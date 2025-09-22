@@ -1,0 +1,6 @@
+# OpenAPI curator defaults mirrored from the historical monolith.
+validators:
+  - name: spectral
+    ruleset: strict
+  - name: fountain-lint
+    ruleset: recommended

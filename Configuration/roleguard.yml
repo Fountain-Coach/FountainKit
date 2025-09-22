@@ -1,0 +1,6 @@
+# Minimal role guard matrix mapping launch roles to allowed personas.
+roles:
+  coach:
+    personas: [planner, assistant]
+  operator:
+    personas: [guardian]

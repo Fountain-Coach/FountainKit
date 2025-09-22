@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<USAGE
+Usage: $(basename "$0") <start|stop|precompile> [--no-build|--force-build]
+USAGE
+}
+
+if [[ $# -lt 1 ]]; then
+  usage >&2
+  exit 2
+fi
+
+COMMAND=$1
+shift || true
+
+REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)
+LOG_DIR="$REPO_ROOT/.fountain/logs"
+mkdir -p "$LOG_DIR"
+
+case "$COMMAND" in
+  start)
+    echo "[launcher] Starting Fountain services from $REPO_ROOT" | tee "$LOG_DIR/launcher.log"
+    if [[ $# -gt 0 ]]; then
+      echo "[launcher] Options: $*" | tee -a "$LOG_DIR/launcher.log"
+    fi
+    ;;
+  stop)
+    echo "[launcher] Stopping Fountain services" | tee "$LOG_DIR/launcher.log"
+    ;;
+  precompile)
+    echo "[launcher] Precompiling Fountain services" | tee "$LOG_DIR/launcher.log"
+    ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+esac

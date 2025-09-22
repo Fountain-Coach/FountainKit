@@ -1,0 +1,8 @@
+# Default DNS zones consumed by the modular Fountain runtime.
+zones:
+  - name: fountain.local
+    ttl: 60
+    records:
+      - type: A
+        name: "@"
+        value: 127.0.0.1

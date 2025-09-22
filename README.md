@@ -1,7 +1,20 @@
-
 # FountainKit Workspace
 
 FountainKit is the Swift Package Manager workspace that powers FountainAI for the Fountain Coach GitHub organization. It decomposes the original monolithic package into focused modules that can evolve, test, and ship independently.
+
+## Repository layout
+
+| Path | Purpose |
+| ---- | ------- |
+| `AGENTS.md` | Engineering guide and repository-wide conventions for coding, testing, and reviews. |
+| `Configuration/` | Runtime configuration files consumed by services (gateway, role guard, curator, publishing, tutor dashboard). |
+| `Packages/` | Swift packages that make up the modular workspace—each has its own manifest, sources, tests, and documentation. |
+| `Public/` | Static assets served by HTTP frontends (health probes, landing page, styles). |
+| `Scripts/` | Operational scripts for launching tooling, renewing certificates, and starting diagnostics. |
+| `Workspace/` | Empty Xcode workspace placeholder used when generating IDE projects. |
+| `Package.swift` / `Package.resolved` | Root SwiftPM manifest and lockfile aggregating all local packages. |
+| `README.md` | This quick reference to help navigate the workspace. |
+| `Evaluation of FountainAI Monolith Refactoring into **FountainKit**.pdf` | Architectural write-up describing the rationale and migration plan. |
 
 ## Package overview
 
@@ -17,11 +30,25 @@ FountainKit is the Swift Package Manager workspace that powers FountainAI for th
 | `FountainSpecCuration` | Authoritative OpenAPI specs, fixtures, and regeneration scripts. |
 | `FountainExamples` | Sample Teatro integrations and showcase applications using the modular kits. |
 
-Each package lives under `Packages/<Name>` with its own `Package.swift`, `Sources/`, `Tests/`, and `README`. The root manifest depends on these packages via relative paths for local development.
+Each package lives under `Packages/<Name>` with its own `Package.swift`, `Sources/`, `Tests/`, and README. The root manifest depends on these packages via relative paths for local development.
+
+### Tooling quick reference
+
+| Tool / Target | Location | Purpose |
+| ------------- | -------- | ------- |
+| `openapi-curator-cli` | `Packages/FountainTooling/Sources/openapi-curator-cli` | CLI wrapper over the curator engine; curates OpenAPI specs, computes diffs, and optionally submits to Tools Factory. |
+| `openapi-curator-service` | `Packages/FountainTooling/Sources/openapi-curator-service` | Long-running HTTP service that exposes `/curate`, `/truth-table`, and `/metrics` endpoints for automated spec curation. |
+| `fountain-client-generator` | `Packages/FountainTooling/Sources/fountain-client-generator` | Generates REST clients from curated specs and publishes them into `FountainAPIClients`. |
+| `flexctl` | `Packages/FountainTelemetryKit/Sources/flexctl` | MIDI/SSE diagnostics console for telemetry troubleshooting. |
+| `gateway-server` | `Packages/FountainApps/Sources/gateway-server` | Assembled executable that fronts persona orchestration, tool invocation, and publishing pipelines. |
+| `tools-factory-server` | `Packages/FountainApps/Sources/tools-factory-server` | HTTP surface that receives curated specs, persists them, and coordinates downstream toolchain updates. |
+| `teatro-examples` | `Packages/FountainExamples/Sources` | Collection of runnable examples showing how downstream apps integrate with FountainKit APIs. |
+| `Scripts/renew-certs.sh` | `Scripts` | Helper script for rotating TLS certificates and uploading to managed environments. |
+| `Scripts/start-diagnostics.swift` | `Scripts` | Swift script that boots SSE/MIDI diagnostics pipelines backed by telemetry kits. |
 
 ## OpenAPI specifications
 
-Authoritative OpenAPI documents now live in [`Packages/FountainSpecCuration/openapi`](Packages/FountainSpecCuration/openapi). Service executables include README files that link directly to their specs (for example `Packages/FountainSpecCuration/openapi/v1/planner.yml`). Use this directory when regenerating clients or browsing HTTP contracts—the legacy root-level `openapi/` tree has been removed.
+Authoritative OpenAPI documents live in [`Packages/FountainSpecCuration/openapi`](Packages/FountainSpecCuration/openapi). Service executables include README files that link directly to their specs (for example `Packages/FountainSpecCuration/openapi/v1/planner.yml`). Use this directory when regenerating clients or browsing HTTP contracts—the legacy root-level `openapi/` tree has been removed.
 
 ## Getting started
 
@@ -82,5 +109,3 @@ coverage alongside the package tests.
 ## License
 
 FountainKit inherits the licensing terms of the original FountainAI project; consult the repository’s `LICENSES/` directory for details.
-
-

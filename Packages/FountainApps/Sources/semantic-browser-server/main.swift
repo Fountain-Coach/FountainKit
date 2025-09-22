@@ -1,5 +1,5 @@
 import Foundation
-import SemanticBrowser
+import SemanticBrowserService
 import LauncherSignature
 
 verifyLauncherSignature()

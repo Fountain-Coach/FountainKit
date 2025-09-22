@@ -30,7 +30,13 @@ struct DashboardConfiguration: Sendable {
             let overrideURL = URL(fileURLWithPath: overridePath, isDirectory: true, relativeTo: workingDirectory)
             rootURL = overrideURL.standardizedFileURL
         } else {
-            rootURL = workingDirectory.appendingPathComponent("openapi/v1", isDirectory: true)
+            let curatedRoot = workingDirectory.appendingPathComponent("Packages/FountainSpecCuration/openapi/v1", isDirectory: true)
+            var curatedIsDirectory: ObjCBool = false
+            if fileManager.fileExists(atPath: curatedRoot.path, isDirectory: &curatedIsDirectory), curatedIsDirectory.boolValue {
+                rootURL = curatedRoot
+            } else {
+                rootURL = workingDirectory.appendingPathComponent("openapi/v1", isDirectory: true)
+            }
         }
 
         var isDirectory: ObjCBool = false

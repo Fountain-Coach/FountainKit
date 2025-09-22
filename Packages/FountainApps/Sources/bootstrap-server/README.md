@@ -1,4 +1,4 @@
 # Bootstrap Service
 
-OpenAPI spec: [`openapi/v1/bootstrap.yml`](../../openapi/v1/bootstrap.yml)
+OpenAPI spec: [`Packages/FountainSpecCuration/openapi/v1/bootstrap.yml`](../../../FountainSpecCuration/openapi/v1/bootstrap.yml)
 

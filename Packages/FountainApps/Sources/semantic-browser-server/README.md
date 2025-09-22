@@ -11,7 +11,7 @@ A Swift service that fetches and renders web pages (with optional CDP headless b
 - Observability: Spec‑pure health, Prometheus metrics, admin diagnostics (browser pool, host gate, network capture, artifacts).
 
 ## API
-OpenAPI spec: [`openapi/v1/semantic-browser.yml`](../../openapi/v1/semantic-browser.yml)
+OpenAPI spec: [`Packages/FountainSpecCuration/openapi/v1/semantic-browser.yml`](../../../FountainSpecCuration/openapi/v1/semantic-browser.yml)
 
 Key endpoints (spec‑compliant):
 - POST `/v1/snapshot` → SnapshotResponse
@@ -130,7 +130,7 @@ docker run --rm -p 8006:8006 \
 - Exports: check `ARTIFACT_ROOT` mount and permissions; review admin health for GC activity.
 
 ## Development
-- Specs live under `openapi/v1/semantic-browser.yml`.
+- Specs live under `Packages/FountainSpecCuration/openapi/v1/semantic-browser.yml`.
 - Unit tests under `Tests/SemanticBrowserTests/*` include spec conformance and query/index flows.
 - Run tests: `swift test -v`
 

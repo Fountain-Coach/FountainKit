@@ -61,7 +61,8 @@ let package = Package(
                 .product(name: "Crypto", package: "swift-crypto"),
                 .product(name: "X509", package: "swift-certificates"),
                 "Yams"
-            ]
+            ],
+            exclude: ["README.md"]
         ),
         .executableTarget(
             name: "tools-factory-server",
@@ -79,7 +80,8 @@ let package = Package(
                 .product(name: "FountainRuntime", package: "FountainCore"),
                 .product(name: "ToolServerService", package: "FountainServiceKit-ToolServer"),
                 .product(name: "LauncherSignature", package: "FountainCore")
-            ]
+            ],
+            exclude: ["README.md"]
         ),
         .executableTarget(
             name: "planner-server",
@@ -146,21 +148,24 @@ let package = Package(
             name: "publishing-frontend",
             dependencies: [
                 .product(name: "PublishingFrontend", package: "FountainGatewayKit")
-            ]
+            ],
+            exclude: ["README.md"]
         ),
         .executableTarget(
             name: "tutor-dashboard",
             dependencies: [
                 .product(name: "TutorDashboard", package: "FountainAPIClients"),
                 .product(name: "SwiftCursesKit", package: "swiftcurseskit")
-            ]
+            ],
+            exclude: ["README.md"]
         ),
         .executableTarget(
             name: "FountainLauncherUI",
             dependencies: [
                 .product(name: "SecretStore", package: "swift-secretstore")
             ],
-            path: "Sources/FountainLauncherUI"
+            path: "Sources/FountainLauncherUI",
+            exclude: ["README.md"]
         ),
         .testTarget(
             name: "FountainLauncherUITests",

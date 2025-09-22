@@ -19,6 +19,10 @@ FountainKit is the Swift Package Manager workspace that powers FountainAI for th
 
 Each package lives under `Packages/<Name>` with its own `Package.swift`, `Sources/`, `Tests/`, and `README`. The root manifest depends on these packages via relative paths for local development.
 
+## OpenAPI specifications
+
+Authoritative OpenAPI documents now live in [`Packages/FountainSpecCuration/openapi`](Packages/FountainSpecCuration/openapi). Service executables include README files that link directly to their specs (for example `Packages/FountainSpecCuration/openapi/v1/planner.yml`). Use this directory when regenerating clients or browsing HTTP contracts—the legacy root-level `openapi/` tree has been removed.
+
 ## Getting started
 
 ### Bootstrap the workspace

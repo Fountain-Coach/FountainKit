@@ -1,4 +1,4 @@
 # Function Caller Service
 
-OpenAPI spec: [`openapi/v1/function-caller.yml`](../../openapi/v1/function-caller.yml)
+OpenAPI spec: [`Packages/FountainSpecCuration/openapi/v1/function-caller.yml`](../../../FountainSpecCuration/openapi/v1/function-caller.yml)
 

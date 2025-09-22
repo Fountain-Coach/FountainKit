@@ -1,4 +1,4 @@
 # Tools Factory Server
 
-OpenAPI spec: [`openapi/v1/tools-factory.yml`](../../openapi/v1/tools-factory.yml)
+OpenAPI spec: [`Packages/FountainSpecCuration/openapi/v1/tools-factory.yml`](../../../FountainSpecCuration/openapi/v1/tools-factory.yml)
 

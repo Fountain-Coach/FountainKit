@@ -1,4 +1,4 @@
 # Baseline Awareness Service
 
-OpenAPI spec: [`openapi/v1/baseline-awareness.yml`](../../openapi/v1/baseline-awareness.yml)
+OpenAPI spec: [`Packages/FountainSpecCuration/openapi/v1/baseline-awareness.yml`](../../../FountainSpecCuration/openapi/v1/baseline-awareness.yml)
 

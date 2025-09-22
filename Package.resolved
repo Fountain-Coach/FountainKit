@@ -1,5 +1,5 @@
 {
-  "originHash" : "53c45195e6105f0c4830313d2916490fd0fc35fb0681480fe7f0b48ca7a387fc",
+  "originHash" : "18969d90cb68eda5f207dcc326f58694493a59b53e4d8aedc98426f27cc7d98d",
   "pins" : [
     {
       "identity" : "anycodable",
@@ -35,15 +35,6 @@
       "state" : {
         "revision" : "fec93dae9efbb4f1d56984eb0889983962a1dbab",
         "version" : "0.3.1"
-      }
-    },
-    {
-      "identity" : "semantic-browser",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Fountain-Coach/semantic-browser.git",
-      "state" : {
-        "revision" : "13bb6e9ec646f0d20df0068dc79201a648665824",
-        "version" : "0.0.2"
       }
     },
     {

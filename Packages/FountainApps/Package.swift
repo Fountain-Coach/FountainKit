@@ -29,6 +29,7 @@ let package = Package(
         .package(path: "../FountainServiceKit-Bootstrap"),
         .package(path: "../FountainServiceKit-Awareness"),
         .package(path: "../FountainServiceKit-Persist"),
+        .package(path: "../FountainServiceKit-SemanticBrowser"),
         .package(path: "../FountainServiceKit-ToolsFactory"),
         .package(path: "../FountainServiceKit-ToolServer"),
         .package(path: "../FountainTooling"),
@@ -36,7 +37,6 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
         .package(url: "https://github.com/apple/swift-certificates.git", from: "1.0.0"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
-        .package(url: "https://github.com/Fountain-Coach/semantic-browser.git", exact: "0.0.2"),
         .package(url: "https://github.com/Fountain-Coach/swiftcurseskit.git", exact: "0.2.0"),
         .package(url: "https://github.com/Fountain-Coach/swift-secretstore.git", exact: "0.1.0")
     ],
@@ -137,7 +137,7 @@ let package = Package(
         .executableTarget(
             name: "semantic-browser-server",
             dependencies: [
-                .product(name: "SemanticBrowser", package: "semantic-browser"),
+                .product(name: "SemanticBrowserService", package: "FountainServiceKit-SemanticBrowser"),
                 .product(name: "LauncherSignature", package: "FountainCore")
             ],
             exclude: ["README.md"]

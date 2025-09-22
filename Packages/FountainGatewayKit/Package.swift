@@ -114,6 +114,13 @@ let package = Package(
                 .product(name: "FountainRuntime", package: "FountainCore"),
                 "Yams"
             ]
+        ),
+        .testTarget(
+            name: "PublishingFrontendTests",
+            dependencies: [
+                "PublishingFrontend",
+                .product(name: "FountainRuntime", package: "FountainCore")
+            ]
         )
     ]
 )

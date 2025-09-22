@@ -1,0 +1,9 @@
+# Stubbed gateway configuration restored from the monolith defaults.
+controlPlane:
+  host: 127.0.0.1
+  port: 9090
+plugins:
+  - name: llm
+    enabled: true
+  - name: auth
+    enabled: true

@@ -71,7 +71,7 @@ let package = Package(
                 .product(name: "ToolsFactoryService", package: "FountainServiceKit-ToolsFactory"),
                 .product(name: "LauncherSignature", package: "FountainCore")
             ],
-            exclude: ["README.md"]
+            exclude: ["README.md", "AGENTS.md"]
         ),
         .executableTarget(
             name: "tool-server",
@@ -161,6 +161,10 @@ let package = Package(
                 .product(name: "SecretStore", package: "swift-secretstore")
             ],
             path: "Sources/FountainLauncherUI"
+        ),
+        .testTarget(
+            name: "FountainLauncherUITests",
+            dependencies: ["FountainLauncherUI"]
         )
     ]
 )

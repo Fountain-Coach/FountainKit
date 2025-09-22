@@ -1,6 +1,7 @@
+import Foundation
+#if canImport(SwiftUI) && canImport(AppKit)
 import SwiftUI
 import AppKit
-import Foundation
 
 @main
 struct LauncherUIApp: App {
@@ -57,9 +58,16 @@ final class LauncherViewModel: ObservableObject {
         NSApp.activate(ignoringOtherApps: true)
         if panel.runModal() == .OK, let url = panel.url {
             let pkg = url.appendingPathComponent("Package.swift")
-            let openapi = url.appendingPathComponent("openapi")
-            guard FileManager.default.fileExists(atPath: pkg.path), FileManager.default.fileExists(atPath: openapi.path) else {
-                errorMessage = "Selected folder is not a FountainAI repo (missing Package.swift or openapi/)"
+            guard FileManager.default.fileExists(atPath: pkg.path) else {
+                errorMessage = "Selected folder is not a FountainAI repo (missing Package.swift)"
+                return
+            }
+            if LauncherResources.locateSpecDirectory(repoRoot: url.path) == nil {
+                errorMessage = "Selected folder is missing Fountain specs (looked for Packages/FountainSpecCuration/openapi or openapi/)"
+                return
+            }
+            if LauncherResources.locateScriptsDirectory(repoRoot: url.path) == nil {
+                errorMessage = "Selected folder is missing launcher Scripts/."
                 return
             }
             repoPath = url.path
@@ -70,9 +78,15 @@ final class LauncherViewModel: ObservableObject {
     func start() {
         guard let repoPath else { errorMessage = "Select repository first"; return }
         starting = true
-        var args = ["bash", "Scripts/launcher", "start"]
+        let env = processEnv()
+        guard let script = LauncherResources.launcherScriptURL(repoRoot: repoPath, environment: env) else {
+            errorMessage = "Launcher script not found in Scripts/"
+            starting = false
+            return
+        }
+        var args = ["bash", script.path, "start"]
         switch buildMode { case .auto: break; case .noBuild: args.append("--no-build"); case .forceBuild: args.append("--force-build") }
-        run(command: args, cwd: repoPath, env: processEnv()) { [weak self] code, out in
+        run(command: args, cwd: repoPath, env: env) { [weak self] code, out in
             DispatchQueue.main.async {
                 self?.starting = false
                 if code == 0 { self?.controlPlaneOK = true } else { self?.errorMessage = "Start failed. Check logs." }
@@ -82,16 +96,18 @@ final class LauncherViewModel: ObservableObject {
 
     func stop() {
         guard let repoPath else { return }
-        run(command: ["bash", "Scripts/launcher", "stop"], cwd: repoPath, env: processEnv()) { [weak self] _, _ in
+        let env = processEnv()
+        guard let script = LauncherResources.launcherScriptURL(repoRoot: repoPath, environment: env) else { return }
+        run(command: ["bash", script.path, "stop"], cwd: repoPath, env: env) { [weak self] _, _ in
             DispatchQueue.main.async { self?.controlPlaneOK = false }
         }
     }
 
     func diagnostics() {
         guard let repoPath else { errorMessage = "Select repository first"; return }
-        let script = URL(fileURLWithPath: repoPath).appendingPathComponent("Scripts/start-diagnostics.swift")
-        if FileManager.default.fileExists(atPath: script.path) {
-            runStreaming(command: ["swift", script.path], cwd: repoPath, env: processEnv())
+        let env = processEnv()
+        if let script = LauncherResources.diagnosticsScriptURL(repoRoot: repoPath, environment: env) {
+            runStreaming(command: ["swift", script.path], cwd: repoPath, env: env)
         } else {
             // Fallback: probe control plane
             Task { [weak self] in
@@ -152,7 +168,7 @@ final class LauncherViewModel: ObservableObject {
 
     // Build environment for child processes: secrets from Keychain, URLs from defaults
     private func processEnv() -> [String: String] {
-        var env: [String: String] = [:]
+        var env = ProcessInfo.processInfo.environment
         if let url = UserDefaults.standard.string(forKey: "FountainAI.FOUNTAINSTORE_URL"), !url.isEmpty {
             env["FOUNTAINSTORE_URL"] = url
         }
@@ -161,13 +177,24 @@ final class LauncherViewModel: ObservableObject {
         if let repo = repoPath {
             env["FOUNTAINAI_ROOT"] = repo
             env["FOUNTAINAI_SERVICES_DIR"] = URL(fileURLWithPath: repo).appendingPathComponent("dist/bin").path
+            if let scripts = LauncherResources.locateScriptsDirectory(repoRoot: repo, environment: env) {
+                env[LauncherResources.scriptsOverrideKey] = scripts.path
+            }
+            if let specs = LauncherResources.locateSpecDirectory(repoRoot: repo, environment: env) {
+                env[LauncherResources.specsOverrideKey] = specs.path
+            }
         }
         return env
     }
 
     func precompile() {
         guard let repoPath else { errorMessage = "Select repository first"; return }
-        runStreaming(command: ["bash", "Scripts/launcher", "precompile"], cwd: repoPath, env: processEnv())
+        let env = processEnv()
+        guard let script = LauncherResources.launcherScriptURL(repoRoot: repoPath, environment: env) else {
+            errorMessage = "Launcher script not found in Scripts/"
+            return
+        }
+        runStreaming(command: ["bash", script.path, "precompile"], cwd: repoPath, env: env)
     }
 
     // MARK: - Environment Management
@@ -432,3 +459,15 @@ extension LauncherViewModel {
         }
     }
 }
+#endif
+#if !(canImport(SwiftUI) && canImport(AppKit))
+@main
+enum FountainLauncherUIUnavailable {
+    static func main() {
+        let message = "FountainLauncherUI is only supported on macOS.\n"
+        if let data = message.data(using: .utf8) {
+            try? FileHandle.standardError.write(contentsOf: data)
+        }
+    }
+}
+#endif

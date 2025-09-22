@@ -1,0 +1,301 @@
+openapi: 3.1.0
+info:
+  title: FountainAI Gateway
+  description: >
+    Swift-based API gateway providing HTTPS termination, routing,
+    authentication and metrics for FountainAI services.
+  version: 1.0.0
+  x-fountain.port: 8010
+  x-fountain.binary: fountain-gateway
+servers:
+  - url: http://gateway.local
+    description: Local development
+  - url: http://gateway.fountain.coach
+paths:
+  /health:
+    get:
+      summary: Health
+      description: Returns 200 if the gateway is running.
+      operationId: gatewayHealth
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+  /metrics:
+    get:
+      summary: Metrics
+      description: Endpoint that serves runtime metrics encoded as JSON.
+      operationId: gatewayMetrics
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: integer
+      security:
+        - bearerAuth: []
+  /auth/token:
+    post:
+      summary: Issue Authentication Token
+      description: >
+        Verify client credentials and issue a JWT used for accessing
+        protected routes.
+      operationId: issueAuthToken
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security: []
+  /certificates:
+    get:
+      summary: Certificate Info
+      description: Returns metadata about the active TLS certificate.
+      operationId: certificateInfo
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertificateInfo'
+      security:
+        - bearerAuth: []
+  /certificates/renew:
+    post:
+      summary: Trigger certificate renewal
+      description: Manually invoke the renewal process for the TLS certificate.
+      operationId: renewCertificate
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      responses:
+        '202':
+          description: Renewal triggered
+          content:
+            application/json:
+              schema:
+                type: object
+      security:
+        - bearerAuth: []
+  /routes:
+    get:
+      summary: List Configured Routes
+      description: Returns all routing definitions active in the gateway.
+      operationId: listRoutes
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RouteInfo'
+      security:
+        - bearerAuth: []
+    post:
+      summary: Add a new route
+      operationId: createRoute
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RouteInfo'
+      responses:
+        '201':
+          description: Route created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RouteInfo'
+        '409':
+          description: Route already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - bearerAuth: []
+  /routes/{routeId}:
+    put:
+      summary: Update an existing route
+      operationId: updateRoute
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: routeId
+          in: path
+          required: true
+          description: Unique identifier for the route
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RouteInfo'
+      responses:
+        '200':
+          description: Route updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RouteInfo'
+        '404':
+          description: Route not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - bearerAuth: []
+    delete:
+      summary: Delete a route
+      operationId: deleteRoute
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: routeId
+          in: path
+          required: true
+          description: Unique identifier for the route
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Route deleted
+        '404':
+          description: Route not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+        - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    CredentialRequest:
+      type: object
+      required:
+        - clientId
+        - clientSecret
+      properties:
+        clientId:
+          type: string
+          description: API client identifier
+        clientSecret:
+          type: string
+          description: API client secret
+    TokenResponse:
+      type: object
+      required:
+        - token
+        - expiresAt
+      properties:
+        token:
+          type: string
+          description: Bearer token for gateway access
+        expiresAt:
+          type: string
+          format: date-time
+          description: Expiration timestamp of the token
+    RouteInfo:
+      type: object
+      required:
+        - id
+        - path
+        - target
+        - methods
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the route
+        path:
+          type: string
+          description: URL path pattern for matching requests
+        target:
+          type: string
+          description: Upstream service address
+        methods:
+          type: array
+          items:
+            type: string
+            enum: [GET, POST, PUT, PATCH, DELETE]
+          description: HTTP methods forwarded to the upstream
+        rateLimit:
+          type: integer
+          description: Optional maximum requests per minute
+        proxyEnabled:
+          type: boolean
+          description: Indicates if proxying to the upstream is enabled
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Description of the error
+    CertificateInfo:
+      type: object
+      required:
+        - notAfter
+        - issuer
+      properties:
+        notAfter:
+          type: string
+          format: date-time
+          description: Expiration date of the certificate
+        issuer:
+          type: string
+          description: Certificate issuer
+
+# © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

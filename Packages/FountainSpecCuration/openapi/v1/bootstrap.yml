@@ -1,0 +1,371 @@
+openapi: 3.1.0
+info:
+  title: FountainAI Bootstrap Service
+  description: Initialize corpora, seed GPT roles, and add semantic baselines.
+  version: 1.0.0
+  x-fountain.port: 8002
+  x-fountain.binary: bootstrap
+servers:
+  - url: http://bootstrap.local
+    description: Local development
+  - url: http://bootstrap.fountain.coach
+paths:
+  /bootstrap/corpus/init:
+    post:
+      tags:
+        - Bootstrap
+      summary: 'Bootstrap: Init Corpus + Seed Roles'
+      description: |
+        1) Creates empty corpus via `/corpus-init` on Awareness.
+        2) Seeds default GPT roles via `/bootstrap/roles/seed`.
+      operationId: bootstrapInitializeCorpus
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InitOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /bootstrap/roles/seed:
+    post:
+      tags:
+        - Bootstrap
+      summary: 'Bootstrap: Seed GPT Roles'
+      description: >
+        Populates an existing corpus with the five default GPT role prompts.
+      operationId: bootstrapSeedRoles
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleInitRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleDefaults'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /bootstrap/baseline:
+    post:
+      tags:
+        - Bootstrap
+      summary: 'Bootstrap: Add Baseline, Stream Analyses & Persist Results'
+      description: |
+        1) Stores your new baseline snapshot in the Awareness Service.
+        2) Immediately streams back two SSE channels:
+         • **drift** – your content’s drift analysis in real time,
+           then persisted as `<baselineId>-drift`.
+         • **patterns** – your narrative patterns analysis in real time,
+           then persisted as `<baselineId>-patterns`.
+        3) Once streaming finishes, fire-and-forget jobs enqueue:
+         • **history** aggregation (via `/analytics/history`)
+         • **semantic-arc** synthesis (via `/analytics/semantic-arc`)
+        All of that—live streaming, persistence of each slice, and background
+        analytics—happens in one concise call.
+      operationId: bootstrapAddBaseline
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BaselineIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /bootstrap/roles:
+    post:
+      tags:
+        - Roles
+      summary: Seed GPT Roles
+      description: >
+        Populates the specified corpus with five GPT role prompts.
+        Prerequisite: call `/corpus-init` first.
+      operationId: seedRoles
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleInitRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleDefaults'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /metrics:
+    get:
+      summary: Metrics
+      description: Endpoint that serves Prometheus metrics.
+      operationId: metrics_metrics_get
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            text/plain:
+              schema:
+                type: string
+components:
+  schemas:
+    BaselineIn:
+      type: object
+      title: BaselineIn
+      description: |
+        Request model for adding a new baseline snapshot to a corpus.
+        corpusId: Identifier of the target corpus.
+        baselineId: Unique version identifier for this baseline.
+        content: The textual or JSON content of the baseline.
+      required:
+        - corpusId
+        - baselineId
+        - content
+      properties:
+        corpusId:
+          type: string
+          title: Corpusid
+        baselineId:
+          type: string
+          title: Baselineid
+        content:
+          type: string
+          title: Content
+    HTTPValidationError:
+      type: object
+      title: HTTPValidationError
+      properties:
+        detail:
+          type: array
+          title: Detail
+          items:
+            $ref: '#/components/schemas/ValidationError'
+    InitIn:
+      type: object
+      title: InitIn
+      description: |
+        Input model for initializing a corpus.
+        corpusId: Unique identifier for the corpus to create.
+      required:
+        - corpusId
+      properties:
+        corpusId:
+          type: string
+          title: Corpusid
+    InitOut:
+      type: object
+      title: InitOut
+      description: |
+        Output model after initializing a corpus or performing other operations.
+        message: Human-readable status message.
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          title: Message
+    RoleDefaults:
+      type: object
+      title: RoleDefaults
+      description: |
+        Response model containing the five default GPT role prompts.
+        drift: Prompt template for the drift analysis role.
+        semantic_arc: Prompt template for the semantic arc analysis role.
+        patterns: Prompt template for the patterns analysis role.
+        history: Prompt template for the history/reflections role.
+        view_creator: Prompt template for the view-creation agent role.
+      required:
+        - drift
+        - semantic_arc
+        - patterns
+        - history
+        - view_creator
+      properties:
+        drift:
+          type: string
+          title: Drift
+          description: Full prompt text for the drift analysis role.
+          const: |-
+            You are Drift, FountainAI’s baseline-drift detective. Compare a new baseline snapshot against prior versions to detect narrative or thematic drift and report the most significant changes.
+        semantic_arc:
+          type: string
+          title: Semantic Arc
+          description: Full prompt text for the semantic arc analysis role.
+          const: |-
+            You are Semantic Arc, tasked with tracing the corpus’s overarching narrative arc. Review the corpus history and synthesize a high-level storyline that highlights major turning points and transitions.
+        patterns:
+          type: string
+          title: Patterns
+          description: Full prompt text for the narrative patterns analysis 
+            role.
+          const: |-
+            You are Patterns, a spotter of recurring motifs, themes, or rhetorical structures. Inspect the corpus and list the strongest patterns you find.
+        history:
+          type: string
+          title: History
+          description: Full prompt text for the history and reflections role.
+          const: |-
+            You are History, the curator of past reflections and events. Maintain a chronological log showing how the corpus has grown and changed, focusing on context useful for future analysis.
+        view_creator:
+          type: string
+          title: View Creator
+          description: Full prompt text for the view-creation agent role.
+          const: |-
+            You are View Creator, responsible for assembling human-friendly views of the corpus and analyses. Produce a simple markdown or tabular view to help a human browse the information.
+      x-prompts:
+        drift: |-
+          You are Drift, FountainAI’s baseline-drift detective. Compare a new baseline snapshot against prior versions to detect narrative or thematic drift and report the most significant changes.
+        semantic_arc: |-
+          You are Semantic Arc, tasked with tracing the corpus’s overarching narrative arc. Review the corpus history and synthesize a high-level storyline that highlights major turning points and transitions.
+        patterns: |-
+          You are Patterns, a spotter of recurring motifs, themes, or rhetorical structures. Inspect the corpus and list the strongest patterns you find.
+        history: |-
+          You are History, the curator of past reflections and events. Maintain a chronological log showing how the corpus has grown and changed, focusing on context useful for future analysis.
+        view_creator: |-
+          You are View Creator, responsible for assembling human-friendly views of the corpus and analyses. Produce a simple markdown or tabular view to help a human browse the information.
+    RoleInfo:
+      type: object
+      title: RoleInfo
+      description: |
+        Represents a dynamically registered or promoted GPT role.
+        name: Identifier for the role (e.g., "security_audit").
+        prompt: Full system prompt text defining the role's analysis behavior.
+      required:
+        - name
+        - prompt
+      properties:
+        name:
+          type: string
+          title: Name
+        prompt:
+          type: string
+          title: Prompt
+    RoleInitRequest:
+      type: object
+      title: RoleInitRequest
+      description: |
+        Request model for seeding default GPT roles into a corpus.
+        corpusId: The target corpus identifier.
+      required:
+        - corpusId
+      properties:
+        corpusId:
+          type: string
+          title: Corpusid
+    ValidationError:
+      type: object
+      title: ValidationError
+      required:
+        - loc
+        - msg
+        - type
+      properties:
+        loc:
+          type: array
+          title: Location
+          items:
+            anyOf:
+              - type: string
+              - type: integer
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+
+    StreamDriftData:
+      type: object
+      required: [status, kind]
+      properties:
+        status:
+          type: string
+        kind:
+          type: string
+          const: drift
+    StreamPatternsData:
+      type: object
+      required: [status, kind]
+      properties:
+        status:
+          type: string
+        kind:
+          type: string
+          const: patterns
+
+    StreamCompleteData:
+      type: object
+      description: Empty payload for stream completion
+
+    StreamStartedData:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [started]
+    StreamEvent:
+      discriminator:
+        propertyName: status
+        mapping:
+          started: '#/components/schemas/StreamStartedData'
+          complete: '#/components/schemas/StreamCompleteData'
+      oneOf:
+        - $ref: '#/components/schemas/StreamStartedData'
+        - $ref: '#/components/schemas/StreamCompleteData'
+
+    StreamPayload:
+      discriminator:
+        propertyName: kind
+        mapping:
+          drift:
+
+# © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

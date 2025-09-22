@@ -1,0 +1,95 @@
+openapi: 3.1.0
+info:
+  title: FountainAI Auth Gateway Plugin
+  description: >
+    Lightweight authentication gateway plugin exposing token validation
+    and claims retrieval endpoints.
+  version: 1.0.0
+  x-fountain.port: 8010
+  x-fountain.binary: fountain-gateway
+x-persona: ../personas/auth.md
+servers:
+  - url: http://gateway.local
+    description: Local development
+  - url: http://gateway.fountain.coach
+paths:
+  /auth/validate:
+    post:
+      summary: Validate Access Token
+      description: Verifies a bearer token and returns its role when valid.
+      operationId: authValidate
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateRequest'
+      responses:
+        '200':
+          description: Token is valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationResponse'
+        '401':
+          description: Token is invalid or expired
+  /auth/claims:
+    get:
+      summary: Retrieve Claims
+      description: Returns claims associated with the supplied bearer token.
+      operationId: authClaims
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            type: string
+            description: Bearer access token
+      responses:
+        '200':
+          description: Claims found for token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimsResponse'
+        '401':
+          description: Token is missing or invalid
+components:
+  schemas:
+    ValidateRequest:
+      type: object
+      properties:
+        token:
+          type: string
+      required:
+        - token
+    ValidationResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        role:
+          type: string
+          nullable: true
+      required:
+        - valid
+    ClaimsResponse:
+      type: object
+      properties:
+        role:
+          type: string
+          nullable: true
+        scopes:
+          type: array
+          items:
+            type: string
+      required:
+        - scopes
+
+# © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

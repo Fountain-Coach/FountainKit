@@ -1,0 +1,355 @@
+openapi: 3.1.0
+info:
+  title: Tool Server
+  version: 1.0.0
+  x-fountain.port: 8012
+  x-fountain.binary: tool-server
+paths:
+  /imagemagick:
+    post:
+      operationId: runImageMagick
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToolRequest'
+      responses:
+        '200':
+          description: output
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+  /ffmpeg:
+    post:
+      operationId: runFFmpeg
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToolRequest'
+      responses:
+        '200': {description: output}
+  /exiftool:
+    post:
+      operationId: runExifTool
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToolRequest'
+      responses:
+        '200': {description: output}
+  /pandoc:
+    post:
+      operationId: runPandoc
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToolRequest'
+      responses:
+        '200': {description: output}
+  /libplist:
+    post:
+      operationId: runLibPlist
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToolRequest'
+      responses:
+        '200': {description: output}
+  /pdf/scan:
+    post:
+      operationId: pdfScan
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      summary: Scan one or more PDFs into a semantic index
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScanRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Index'
+  /pdf/index/validate:
+    post:
+      operationId: pdfIndexValidate
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      summary: Validate an index structure
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Index'
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationResult'
+  /pdf/query:
+    post:
+      operationId: pdfQuery
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      summary: Query an index by keyword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryRequest'
+      responses:
+        '200':
+          description: Matched spans
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResponse'
+  /pdf/export-matrix:
+    post:
+      operationId: pdfExportMatrix
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      summary: Export a Midi2Swift-friendly matrix skeleton from an index
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportMatrixRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Matrix'
+components:
+  schemas:
+    ToolRequest:
+      type: object
+      properties:
+        args:
+          type: array
+          items:
+            type: string
+        request_id:
+          type: string
+      required: [args]
+    ScanRequest:
+      type: object
+      required: [inputs]
+      properties:
+        inputs:
+          description: File paths or URLs to PDFs
+          type: array
+          items:
+            type: string
+        includeText:
+          type: boolean
+          default: false
+        sha256:
+          type: boolean
+          default: false
+    Index:
+      type: object
+      required: [documents]
+      properties:
+        documents:
+          type: array
+          items:
+            type: object
+            required: [id, fileName, size]
+            properties:
+              id:
+                type: string
+              fileName:
+                type: string
+              size:
+                type: integer
+              sha256:
+                type: string
+                nullable: true
+              pages:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    number:
+                      type: integer
+                    text:
+                      type: string
+    ValidationResult:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        issues:
+          type: array
+          items:
+            type: string
+    QueryRequest:
+      type: object
+      required: [index, q]
+      properties:
+        index:
+          $ref: '#/components/schemas/Index'
+        q:
+          type: string
+        pageRange:
+          type: string
+          description: Comma-separated list of pages or ranges to search (e.g., 
+            1-3,5)
+    QueryResponse:
+      type: object
+      properties:
+        hits:
+          type: array
+          items:
+            type: object
+            properties:
+              docId:
+                type: string
+              page:
+                type: integer
+              snippet:
+                type: string
+    ExportMatrixRequest:
+      type: object
+      required: [index]
+      properties:
+        index:
+          $ref: '#/components/schemas/Index'
+        bitfields:
+          type: boolean
+          default: false
+        ranges:
+          type: boolean
+          default: false
+        enums:
+          type: boolean
+          default: false
+    Matrix:
+      type: object
+      required: [schemaVersion, messages, terms]
+      properties:
+        schemaVersion:
+          type: string
+          description: Matrix schema version
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatrixEntry'
+        terms:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatrixEntry'
+        bitfields:
+          type: array
+          items:
+            $ref: '#/components/schemas/BitField'
+        ranges:
+          type: array
+          items:
+            $ref: '#/components/schemas/RangeSpec'
+        enums:
+          type: array
+          items:
+            $ref: '#/components/schemas/EnumSpec'
+    MatrixEntry:
+      type: object
+      required: [text, page, x, y]
+      properties:
+        text:
+          type: string
+        page:
+          type: integer
+        x:
+          type: integer
+          description: X coordinate (placeholder)
+        y:
+          type: integer
+          description: Y coordinate (placeholder)
+    BitField:
+      type: object
+      required: [name, bits]
+      properties:
+        name:
+          type: string
+        bits:
+          type: array
+          items:
+            type: integer
+    RangeSpec:
+      type: object
+      required: [field, min, max]
+      properties:
+        field:
+          type: string
+        min:
+          type: integer
+        max:
+          type: integer
+    EnumCase:
+      type: object
+      required: [name, value]
+      properties:
+        name:
+          type: string
+        value:
+          type: integer
+    EnumSpec:
+      type: object
+      required: [field, cases]
+      properties:
+        field:
+          type: string
+        cases:
+          type: array
+          items:
+            $ref: '#/components/schemas/EnumCase'
+
+# © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.
+servers:
+  - url: http://tool-server.local
+    description: Local development
+  - url: http://tool-server.fountain.coach
+
+# © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

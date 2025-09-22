@@ -1,0 +1,49 @@
+// swift-tools-version: 6.1
+import PackageDescription
+
+let package = Package(
+    name: "FountainAPIClients",
+    platforms: [
+        .macOS(.v13)
+    ],
+    products: [
+        .library(name: "ApiClientsCore", targets: ["ApiClientsCore"]),
+        .library(name: "GatewayAPI", targets: ["GatewayAPI"]),
+        .library(name: "PersistAPI", targets: ["PersistAPI"]),
+        .library(name: "SemanticBrowserAPI", targets: ["SemanticBrowserAPI"]),
+        .library(name: "LLMGatewayAPI", targets: ["LLMGatewayAPI"]),
+        .library(name: "TutorDashboard", targets: ["TutorDashboard"])
+    ],
+    dependencies: [
+        .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0")
+    ],
+    targets: [
+        .target(
+            name: "ApiClientsCore",
+            dependencies: []
+        ),
+        .target(
+            name: "GatewayAPI",
+            dependencies: ["ApiClientsCore"]
+        ),
+        .target(
+            name: "PersistAPI",
+            dependencies: ["ApiClientsCore"]
+        ),
+        .target(
+            name: "SemanticBrowserAPI",
+            dependencies: ["ApiClientsCore"]
+        ),
+        .target(
+            name: "LLMGatewayAPI",
+            dependencies: ["ApiClientsCore"]
+        ),
+        .target(
+            name: "TutorDashboard",
+            dependencies: [
+                "ApiClientsCore",
+                "Yams"
+            ]
+        )
+    ]
+)

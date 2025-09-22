@@ -1,0 +1,132 @@
+openapi: 3.1.0
+info:
+  title: Rate Limiter Gateway Plugin
+  description: >
+    Token bucket rate limiter for FountainAI gateway.
+  version: 1.0.0
+  x-fountain.port: 8010
+  x-fountain.binary: fountain-gateway
+x-persona: ../personas/rate-limiter.md
+servers:
+  - url: http://rate-limiter.local
+    description: Local development
+  - url: http://rate-limiter.fountain.coach
+paths:
+  /rate-limit/check:
+    post:
+      tags:
+        - RateLimiter
+      summary: Check rate limit
+      description: Checks and consumes a rate limit token.
+      operationId: rateLimitCheck
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RateLimitCheckRequest'
+      responses:
+        '200':
+          description: Result of rate limit check
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitCheckResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /rate-limit/stats:
+    get:
+      tags:
+        - RateLimiter
+      summary: Retrieve rate limiter statistics
+      operationId: rateLimitStats
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: Aggregated allowed/throttled counts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitStatsResponse'
+components:
+  schemas:
+    RateLimitCheckRequest:
+      title: RateLimitCheckRequest
+      type: object
+      required:
+        - routeId
+        - clientId
+      properties:
+        routeId:
+          type: string
+          title: Routeid
+        clientId:
+          type: string
+          title: Clientid
+        limitPerMinute:
+          type: integer
+          title: Limitperminute
+          nullable: true
+    RateLimitCheckResponse:
+      title: RateLimitCheckResponse
+      type: object
+      required:
+        - allowed
+      properties:
+        allowed:
+          type: boolean
+          title: Allowed
+    RateLimitStatsResponse:
+      title: RateLimitStatsResponse
+      type: object
+      required:
+        - allowed
+        - throttled
+      properties:
+        allowed:
+          type: integer
+          title: Allowed
+        throttled:
+          type: integer
+          title: Throttled
+    HTTPValidationError:
+      title: HTTPValidationError
+      type: object
+      properties:
+        detail:
+          type: array
+          title: Detail
+          items:
+            $ref: '#/components/schemas/ValidationError'
+    ValidationError:
+      title: ValidationError
+      type: object
+      required:
+        - loc
+        - msg
+        - type
+      properties:
+        loc:
+          type: array
+          title: Location
+          items:
+            anyOf:
+              - type: string
+              - type: integer
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+
+# © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

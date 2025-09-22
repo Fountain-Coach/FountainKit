@@ -1,0 +1,13 @@
+{
+  "v": 1,
+  "ts": 1723622400000,
+  "corr": "dE8x-7qF",
+  "intent": "planner.execute",
+  "body": {
+    "steps": [
+      {"name": "persist.getCorpus", "arguments": {"corpusId": "fc-main"}},
+      {"name": "analytics.summarize", "arguments": {"corpusId": "fc-main"}}
+    ]
+  }
+}
+// © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

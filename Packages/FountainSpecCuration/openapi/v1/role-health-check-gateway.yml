@@ -1,0 +1,143 @@
+openapi: 3.1.0
+info:
+  title: Role Health Check Gateway Plugin
+  description: >
+    Verifies seeded roles and promotes validated reflections.
+  version: 1.0.0
+  x-fountain.port: 8010
+  x-fountain.binary: fountain-gateway
+x-persona: ../personas/role-health-check.md
+servers:
+  - url: http://role-health-check.local
+    description: Local development
+  - url: http://role-health-check.fountain.coach
+x-prompts:
+  system: |-
+    You are the Role Health Check Gateway Plugin. Validate the five default GPT roles: drift, semantic_arc, patterns, history, and view_creator.
+paths:
+  /role-health-check/reflect:
+    post:
+      tags:
+        - RoleHealthCheck
+      summary: Enqueue Role Health-Check Reflection
+      description: Enqueues the health-check reflection in the corpus.
+      operationId: roleHealthCheckReflect
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleHealthCheckRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleInfo'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /role-health-check/promote:
+    post:
+      tags:
+        - RoleHealthCheck
+      summary: Promote Role Health-Check Reflection
+      description: Promotes the latest health-check reflection to a role.
+      operationId: roleHealthCheckPromote
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleHealthCheckRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleInfo'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    RoleHealthCheckRequest:
+      title: RoleHealthCheckRequest
+      description: |
+        Request model for processing role health-check reflections.
+        corpusId: The target corpus identifier.
+        roleName: The role under health check.
+      type: object
+      required:
+        - corpusId
+        - roleName
+      properties:
+        corpusId:
+          type: string
+          title: Corpusid
+        roleName:
+          type: string
+          title: Rolename
+    RoleInfo:
+      title: RoleInfo
+      description: |
+        Represents a dynamically registered or promoted GPT role.
+        name: Identifier for the role (e.g., "security_audit").
+        prompt: Full system prompt text defining the role's analysis behavior.
+      type: object
+      required:
+        - name
+        - prompt
+      properties:
+        name:
+          type: string
+          title: Name
+        prompt:
+          type: string
+          title: Prompt
+    HTTPValidationError:
+      title: HTTPValidationError
+      type: object
+      properties:
+        detail:
+          type: array
+          title: Detail
+          items:
+            $ref: '#/components/schemas/ValidationError'
+    ValidationError:
+      title: ValidationError
+      type: object
+      required:
+        - loc
+        - msg
+        - type
+      properties:
+        loc:
+          type: array
+          title: Location
+          items:
+            anyOf:
+              - type: string
+              - type: integer
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+
+# © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

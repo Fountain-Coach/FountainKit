@@ -1,0 +1,134 @@
+openapi: 3.1.0
+info:
+  title: Budget Breaker Gateway Plugin
+  description: >
+    Enforces request budgets with simple health checks.
+  version: 1.0.0
+
+  x-fountain.port: 8010
+  x-fountain.binary: fountain-gateway
+x-persona: ../personas/budget-breaker.md
+servers:
+  - url: http://budget-breaker.local
+    description: Local development
+  - url: http://budget-breaker.fountain.coach
+paths:
+  /budget/check:
+    post:
+      tags:
+        - BudgetBreaker
+      summary: Check budget
+      description: Checks and consumes budget for a client.
+      operationId: budgetCheck
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BudgetCheckRequest'
+      responses:
+        '200':
+          description: Result of budget check
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetCheckResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /budget/health:
+    post:
+      tags:
+        - BudgetBreaker
+      summary: Health check
+      description: Reports plugin health status.
+      operationId: budgetHealth
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: Health status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetHealthResponse'
+components:
+  schemas:
+    BudgetCheckRequest:
+      title: BudgetCheckRequest
+      type: object
+      required:
+        - routeId
+        - clientId
+        - amount
+      properties:
+        routeId:
+          type: string
+          title: Routeid
+        clientId:
+          type: string
+          title: Clientid
+        amount:
+          type: integer
+          title: Amount
+    BudgetCheckResponse:
+      title: BudgetCheckResponse
+      type: object
+      required:
+        - allowed
+        - remaining
+      properties:
+        allowed:
+          type: boolean
+          title: Allowed
+        remaining:
+          type: integer
+          title: Remaining
+    BudgetHealthResponse:
+      title: BudgetHealthResponse
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          title: Status
+    HTTPValidationError:
+      title: HTTPValidationError
+      type: object
+      properties:
+        detail:
+          type: array
+          title: Detail
+          items:
+            $ref: '#/components/schemas/ValidationError'
+    ValidationError:
+      title: ValidationError
+      type: object
+      required:
+        - loc
+        - msg
+        - type
+      properties:
+        loc:
+          type: array
+          title: Location
+          items:
+            anyOf:
+              - type: string
+              - type: integer
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+
+# © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

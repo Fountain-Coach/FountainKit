@@ -32,6 +32,7 @@ swift build
 swift test --package-path Packages/FountainCore
 swift test --package-path Packages/FountainGatewayKit
 swift test --package-path Packages/FountainTelemetryKit
+swift test --package-path Packages/FountainExamples
 ```
 
 ### Launch the gateway server (assembled from kits)
@@ -39,6 +40,16 @@ swift test --package-path Packages/FountainTelemetryKit
 ```bash
 swift run --package-path Packages/FountainApps gateway-server
 ```
+
+### Run cross-package examples
+
+```bash
+swift run --package-path Packages/FountainExamples hello-fountainai-teatro
+```
+
+The executable seeds an in-memory Fountain Store and routes a request through
+the gateway, planner, and function-caller services, providing integration
+coverage alongside the package tests.
 
 ## Development workflow
 

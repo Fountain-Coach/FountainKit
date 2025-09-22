@@ -1,0 +1,302 @@
+openapi: 3.1.0
+info:
+  title: OpenAPI Curator Service
+  version: 1.0.2
+  x-fountain.port: 8000
+  x-fountain.binary: openapi-curator-service
+paths:
+  /curate:
+    post:
+      tags:
+        - Curator
+      summary: Curate one or more OpenAPI documents
+      operationId: curate
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CurateRequest'
+      responses:
+        '200':
+          description: Curated spec and report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /validate:
+    post:
+      tags:
+        - Curator
+      summary: Validate specs without curating
+      operationId: validate
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateRequest'
+      responses:
+        '200':
+          description: Validation report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationReport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /truth-table:
+    post:
+      tags:
+        - Curator
+      summary: Export truth table for specs
+      operationId: truth_table
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CurateRequest'
+      responses:
+        '200':
+          description: Truth table
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TruthTable'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /rules:
+    get:
+      tags:
+        - Rules
+      summary: Get active curation rules
+      operationId: get_rules
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: Rules YAML as JSON
+          content:
+            application/json:
+              schema:
+                type: object
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      tags:
+        - Rules
+      summary: Replace curation rules
+      operationId: put_rules
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RulesDocument'
+      responses:
+        '204':
+          description: Rules replaced
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /history:
+    get:
+      tags:
+        - History
+      summary: List curated snapshots for a corpus
+      operationId: history
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - in: query
+          name: corpusId
+          schema:
+            type: string
+            example: tools-factory
+          description: Filter snapshots for this corpus
+      responses:
+        '200':
+          description: List of snapshots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /metrics:
+    get:
+      tags:
+        - Metrics
+      summary: Metrics
+      description: Endpoint that serves Prometheus metrics.
+      operationId: metrics_metrics_get
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: Metrics response
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  schemas:
+    CurateRequest:
+      type: object
+      required:
+        - specs
+      properties:
+        corpusId:
+          type: string
+          description: Corpus identifier used for snapshot history
+          example: tools-factory
+        specs:
+          type: array
+          description: OpenAPI documents or URIs to curate
+          items:
+            oneOf:
+              - type: object
+                additionalProperties: true
+              - type: string
+                description: URI to spec
+                example: file://openapi/v1/baseline-awareness.yml
+        submitToToolsFactory:
+          type: boolean
+          description: Submit curated result to Tools Factory
+          default: false
+    CurateResponse:
+      type: object
+      properties:
+        curatedOpenAPI:
+          type: object
+          additionalProperties: true
+          description: Curated OpenAPI document
+        report:
+          $ref: '#/components/schemas/ValidationReport'
+    ValidateRequest:
+      type: object
+      required:
+        - specs
+      properties:
+        specs:
+          type: array
+          description: OpenAPI documents or URIs to validate
+          items:
+            oneOf:
+              - type: object
+                additionalProperties: true
+              - type: string
+                description: URI to spec
+    ValidationReport:
+      type: object
+      properties:
+        removed:
+          type: array
+          items:
+            type: string
+          description: Endpoints removed during curation
+        renamed:
+          type: array
+          items:
+            type: object
+            properties:
+              from:
+                type: string
+              to:
+                type: string
+          description: Endpoints renamed during curation
+        collisions:
+          type: array
+          items:
+            type: object
+            properties:
+              operationId:
+                type: string
+              services:
+                type: array
+                items:
+                  type: string
+          description: Conflicting operation IDs across services
+        warnings:
+          type: array
+          items:
+            type: string
+          description: Non-fatal warnings detected
+    RulesDocument:
+      type: object
+      required:
+        - rules
+      properties:
+        rules:
+          type: object
+          additionalProperties: true
+          description: Rules configuration used during curation
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Invalid spec provided
+    TruthEntry:
+      type: object
+      required:
+        - visibility
+        - allowAsTool
+        - reason
+      properties:
+        visibility:
+          type: string
+        allowAsTool:
+          type: boolean
+        reason:
+          type: string
+    TruthTable:
+      type: object
+      additionalProperties:
+        $ref: '#/components/schemas/TruthEntry'
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+servers:
+  - url: http://openapi-curator.local
+    description: Local development
+  - url: http://openapi-curator.fountain.coach
+
+# © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

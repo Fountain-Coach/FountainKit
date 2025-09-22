@@ -1,0 +1,28 @@
+// swift-tools-version: 6.1
+import PackageDescription
+
+let package = Package(
+    name: "FountainServiceKit-Awareness",
+    platforms: [
+        .macOS(.v13)
+    ],
+    products: [
+        .library(name: "AwarenessService", targets: ["AwarenessService"])
+    ],
+    dependencies: [
+        .package(path: "../FountainCore"),
+        .package(url: "https://github.com/apple/swift-numerics.git", from: "1.0.0"),
+        .package(url: "https://github.com/apple/swift-atomics.git", from: "1.3.0")
+    ],
+    targets: [
+        .target(
+            name: "AwarenessService",
+            dependencies: [
+                .product(name: "FountainRuntime", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "Numerics", package: "swift-numerics"),
+                .product(name: "Atomics", package: "swift-atomics")
+            ]
+        )
+    ]
+)

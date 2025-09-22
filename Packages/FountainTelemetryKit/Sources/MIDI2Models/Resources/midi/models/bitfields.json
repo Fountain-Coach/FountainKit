@@ -1,0 +1,7 @@
+[
+  {"name": "NoteFlags", "bits": [
+    {"name": "isSharp", "offset": 0, "width": 1},
+    {"name": "isFlat", "offset": 1, "width": 1}
+  ]}
+]
+// © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

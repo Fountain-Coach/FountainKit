@@ -1,0 +1,7 @@
+openapi: "3.0.0"
+info:
+  title: Tool Server API
+  version: "1.0.0"
+paths: {}
+
+# © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

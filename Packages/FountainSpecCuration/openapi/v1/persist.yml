@@ -1,0 +1,587 @@
+openapi: 3.1.0
+info:
+  title: FountainStore Persistence Service
+  description: >
+    Persistence and semantic indexing API for FountainAI corpora and related
+    semantic artifacts (baselines, drifts, reflections, functions, history).
+    Collection schemas for pages, segments, entities, tables, and analyses are
+    described in [docs/fountainstore-collections.md](../../docs/fountainstore-collections.md).
+  version: 1.0.2
+  x-fountain.port: 8005
+  x-fountain.binary: persist
+x-persona: ../personas/persist.md
+servers:
+  - url: http://persist.local
+    description: Local development
+  - url: http://persist.fountain.coach
+paths:
+  /capabilities:
+    get:
+      summary: Get supported capabilities
+      operationId: capabilities
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: Capability flags for the persistence service.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Capabilities'
+
+  /corpora:
+    get:
+      summary: List all corpora with pagination support
+      description: |
+        Retrieve a paginated list of all corpus identifiers
+        available in the persistence layer.
+        Useful for clients to discover existing corpora.
+      operationId: listCorpora
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of corpora to return in this response.
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 200
+        - name: offset
+          in: query
+          description: >
+            Number of corpora to skip before starting to collect the
+            result set.
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: A paginated list of corpus IDs.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                    description: Total number of corpora stored.
+                  corpora:
+                    type: array
+                    description: Array of corpus unique identifiers.
+                    items:
+                      type: string
+
+    post:
+      summary: Create a new corpus
+      description: |
+        Initialize a new corpus that will act as a semantic container for
+        baselines, reflections, and other artifacts. Corpus IDs must be unique.
+      operationId: createCorpus
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        description: Corpus creation request payload including unique corpusId.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CorpusCreateRequest'
+      responses:
+        '201':
+          description: Corpus created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CorpusResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /corpora/{corpusId}/baselines:
+    get:
+      summary: List baselines in a corpus, supports pagination
+      description: |
+        Retrieve baseline snapshots stored for the given corpus.
+        Useful for examining historical semantic state.
+      operationId: listBaselines
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: corpusId
+          in: path
+          required: true
+          description: Identifier of the corpus to list baselines for.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Maximum number of baselines to return.
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 200
+        - name: offset
+          in: query
+          description: Number of baselines to skip before returning results.
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: Paginated list of baselines for the corpus.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                    description: Total number of baselines available.
+                  baselines:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Baseline'
+    post:
+      summary: Add a baseline snapshot to a corpus
+      description: |
+        Store a baseline snapshot within the specified corpus. Baselines
+        capture semantic state or data snapshots relevant for drift
+        analysis or reflection.
+      operationId: addBaseline
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: corpusId
+          in: path
+          required: true
+          description: >
+            The unique identifier of the corpus to store the baseline in.
+          schema:
+            type: string
+      requestBody:
+        description: >
+          Baseline data including unique baselineId and textual content.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Baseline'
+      responses:
+        '200':
+          description: Baseline added successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /corpora/{corpusId}/functions:
+    get:
+      summary: List functions in a corpus, supports pagination
+      operationId: listFunctionsInCorpus
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: corpusId
+          in: path
+          required: true
+          description: Corpus identifier to list functions for.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Maximum number of functions to return.
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 200
+        - name: offset
+          in: query
+          description: Number of functions to skip before returning results.
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+        - name: q
+          in: query
+          description: Optional substring filter across name, description, and 
+            httpPath.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated list of functions in the corpus.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                    description: Total functions registered in this corpus.
+                  functions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Function'
+    post:
+      summary: Add a function to a corpus
+      operationId: addFunction
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: corpusId
+          in: path
+          required: true
+          description: Corpus identifier to associate the function with.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Function'
+      responses:
+        '200':
+          description: Function stored successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /corpora/{corpusId}/reflections:
+    post:
+      summary: Add a reflection to a corpus
+      description: |
+        Store a GPT-generated reflection related to the specified corpus.
+        Reflections often include question and answer content useful for
+        semantic reasoning and planning.
+      operationId: addReflection
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: corpusId
+          in: path
+          required: true
+          description: The corpus identifier to associate this reflection with.
+          schema:
+            type: string
+      requestBody:
+        description: >
+          Reflection content including reflectionId, question, and answer.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reflection'
+      responses:
+        '200':
+          description: Reflection added successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+
+    get:
+      summary: List reflections in a corpus, supports pagination
+      description: |
+        Retrieve reflections stored in the given corpus with pagination. Useful
+        for browsing semantic insights or planning data over time.
+      operationId: listReflections
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: corpusId
+          in: path
+          required: true
+          description: Corpus identifier to list reflections for.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Maximum number of reflections to return.
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 200
+        - name: offset
+          in: query
+          description: Number of reflections to skip before returning results.
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: Paginated list of reflections for the corpus.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                    description: Total number of reflections available.
+                  reflections:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Reflection'
+
+  /functions:
+    get:
+      summary: List all registered functions with pagination
+      description: |
+        Retrieve a paginated list of all registered callable functions known to
+        the persistence layer for orchestration and invocation.
+      operationId: listFunctions
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of functions to return.
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 200
+        - name: offset
+          in: query
+          description: Number of functions to skip before returning results.
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+        - name: q
+          in: query
+          description: Optional substring filter across name, description, 
+            httpPath, functionId, and corpusId.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated list of functions.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                    description: Total functions registered.
+                  functions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Function'
+
+  /functions/{functionId}:
+    get:
+      summary: Get function details by ID
+      description: >
+        Retrieve detailed metadata for a registered function by its
+        identifier.
+      operationId: getFunctionDetails
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: functionId
+          in: path
+          required: true
+          description: Unique identifier of the function.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Function metadata retrieved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Function'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+
+  /metrics:
+    get:
+      summary: Metrics
+      description: Endpoint that serves Prometheus metrics.
+      operationId: metrics_metrics_get
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            text/plain:
+              schema:
+                type: string
+
+components:
+  schemas:
+    Capabilities:
+      type: object
+      properties:
+        corpus:
+          type: boolean
+        documents:
+          type: array
+          items:
+            type: string
+        query:
+          type: array
+          items:
+            type: string
+        transactions:
+          type: array
+          items:
+            type: string
+        admin:
+          type: array
+          items:
+            type: string
+        experimental:
+          type: array
+          items:
+            type: string
+
+    BaseEntity:
+      type: object
+      required:
+        - corpusId
+      properties:
+        corpusId:
+          type: string
+          description: Unique corpus identifier to namespace stored data.
+
+    CorpusCreateRequest:
+      type: object
+      required:
+        - corpusId
+      properties:
+        corpusId:
+          type: string
+          description: Unique identifier for the new corpus to be created.
+
+    CorpusResponse:
+      type: object
+      properties:
+        corpusId:
+          type: string
+          description: Identifier of the created corpus.
+        message:
+          type: string
+          description: Human-readable status message.
+
+    Baseline:
+      allOf:
+        - $ref: '#/components/schemas/BaseEntity'
+        - type: object
+          required:
+            - baselineId
+            - content
+          properties:
+            baselineId:
+              type: string
+              description: Unique identifier for this baseline snapshot.
+            content:
+              type: string
+              description: Textual or JSON content of the baseline snapshot.
+
+    Reflection:
+      allOf:
+        - $ref: '#/components/schemas/BaseEntity'
+        - type: object
+          required:
+            - reflectionId
+            - question
+            - content
+          properties:
+            reflectionId:
+              type: string
+              description: Unique identifier for the reflection.
+            question:
+              type: string
+              description: Reflection question or prompt.
+            content:
+              type: string
+              description: Generated response or insight from GPT.
+
+    Function:
+      allOf:
+        - $ref: '#/components/schemas/BaseEntity'
+        - type: object
+          required:
+            - functionId
+            - name
+            - description
+            - httpMethod
+            - httpPath
+          properties:
+            functionId:
+              type: string
+              description: Unique identifier for the registered function.
+            name:
+              type: string
+              description: Human-readable function name.
+            description:
+              type: string
+              description: Description of the function’s purpose.
+            httpMethod:
+              type: string
+              enum: [GET, POST, PUT, PATCH, DELETE]
+              description: HTTP method to invoke the function.
+            httpPath:
+              type: string
+              description: HTTP path used to call the function.
+
+    SuccessResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Success confirmation message.
+          example: Operation successful.
+
+  responses:
+    ErrorResponse:
+      description: Standard error response.
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - code
+              - message
+            properties:
+              code:
+                type: string
+                description: Error code identifier.
+              message:
+                type: string
+                description: Human-readable error message.
+
+# © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.
+
+# © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

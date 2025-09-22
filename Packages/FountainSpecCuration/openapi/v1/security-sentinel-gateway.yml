@@ -1,0 +1,101 @@
+openapi: 3.1.0
+info:
+  title: Security Sentinel Gateway Plugin
+  description: >
+    Consults the Security Sentinel role for allow/deny/escalate decisions.
+  version: 1.0.0
+  x-fountain.port: 8010
+  x-fountain.binary: fountain-gateway
+x-persona: ../personas/security-sentinel.md
+servers:
+  - url: http://security-sentinel.local
+    description: Local development
+  - url: http://security-sentinel.fountain.coach
+paths:
+  /sentinel/consult:
+    post:
+      tags:
+        - Sentinel
+      summary: Consult Security Sentinel
+      description: Sends a summary of a potentially destructive operation for a 
+        decision.
+      operationId: sentinelConsult
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SentinelConsultRequest'
+      responses:
+        '200':
+          description: Decision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SentinelDecision'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    SentinelConsultRequest:
+      title: SentinelConsultRequest
+      type: object
+      required:
+        - summary
+      properties:
+        summary:
+          type: string
+        context:
+          type: string
+          nullable: true
+    SentinelDecision:
+      title: SentinelDecision
+      type: object
+      required:
+        - decision
+      properties:
+        decision:
+          type: string
+          enum:
+            - allow
+            - deny
+            - escalate
+    HTTPValidationError:
+      title: HTTPValidationError
+      type: object
+      properties:
+        detail:
+          type: array
+          title: Detail
+          items:
+            $ref: '#/components/schemas/ValidationError'
+    ValidationError:
+      title: ValidationError
+      type: object
+      required:
+        - loc
+        - msg
+        - type
+      properties:
+        loc:
+          type: array
+          title: Location
+          items:
+            anyOf:
+              - type: string
+              - type: integer
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+
+# © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

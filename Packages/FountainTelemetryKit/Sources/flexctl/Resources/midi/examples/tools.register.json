@@ -1,0 +1,8 @@
+{
+  "v": 1,
+  "ts": 1723622400000,
+  "corr": "c3",
+  "intent": "tools.register",
+  "body": {"tool": "demo"}
+}
+// © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

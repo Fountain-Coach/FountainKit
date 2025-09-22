@@ -1,0 +1,8 @@
+{
+  "v": 1,
+  "ts": 1723622400000,
+  "corr": "c4",
+  "intent": "function.invoke",
+  "body": {"name": "echo", "arguments": {"msg": "hi"}}
+}
+// © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

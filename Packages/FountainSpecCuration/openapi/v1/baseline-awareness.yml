@@ -1,0 +1,511 @@
+openapi: 3.1.0
+info:
+  title: Baseline Awareness Service
+  description: >
+    Manages baselines, drift, patterns, reflection data,
+    and semantic analytics.
+  version: 1.0.0
+  x-fountain.port: 8001
+  x-fountain.binary: baseline-awareness
+servers:
+  - url: http://awareness.local
+    description: Local development
+  - url: http://awareness.fountain.coach
+paths:
+  /health:
+    get:
+      summary: Health
+      operationId: health_health_get
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+  /corpus/init:
+    post:
+      summary: Initialize a new corpus
+      description: Creates a new corpus with the given corpus ID.
+      operationId: initializeCorpus
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InitOut'
+        '422':
+          description: Validation Error
+  /corpus/baseline:
+    post:
+      summary: Add Baseline
+      description: Adds a baseline text to the corpus.
+      operationId: addBaseline
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BaselineRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+        '422':
+          description: Validation Error
+  /corpus/drift:
+    post:
+      summary: Add Drift
+      description: Adds a drift document to the corpus.
+      operationId: addDrift
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DriftRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+        '422':
+          description: Validation Error
+  /corpus/patterns:
+    post:
+      summary: Add Patterns
+      description: Adds narrative patterns to the corpus.
+      operationId: addPatterns
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatternsRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+        '422':
+          description: Validation Error
+  /corpus/reflections:
+    post:
+      summary: Add Reflection
+      description: Adds a reflection item to the corpus.
+      operationId: addReflection
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReflectionRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+        '422':
+          description: Validation Error
+  /corpus/reflections/{corpus_id}:
+    get:
+      summary: List Reflections
+      description: Lists all reflections in the specified corpus.
+      operationId: listReflections
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: corpus_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Corpus Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReflectionSummaryResponse'
+        '422':
+          description: Validation Error
+  /corpus/history/{corpus_id}:
+    get:
+      summary: List History
+      description: Lists the change history of the specified corpus.
+      operationId: listHistory
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: corpus_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Corpus Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistorySummaryResponse'
+        '422':
+          description: Validation Error
+  /corpus/summary/{corpus_id}:
+    get:
+      summary: Summarize History
+      description: Provides a semantic summary of the corpus history.
+      operationId: summarizeHistory
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: corpus_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Corpus Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistorySummaryResponse'
+        '422':
+          description: Validation Error
+  /corpus/history:
+    get:
+      tags:
+        - analytics
+      summary: Read History
+      description: >
+        Retrieve the timeline of all semantic entries for the given corpus.
+      operationId: listHistoryAnalytics
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: corpus_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+        '422':
+          description: Validation Error
+  /corpus/semantic-arc:
+    get:
+      tags:
+        - analytics
+      summary: Read Semantic Arc
+      description: >
+        Construct and return the semantic arc based on the corpus history.
+      operationId: readSemanticArc
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: corpus_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+        '422':
+          description: Validation Error
+  /corpus/history/stream:
+    get:
+      summary: Stream History Analytics
+      operationId: streamHistoryAnalytics
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      description: Stream historical analytics of the corpus.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+        '422':
+          description: Validation Error
+  /metrics:
+    get:
+      summary: Metrics
+      description: Endpoint that serves Prometheus metrics.
+      operationId: metrics_metrics_get
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            text/plain:
+              schema:
+                type: string
+components:
+  schemas:
+    BaselineRequest:
+      type: object
+      title: BaselineRequest
+      required:
+        - corpusId
+        - baselineId
+        - content
+      properties:
+        corpusId:
+          type: string
+          title: Corpusid
+        baselineId:
+          type: string
+          title: Baselineid
+        content:
+          type: string
+          title: Content
+    DriftRequest:
+      type: object
+      title: DriftRequest
+      required:
+        - corpusId
+        - driftId
+        - content
+      properties:
+        corpusId:
+          type: string
+          title: Corpusid
+        driftId:
+          type: string
+          title: Driftid
+        content:
+          type: string
+          title: Content
+    HistorySummaryResponse:
+      type: object
+      title: HistorySummaryResponse
+      required:
+        - summary
+      properties:
+        summary:
+          type: string
+          title: Summary
+    InitIn:
+      type: object
+      title: InitIn
+      required:
+        - corpusId
+      properties:
+        corpusId:
+          type: string
+          title: Corpusid
+    InitOut:
+      type: object
+      title: InitOut
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          title: Message
+    PatternsRequest:
+      type: object
+      title: PatternsRequest
+      required:
+        - corpusId
+        - patternsId
+        - content
+      properties:
+        corpusId:
+          type: string
+          title: Corpusid
+        patternsId:
+          type: string
+          title: Patternsid
+        content:
+          type: string
+          title: Content
+    ReflectionRequest:
+      type: object
+      title: ReflectionRequest
+      required:
+        - corpusId
+        - reflectionId
+        - question
+        - content
+      properties:
+        corpusId:
+          type: string
+          title: Corpusid
+        reflectionId:
+          type: string
+          title: Reflectionid
+        question:
+          type: string
+          title: Question
+        content:
+          type: string
+          title: Content
+    ReflectionSummaryResponse:
+      type: object
+      title: ReflectionSummaryResponse
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          title: Message
+
+    HistoryEvent:
+      oneOf:
+        - $ref: '#/components/schemas/BaselineEvent'
+        - $ref: '#/components/schemas/ReflectionEvent'
+        - $ref: '#/components/schemas/DriftEvent'
+        - $ref: '#/components/schemas/PatternsEvent'
+      discriminator:
+        propertyName: type
+        mapping:
+          baseline: '#/components/schemas/BaselineEvent'
+          reflection: '#/components/schemas/ReflectionEvent'
+          drift: '#/components/schemas/DriftEvent'
+          patterns: '#/components/schemas/PatternsEvent'
+    BaselineEvent:
+      type: object
+      required: [type, id, content_len, ts]
+      properties:
+        type:
+          type: string
+          enum: [baseline]
+        id:
+          type: string
+        content_len:
+          type: integer
+        ts:
+          type: number
+    ReflectionEvent:
+      type: object
+      required: [type, id, question, ts]
+      properties:
+        type:
+          type: string
+          enum: [reflection]
+        id:
+          type: string
+        question:
+          type: string
+        ts:
+          type: number
+    DriftEvent:
+      type: object
+      required: [type, id, content_len, ts]
+      properties:
+        type:
+          type: string
+          enum: [drift]
+        id:
+          type: string
+        content_len:
+          type: integer
+        ts:
+          type: number
+    PatternsEvent:
+      type: object
+      required: [type, id, content_len, ts]
+      properties:
+        type:
+          type: string
+          enum: [patterns]
+        id:
+          type: string
+        content_len:
+          type: integer
+        ts:
+          type: number
+    HistoryEventsResponse:
+      type: object
+      required: [total, events]
+      properties:
+        total:
+          type: integer
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistoryEvent'
+    StreamTickData:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+
+    AwarenessTickData:
+      type: object
+      required: [status, kind]
+      properties:
+        status:
+          type: string
+          enum: [started]
+        kind:
+          type: string
+          const: tick
+    AwarenessCompleteData:
+      type: object
+    AwarenessStreamEvent:
+      discriminator:
+        propertyName: kind
+        mapping:
+          tick:
+
+# © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

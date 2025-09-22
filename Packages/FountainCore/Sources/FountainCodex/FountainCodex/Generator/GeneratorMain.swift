@@ -1,0 +1,39 @@
+import Foundation
+
+/// Command line interface for code generation utilities.
+public struct GeneratorCLI {
+    /// Parses command line arguments and runs generators.
+    /// - Parameter args: Raw argument array excluding the executable name.
+    static func run(args: [String]) throws {
+        var inputPath: String?
+        var outputPath: String?
+        var iterator = args.makeIterator()
+        while let arg = iterator.next() {
+            switch arg {
+            case "--input": inputPath = iterator.next()
+            case "--output": outputPath = iterator.next()
+            default: break
+            }
+        }
+        guard let inputPath, let outputPath else {
+            print("Usage: generator --input <spec> --output <dir>")
+            return
+        }
+        let specURL = URL(fileURLWithPath: inputPath)
+        let outURL = URL(fileURLWithPath: outputPath)
+        let spec = try SpecLoader.load(from: specURL)
+        try FileManager.default.createDirectory(at: outURL, withIntermediateDirectories: true)
+        try ModelEmitter.emit(from: spec, to: outURL)
+        try ClientGenerator.emitClient(from: spec, to: outURL.appendingPathComponent("Client"))
+        try ServerGenerator.emitServer(from: spec, to: outURL.appendingPathComponent("Server"))
+    }
+
+    /// Entry point used by the executable target.
+    public static func main() throws {
+        try run(args: Array(CommandLine.arguments.dropFirst()))
+    }
+}
+
+// try GeneratorCLI.main()
+
+// © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "FountainApps",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v14)
     ],
     products: [
         .executable(name: "gateway-server", targets: ["gateway-server"]),

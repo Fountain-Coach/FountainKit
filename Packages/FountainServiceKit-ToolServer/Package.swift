@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "FountainServiceKit-ToolServer",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v14)
     ],
     products: [
         .library(name: "ToolServer", targets: ["ToolServer"]),

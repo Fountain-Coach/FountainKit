@@ -1,6 +1,4 @@
 import Foundation
-import Crypto
-import Toolsmith
 import FountainStoreClient
 
 public protocol ToolAdapter {
@@ -12,7 +10,6 @@ public struct Router {
     let adapters: [String: ToolAdapter]
     let validator = Validation()
     let manifest: ToolManifest
-    let toolsmith = Toolsmith()
     let persistence: FountainStoreClient?
     let defaultCorpusId: String
 
@@ -57,15 +54,8 @@ public struct Router {
 
         let payload = try JSONDecoder().decode(ToolRequest.self, from: request.body)
         try validator.validate(args: payload.args)
-        let hash = SHA256.hash(data: Data(payload.args.joined(separator: " ").utf8)).compactMap { String(format: "%02x", $0) }.joined()
-        var output = Data()
-        var code: Int32 = -1
-        try toolsmith.run(tool: adapter.tool, metadata: ["args_hash": hash], requestID: payload.request_id ?? UUID().uuidString) {
-            let result = try adapter.run(args: payload.args)
-            output = result.0
-            code = result.1
-        }
-        return HTTPResponse(status: Int(code == 0 ? 200 : 500), body: output)
+        let result = try adapter.run(args: payload.args)
+        return HTTPResponse(status: Int(result.1 == 0 ? 200 : 500), body: result.0)
     }
 
     // MARK: Tools Factory API

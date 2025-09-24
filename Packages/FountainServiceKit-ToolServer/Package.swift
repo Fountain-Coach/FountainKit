@@ -12,20 +12,16 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../FountainCore"),
-        .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
-        .package(url: "https://github.com/Fountain-Coach/toolsmith.git", exact: "1.0.0"),
-        .package(url: "https://github.com/apple/swift-numerics.git", from: "1.0.0"),
-        .package(url: "https://github.com/apple/swift-atomics.git", from: "1.3.0")
+        .package(url: "https://github.com/apple/swift-atomics.git", from: "1.3.0"),
+        .package(url: "https://github.com/apple/swift-numerics.git", from: "1.0.0")
     ],
     targets: [
         .target(
             name: "ToolServer",
             dependencies: [
-                .product(name: "Crypto", package: "swift-crypto"),
-                .product(name: "Toolsmith", package: "toolsmith"),
+                .product(name: "Atomics", package: "swift-atomics"),
                 .product(name: "FountainStoreClient", package: "FountainCore"),
-                .product(name: "Numerics", package: "swift-numerics"),
-                .product(name: "Atomics", package: "swift-atomics")
+                .product(name: "Numerics", package: "swift-numerics")
             ],
             exclude: ["Dockerfile"],
             resources: [

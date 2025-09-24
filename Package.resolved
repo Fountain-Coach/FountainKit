@@ -227,15 +227,6 @@
       }
     },
     {
-      "identity" : "toolsmith",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Fountain-Coach/toolsmith.git",
-      "state" : {
-        "revision" : "e6c3a6c87a266a2433280d4fc1447ccc971f348f",
-        "version" : "1.0.0"
-      }
-    },
-    {
       "identity" : "typesense-swift",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/typesense/typesense-swift.git",

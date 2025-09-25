@@ -21,10 +21,10 @@ struct LocalAgentConfig: Codable {
 struct LocalAgentManager {
     static func main() async {
         var args = CommandLine.arguments.dropFirst()
-        guard let command = args.first else {
-            eprint("usage: local-agent-manager <ensure|start|stop|status|precompile|health> [--repo-root PATH]")
-            exit(2)
-        }
+            guard let command = args.first else {
+                eprint("usage: local-agent-manager <ensure|start|stop|status|precompile|health|watch|doctor> [--repo-root PATH]")
+                exit(2)
+            }
         args = args.dropFirst()
         let repoRoot = parseOption(name: "--repo-root", in: &args) ?? FileManager.default.currentDirectoryPath
         do {
@@ -36,6 +36,10 @@ struct LocalAgentManager {
                 try ensureRepo(config: config, repoRoot: repoRoot)
                 try configureAgent(config: config, repoRoot: repoRoot)
                 try await start(config: config, repoRoot: repoRoot)
+            case "watch":
+                try ensureRepo(config: config, repoRoot: repoRoot)
+                try configureAgent(config: config, repoRoot: repoRoot)
+                try await watch(config: config, repoRoot: repoRoot)
             case "stop":
                 try stop(repoRoot: repoRoot)
             case "status":
@@ -49,6 +53,8 @@ struct LocalAgentManager {
                 let ok = await health(config: config)
                 print(ok ? "ok" : "fail")
                 exit(ok ? 0 : 1)
+            case "doctor":
+                await doctor(config: config, repoRoot: repoRoot)
             default:
                 eprint("unknown command: \(command)")
                 exit(2)
@@ -143,12 +149,14 @@ struct LocalAgentManager {
         let pidStr = String(task.processIdentifier)
         try FileManager.default.createDirectory(at: pidFile.deletingLastPathComponent(), withIntermediateDirectories: true)
         try pidStr.data(using: .utf8)?.write(to: pidFile)
-        // wait until health ok or timeout
-        for _ in 0..<60 {
+        // wait until health ok or timeout (extend to ~30s)
+        for _ in 0..<120 {
             if await health(config: config) { print("healthy"); return }
             try await Task.sleep(nanoseconds: 250_000_000)
         }
-        eprint("failed to become healthy")
+        eprint("failed to become healthy after 30s; attempting fallback mock-localagent")
+        // Fallback: start the bundled mock-localagent-server on the same port
+        try startMock(repoRoot: repoRoot)
     }
 
     static func stop(repoRoot: String) throws {
@@ -159,6 +167,12 @@ struct LocalAgentManager {
         }
         kill(p, SIGTERM)
         try? FileManager.default.removeItem(at: pidFile)
+        // Also stop fallback mock if present
+        let mockPid = mockPidURL(repoRoot: repoRoot)
+        if let pid = try? String(contentsOf: mockPid), let p = Int32(pid.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            kill(p, SIGTERM)
+            try? FileManager.default.removeItem(at: mockPid)
+        }
     }
 
     // MARK: - Precompile
@@ -196,6 +210,10 @@ struct LocalAgentManager {
         URL(fileURLWithPath: repoRoot).appendingPathComponent(".fountain/pids/local-agent.pid")
     }
 
+    static func mockPidURL(repoRoot: String) -> URL {
+        URL(fileURLWithPath: repoRoot).appendingPathComponent(".fountain/pids/mock-localagent.pid")
+    }
+
     static func parseOption(name: String, in args: inout ArraySlice<String>) -> String? {
         if let idx = args.firstIndex(of: name) {
             let valIdx = args.index(after: idx)
@@ -213,4 +231,73 @@ let stderr = FileHandle.standardError
 func eprint(_ items: Any..., to handle: FileHandle = stderr) {
     let text = items.map { String(describing: $0) }.joined(separator: " ") + "\n"
     handle.write(Data(text.utf8))
+}
+
+// MARK: - Fallback + Watch + Doctor
+extension LocalAgentManager {
+    static func startMock(repoRoot: String) throws {
+        let logDir = URL(fileURLWithPath: repoRoot).appendingPathComponent(".fountain/logs", isDirectory: true)
+        try FileManager.default.createDirectory(at: logDir, withIntermediateDirectories: true)
+        let logURL = logDir.appendingPathComponent("mock-localagent.log")
+        if !FileManager.default.fileExists(atPath: logURL.path) {
+            _ = FileManager.default.createFile(atPath: logURL.path, contents: nil)
+        }
+        let pidFile = mockPidURL(repoRoot: repoRoot)
+        let task = Process()
+        task.currentDirectoryURL = URL(fileURLWithPath: repoRoot)
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        task.arguments = ["swift", "run", "--package-path", "Packages/FountainApps", "mock-localagent-server"]
+        let fh = try FileHandle(forWritingTo: logURL)
+        task.standardOutput = fh
+        task.standardError = fh
+        try task.run()
+        let pidStr = String(task.processIdentifier)
+        try FileManager.default.createDirectory(at: pidFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try pidStr.data(using: .utf8)?.write(to: pidFile)
+        print("mock-localagent started pid \(pidStr)")
+    }
+
+    static func watch(config: LocalAgentConfig, repoRoot: String) async throws {
+        // Simple supervisor: ensure one of LocalAgent or mock is healthy; otherwise start LocalAgent
+        while true {
+            if await health(config: config) {
+                try? FileManager.default.removeItem(at: mockPidURL(repoRoot: repoRoot))
+                try? FileManager.default.removeItem(at: pidURL(repoRoot: repoRoot))
+                // Quick write indicating healthy state
+                print("watch: healthy")
+            } else {
+                eprint("watch: not healthy; attempting restart")
+                try? stop(repoRoot: repoRoot)
+                try? await start(config: config, repoRoot: repoRoot)
+            }
+            try await Task.sleep(nanoseconds: 2_000_000_000)
+        }
+    }
+
+    static func doctor(config: LocalAgentConfig, repoRoot: String) async {
+        print("— LocalAgent Doctor —")
+        // Check repo exists
+        let dirURL = URL(fileURLWithPath: repoRoot, isDirectory: true).appendingPathComponent(config.rel_dir, isDirectory: true)
+        var isDir: ObjCBool = false
+        if FileManager.default.fileExists(atPath: dirURL.path, isDirectory: &isDir), isDir.boolValue {
+            print("Repo: OK at \(dirURL.path)")
+        } else {
+            print("Repo: MISSING at \(dirURL.path); run ensure")
+        }
+        // Config file
+        let configFile = dirURL.appendingPathComponent("AgentService/agent-config.json")
+        if FileManager.default.fileExists(atPath: configFile.path) {
+            print("Config: OK at \(configFile.path)")
+        } else {
+            print("Config: MISSING; start will create a minimal one")
+        }
+        // Port check via health
+        let ok = await health(config: config)
+        print("Health: \(ok ? "OK" : "FAIL") at http://\(config.host):\(config.port)/health")
+        // Suggest next steps
+        if !ok {
+            print("Try: local-agent-manager start --repo-root \(repoRoot)")
+            print("If it fails, see logs: .fountain/logs/local-agent.log ; fallback mock: .fountain/logs/mock-localagent.log")
+        }
+    }
 }

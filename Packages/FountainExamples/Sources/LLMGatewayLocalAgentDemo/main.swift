@@ -5,15 +5,11 @@ import LLMGatewayPlugin
 @main
 struct Demo {
     static func main() async {
-        let router = LLMGatewayPlugin.Router()
-        let reqBody = LLMGatewayPlugin.ChatRequest(
+        let router = Router()
+        let reqBody = ChatRequest(
             model: "local-mock-1",
-            messages: [
-                .init(role: "user", content: "call schedule_meeting with {\"title\":\"Team sync\",\"time\":\"2025-01-01 10:00\"}")
-            ],
-            functions: [
-                .init(name: "schedule_meeting", description: "Schedule a meeting")
-            ],
+            messages: [MessageObject(role: "user", content: "call schedule_meeting with {\"title\":\"Team sync\",\"time\":\"2025-01-01 10:00\"}")],
+            functions: [FunctionObject(name: "schedule_meeting", description: "Schedule a meeting")],
             function_call: .auto
         )
         do {
@@ -31,4 +27,3 @@ struct Demo {
         }
     }
 }
-

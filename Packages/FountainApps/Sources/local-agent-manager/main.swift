@@ -22,7 +22,7 @@ struct LocalAgentManager {
     static func main() async {
         var args = CommandLine.arguments.dropFirst()
         guard let command = args.first else {
-            print("usage: local-agent-manager <ensure|start|stop|status|precompile|health> [--repo-root PATH]", to: &stderr)
+            eprint("usage: local-agent-manager <ensure|start|stop|status|precompile|health> [--repo-root PATH]")
             exit(2)
         }
         args = args.dropFirst()
@@ -50,11 +50,11 @@ struct LocalAgentManager {
                 print(ok ? "ok" : "fail")
                 exit(ok ? 0 : 1)
             default:
-                print("unknown command: \(command)", to: &stderr)
+                eprint("unknown command: \(command)")
                 exit(2)
             }
         } catch {
-            print("local-agent-manager error: \(error)", to: &stderr)
+            eprint("local-agent-manager error: \(error)")
             exit(1)
         }
     }
@@ -145,7 +145,7 @@ struct LocalAgentManager {
             if await health(config: config) { print("healthy"); return }
             try await Task.sleep(nanoseconds: 250_000_000)
         }
-        print("failed to become healthy", to: &stderr)
+        eprint("failed to become healthy")
     }
 
     static func stop(repoRoot: String) throws {
@@ -206,12 +206,8 @@ struct LocalAgentManager {
 }
 
 // MARK: - Stderr helper
-var stderr = FileHandle.standardError
-extension String: TextOutputStream {
-    public mutating func write(_ string: String) { }
-}
-func print(_ items: Any..., to: inout FileHandle) {
+let stderr = FileHandle.standardError
+func eprint(_ items: Any..., to handle: FileHandle = stderr) {
     let text = items.map { String(describing: $0) }.joined(separator: " ") + "\n"
-    to.write(Data(text.utf8))
+    handle.write(Data(text.utf8))
 }
-

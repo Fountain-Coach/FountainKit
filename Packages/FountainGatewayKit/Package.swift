@@ -44,7 +44,8 @@ let package = Package(
         .target(
             name: "LLMGatewayPlugin",
             dependencies: [
-                .product(name: "FountainRuntime", package: "FountainCore")
+                .product(name: "FountainRuntime", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
             ]
         ),
         .target(

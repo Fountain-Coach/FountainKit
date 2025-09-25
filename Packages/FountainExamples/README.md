@@ -43,3 +43,14 @@ try await example.seedScheduleMeetingFunction()
 
 Pair this with the `openapi/personas/local-agent.md` persona and a running
 LocalAgent service at `http://127.0.0.1:8080` to exercise function-calling.
+
+### LLM Gateway ↔ LocalAgent demo
+
+Run a forwarder demo that hits the LLM Gateway’s `/chat` and forwards to LocalAgent:
+
+```bash
+swift run --package-path Packages/FountainExamples llm-gateway-localagent-demo
+```
+
+This expects LocalAgent to be running (mock backend is fine). It sends a
+`schedule_meeting` request and prints the upstream response.

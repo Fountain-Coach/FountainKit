@@ -18,7 +18,8 @@ let package = Package(
         .executable(name: "semantic-browser-server", targets: ["semantic-browser-server"]),
         .executable(name: "publishing-frontend", targets: ["publishing-frontend"]),
         .executable(name: "tutor-dashboard", targets: ["tutor-dashboard"]),
-        .executable(name: "FountainLauncherUI", targets: ["FountainLauncherUI"])
+        .executable(name: "FountainLauncherUI", targets: ["FountainLauncherUI"]),
+        .executable(name: "local-agent-manager", targets: ["local-agent-manager"])
     ],
     dependencies: [
         .package(path: "../FountainCore"),
@@ -166,6 +167,12 @@ let package = Package(
             ],
             path: "Sources/FountainLauncherUI",
             exclude: ["README.md"]
+        ),
+        .executableTarget(
+            name: "local-agent-manager",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ]
         ),
         .testTarget(
             name: "FountainLauncherUITests",

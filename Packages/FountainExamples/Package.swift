@@ -8,7 +8,8 @@ let package = Package(
     ],
     products: [
         .library(name: "FountainExamples", targets: ["FountainExamples"]),
-        .executable(name: "hello-fountainai-teatro", targets: ["HelloFountainAITeatro"])
+        .executable(name: "hello-fountainai-teatro", targets: ["HelloFountainAITeatro"]),
+        .executable(name: "llm-gateway-localagent-demo", targets: ["LLMGatewayLocalAgentDemo"])
     ],
     dependencies: [
         .package(path: "../FountainCore"),
@@ -31,6 +32,13 @@ let package = Package(
             name: "HelloFountainAITeatro",
             dependencies: [
                 "FountainExamples"
+            ]
+        ),
+        .executableTarget(
+            name: "LLMGatewayLocalAgentDemo",
+            dependencies: [
+                .product(name: "FountainRuntime", package: "FountainCore"),
+                .product(name: "LLMGatewayPlugin", package: "FountainGatewayKit")
             ]
         ),
         .testTarget(

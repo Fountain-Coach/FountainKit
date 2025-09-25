@@ -25,12 +25,18 @@ case "$COMMAND" in
     if [[ $# -gt 0 ]]; then
       echo "[launcher] Options: $*" | tee -a "$LOG_DIR/launcher.log"
     fi
+    # Start LocalAgent under launcher control via manager (config from ConfigurationStore or Configuration/local-agent.json)
+    swift run --package-path "$REPO_ROOT/Packages/FountainApps" local-agent-manager ensure --repo-root "$REPO_ROOT" >>"$LOG_DIR/launcher.log" 2>&1 || true
+    swift run --package-path "$REPO_ROOT/Packages/FountainApps" local-agent-manager start --repo-root "$REPO_ROOT" >>"$LOG_DIR/launcher.log" 2>&1 || true
     ;;
   stop)
     echo "[launcher] Stopping Fountain services" | tee "$LOG_DIR/launcher.log"
+    swift run --package-path "$REPO_ROOT/Packages/FountainApps" local-agent-manager stop --repo-root "$REPO_ROOT" >>"$LOG_DIR/launcher.log" 2>&1 || true
     ;;
   precompile)
     echo "[launcher] Precompiling Fountain services" | tee "$LOG_DIR/launcher.log"
+    swift build --package-path "$REPO_ROOT/Packages/FountainApps" -c release >>"$LOG_DIR/launcher.log" 2>&1 || true
+    swift run --package-path "$REPO_ROOT/Packages/FountainApps" -c release local-agent-manager precompile --repo-root "$REPO_ROOT" >>"$LOG_DIR/launcher.log" 2>&1 || true
     ;;
   *)
     usage >&2

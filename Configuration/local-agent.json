@@ -1,0 +1,7 @@
+{
+  "repo_url": "https://github.com/Fountain-Coach/LocalAgent",
+  "rel_dir": "External/LocalAgent",
+  "backend": "mock",
+  "host": "127.0.0.1",
+  "port": 8080
+}

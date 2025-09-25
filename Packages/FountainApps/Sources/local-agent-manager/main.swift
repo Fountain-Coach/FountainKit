@@ -129,6 +129,9 @@ struct LocalAgentManager {
         let logDir = URL(fileURLWithPath: repoRoot).appendingPathComponent(".fountain/logs", isDirectory: true)
         try FileManager.default.createDirectory(at: logDir, withIntermediateDirectories: true)
         let logURL = logDir.appendingPathComponent("local-agent.log")
+        if !FileManager.default.fileExists(atPath: logURL.path) {
+            _ = FileManager.default.createFile(atPath: logURL.path, contents: nil)
+        }
         let task = Process()
         task.currentDirectoryURL = dir
         task.executableURL = URL(fileURLWithPath: "/usr/bin/env")

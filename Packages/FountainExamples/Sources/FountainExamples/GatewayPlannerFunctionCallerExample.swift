@@ -48,6 +48,23 @@ public struct GatewayPlannerFunctionCallerExample: Sendable {
         return demoFunction
     }
 
+    /// Seeds an example function compatible with LocalAgent function-calling docs.
+    /// This does not affect existing tests; invoke from demos as needed.
+    @discardableResult
+    public func seedScheduleMeetingFunction() async throws -> FunctionModel {
+        _ = try await store.createCorpus(corpusId)
+        let fn = FunctionModel(
+            corpusId: corpusId,
+            functionId: "schedule_meeting",
+            name: "schedule_meeting",
+            description: "Schedule a meeting",
+            httpMethod: "POST",
+            httpPath: "/schedule_meeting"
+        )
+        _ = try await store.addFunction(fn)
+        return fn
+    }
+
     /// Runs the end-to-end demo flow by consulting the gateway and then calling
     /// into the planner and function caller services.
     public func runDemoFlow(objective: String) async throws -> Outcome {

@@ -30,3 +30,16 @@ swift test --package-path Packages/FountainExamples
 
 Running the tests exercises the same cross-package flow to ensure regressions in
 any of the participating kits are caught during CI.
+
+## LocalAgent integration hint
+
+To mirror the LocalAgent integration guide, you can seed a demo
+`schedule_meeting` function in the embedded store from your own example code:
+
+```swift
+let example = GatewayPlannerFunctionCallerExample()
+try await example.seedScheduleMeetingFunction()
+```
+
+Pair this with the `openapi/personas/local-agent.md` persona and a running
+LocalAgent service at `http://127.0.0.1:8080` to exercise function-calling.

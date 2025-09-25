@@ -93,6 +93,7 @@ The following personas drive Gateway plugin behaviour via the LLM:
 - [Destructive Guardian Persona](personas/destructive-guardian.md) – [Spec](v1/destructive-guardian-gateway.yml)
 - [Role Health Check Persona](personas/role-health-check.md) – [Spec](v1/role-health-check-gateway.yml)
 - [Persistence Service Persona](personas/persist.md) – [Spec](v1/persist.yml)
+- [Local Agent Persona](personas/local-agent.md) – [Spec](v1/llm-gateway.yml)
 
 ### Default Roles
 

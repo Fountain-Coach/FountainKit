@@ -8,6 +8,8 @@ import Foundation
 ///   present and the user hints a call like "call <name> with {json}", it emits
 ///   an OpenAI-style function_call response. Otherwise it echoes text.
 struct LocalCoreMLAdapter: Sendable {
+    private let modelPath: String?
+    init(modelPath: String? = nil) { self.modelPath = modelPath }
     func respond(to req: ChatRequest) throws -> Data {
         // Minimal heuristic for function_call: detect "call <name> with {..}"
         let lastUser = req.messages.last(where: { $0.role.lowercased() == "user" })?.content ?? ""
@@ -17,13 +19,10 @@ struct LocalCoreMLAdapter: Sendable {
             return try JSONSerialization.data(withJSONObject: resp, options: [])
         }
         // Otherwise plain text reply (optionally mention CoreML model if provided)
-        let modelHint = ProcessInfo.processInfo.environment["LLM_COREML_MODEL"]
-        let text: String
-        if let mh = modelHint, !mh.isEmpty {
-            text = "[coreml:\(URL(fileURLWithPath: mh).lastPathComponent)] " + defaultTextReply(for: lastUser, functions: req.functions)
-        } else {
-            text = defaultTextReply(for: lastUser, functions: req.functions)
-        }
+        let text: String = {
+            if let mh = modelPath, !mh.isEmpty { return "[coreml:\(URL(fileURLWithPath: mh).lastPathComponent)] " + defaultTextReply(for: lastUser, functions: req.functions) }
+            return defaultTextReply(for: lastUser, functions: req.functions)
+        }()
         let resp = makeTextResponse(model: req.model, text: text)
         return try JSONSerialization.data(withJSONObject: resp, options: [])
     }
@@ -97,4 +96,3 @@ struct LocalCoreMLAdapter: Sendable {
         return obj
     }
 }
-

@@ -19,7 +19,8 @@ let package = Package(
         .executable(name: "publishing-frontend", targets: ["publishing-frontend"]),
         .executable(name: "tutor-dashboard", targets: ["tutor-dashboard"]),
         .executable(name: "FountainLauncherUI", targets: ["FountainLauncherUI"]),
-        .executable(name: "local-agent-manager", targets: ["local-agent-manager"])
+        .executable(name: "local-agent-manager", targets: ["local-agent-manager"]),
+        .executable(name: "mock-localagent-server", targets: ["mock-localagent-server"])
     ],
     dependencies: [
         .package(path: "../FountainCore"),
@@ -172,6 +173,12 @@ let package = Package(
             name: "local-agent-manager",
             dependencies: [
                 .product(name: "FountainStoreClient", package: "FountainCore")
+            ]
+        ),
+        .executableTarget(
+            name: "mock-localagent-server",
+            dependencies: [
+                .product(name: "FountainRuntime", package: "FountainCore")
             ]
         ),
         .testTarget(

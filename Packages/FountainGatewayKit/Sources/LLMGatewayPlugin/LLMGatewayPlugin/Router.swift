@@ -12,7 +12,8 @@ public struct Router: Sendable {
     /// - Parameter request: Incoming HTTP request.
     /// - Returns: A response if a matching route is found, otherwise `nil`.
     public func route(_ request: HTTPRequest) async throws -> HTTPResponse? {
-        switch (request.method, request.path.split(separator: "/", omittingEmptySubsequences: true)) {
+        let pathOnly = request.path.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? request.path
+        switch (request.method, pathOnly.split(separator: "/", omittingEmptySubsequences: true)) {
         case ("GET", ["metrics"]):
             return await handlers.metrics_metrics_get()
         case ("POST", ["chat"]):

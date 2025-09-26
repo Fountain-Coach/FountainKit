@@ -4,13 +4,14 @@ set -euo pipefail
 usage() {
   cat <<USAGE
 Usage:
-  $(basename "$0") [env|--all]
+  $(basename "$0") [env|--all|--check]
 
 Commands:
   env       Export LAUNCHER_SIGNATURE into current shell (when sourced)
 
 Options:
   --all     Start optional extras (semantic-browser, tools-factory, tool-server, publishing-frontend)
+  --check   Wait for readiness on common endpoints (timeout ~30s per service)
 USAGE
 }
 
@@ -37,12 +38,14 @@ if [[ "${1:-}" == "env" ]]; then
 fi
 
 ALL=0
+CHECK=0
 for a in "$@"; do
   if [[ "$a" == "--help" || "$a" == "-h" ]]; then
     usage
     exit 0
   fi
   if [[ "$a" == "--all" ]]; then ALL=1; fi
+  if [[ "$a" == "--check" ]]; then CHECK=1; fi
 done
 
 # Helpers
@@ -69,6 +72,31 @@ is_port_listening() {
     return $?
   fi
   return 1
+}
+
+http_200() {
+  local url="$1"
+  command -v curl >/dev/null 2>&1 || return 1
+  curl -sf --max-time 2 "$url" >/dev/null 2>&1
+}
+
+wait_ready() {
+  local name="$1"; shift
+  local url="$1"; shift
+  local timeout="${1:-30}"; shift || true
+  local start=$(date +%s)
+  while true; do
+    if http_200 "$url"; then
+      echo "[dev-up] $name ready at $url"
+      return 0
+    fi
+    local now=$(date +%s)
+    if (( now - start >= timeout )); then
+      echo "[dev-up] WARN: $name not ready after ${timeout}s ($url)" >&2
+      return 1
+    fi
+    sleep 0.5
+  done
 }
 
 # Prefer prebuilt binaries by default; build once if missing.
@@ -135,6 +163,22 @@ if [[ "$ALL" == "1" ]]; then
   start_bg tools-factory tools-factory-server
   start_bg tool-server tool-server
   start_bg publishing-frontend publishing-frontend
+fi
+
+if [[ "$CHECK" == "1" || "${DEV_UP_CHECKS:-0}" == "1" ]]; then
+  # Common readiness probes
+  wait_ready baseline-awareness http://127.0.0.1:8001/metrics || true
+  wait_ready bootstrap          http://127.0.0.1:8002/metrics || true
+  wait_ready planner            http://127.0.0.1:8003/metrics || true
+  wait_ready function-caller    http://127.0.0.1:8004/metrics || true
+  wait_ready persist            http://127.0.0.1:8005/metrics || true
+  wait_ready gateway            http://127.0.0.1:8010/metrics || true
+  if [[ "$ALL" == "1" ]]; then
+    wait_ready tools-factory    http://127.0.0.1:8011/metrics || true
+    wait_ready tool-server      http://127.0.0.1:8012/_health || true
+    # semantic-browser exposes /metrics per its README; may depend on env, so mark optional
+    wait_ready semantic-browser http://127.0.0.1:8007/metrics || true
+  fi
 fi
 
 echo "[dev-up] Done. Logs under .fountain/logs; pids under .fountain/pids"

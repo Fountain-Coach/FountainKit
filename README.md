@@ -2,6 +2,8 @@
 
 FountainKit is the Swift Package Manager workspace that powers FountainAI for the Fountain Coach GitHub organization. It decomposes the original monolithic package into focused modules that can evolve, test, and ship independently.
 
+See ONBOARDING.md for a 10‑minute quickstart with dev scripts.
+
 ## Repository layout
 
 | Path | Purpose |

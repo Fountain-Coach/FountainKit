@@ -184,6 +184,10 @@ let package = Package(
         .testTarget(
             name: "FountainLauncherUITests",
             dependencies: ["FountainLauncherUI"]
+        ),
+        .testTarget(
+            name: "FountainDevScriptsTests",
+            dependencies: []
         )
     ]
 )

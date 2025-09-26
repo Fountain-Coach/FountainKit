@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<USAGE
+Usage:
+  $(basename "$0") [env|--all]
+
+Commands:
+  env       Export LAUNCHER_SIGNATURE into current shell (when sourced)
+
+Options:
+  --all     Start optional extras (semantic-browser, tools-factory, tool-server, publishing-frontend)
+USAGE
+}
+
+# Determine repo root
+REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)
+LOG_DIR="$REPO_ROOT/.fountain/logs"
+PID_DIR="$REPO_ROOT/.fountain/pids"
+mkdir -p "$LOG_DIR" "$PID_DIR"
+
+# Use existing signature if provided, else fall back to embedded default
+DEFAULT_SIG="B86D7CEE-24C4-4C4C-A107-8D0542D1965B"
+SIG="${LAUNCHER_SIGNATURE:-$DEFAULT_SIG}"
+
+if [[ "${1:-}" == "env" ]]; then
+  # If sourced, export into caller's shell
+  if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+    export LAUNCHER_SIGNATURE="$SIG"
+    echo "[dev-up] Exported LAUNCHER_SIGNATURE=$LAUNCHER_SIGNATURE"
+    return 0
+  else
+    echo "[dev-up] Tip: run 'source Scripts/dev-up env' to export into current shell"
+    exit 0
+  fi
+fi
+
+ALL=0
+for a in "$@"; do
+  if [[ "$a" == "--help" || "$a" == "-h" ]]; then
+    usage
+    exit 0
+  fi
+  if [[ "$a" == "--all" ]]; then ALL=1; fi
+done
+
+start_bg() {
+  local name="$1"; shift
+  local target="$1"; shift
+  local pid_file="$PID_DIR/$name.pid"
+  local log_file="$LOG_DIR/$name.log"
+  if [[ -f "$pid_file" ]] && kill -0 "$(cat "$pid_file" 2>/dev/null)" 2>/dev/null; then
+    echo "[dev-up] $name already running (pid $(cat "$pid_file"))"
+    return 0
+  fi
+  : >"$log_file"
+  echo "[dev-up] Starting $name → $log_file"
+  if [[ "${DEV_UP_USE_BIN:-0}" == "1" ]]; then
+    local BIN_DIR="$REPO_ROOT/Packages/FountainApps/.build/debug"
+    nohup env LAUNCHER_SIGNATURE="$SIG" \
+      "$BIN_DIR/$target" \
+        >>"$log_file" 2>&1 &
+  else
+    nohup env LAUNCHER_SIGNATURE="$SIG" \
+      swift run --package-path "$REPO_ROOT/Packages/FountainApps" "$target" \
+        >>"$log_file" 2>&1 &
+  fi
+  echo $! >"$pid_file"
+  sleep 0.2
+}
+
+if [[ "${DEV_UP_NO_START_LOCAL_AGENT:-0}" != "1" ]]; then
+  echo "[dev-up] Ensuring LocalAgent (see .fountain/logs/launcher.log)"
+  "$REPO_ROOT/Scripts/launcher" start || true
+fi
+
+# Core services (ordered: deps first, gateway last)
+start_bg baseline-awareness baseline-awareness-server
+start_bg bootstrap bootstrap-server
+start_bg planner planner-server
+start_bg function-caller function-caller-server
+start_bg persist persist-server
+start_bg gateway gateway-server
+
+if [[ "$ALL" == "1" ]]; then
+  start_bg semantic-browser semantic-browser-server
+  start_bg tools-factory tools-factory-server
+  start_bg tool-server tool-server
+  start_bg publishing-frontend publishing-frontend
+fi
+
+echo "[dev-up] Done. Logs under .fountain/logs; pids under .fountain/pids"
+echo "[dev-up] Tip: 'source Scripts/dev-up env' to export LAUNCHER_SIGNATURE into your shell"

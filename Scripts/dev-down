@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<USAGE
+Usage:
+  $(basename "$0") [--all]
+
+Stops background FountainKit dev processes started by Scripts/dev-up and the LocalAgent.
+
+Options:
+  --all   Also stop optional extras (semantic-browser, tools-factory, tool-server, publishing-frontend)
+USAGE
+}
+
+REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)
+PID_DIR="$REPO_ROOT/.fountain/pids"
+
+ALL=0
+for a in "$@"; do
+  if [[ "$a" == "--help" || "$a" == "-h" ]]; then
+    usage; exit 0
+  fi
+  if [[ "$a" == "--all" ]]; then ALL=1; fi
+done
+
+stop_pid() {
+  local name="$1"; shift
+  local pid_file="$PID_DIR/$name.pid"
+  if [[ -f "$pid_file" ]]; then
+    local pid
+    pid=$(cat "$pid_file" 2>/dev/null || true)
+    if [[ -n "${pid:-}" ]] && kill -0 "$pid" 2>/dev/null; then
+      echo "[dev-down] Stopping $name (pid $pid)"
+      kill "$pid" 2>/dev/null || true
+      sleep 0.2
+    else
+      echo "[dev-down] $name not running; cleaning stale pid file"
+    fi
+    rm -f "$pid_file"
+  fi
+}
+
+# Core
+for svc in baseline-awareness bootstrap planner function-caller persist gateway; do
+  stop_pid "$svc"
+done
+
+if [[ "$ALL" == "1" ]]; then
+  for svc in semantic-browser tools-factory tool-server publishing-frontend; do
+    stop_pid "$svc"
+  done
+fi
+
+echo "[dev-down] Stopping LocalAgent (and mock fallback if present)"
+"$REPO_ROOT/Scripts/launcher" stop || true
+
+echo "[dev-down] Done."
+

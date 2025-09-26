@@ -14,4 +14,9 @@ jobs:
       - name: Smoke test
         run: |
           bash Scripts/ci-smoke.sh
-
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fountain-logs
+          path: .fountain/logs

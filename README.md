@@ -4,6 +4,11 @@ FountainKit is the Swift Package Manager workspace that powers FountainAI for th
 
 See ONBOARDING.md for a 10‑minute quickstart with dev scripts.
 
+Quick dev helpers:
+- `Scripts/dev-up` – start core services (use `--check` for readiness)
+- `Scripts/dev-down` – stop services (use `--force` to clear ports)
+- `Scripts/dev-status` – show service/port/PID status at a glance
+
 ## Repository layout
 
 | Path | Purpose |

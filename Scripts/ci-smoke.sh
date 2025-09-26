@@ -13,6 +13,9 @@ echo "[ci-smoke] Starting core services with readiness checks…"
 DEV_UP_USE_BIN=1 DEV_UP_NO_START_LOCAL_AGENT=1 DEV_UP_CHECKS=1 \
   bash "$ROOT/Scripts/dev-up"
 
+echo "[ci-smoke] Status snapshot:"
+bash "$ROOT/Scripts/dev-status" || true
+
 echo "[ci-smoke] Probing gateway metrics…"
 curl -sf --max-time 5 http://127.0.0.1:8010/metrics >/dev/null
 
@@ -29,4 +32,3 @@ echo "[ci-smoke] Shutting down…"
 bash "$ROOT/Scripts/dev-down" --force
 
 echo "[ci-smoke] OK"
-

@@ -11,6 +11,8 @@ This guide helps you run FountainKit locally in minutes without learning every p
 - Export the launcher signature and start the core services in the background:
   - `Scripts/dev-up` (prefers prebuilt binaries; builds once if needed)
   - Tip: to also export the signature into your current shell, run: `source Scripts/dev-up env`
+- Optional: wait for readiness probes and JSON metrics
+  - `Scripts/dev-up --check`
 - Verify gateway is up:
   - `curl -s http://127.0.0.1:8010/metrics | head -n1`
 - Exercise the gateway → LocalAgent path:
@@ -18,10 +20,17 @@ This guide helps you run FountainKit locally in minutes without learning every p
 - Stop everything:
   - `Scripts/dev-down`
 
+## Check Status
+
+- Inspect which services are up, which ports they listen on, and PIDs:
+  - `Scripts/dev-status`
+  - Output columns: `SERVICE`, `PORT`, `STATUS` (up/down), `PID` (if managed by dev-up)
+
 ## What Dev Scripts Do
 
 - `Scripts/dev-up` starts core servers in the background with logs and pids under `.fountain/` and injects the required `LAUNCHER_SIGNATURE` for signed targets.
 - `Scripts/dev-down` stops those background servers and the LocalAgent.
+- `Scripts/dev-status` shows a quick overview of listeners and known PIDs.
 
 Core services started by default:
 - gateway-server (8010)
@@ -70,6 +79,12 @@ Optional extras with `--all`:
   - Adjust `PORT` env per service as needed, e.g. `PORT=9000 swift run --package-path Packages/FountainApps gateway-server`.
 - Where are logs/pids?
   - `.fountain/logs/*.log` and `.fountain/pids/*.pid`
+
+## CI Smoke
+
+- Run the local smoke script that builds, starts core services with readiness, probes a few endpoints and tears down:
+  - `bash Scripts/ci-smoke.sh`
+- In CI, a workflow `.github/workflows/ci-smoke.yml` runs this on push/PR and uploads `.fountain/logs` as an artifact for debugging.
 
 ## File References
 

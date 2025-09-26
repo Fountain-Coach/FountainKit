@@ -99,6 +99,42 @@ wait_ready() {
   done
 }
 
+# JSON probe helpers (used for gateway metrics shape)
+http_json_ok() {
+  local url="$1"
+  command -v curl >/dev/null 2>&1 || return 1
+  local body
+  body=$(curl -sf --max-time 3 -H 'Accept: application/json' "$url" 2>/dev/null) || return 1
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - <<'PY' "$body" >/dev/null 2>&1 || exit 1
+import sys, json
+json.loads(sys.argv[1])
+PY
+    return $?
+  fi
+  # Fallback heuristic when python3 is unavailable
+  [[ "$body" == \{* ]] && return 0 || return 1
+}
+
+wait_ready_json() {
+  local name="$1"; shift
+  local url="$1"; shift
+  local timeout="${1:-30}"; shift || true
+  local start=$(date +%s)
+  while true; do
+    if http_json_ok "$url"; then
+      echo "[dev-up] $name ready (JSON) at $url"
+      return 0
+    fi
+    local now=$(date +%s)
+    if (( now - start >= timeout )); then
+      echo "[dev-up] WARN: $name JSON not ready after ${timeout}s ($url)" >&2
+      return 1
+    fi
+    sleep 0.5
+  done
+}
+
 # Prefer prebuilt binaries by default; build once if missing.
 USE_BIN="${DEV_UP_USE_BIN:-1}"
 NEEDS_BUILD=0
@@ -172,7 +208,8 @@ if [[ "$CHECK" == "1" || "${DEV_UP_CHECKS:-0}" == "1" ]]; then
   wait_ready planner            http://127.0.0.1:8003/metrics || true
   wait_ready function-caller    http://127.0.0.1:8004/metrics || true
   wait_ready persist            http://127.0.0.1:8005/metrics || true
-  wait_ready gateway            http://127.0.0.1:8010/metrics || true
+  # Gateway metrics are JSON; verify parsable shape for a stronger signal
+  wait_ready_json gateway       http://127.0.0.1:8010/metrics || true
   if [[ "$ALL" == "1" ]]; then
     wait_ready tools-factory    http://127.0.0.1:8011/metrics || true
     wait_ready tool-server      http://127.0.0.1:8012/_health || true

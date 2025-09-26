@@ -45,22 +45,60 @@ for a in "$@"; do
   if [[ "$a" == "--all" ]]; then ALL=1; fi
 done
 
+# Helpers
+port_for() {
+  case "$1" in
+    baseline-awareness) echo "${BASELINE_AWARENESS_PORT:-8001}" ;;
+    bootstrap) echo "${BOOTSTRAP_PORT:-8002}" ;;
+    planner) echo "${PLANNER_PORT:-8003}" ;;
+    function-caller) echo "${FUNCTION_CALLER_PORT:-8004}" ;;
+    persist) echo "${FOUNTAINSTORE_PORT:-8005}" ;;
+    gateway) echo "${GATEWAY_PORT:-${PORT:-8010}}" ;;
+    semantic-browser) echo "${SEMANTIC_BROWSER_PORT:-8007}" ;;
+    tools-factory) echo "${TOOLS_FACTORY_PORT:-8011}" ;;
+    tool-server) echo "${PORT:-8012}" ;;
+    *) echo 0 ;;
+  esac
+}
+
+is_port_listening() {
+  local port="$1"
+  [[ "$port" -eq 0 ]] && return 1
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
+    return $?
+  fi
+  return 1
+}
+
+# Prefer prebuilt binaries by default; build once if missing.
+USE_BIN="${DEV_UP_USE_BIN:-1}"
+NEEDS_BUILD=0
+BIN_DIR="$REPO_ROOT/Packages/FountainApps/.build/debug"
+
 start_bg() {
   local name="$1"; shift
   local target="$1"; shift
   local pid_file="$PID_DIR/$name.pid"
   local log_file="$LOG_DIR/$name.log"
+  local port
+  port=$(port_for "$name")
   if [[ -f "$pid_file" ]] && kill -0 "$(cat "$pid_file" 2>/dev/null)" 2>/dev/null; then
     echo "[dev-up] $name already running (pid $(cat "$pid_file"))"
     return 0
   fi
+  if is_port_listening "$port"; then
+    echo "[dev-up] $name port :$port already bound; skipping start"
+    return 0
+  fi
   : >"$log_file"
   echo "[dev-up] Starting $name → $log_file"
-  if [[ "${DEV_UP_USE_BIN:-0}" == "1" ]]; then
-    local BIN_DIR="$REPO_ROOT/Packages/FountainApps/.build/debug"
+  if [[ "$USE_BIN" == "1" ]]; then
+    if [[ ! -x "$BIN_DIR/$target" ]]; then
+      NEEDS_BUILD=1
+    fi
     nohup env LAUNCHER_SIGNATURE="$SIG" \
-      "$BIN_DIR/$target" \
-        >>"$log_file" 2>&1 &
+      "$BIN_DIR/$target" >>"$log_file" 2>&1 &
   else
     nohup env LAUNCHER_SIGNATURE="$SIG" \
       swift run --package-path "$REPO_ROOT/Packages/FountainApps" "$target" \
@@ -73,6 +111,15 @@ start_bg() {
 if [[ "${DEV_UP_NO_START_LOCAL_AGENT:-0}" != "1" ]]; then
   echo "[dev-up] Ensuring LocalAgent (see .fountain/logs/launcher.log)"
   "$REPO_ROOT/Scripts/launcher" start || true
+fi
+
+# Build once if needed and using binaries.
+if [[ "$USE_BIN" == "1" ]]; then
+  # Prime the build only once if any target missing.
+  if [[ "$NEEDS_BUILD" == "1" ]]; then
+    echo "[dev-up] Building FountainApps binaries (one-time)…"
+    swift build --package-path "$REPO_ROOT/Packages/FountainApps" >/dev/null 2>&1 || true
+  fi
 fi
 
 # Core services (ordered: deps first, gateway last)

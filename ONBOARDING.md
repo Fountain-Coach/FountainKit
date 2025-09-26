@@ -9,7 +9,7 @@ This guide helps you run FountainKit locally in minutes without learning every p
 - Start the LocalAgent (mock fallback if it can’t start):
   - `Scripts/launcher start` (logs: `.fountain/logs/launcher.log`)
 - Export the launcher signature and start the core services in the background:
-  - `Scripts/dev-up`
+  - `Scripts/dev-up` (prefers prebuilt binaries; builds once if needed)
   - Tip: to also export the signature into your current shell, run: `source Scripts/dev-up env`
 - Verify gateway is up:
   - `curl -s http://127.0.0.1:8010/metrics | head -n1`
@@ -64,7 +64,9 @@ Optional extras with `--all`:
   - LocalAgent likely not running or unhealthy. Run `Scripts/launcher start`.
   - Fallback mock auto-starts if LocalAgent can’t become healthy.
   - Logs: `.fountain/logs/local-agent.log` and `.fountain/logs/mock-localagent.log`
-- Port conflicts
+- Port conflicts or “Address already in use”
+  - The dev-up script now guards against double-starts by checking ports and PIDs.
+  - If you started services outside dev-up, use: `Scripts/dev-down --force` to kill listeners on default dev ports.
   - Adjust `PORT` env per service as needed, e.g. `PORT=9000 swift run --package-path Packages/FountainApps gateway-server`.
 - Where are logs/pids?
   - `.fountain/logs/*.log` and `.fountain/pids/*.pid`
@@ -75,4 +77,3 @@ Optional extras with `--all`:
 - Launcher signature constant: `Packages/FountainCore/Sources/LauncherSignature/Signature.swift:1`
 - Gateway entry: `Packages/FountainApps/Sources/gateway-server/main.swift:1`
 - Dev scripts: `Scripts/dev-up`, `Scripts/dev-down`
-

@@ -4,12 +4,13 @@ set -euo pipefail
 usage() {
   cat <<USAGE
 Usage:
-  $(basename "$0") [--all]
+  $(basename "$0") [--all] [--force]
 
 Stops background FountainKit dev processes started by Scripts/dev-up and the LocalAgent.
 
 Options:
-  --all   Also stop optional extras (semantic-browser, tools-factory, tool-server, publishing-frontend)
+  --all     Also stop optional extras (semantic-browser, tools-factory, tool-server, publishing-frontend)
+  --force   Additionally kill any listeners on default dev ports (8001-8012)
 USAGE
 }
 
@@ -17,11 +18,13 @@ REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)
 PID_DIR="$REPO_ROOT/.fountain/pids"
 
 ALL=0
+FORCE=0
 for a in "$@"; do
   if [[ "$a" == "--help" || "$a" == "-h" ]]; then
     usage; exit 0
   fi
   if [[ "$a" == "--all" ]]; then ALL=1; fi
+  if [[ "$a" == "--force" ]]; then FORCE=1; fi
 done
 
 stop_pid() {
@@ -55,5 +58,16 @@ fi
 echo "[dev-down] Stopping LocalAgent (and mock fallback if present)"
 "$REPO_ROOT/Scripts/launcher" stop || true
 
-echo "[dev-down] Done."
+if [[ "$FORCE" == "1" ]]; then
+  if command -v lsof >/dev/null 2>&1; then
+    echo "[dev-down] --force: killing listeners on dev ports (8001-8012)"
+    for port in 8001 8002 8003 8004 8005 8010 8011 8012; do
+      pids=$(lsof -t -nP -iTCP:$port -sTCP:LISTEN 2>/dev/null || true)
+      if [[ -n "${pids:-}" ]]; then
+        echo "$pids" | xargs -I{} sh -c 'echo "  killing pid {} on :$0"; kill {} >/dev/null 2>&1 || true' $port
+      fi
+    done
+  fi
+fi
 
+echo "[dev-down] Done."

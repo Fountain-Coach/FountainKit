@@ -9,6 +9,22 @@ Quick dev helpers:
 - `Scripts/dev-down` – stop services (use `--force` to clear ports)
 - `Scripts/dev-status` – show service/port/PID status at a glance
 
+## Service Map
+
+Core (started by `Scripts/dev-up`):
+- gateway-server — port 8010 — readiness: GET `/metrics` (JSON)
+- baseline-awareness-server — port 8001 — readiness: GET `/metrics`
+- bootstrap-server — port 8002 — readiness: GET `/metrics`
+- planner-server — port 8003 — readiness: GET `/metrics`
+- function-caller-server — port 8004 — readiness: GET `/metrics`
+- persist-server — port 8005 — readiness: GET `/metrics`
+
+Extras (started by `Scripts/dev-up --all`):
+- tools-factory-server — port 8011 — readiness: GET `/metrics`
+- tool-server — port 8012 — readiness: GET `/_health` (200) or `/metrics`
+- semantic-browser-server — port 8007 — readiness: GET `/metrics` (or `/v1/health`)
+- publishing-frontend — config-driven port — readiness: via upstream gateway plugin
+
 ## Repository layout
 
 | Path | Purpose |

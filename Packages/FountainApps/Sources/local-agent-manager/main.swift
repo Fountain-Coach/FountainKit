@@ -1,3 +1,6 @@
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import Foundation
 import FountainStoreClient
 
@@ -127,7 +130,9 @@ struct LocalAgentManager {
     // MARK: - Start/Stop
     static func start(config: LocalAgentConfig, repoRoot: String) async throws {
         let pidFile = pidURL(repoRoot: repoRoot)
-        if let pid = try? String(contentsOf: pidFile), let p = Int32(pid.trimmingCharacters(in: .whitespacesAndNewlines)), kill(p, 0) == 0 {
+        if let pid = try? String(contentsOf: pidFile, encoding: .utf8),
+           let p = Int32(pid.trimmingCharacters(in: .whitespacesAndNewlines)),
+           kill(p, 0) == 0 {
             print("already running pid \(p)")
             return
         }
@@ -161,7 +166,8 @@ struct LocalAgentManager {
 
     static func stop(repoRoot: String) throws {
         let pidFile = pidURL(repoRoot: repoRoot)
-        guard let pid = try? String(contentsOf: pidFile), let p = Int32(pid.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+        guard let pid = try? String(contentsOf: pidFile, encoding: .utf8),
+              let p = Int32(pid.trimmingCharacters(in: .whitespacesAndNewlines)) else {
             print("not running")
             return
         }
@@ -169,7 +175,8 @@ struct LocalAgentManager {
         try? FileManager.default.removeItem(at: pidFile)
         // Also stop fallback mock if present
         let mockPid = mockPidURL(repoRoot: repoRoot)
-        if let pid = try? String(contentsOf: mockPid), let p = Int32(pid.trimmingCharacters(in: .whitespacesAndNewlines)) {
+        if let pid = try? String(contentsOf: mockPid, encoding: .utf8),
+           let p = Int32(pid.trimmingCharacters(in: .whitespacesAndNewlines)) {
             kill(p, SIGTERM)
             try? FileManager.default.removeItem(at: mockPid)
         }

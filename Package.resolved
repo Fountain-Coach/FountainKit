@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Fountain-Coach/Fountain-Store.git",
       "state" : {
-        "revision" : "94b1b376c8227aa80e8414acefdaa5dc6f79dbdc",
-        "version" : "0.1.0"
+        "revision" : "42404e5b5fa2759ac56eb91151b8287a9c4b5d29",
+        "version" : "0.2.0-beta.1"
       }
     },
     {

@@ -21,7 +21,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
         .package(url: "https://github.com/apple/swift-atomics.git", from: "1.3.0"),
-        .package(url: "https://github.com/Fountain-Coach/Fountain-Store.git", from: "0.1.0")
+        .package(url: "https://github.com/Fountain-Coach/Fountain-Store.git", exact: "0.2.0-beta.1")
     ],
     targets: [
         .target(

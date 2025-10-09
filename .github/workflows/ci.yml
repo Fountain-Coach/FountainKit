@@ -1,0 +1,142 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  lint-openapi:
+    name: Lint OpenAPI specs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run OpenAPI linter
+        run: Scripts/openapi-lint.sh
+
+  swift-ci:
+    name: ${{ matrix.title }}
+    needs:
+      - lint-openapi
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: workspace-build
+            title: swift build (workspace)
+            runner: macos-15
+            command: swift build --explicit-target-dependency-import-check
+            cache-path: |
+              .build
+              .swiftpm
+          - id: fountaincore-tests
+            title: swift test (FountainCore)
+            runner: macos-15
+            command: swift test --package-path "Packages/FountainCore" --parallel
+            cache-path: Packages/FountainCore/.build
+          - id: fountainapiclients-tests
+            title: swift test (FountainAPIClients)
+            runner: macos-15
+            command: swift test --package-path "Packages/FountainAPIClients" --parallel
+            cache-path: Packages/FountainAPIClients/.build
+          - id: fountaingatewaykit-tests
+            title: swift test (FountainGatewayKit)
+            runner: macos-15
+            command: swift test --package-path "Packages/FountainGatewayKit" --parallel
+            cache-path: Packages/FountainGatewayKit/.build
+          - id: fountaintelemetrykit-tests
+            title: swift test (FountainTelemetryKit)
+            runner: macos-15
+            command: swift test --package-path "Packages/FountainTelemetryKit" --parallel
+            cache-path: Packages/FountainTelemetryKit/.build
+          - id: fountaintooling-tests
+            title: swift test (FountainTooling)
+            runner: macos-15
+            command: swift test --package-path "Packages/FountainTooling" --parallel
+            cache-path: Packages/FountainTooling/.build
+          - id: fountainapps-tests
+            title: swift test (FountainApps)
+            runner: macos-15
+            command: swift test --package-path "Packages/FountainApps" --parallel
+            cache-path: Packages/FountainApps/.build
+          - id: fountainexamples-tests
+            title: swift test (FountainExamples)
+            runner: macos-15
+            command: swift test --package-path "Packages/FountainExamples" --parallel
+            cache-path: Packages/FountainExamples/.build
+          - id: fountainspeccuration-tests
+            title: swift test (FountainSpecCuration)
+            runner: macos-15
+            command: swift test --package-path "Packages/FountainSpecCuration" --parallel
+            cache-path: Packages/FountainSpecCuration/.build
+          - id: fountainservicekit-awareness-tests
+            title: swift test (FountainServiceKit-Awareness)
+            runner: macos-15
+            command: swift test --package-path "Packages/FountainServiceKit-Awareness" --parallel
+            cache-path: Packages/FountainServiceKit-Awareness/.build
+          - id: fountainservicekit-bootstrap-tests
+            title: swift test (FountainServiceKit-Bootstrap)
+            runner: macos-15
+            command: swift test --package-path "Packages/FountainServiceKit-Bootstrap" --parallel
+            cache-path: Packages/FountainServiceKit-Bootstrap/.build
+          - id: fountainservicekit-functioncaller-tests
+            title: swift test (FountainServiceKit-FunctionCaller)
+            runner: macos-15
+            command: swift test --package-path "Packages/FountainServiceKit-FunctionCaller" --parallel
+            cache-path: Packages/FountainServiceKit-FunctionCaller/.build
+          - id: fountainservicekit-planner-tests
+            title: swift test (FountainServiceKit-Planner)
+            runner: macos-15
+            command: swift test --package-path "Packages/FountainServiceKit-Planner" --parallel
+            cache-path: Packages/FountainServiceKit-Planner/.build
+          - id: fountainservicekit-persist-tests
+            title: swift test (FountainServiceKit-Persist)
+            runner: macos-15
+            command: swift test --package-path "Packages/FountainServiceKit-Persist" --parallel
+            cache-path: Packages/FountainServiceKit-Persist/.build
+          - id: fountainservicekit-toolsfactory-tests
+            title: swift test (FountainServiceKit-ToolsFactory)
+            runner: macos-15
+            command: swift test --package-path "Packages/FountainServiceKit-ToolsFactory" --parallel
+            cache-path: Packages/FountainServiceKit-ToolsFactory/.build
+          - id: fountainservicekit-toolserver-tests
+            title: swift test (FountainServiceKit-ToolServer)
+            runner: macos-15
+            command: swift test --package-path "Packages/FountainServiceKit-ToolServer" --parallel
+            cache-path: Packages/FountainServiceKit-ToolServer/.build
+          - id: fountainservicekit-semanticbrowser-tests
+            title: swift test (FountainServiceKit-SemanticBrowser)
+            runner: macos-15
+            command: swift test --package-path "Packages/FountainServiceKit-SemanticBrowser" --parallel
+            cache-path: Packages/FountainServiceKit-SemanticBrowser/.build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure Xcode 16.2
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '16.2'
+      - name: Restore SwiftPM cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.cache-path }}
+          key: ${{ runner.os }}-spm-${{ matrix.id }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-${{ matrix.id }}-
+            ${{ runner.os }}-spm-
+      - name: ${{ matrix.title }}
+        run: ${{ matrix.command }}

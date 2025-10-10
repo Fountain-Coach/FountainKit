@@ -10,9 +10,10 @@ let package = Package(
         .library(name: "SemanticBrowserService", targets: ["SemanticBrowserService"])
     ],
     dependencies: [
+        .package(path: "../FountainTooling"),
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.59.0"),
-        .package(url: "https://github.com/typesense/typesense-swift.git", from: "1.0.1"),
         .package(url: "https://github.com/apple/swift-numerics.git", from: "1.0.0"),
+        .package(url: "https://github.com/typesense/typesense-swift.git", from: "1.0.1"),
         // OpenAPI generator + runtime for server stubs
         .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
         .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0")
@@ -29,6 +30,7 @@ let package = Package(
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
             ],
             plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
         ),

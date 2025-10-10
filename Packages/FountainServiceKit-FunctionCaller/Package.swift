@@ -11,9 +11,10 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../FountainCore"),
-        .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.21.0"),
+        .package(path: "../FountainTooling"),
         .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
-        .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0")
+        .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0"),
+        .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.21.0")
     ],
     targets: [
         .target(
@@ -25,6 +26,7 @@ let package = Package(
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
             ],
             plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
         )

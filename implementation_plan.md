@@ -17,6 +17,7 @@ Status — Done
   - Tool Server now managed via Docker Compose with a dedicated manager and compose file; handlers run tools via `docker compose run`.
   - Tool Server supports startup image pull (TOOLSERVER_PULL_ON_START) and a public status endpoint returning compose availability and services.
   - CI runs `Scripts/openapi-lint.sh` on Ubuntu and macOS runners before Swift builds/tests.
+  - SwiftPM build plugin enforces presence of `openapi-generator-config.yaml` for generated targets.
 
 Status — In Progress
 - Service migrations: Completed for Awareness, ToolsFactory, ToolServer (handlers + routing).
@@ -25,7 +26,7 @@ Status — In Progress
 Next Steps (High Priority)
 1. **Spec + Generator Enforcement**
    - [x] Land CI guardrail that runs `Scripts/openapi-lint.sh` on Linux and macOS runners.
-   - [ ] Enforce “generator config present” for every target by adding a SwiftPM plugin check (fails the build when missing).
+   - [x] Enforce “generator config present” for every target by adding a SwiftPM plugin check (fails the build when missing).
 2. **Cross-Platform Client Coverage**
    - [ ] Evaluate the need for a generated DNS client (see `OPENAPI_COVERAGE.md`) and implement it with URLSession + AsyncHTTPClient transports.
    - [ ] Migrate remaining pending clients (`PlannerAPI`, `FunctionCallerAPI`, `BootstrapAPI`, `ToolsFactoryAPI`, `FKOpsAPI`, `AwarenessAPI`) to generated implementations and validate parity on Linux/macOS.

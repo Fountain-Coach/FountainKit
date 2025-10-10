@@ -47,6 +47,7 @@ This audit reconciles the historical plan with the current repository state so f
 1. Prioritise client migrations for `GatewayAPI` and `LLMGatewayAPI` so high-traffic consumers leverage generated bindings.
 2. Schedule service-kit migrations starting with Bootstrap and Function Caller to reduce manual schema drift.
 3. Draft CI linting tasks that validate spec + generator parity before deprecating legacy codegen.
+4. Keep adoption coverage tables (`Packages/FountainSpecCuration/openapi/README.md` and `Packages/FountainSpecCuration/OPENAPI_COVERAGE.md`) up to date as targets adopt the generator.
 
 ## Appendix A: OpenAPI Generator Coverage Report
 # OpenAPI Generator Coverage Report

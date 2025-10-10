@@ -5,7 +5,7 @@ Persona definitions for Gateway plugins live in `personas/` and are referenced v
 
 - Every operation includes `x-fountain.visibility`, `x-fountain.reason`, and `x-fountain.allow-as-tool` extensions for curation.
 
-For a repository-wide index of OpenAPI coverage, see [../OPENAPI_COVERAGE.md](../OPENAPI_COVERAGE.md).
+For a repository‑wide index of OpenAPI coverage and adoption status, see [../OPENAPI_COVERAGE.md](../OPENAPI_COVERAGE.md).
 
 | Service | Version | Owner | Spec |
 | --- | --- | --- | --- |
@@ -15,8 +15,7 @@ For a repository-wide index of OpenAPI coverage, see [../OPENAPI_COVERAGE.md](..
 | DNS API | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/dns.yml](v1/dns.yml) |
 | Function Caller Service | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/function-caller.yml](v1/function-caller.yml) |
 | Gateway | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/gateway.yml](v1/gateway.yml) |
-| LLM Gateway | 2.0.0 | Contexter alias Benedikt Eickhoff | [v2/llm-gateway.yml](v2/llm-gateway.yml) |
-| LLM Gateway | 2.0.0 | Contexter alias Benedikt Eickhoff | [v1/llm-gateway.yml](v1/llm-gateway.yml) |
+| LLM Gateway | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/llm-gateway.yml](v1/llm-gateway.yml) |
 | Persistence Service | 1.0.2 | Contexter alias Benedikt Eickhoff | [v1/persist.yml](v1/persist.yml) |
 | Planner Service | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/planner.yml](v1/planner.yml) |
 | Planner Service (legacy alias) | 1.0.0 | Contexter alias Benedikt Eickhoff | [v0/planner.yml](v0/planner.yml) |
@@ -31,25 +30,25 @@ For a repository-wide index of OpenAPI coverage, see [../OPENAPI_COVERAGE.md](..
 | Tool Server | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/tool-server.yml](v1/tool-server.yml) |
 | OpenAPI Curator Service | 1.0.2 | Contexter alias Benedikt Eickhoff | [v1/openapi-curator.yml](v1/openapi-curator.yml) |
 | Curator Gateway Plugin | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/curator-gateway.yml](v1/curator-gateway.yml) |
-| Auth Gateway Plugin | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/auth-gateway.yml](v1/auth-gateway.yml) |
-| Baseline Awareness Service | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/baseline-awareness.yml](v1/baseline-awareness.yml) |
-| Bootstrap Service | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/bootstrap.yml](v1/bootstrap.yml) |
-| DNS API | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/dns.yml](v1/dns.yml) |
-| Function Caller Service | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/function-caller.yml](v1/function-caller.yml) |
-| Gateway | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/gateway.yml](v1/gateway.yml) |
-| Persistence Service | 1.0.2 | Contexter alias Benedikt Eickhoff | [v1/persist.yml](v1/persist.yml) |
-| Planner Service | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/planner.yml](v1/planner.yml) |
-| Role Health Check Gateway Plugin | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/role-health-check-gateway.yml](v1/role-health-check-gateway.yml) |
-| Semantic Browser & Dissector API | 0.2.1 | Contexter alias Benedikt Eickhoff | [v1/semantic-browser.yml](v1/semantic-browser.yml) |
-| Tools Factory Service | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/tools-factory.yml](v1/tools-factory.yml) |
-| Rate Limiter Gateway Plugin | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/rate-limiter-gateway.yml](v1/rate-limiter-gateway.yml) |
-| Payload Inspection Gateway Plugin | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/payload-inspection-gateway.yml](v1/payload-inspection-gateway.yml) |
-| Budget Breaker Gateway Plugin | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/budget-breaker-gateway.yml](v1/budget-breaker-gateway.yml) |
-| Destructive Guardian Gateway Plugin | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/destructive-guardian-gateway.yml](v1/destructive-guardian-gateway.yml) |
-| Security Sentinel Gateway Plugin | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/security-sentinel-gateway.yml](v1/security-sentinel-gateway.yml) |
-| Tool Server | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/tool-server.yml](v1/tool-server.yml) |
-| OpenAPI Curator Service | 1.0.2 | Contexter alias Benedikt Eickhoff | [v1/openapi-curator.yml](v1/openapi-curator.yml) |
 | Curator Gateway Plugin | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/curator-gateway.yml](v1/curator-gateway.yml) |
+
+## Coverage Status
+
+This section tracks ownership and adoption of Apple’s Swift OpenAPI Generator. See also the repository‑wide index at `../OPENAPI_COVERAGE.md`.
+
+| Spec | Owner target(s) | Server adoption | Client adoption |
+| --- | --- | --- | --- |
+| `v1/gateway.yml` | `FountainApps/gateway-server` | Generator enabled (scoped control plane) | N/A |
+| `v1/semantic-browser.yml` | `FountainServiceKit-SemanticBrowser/SemanticBrowserService` | Generator enabled | `FountainAPIClients/SemanticBrowserAPI` generator enabled |
+| `v1/persist.yml` | `FountainServiceKit-Persist/PersistService` | Generator enabled | `FountainAPIClients/PersistAPI` generator enabled |
+| `v1/planner.yml` | `FountainServiceKit-Planner/PlannerService` | Generator enabled | Pending |
+| `v1/function-caller.yml` | `FountainServiceKit-FunctionCaller/FunctionCallerService` | Pending | Pending |
+| `v1/bootstrap.yml` | `FountainServiceKit-Bootstrap/BootstrapService` | Pending | Pending |
+| `v1/tools-factory.yml` | `FountainServiceKit-ToolsFactory/ToolsFactoryService` | Pending | Pending |
+| `v1/tool-server.yml` | `FountainServiceKit-ToolServer` | Manual router, no generator | N/A |
+| `v1/dns.yml` | TBC | Pending | Pending |
+| `v1/llm-gateway.yml` | Gateway plugin (no standalone server) | N/A | N/A |
+| `v1/openapi-curator.yml` | `FountainTooling` | Pending | N/A |
 
 
 ## Gateway Plugins

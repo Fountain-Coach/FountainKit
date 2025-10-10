@@ -54,3 +54,7 @@ Welcome to FountainKit, the modular SwiftPM workspace for the Fountain Coach org
 - Generated Swift files remain untouched; transport abstractions live in shared kits.
 
 Thank you for helping FountainKit stay modular and healthy!
+
+---
+
+**Maintenance**: Keep `implementation_plan.md` up to date after each OpenAPI adoption audit; root agents are responsible for reviewing and refreshing the plan when generator coverage changes.

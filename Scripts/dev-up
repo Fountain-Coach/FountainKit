@@ -196,6 +196,7 @@ start_bg persist persist-server Packages/FountainApps
 start_bg gateway gateway-server Packages/FountainApps
 
 if [[ "$ALL" == "1" ]]; then
+  echo "[dev-up] semantic-browser env: see Configuration/semantic-browser.env.example (SB_CDP_URL, SB_BROWSER_CLI/SB_BROWSER_ARGS, SEMANTIC_BROWSER_PORT)"
   start_bg semantic-browser semantic-browser-server Packages/FountainApps-SemanticBrowser
   start_bg tools-factory tools-factory-server Packages/FountainApps
   start_bg tool-server tool-server Packages/FountainApps

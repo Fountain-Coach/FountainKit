@@ -26,6 +26,16 @@ public struct ToolServerOpenAPI: APIProtocol, @unchecked Sendable {
 
     public func runImageMagick(_ input: Operations.runImageMagick.Input) async throws -> Operations.runImageMagick.Output {
         guard case let .json(req) = input.body else { return .undocumented(statusCode: 422, OpenAPIRuntime.UndocumentedPayload()) }
+        // Pass request_id into the container environment for traceability.
+        let env: [String: String] = req.request_id.map { ["TS_REQUEST_ID": $0] } ?? [:]
+        let result = try compose.run(service: "imagemagick", args: req.args ?? [], extraEnv: env)
+        // Prefer returning stdout as octet-stream if available; fallback to JSON status.
+        if !result.stdout.isEmpty {
+            // Use undocumented payload to keep response flexible if runtime types differ.
+            if let body = try? OpenAPIRuntime.OpenAPIValueContainer(unvalidatedValue: Array(result.stdout)) {
+                return .undocumented(statusCode: 200, OpenAPIRuntime.UndocumentedPayload(body))
+            }
+        }
         if let body = execJSON(service: "imagemagick", args: req.args ?? []) {
             return .undocumented(statusCode: 200, OpenAPIRuntime.UndocumentedPayload(body))
         }
@@ -34,6 +44,7 @@ public struct ToolServerOpenAPI: APIProtocol, @unchecked Sendable {
 
     public func runFFmpeg(_ input: Operations.runFFmpeg.Input) async throws -> Operations.runFFmpeg.Output {
         guard case let .json(req) = input.body else { return .undocumented(statusCode: 422, OpenAPIRuntime.UndocumentedPayload()) }
+        let env: [String: String] = req.request_id.map { ["TS_REQUEST_ID": $0] } ?? [:]
         if let body = execJSON(service: "ffmpeg", args: req.args ?? []) {
             return .undocumented(statusCode: 200, OpenAPIRuntime.UndocumentedPayload(body))
         }
@@ -42,6 +53,7 @@ public struct ToolServerOpenAPI: APIProtocol, @unchecked Sendable {
 
     public func runExifTool(_ input: Operations.runExifTool.Input) async throws -> Operations.runExifTool.Output {
         guard case let .json(req) = input.body else { return .undocumented(statusCode: 422, OpenAPIRuntime.UndocumentedPayload()) }
+        let env: [String: String] = req.request_id.map { ["TS_REQUEST_ID": $0] } ?? [:]
         if let body = execJSON(service: "exiftool", args: req.args ?? []) {
             return .undocumented(statusCode: 200, OpenAPIRuntime.UndocumentedPayload(body))
         }
@@ -50,6 +62,7 @@ public struct ToolServerOpenAPI: APIProtocol, @unchecked Sendable {
 
     public func runPandoc(_ input: Operations.runPandoc.Input) async throws -> Operations.runPandoc.Output {
         guard case let .json(req) = input.body else { return .undocumented(statusCode: 422, OpenAPIRuntime.UndocumentedPayload()) }
+        let env: [String: String] = req.request_id.map { ["TS_REQUEST_ID": $0] } ?? [:]
         if let body = execJSON(service: "pandoc", args: req.args ?? []) {
             return .undocumented(statusCode: 200, OpenAPIRuntime.UndocumentedPayload(body))
         }
@@ -58,6 +71,7 @@ public struct ToolServerOpenAPI: APIProtocol, @unchecked Sendable {
 
     public func runLibPlist(_ input: Operations.runLibPlist.Input) async throws -> Operations.runLibPlist.Output {
         guard case let .json(req) = input.body else { return .undocumented(statusCode: 422, OpenAPIRuntime.UndocumentedPayload()) }
+        let env: [String: String] = req.request_id.map { ["TS_REQUEST_ID": $0] } ?? [:]
         if let body = execJSON(service: "libplist", args: req.args ?? []) {
             return .undocumented(statusCode: 200, OpenAPIRuntime.UndocumentedPayload(body))
         }

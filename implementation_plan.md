@@ -14,6 +14,7 @@ Status — Done
   - Split `semantic-browser-server` into `Packages/FountainApps-SemanticBrowser`; CI builds it separately.
   - Fixed `/auth/token` date decoding and HTTP framing (Content-Length for non‑chunked).
   - Synced generated handler code to current `swift-openapi-runtime` types (e.g., `OpenAPIValueContainer`, refined enums, `.plainText`).
+  - Tool Server now managed via Docker Compose with a dedicated manager and compose file; handlers run tools via `docker compose run`.
 
 Status — In Progress
 - Service migrations: Completed for Awareness, ToolsFactory, ToolServer (handlers + routing).
@@ -23,6 +24,7 @@ Next Steps (High Priority)
 - Add stricter CI checks: spec lint (`Scripts/openapi-lint.sh`) and “must have generator config” guard per target.
 - Evaluate/implement DNS client target if required by consumers.
 - Retire legacy `FountainCodex` once all clients/servers are generated.
+ - Tool Server hardening: add health checks, image pinning, and CI smoke (compose optional) with env guards.
 
 Principles
 - OpenAPI is the source of truth; update specs first and regenerate during build.

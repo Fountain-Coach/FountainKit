@@ -138,11 +138,18 @@ wait_ready_json() {
 # Prefer prebuilt binaries by default; build once if missing.
 USE_BIN="${DEV_UP_USE_BIN:-1}"
 NEEDS_BUILD=0
-BIN_DIR="$REPO_ROOT/Packages/FountainApps/.build/debug"
+DEFAULT_PKG_PATH="$REPO_ROOT/Packages/FountainApps"
+
+bin_dir_for() {
+  local pkg_path="$1"
+  echo "$pkg_path/.build/debug"
+}
 
 start_bg() {
   local name="$1"; shift
   local target="$1"; shift
+  local pkg_rel_path="${1:-Packages/FountainApps}"; shift || true
+  local pkg_path="$REPO_ROOT/$pkg_rel_path"
   local pid_file="$PID_DIR/$name.pid"
   local log_file="$LOG_DIR/$name.log"
   local port
@@ -158,14 +165,17 @@ start_bg() {
   : >"$log_file"
   echo "[dev-up] Starting $name → $log_file"
   if [[ "$USE_BIN" == "1" ]]; then
-    if [[ ! -x "$BIN_DIR/$target" ]]; then
-      NEEDS_BUILD=1
+    local bin_dir
+    bin_dir=$(bin_dir_for "$pkg_path")
+    if [[ ! -x "$bin_dir/$target" ]]; then
+      echo "[dev-up] Building $target (one-time)…"
+      swift build --package-path "$pkg_path" >/dev/null 2>&1 || true
     fi
     nohup env LAUNCHER_SIGNATURE="$SIG" \
-      "$BIN_DIR/$target" >>"$log_file" 2>&1 &
+      "$bin_dir/$target" >>"$log_file" 2>&1 &
   else
     nohup env LAUNCHER_SIGNATURE="$SIG" \
-      swift run --package-path "$REPO_ROOT/Packages/FountainApps" "$target" \
+      swift run --package-path "$pkg_path" "$target" \
         >>"$log_file" 2>&1 &
   fi
   echo $! >"$pid_file"
@@ -177,28 +187,19 @@ if [[ "${DEV_UP_NO_START_LOCAL_AGENT:-0}" != "1" ]]; then
   "$REPO_ROOT/Scripts/launcher" start || true
 fi
 
-# Build once if needed and using binaries.
-if [[ "$USE_BIN" == "1" ]]; then
-  # Prime the build only once if any target missing.
-  if [[ "$NEEDS_BUILD" == "1" ]]; then
-    echo "[dev-up] Building FountainApps binaries (one-time)…"
-    swift build --package-path "$REPO_ROOT/Packages/FountainApps" >/dev/null 2>&1 || true
-  fi
-fi
-
 # Core services (ordered: deps first, gateway last)
-start_bg baseline-awareness baseline-awareness-server
-start_bg bootstrap bootstrap-server
-start_bg planner planner-server
-start_bg function-caller function-caller-server
-start_bg persist persist-server
-start_bg gateway gateway-server
+start_bg baseline-awareness baseline-awareness-server Packages/FountainApps
+start_bg bootstrap bootstrap-server Packages/FountainApps
+start_bg planner planner-server Packages/FountainApps
+start_bg function-caller function-caller-server Packages/FountainApps
+start_bg persist persist-server Packages/FountainApps
+start_bg gateway gateway-server Packages/FountainApps
 
 if [[ "$ALL" == "1" ]]; then
-  start_bg semantic-browser semantic-browser-server
-  start_bg tools-factory tools-factory-server
-  start_bg tool-server tool-server
-  start_bg publishing-frontend publishing-frontend
+  start_bg semantic-browser semantic-browser-server Packages/FountainApps-SemanticBrowser
+  start_bg tools-factory tools-factory-server Packages/FountainApps
+  start_bg tool-server tool-server Packages/FountainApps
+  start_bg publishing-frontend publishing-frontend Packages/FountainApps
 fi
 
 if [[ "$CHECK" == "1" || "${DEV_UP_CHECKS:-0}" == "1" ]]; then

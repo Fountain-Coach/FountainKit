@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)
+PKG="$REPO_ROOT/Packages/FountainApps-SemanticBrowser"
+
+usage() {
+  cat <<USAGE
+Usage:
+  $(basename "$0") [build|run] [-- <swift args>]
+
+Commands:
+  build   Build semantic-browser-server in its standalone package
+  run     Run semantic-browser-server (default)
+
+Examples:
+  Scripts/semantic-browser build
+  Scripts/semantic-browser run -- -Xswiftc -enable-batch-mode
+USAGE
+}
+
+cmd="run"
+args=()
+for a in "$@"; do
+  if [[ "$a" == "--help" || "$a" == "-h" ]]; then usage; exit 0; fi
+  if [[ "$a" == "--" ]]; then shift; args=("$@"); break; fi
+  if [[ "$a" == "build" || "$a" == "run" ]]; then cmd="$a"; else args+=("$a"); fi
+done
+
+export LAUNCHER_SIGNATURE="${LAUNCHER_SIGNATURE:-B86D7CEE-24C4-4C4C-A107-8D0542D1965B}"
+
+case "$cmd" in
+  build)
+    swift build --package-path "$PKG" "${args[@]}"
+    ;;
+  run)
+    swift run --package-path "$PKG" semantic-browser-server "${args[@]}"
+    ;;
+  *)
+    usage; exit 1
+    ;;
+esac
+

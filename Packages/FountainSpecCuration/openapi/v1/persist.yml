@@ -134,6 +134,11 @@ paths:
             type: integer
             default: 0
             minimum: 0
+        - name: sort
+          in: query
+          description: Comma-separated fields to sort by (prefix with '-' for descending), e.g. `-ts,baselineId`.
+          schema:
+            type: string
       responses:
         '200':
           description: Paginated list of baselines for the corpus.
@@ -222,6 +227,11 @@ paths:
             type: integer
             default: 0
             minimum: 0
+        - name: sort
+          in: query
+          description: Comma-separated fields to sort by (prefix with '-' for descending), e.g. `-analysisId,pageId`.
+          schema:
+            type: string
       responses:
         '200':
           description: Paginated list of analyses for the corpus.
@@ -298,6 +308,11 @@ paths:
             type: integer
             default: 0
             minimum: 0
+        - name: sort
+          in: query
+          description: Comma-separated fields to sort by (prefix with '-' for descending), e.g. `title,-host`.
+          schema:
+            type: string
       responses:
         '200':
           description: Paginated list of pages for the corpus.
@@ -369,6 +384,11 @@ paths:
             type: integer
             default: 0
             minimum: 0
+        - name: sort
+          in: query
+          description: Comma-separated fields to sort by (prefix with '-' for descending), e.g. `kind,-segmentId`.
+          schema:
+            type: string
       responses:
         '200':
           description: Paginated list of segments.
@@ -440,6 +460,11 @@ paths:
             type: integer
             default: 0
             minimum: 0
+        - name: sort
+          in: query
+          description: Comma-separated fields to sort by (prefix with '-' for descending), e.g. `type,name`.
+          schema:
+            type: string
       responses:
         '200':
           description: Paginated list of entities.
@@ -586,6 +611,11 @@ paths:
             httpPath.
           schema:
             type: string
+        - name: sort
+          in: query
+          description: Comma-separated fields to sort by (prefix with '-' for descending), e.g. `name,-functionId`.
+          schema:
+            type: string
       responses:
         '200':
           description: Paginated list of functions in the corpus.
@@ -697,6 +727,11 @@ paths:
             type: integer
             default: 0
             minimum: 0
+        - name: sort
+          in: query
+          description: Comma-separated fields to sort by (prefix with '-' for descending), e.g. `-ts,reflectionId`.
+          schema:
+            type: string
       responses:
         '200':
           description: Paginated list of reflections for the corpus.
@@ -743,6 +778,11 @@ paths:
           in: query
           description: Optional substring filter across name, description, 
             httpPath, functionId, and corpusId.
+          schema:
+            type: string
+        - name: sort
+          in: query
+          description: Comma-separated fields to sort by (prefix with '-' for descending), e.g. `name,-corpusId`.
           schema:
             type: string
       responses:

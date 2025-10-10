@@ -19,6 +19,17 @@ public struct PersistOpenAPI: APIProtocol, @unchecked Sendable {
         return .ok(.init(body: .json(body)))
     }
 
+    // Parse sort string into (field, ascending) tuples
+    private func parseSort(_ value: String?) -> [(String, Bool)] {
+        guard let value, !value.isEmpty else { return [] }
+        return value.split(separator: ",").map { raw in
+            let token = raw.trimmingCharacters(in: .whitespaces)
+            if token.hasPrefix("-") { return (String(token.dropFirst()), false) }
+            if token.hasPrefix("+") { return (String(token.dropFirst()), true) }
+            return (token, true)
+        }
+    }
+
     public func listCorpora(_ input: Operations.listCorpora.Input) async throws -> Operations.listCorpora.Output {
         let limit = input.query.limit ?? 50
         let offset = input.query.offset ?? 0
@@ -33,7 +44,7 @@ public struct PersistOpenAPI: APIProtocol, @unchecked Sendable {
         let offset = input.query.offset ?? 0
         var filters: [String: String] = ["corpusId": corpusId]
         if let pageId = input.query.pageId, !pageId.isEmpty { filters["pageId"] = pageId }
-        let q = Query(filters: filters, limit: limit, offset: offset)
+        let q = Query(filters: filters, sort: parseSort(input.query.sort), limit: limit, offset: offset)
         let resp = try await persistence.query(corpusId: corpusId, collection: "analyses", query: q)
         let items: [Components.Schemas.Analysis] = try resp.documents.map { data in
             let a = try JSONDecoder().decode(AnalysisRecord.self, from: data)
@@ -61,11 +72,13 @@ public struct PersistOpenAPI: APIProtocol, @unchecked Sendable {
         let corpusId = input.path.corpusId
         let limit = input.query.limit ?? 50
         let offset = input.query.offset ?? 0
-        let (total, baselines) = try await persistence.listBaselines(corpusId: corpusId, limit: limit, offset: offset)
-        let items: [Components.Schemas.Baseline] = baselines.map { b in
-            .init(value1: .init(corpusId: b.corpusId), value2: .init(baselineId: b.baselineId, content: b.content))
+        let q = Query(filters: ["corpusId": corpusId], sort: parseSort(input.query.sort), limit: limit, offset: offset)
+        let resp = try await persistence.query(corpusId: corpusId, collection: "baselines", query: q)
+        let items: [Components.Schemas.Baseline] = try resp.documents.map { data in
+            let b = try JSONDecoder().decode(Baseline.self, from: data)
+            return .init(value1: .init(corpusId: b.corpusId), value2: .init(baselineId: b.baselineId, content: b.content))
         }
-        let payload = Operations.listBaselines.Output.Ok.Body.jsonPayload(total: total, baselines: items)
+        let payload = Operations.listBaselines.Output.Ok.Body.jsonPayload(total: resp.total, baselines: items)
         return .ok(.init(body: .json(payload)))
     }
 
@@ -82,12 +95,25 @@ public struct PersistOpenAPI: APIProtocol, @unchecked Sendable {
         let limit = input.query.limit ?? 50
         let offset = input.query.offset ?? 0
         let q = input.query.q
-        let (total, functions) = try await persistence.listFunctions(corpusId: corpusId, limit: limit, offset: offset, q: q)
+        var (_, functions) = try await persistence.listFunctions(corpusId: corpusId, limit: limit, offset: offset, q: q)
+        // Apply optional sort locally
+        let sorts = parseSort(input.query.sort)
+        if let first = sorts.first {
+            functions.sort { a, b in
+                let asc = first.1
+                switch first.0 {
+                case "name": return asc ? (a.name < b.name) : (a.name > b.name)
+                case "functionId": return asc ? (a.functionId < b.functionId) : (a.functionId > b.functionId)
+                case "httpPath": return asc ? (a.httpPath < b.httpPath) : (a.httpPath > b.httpPath)
+                default: return true
+                }
+            }
+        }
         let items: [Components.Schemas.Function] = functions.map { f in
             .init(value1: .init(corpusId: f.corpusId),
                   value2: .init(functionId: f.functionId, name: f.name, description: f.description, httpMethod: .init(rawValue: f.httpMethod) ?? .GET, httpPath: f.httpPath))
         }
-        let payload = Operations.listFunctionsInCorpus.Output.Ok.Body.jsonPayload(total: total, functions: items)
+        let payload = Operations.listFunctionsInCorpus.Output.Ok.Body.jsonPayload(total: items.count, functions: items)
         return .ok(.init(body: .json(payload)))
     }
 
@@ -116,11 +142,13 @@ public struct PersistOpenAPI: APIProtocol, @unchecked Sendable {
         let corpusId = input.path.corpusId
         let limit = input.query.limit ?? 50
         let offset = input.query.offset ?? 0
-        let (total, reflections) = try await persistence.listReflections(corpusId: corpusId, limit: limit, offset: offset)
-        let items: [Components.Schemas.Reflection] = reflections.map { r in
-            .init(value1: .init(corpusId: r.corpusId), value2: .init(reflectionId: r.reflectionId, question: r.question, content: r.content))
+        let q = Query(filters: ["corpusId": corpusId], sort: parseSort(input.query.sort), limit: limit, offset: offset)
+        let resp = try await persistence.query(corpusId: corpusId, collection: "reflections", query: q)
+        let items: [Components.Schemas.Reflection] = try resp.documents.map { data in
+            let r = try JSONDecoder().decode(Reflection.self, from: data)
+            return .init(value1: .init(corpusId: r.corpusId), value2: .init(reflectionId: r.reflectionId, question: r.question, content: r.content))
         }
-        let payload = Operations.listReflections.Output.Ok.Body.jsonPayload(total: total, reflections: items)
+        let payload = Operations.listReflections.Output.Ok.Body.jsonPayload(total: resp.total, reflections: items)
         return .ok(.init(body: .json(payload)))
     }
 
@@ -128,11 +156,26 @@ public struct PersistOpenAPI: APIProtocol, @unchecked Sendable {
         let limit = input.query.limit ?? 50
         let offset = input.query.offset ?? 0
         let q = input.query.q
-        let (total, functions) = try await persistence.listFunctions(limit: limit, offset: offset, q: q)
+        var (total, functions) = try await persistence.listFunctions(limit: limit, offset: offset, q: q)
+        // Apply optional sort locally
+        let sorts = parseSort(input.query.sort)
+        if let first = sorts.first {
+            functions.sort { a, b in
+                let asc = first.1
+                switch first.0 {
+                case "name": return asc ? (a.name < b.name) : (a.name > b.name)
+                case "functionId": return asc ? (a.functionId < b.functionId) : (a.functionId > b.functionId)
+                case "httpPath": return asc ? (a.httpPath < b.httpPath) : (a.httpPath > b.httpPath)
+                case "corpusId": return asc ? (a.corpusId < b.corpusId) : (a.corpusId > b.corpusId)
+                default: return true
+                }
+            }
+        }
         let items: [Components.Schemas.Function] = functions.map { f in
             .init(value1: .init(corpusId: f.corpusId),
                   value2: .init(functionId: f.functionId, name: f.name, description: f.description, httpMethod: .init(rawValue: f.httpMethod) ?? .GET, httpPath: f.httpPath))
         }
+        total = functions.count
         let payload = Operations.listFunctions.Output.Ok.Body.jsonPayload(total: total, functions: items)
         return .ok(.init(body: .json(payload)))
     }
@@ -153,7 +196,7 @@ public struct PersistOpenAPI: APIProtocol, @unchecked Sendable {
         let offset = input.query.offset ?? 0
         var filters: [String: String] = ["corpusId": corpusId]
         if let host = input.query.host, !host.isEmpty { filters["host"] = host }
-        let q = Query(filters: filters, limit: limit, offset: offset)
+        let q = Query(filters: filters, sort: parseSort(input.query.sort), limit: limit, offset: offset)
         let resp = try await persistence.query(corpusId: corpusId, collection: "pages", query: q)
         let items: [Components.Schemas.Page] = try resp.documents.map { data in
             let p = try JSONDecoder().decode(Page.self, from: data)
@@ -178,7 +221,7 @@ public struct PersistOpenAPI: APIProtocol, @unchecked Sendable {
         let offset = input.query.offset ?? 0
         var filters: [String: String] = ["corpusId": corpusId]
         if let kind = input.query.kind, !kind.isEmpty { filters["kind"] = kind }
-        let q = Query(filters: filters, limit: limit, offset: offset)
+        let q = Query(filters: filters, sort: parseSort(input.query.sort), limit: limit, offset: offset)
         let resp = try await persistence.query(corpusId: corpusId, collection: "segments", query: q)
         let items: [Components.Schemas.Segment] = try resp.documents.map { data in
             let s = try JSONDecoder().decode(Segment.self, from: data)
@@ -203,7 +246,7 @@ public struct PersistOpenAPI: APIProtocol, @unchecked Sendable {
         let offset = input.query.offset ?? 0
         var filters: [String: String] = ["corpusId": corpusId]
         if let type = input.query._type, !type.isEmpty { filters["type"] = type }
-        let q = Query(filters: filters, limit: limit, offset: offset)
+        let q = Query(filters: filters, sort: parseSort(input.query.sort), limit: limit, offset: offset)
         let resp = try await persistence.query(corpusId: corpusId, collection: "entities", query: q)
         let items: [Components.Schemas.Entity] = try resp.documents.map { data in
             let e = try JSONDecoder().decode(Entity.self, from: data)

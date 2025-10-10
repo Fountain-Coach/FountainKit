@@ -1,6 +1,7 @@
 import Foundation
 import SemanticBrowserService
 import LauncherSignature
+import FountainRuntime
 
 verifyLauncherSignature()
 
@@ -9,19 +10,18 @@ func buildService() -> SemanticMemoryService { SemanticMemoryService() }
 Task {
     let env = ProcessInfo.processInfo.environment
     let service = buildService()
-    let engine: BrowserEngine = {
-        if let ws = env["SB_CDP_URL"], let u = URL(string: ws) { return CDPBrowserEngine(wsURL: u) }
-        if let bin = env["SB_BROWSER_CLI"] {
-            return ShellBrowserEngine(
-                binary: bin,
-                args: (env["SB_BROWSER_ARGS"] ?? "").split(separator: " ").map(String.init)
-            )
+    // Serve generated OpenAPI handlers via a lightweight NIO transport.
+    let fallback: HTTPKernel = { req in
+        if req.method == "GET" && req.path == "/metrics" {
+            return HTTPResponse(status: 200, headers: ["Content-Type": "text/plain"], body: Data("ok\n".utf8))
         }
-        return URLFetchBrowserEngine()
-    }()
-    let requireKey = (env["SB_REQUIRE_API_KEY"] ?? "true").lowercased() != "false"
-    let kernel = makeSemanticKernel(service: service, engine: engine, requireAPIKey: requireKey)
-    let server = NIOHTTPServer(kernel: kernel)
+        return HTTPResponse(status: 404)
+    }
+    let transport = NIOOpenAPIServerTransport(fallback: fallback)
+    let api = SemanticBrowserOpenAPI(service: service)
+    // Register generated handlers; use root prefix.
+    try? api.registerHandlers(on: transport, serverURL: URL(string: "/")!)
+    let server = NIOHTTPServer(kernel: transport.asKernel())
     let port = Int(env["SEMANTIC_BROWSER_PORT"] ?? env["PORT"] ?? "8007") ?? 8007
     _ = try? await server.start(port: port)
     print("semantic-browser listening on \(port)")

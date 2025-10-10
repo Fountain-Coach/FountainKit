@@ -15,8 +15,11 @@ public struct PlannerOpenAPI: APIProtocol, @unchecked Sendable {
 
     public func planner_execute(_ input: Operations.planner_execute.Input) async throws -> Operations.planner_execute.Output {
         guard case let .json(req) = input.body else { return .undocumented(statusCode: 422, OpenAPIRuntime.UndocumentedPayload()) }
-        let results: [Components.Schemas.FunctionCallResult] = req.steps.map { call in
-            Components.Schemas.FunctionCallResult(step: call.name, arguments: call.arguments ?? [:], output: "ok")
+        let emptyArgsData = Data("{}".utf8)
+        let results: [Components.Schemas.FunctionCallResult] = req.steps.compactMap { call in
+            let encoded = (try? JSONEncoder().encode(call.arguments)) ?? emptyArgsData
+            guard let args = try? JSONDecoder().decode(Components.Schemas.FunctionCallResult.argumentsPayload.self, from: encoded) else { return nil }
+            return Components.Schemas.FunctionCallResult(step: call.name, arguments: args, output: "ok")
         }
         let body = Components.Schemas.ExecutionResult(results: results)
         return .ok(.init(body: .json(body)))
@@ -38,9 +41,10 @@ public struct PlannerOpenAPI: APIProtocol, @unchecked Sendable {
     public func get_semantic_arc(_ input: Operations.get_semantic_arc.Input) async throws -> Operations.get_semantic_arc.Output {
         let corpusId = input.path.corpus_id
         let (_, list) = try await persistence.listReflections(corpusId: corpusId)
-        let obj: [String: (any Sendable)?] = ["corpus_id": corpusId, "total": list.count]
-        if let container = try? OpenAPIRuntime.OpenAPIObjectContainer(unvalidatedValue: obj) {
-            return .ok(.init(body: .json(container)))
+        let obj: [String: Any] = ["corpus_id": corpusId, "total": list.count]
+        if let data = try? JSONSerialization.data(withJSONObject: obj),
+           let payload = try? JSONDecoder().decode(Operations.get_semantic_arc.Output.Ok.Body.jsonPayload.self, from: data) {
+            return .ok(.init(body: .json(payload)))
         }
         return .undocumented(statusCode: 500, OpenAPIRuntime.UndocumentedPayload())
     }
@@ -57,4 +61,3 @@ public struct PlannerOpenAPI: APIProtocol, @unchecked Sendable {
         return .ok(.init(body: .plainText(HTTPBody("planner_requests_total 0\n"))))
     }
 }
-

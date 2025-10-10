@@ -6,3 +6,8 @@ filter:
   paths:
     - /capabilities
     - /corpora
+    - /corpora/{corpusId}/baselines
+    - /corpora/{corpusId}/reflections
+    - /corpora/{corpusId}/functions
+    - /functions
+    - /functions/{functionId}

@@ -2,6 +2,7 @@ import Foundation
 import Dispatch
 import FountainRuntime
 import FountainStoreClient
+import PersistService
 import LauncherSignature
 
 verifyLauncherSignature()
@@ -13,7 +14,7 @@ let svc = FountainStoreClient(client: EmbeddedFountainStoreClient())
 Task {
     await svc.ensureCollections(corpusId: corpusId)
     // Prefer generated OpenAPI handlers; keep /metrics via fallback kernel
-    let fallback: HTTPKernel = { req in
+    let fallback = HTTPKernel { req in
         if req.method == "GET" && req.path == "/metrics" { return await metrics_metrics_get() }
         return HTTPResponse(status: 404)
     }

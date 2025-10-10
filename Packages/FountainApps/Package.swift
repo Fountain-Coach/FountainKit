@@ -153,6 +153,7 @@ let package = Package(
             dependencies: [
                 .product(name: "SemanticBrowserService", package: "FountainServiceKit-SemanticBrowser"),
                 .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "FountainRuntime", package: "FountainCore"),
                 .product(name: "NIOHTTPCompression", package: "swift-nio-extras"),
                 .product(name: "NIOSSL", package: "swift-nio-ssl"),
                 .product(name: "AsyncHTTPClient", package: "async-http-client")

@@ -85,6 +85,11 @@ public final class NIOHTTPServer: @unchecked Sendable {
                         let isSSE = (resp.headers["Content-Type"]?.lowercased().contains("text/event-stream") == true)
                         let chunkedSSE = isSSE && (resp.headers["X-Chunked-SSE"] == "1")
 
+                        // Default Content-Length if not explicitly set (non-chunked)
+                        if !chunkedSSE, headers["Content-Length"].isEmpty {
+                            headers.add(name: "Content-Length", value: "\(resp.body.count)")
+                        }
+
                         var responseHead = HTTPResponseHead(version: head.version, status: .init(statusCode: resp.status))
                         if chunkedSSE {
                             // Ensure chunked transfer for streaming writes
@@ -100,14 +105,6 @@ public final class NIOHTTPServer: @unchecked Sendable {
                             let parts = text.components(separatedBy: "\n\n").map { $0 + "\n\n" }.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
                             self.writeSSEChunks(parts, on: context, index: 0)
                         } else {
-                            // Default Content-Length if not explicitly set
-                            if headers["Content-Length"].isEmpty {
-                                headers.add(name: "Content-Length", value: "\(resp.body.count)")
-                                // Update head with length for clients that rely on it
-                                var updatedHead = responseHead
-                                updatedHead.headers = headers
-                                context.write(self.wrapOutboundOut(.head(updatedHead)), promise: nil)
-                            }
                             let buffer = context.channel.allocator.buffer(bytes: resp.body)
                             context.write(self.wrapOutboundOut(.body(.byteBuffer(buffer))), promise: nil)
                             context.writeAndFlush(self.wrapOutboundOut(.end(nil)), promise: nil)

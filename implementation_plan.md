@@ -29,7 +29,7 @@ Next Steps (High Priority)
    - [x] Enforce “generator config present” for every target by adding a SwiftPM plugin check (fails the build when missing).
 2. **Cross-Platform Client Coverage**
    - [x] Evaluate the need for a generated DNS client (see `OPENAPI_COVERAGE.md`) and implement it with URLSession + AsyncHTTPClient transports.
-   - [ ] Migrate remaining pending clients (`PlannerAPI`, `FunctionCallerAPI`, `BootstrapAPI`, `ToolsFactoryAPI`, `FKOpsAPI`, `AwarenessAPI`) to generated implementations and validate parity on Linux/macOS.
+   - [ ] Migrate remaining pending clients (`FunctionCallerAPI`, `BootstrapAPI`, `ToolsFactoryAPI`, `FKOpsAPI`, `AwarenessAPI`) to generated implementations and validate parity on Linux/macOS.
 3. **Runtime Compatibility Sweep**
    - [ ] Audit `FountainCore` transports for FoundationNetworking availability on Linux and provide shims where required.
    - [ ] Add integration smoke tests for a representative client/server pair running on both Darwin and Linux Swift toolchains.

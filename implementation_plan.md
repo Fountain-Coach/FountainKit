@@ -17,7 +17,7 @@ Status — Done
 
 Status — In Progress
 - Switch executables to generated routing:
-  - `function-caller-server` still runs the legacy kernel; service kit already exposes generated handlers. Flip next.
+  - Executables: `function-caller-server` now uses `NIOOpenAPIServerTransport` with `/openapi.yaml` fallback.
 - Service migrations (handlers + routing): `Awareness`, `ToolsFactory`, `ToolServer`.
 - Decision: introduce a generated `DNS` client (if needed by consumers).
 

@@ -9,19 +9,19 @@ final class GatewayServerTests: XCTestCase {
         setenv("GATEWAY_JWT_SECRET", "topsecret", 1)
     }
 
-    func makeAPI() -> GatewayOpenAPI {
-        let server = GatewayServer()
+    func makeAPI() async -> GatewayOpenAPI {
+        let server = await GatewayServer()
         return GatewayOpenAPI(host: server)
     }
 
     func testHealth() async throws {
-        let api = makeAPI()
+        let api = await makeAPI()
         let out = try await api.gatewayHealth(.init(headers: .init()))
         switch out { case .ok: break; default: XCTFail("expected ok") }
     }
 
     func testIssueAuthToken() async throws {
-        let api = makeAPI()
+        let api = await makeAPI()
         let creds = Components.Schemas.CredentialRequest(clientId: "test", clientSecret: "secret")
         let out = try await api.issueAuthToken(.init(headers: .init(), body: .json(creds)))
         guard case let .ok(ok) = out, case let .json(tok) = ok.body else {
@@ -31,13 +31,13 @@ final class GatewayServerTests: XCTestCase {
     }
 
     func testRoutesCRUD() async throws {
-        let api = makeAPI()
+        let api = await makeAPI()
         // Create
         let route = Components.Schemas.RouteInfo(
             id: "t1",
             path: "/api",
             target: "http://localhost:8000",
-            methods: ["GET"],
+            methods: [.GET],
             rateLimit: 50,
             proxyEnabled: true
         )
@@ -55,7 +55,7 @@ final class GatewayServerTests: XCTestCase {
             id: "t1",
             path: "/api",
             target: "http://localhost:8000",
-            methods: ["GET"],
+            methods: [.GET],
             rateLimit: 100,
             proxyEnabled: true
         )
@@ -71,7 +71,7 @@ final class GatewayServerTests: XCTestCase {
     func testMetricsOk() async throws {
         // For OpenAPI handler direct call, metrics auth is handled at kernel level;
         // Here we verify the underlying host metrics returns 200 and is JSON.
-        let server = GatewayServer()
+        let server = await GatewayServer()
         let resp = await server.gatewayMetrics()
         XCTAssertEqual(resp.status, 200)
         XCTAssertEqual(resp.headers["Content-Type"], "application/json")
@@ -193,9 +193,9 @@ final class GatewayServerTests: XCTestCase {
         let data = try JSONSerialization.data(withJSONObject: [route])
         try data.write(to: file)
 
-        let server = GatewayServer(routeStoreURL: file)
-        server.reloadRoutes()
-        let resp = server.listRoutes()
+        let server = await GatewayServer(routeStoreURL: file)
+        await server.reloadRoutes()
+        let resp = await server.listRoutes()
         XCTAssertEqual(resp.status, 200)
         let list = try JSONDecoder().decode([Components.Schemas.RouteInfo].self, from: resp.body)
         XCTAssertTrue(list.contains(where: { $0.id == "file1" }))
@@ -207,7 +207,7 @@ final class GatewayServerTests: XCTestCase {
         try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
         let yaml = tmpDir.appendingPathComponent("zones.yaml")
         let manager = try ZoneManager(fileURL: yaml)
-        let server = GatewayServer(zoneManager: manager)
+        let server = await GatewayServer(zoneManager: manager)
 
         // Create zone via HTTP-like API
         let createZoneReq = FountainRuntime.HTTPRequest(method: "POST", path: "/zones", headers: ["Content-Type": "application/json"], body: try JSONEncoder().encode(["name": "example.com"]))

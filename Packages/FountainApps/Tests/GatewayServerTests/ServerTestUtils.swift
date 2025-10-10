@@ -10,7 +10,7 @@ enum ServerTestUtils {
     }
 
     static func startGateway(on port: Int = 18111) async -> RunningServer {
-        let server = GatewayServer()
+        let server = await GatewayServer()
         try? await server.start(port: port)
         return RunningServer(server: server, port: port)
     }
@@ -29,4 +29,3 @@ enum ServerTestUtils {
         return (d, r as! HTTPURLResponse)
     }
 }
-

@@ -1,7 +1,6 @@
 import Foundation
 import LauncherSignature
 import FountainRuntime
-#if canImport(CNIOExtrasZlib)
 import SemanticBrowserService
 
 verifyLauncherSignature()
@@ -45,10 +44,5 @@ let _ = Task {
     print("semantic-browser listening on \(port)")
 }
 RunLoop.main.run()
-#else
-verifyLauncherSignature()
-print("semantic-browser-server is not supported on this platform (missing CNIOExtrasZlib)")
-RunLoop.main.run()
-#endif
 
 // © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

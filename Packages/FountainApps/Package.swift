@@ -178,6 +178,14 @@ let package = Package(
                 .product(name: "FountainRuntime", package: "FountainCore")
             ]
         ),
+        .executableTarget(
+            name: "fk-ops-server",
+            dependencies: [
+                .product(name: "FountainRuntime", package: "FountainCore"),
+                .product(name: "FKOpsService", package: "FountainServiceKit-FKOps"),
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ]
+        ),
         .testTarget(
             name: "FountainLauncherUITests",
             dependencies: ["FountainLauncherUI"]

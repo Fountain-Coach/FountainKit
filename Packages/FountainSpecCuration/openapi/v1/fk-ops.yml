@@ -1,0 +1,113 @@
+openapi: 3.1.0
+info:
+  title: FountainKit Ops API
+  version: 1.0.0
+  x-fountain.port: 8020
+  x-fountain.binary: fk-ops-server
+servers:
+  - url: http://fkops.local
+    description: Local development
+  - url: http://fkops.fountain.coach
+paths:
+  /fk/status:
+    get:
+      operationId: fkStatus
+      summary: Aggregate status of core services and Tool Server
+      responses:
+        '200':
+          description: Current status snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FKStatus'
+  /fk/build:
+    post:
+      operationId: fkBuild
+      summary: Build the FountainKit workspace
+      responses:
+        '200':
+          description: Build result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ack'
+  /fk/up:
+    post:
+      operationId: fkUp
+      summary: Start core services (dev-up)
+      responses:
+        '200':
+          description: Startup result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ack'
+  /fk/down:
+    post:
+      operationId: fkDown
+      summary: Stop core services (dev-down)
+      responses:
+        '200':
+          description: Shutdown result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ack'
+  /fk/logs:
+    get:
+      operationId: fkLogs
+      summary: Tail recent logs for a service
+      parameters:
+        - in: query
+          name: service
+          required: true
+          schema:
+            type: string
+          description: Service name (compose service or 'tool-server')
+        - in: query
+          name: lines
+          required: false
+          schema:
+            type: integer
+            default: 200
+      responses:
+        '200':
+          description: Log text
+          content:
+            text/plain:
+              schema:
+                type: string
+components:
+  schemas:
+    FKStatus:
+      type: object
+      required: [services]
+      properties:
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceInfo'
+    ServiceInfo:
+      type: object
+      required: [name, port, metrics_url, schema_url]
+      properties:
+        name:
+          type: string
+        port:
+          type: integer
+        metrics_url:
+          type: string
+        schema_url:
+          type: string
+        reachable:
+          type: boolean
+          nullable: true
+    Ack:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+        message:
+          type: string
+          nullable: true

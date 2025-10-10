@@ -7,11 +7,11 @@ verifyLauncherSignature()
 
 func buildService() -> SemanticMemoryService { SemanticMemoryService() }
 
-let _ = Task {
+Task {
     let env = ProcessInfo.processInfo.environment
     let service = buildService()
     // Serve generated OpenAPI handlers via a lightweight NIO transport.
-    let fallback: HTTPKernel = { req in
+    let fallback = FountainRuntime.HTTPKernel { req in
         if req.method == "GET" && req.path == "/metrics" {
             return HTTPResponse(status: 200, headers: ["Content-Type": "text/plain"], body: Data("ok\n".utf8))
         }

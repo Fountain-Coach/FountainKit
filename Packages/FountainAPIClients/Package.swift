@@ -12,6 +12,7 @@ let package = Package(
         .library(name: "PersistAPI", targets: ["PersistAPI"]),
         .library(name: "SemanticBrowserAPI", targets: ["SemanticBrowserAPI"]),
         .library(name: "LLMGatewayAPI", targets: ["LLMGatewayAPI"]),
+        .library(name: "PlannerAPI", targets: ["PlannerAPI"]),
         .library(name: "DNSAPI", targets: ["DNSAPI"]),
         .library(name: "TutorDashboard", targets: ["TutorDashboard"])
     ],
@@ -72,6 +73,19 @@ let package = Package(
             name: "LLMGatewayAPI",
             dependencies: [
                 "ApiClientsCore",
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
+            ],
+            plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
+        .target(
+            name: "PlannerAPI",
+            dependencies: [
+                "ApiClientsCore",
+                .product(name: "AsyncHTTPClient", package: "async-http-client"),
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
             ],

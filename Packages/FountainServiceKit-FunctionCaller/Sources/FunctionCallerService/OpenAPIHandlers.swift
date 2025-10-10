@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(CoreFoundation)
+import CoreFoundation
+#endif
 import OpenAPIRuntime
 import AsyncHTTPClient
 import FountainStoreClient

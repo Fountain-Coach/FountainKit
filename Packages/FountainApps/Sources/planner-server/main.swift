@@ -12,8 +12,11 @@ let corpusId = env["DEFAULT_CORPUS_ID"] ?? "tools-factory"
 let svc = FountainStoreClient(client: EmbeddedFountainStoreClient())
 Task {
     await svc.ensureCollections(corpusId: corpusId)
-    let kernel = makePlannerKernel(service: svc)
-    let server = NIOHTTPServer(kernel: kernel)
+    // Register generated OpenAPI handlers via NIO bridge
+    let transport = NIOOpenAPIServerTransport()
+    let api = PlannerOpenAPI(persistence: svc)
+    try? api.registerHandlers(on: transport, serverURL: URL(string: "/")!)
+    let server = NIOHTTPServer(kernel: transport.asKernel())
     do {
         let port = Int(env["PLANNER_PORT"] ?? env["PORT"] ?? "8003") ?? 8003
         _ = try await server.start(port: port)

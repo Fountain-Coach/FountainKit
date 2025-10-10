@@ -275,6 +275,11 @@ paths:
           required: true
           schema:
             type: string
+        - name: host
+          in: query
+          description: Optional host filter
+          schema:
+            type: string
         - name: limit
           in: query
           schema:
@@ -341,6 +346,11 @@ paths:
           required: true
           schema:
             type: string
+        - name: kind
+          in: query
+          description: Optional segment kind filter
+          schema:
+            type: string
         - name: limit
           in: query
           schema:
@@ -405,6 +415,11 @@ paths:
         - name: corpusId
           in: path
           required: true
+          schema:
+            type: string
+        - name: type
+          in: query
+          description: Optional entity type filter
           schema:
             type: string
         - name: limit

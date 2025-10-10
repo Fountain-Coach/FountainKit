@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import ArgumentParser
 import Dispatch
 // No launcher signature required for CLI
@@ -13,6 +16,11 @@ struct FKCLI: ParsableCommand {
         )
     }
 
+    private final class MutableBox<T>: @unchecked Sendable {
+        var value: T
+        init(_ value: T) { self.value = value }
+    }
+
     static func baseURL(_ override: String?) -> URL {
         URL(string: override ?? (ProcessInfo.processInfo.environment["FK_OPS_URL"] ?? "http://127.0.0.1:8020"))!
     }
@@ -20,15 +28,22 @@ struct FKCLI: ParsableCommand {
     // Simple synchronous HTTP helper built on URLSession callbacks.
     static func http(_ req: URLRequest) throws -> (Data, URLResponse) {
         let sem = DispatchSemaphore(value: 0)
-        var outData: Data? = nil
-        var outResp: URLResponse? = nil
-        var outErr: Error? = nil
+        let dataBox = MutableBox<Data?>(nil)
+        let responseBox = MutableBox<URLResponse?>(nil)
+        let errorBox = MutableBox<Error?>(nil)
         URLSession.shared.dataTask(with: req) { data, resp, err in
-            outData = data; outResp = resp; outErr = err; sem.signal()
+            dataBox.value = data
+            responseBox.value = resp
+            errorBox.value = err
+            sem.signal()
         }.resume()
         sem.wait()
-        if let e = outErr { throw e }
-        return (outData ?? Data(), outResp!)
+        if let error = errorBox.value { throw error }
+        let data = dataBox.value ?? Data()
+        guard let response = responseBox.value else {
+            throw URLError(.badServerResponse)
+        }
+        return (data, response)
     }
 
     struct Status: ParsableCommand {

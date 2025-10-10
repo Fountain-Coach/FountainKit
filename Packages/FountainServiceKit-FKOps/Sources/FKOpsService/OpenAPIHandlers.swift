@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import OpenAPIRuntime
 
 public struct FKOpsOpenAPI: APIProtocol, @unchecked Sendable {

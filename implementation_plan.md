@@ -19,6 +19,7 @@ Status — Done
   - Tool Server supports startup image pull (TOOLSERVER_PULL_ON_START) and a public status endpoint returning compose availability and services.
   - CI runs `Scripts/openapi-lint.sh` on Ubuntu and macOS runners before Swift builds/tests.
   - SwiftPM build plugin enforces presence of `openapi-generator-config.yaml` for generated targets.
+  - Completed Linux `FoundationNetworking` audit for URLSession-based transports, CLIs, and tests.
 
 Status — In Progress
 - Service migrations: Completed for Awareness, ToolsFactory, ToolServer (handlers + routing).
@@ -31,7 +32,7 @@ Next Steps (High Priority)
    - [x] Evaluate the need for a generated DNS client (see `OPENAPI_COVERAGE.md`) and implement it with URLSession + AsyncHTTPClient transports.
    - [ ] Migrate remaining pending clients (`FunctionCallerAPI`, `BootstrapAPI`, `ToolsFactoryAPI`, `FKOpsAPI`, `AwarenessAPI`) to generated implementations and validate parity on Linux/macOS.
 3. **Runtime Compatibility Sweep**
-   - [ ] Audit `FountainCore` transports for FoundationNetworking availability on Linux and provide shims where required.
+   - [x] Audit `FountainCore` transports for FoundationNetworking availability on Linux and provide shims where required.
    - [ ] Add integration smoke tests for a representative client/server pair running on both Darwin and Linux Swift toolchains.
 4. **Legacy Decommissioning**
    - [ ] Retire `FountainCodex` once generated clients pass the cross-platform smoke tests.

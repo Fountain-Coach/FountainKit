@@ -9,17 +9,19 @@ Notes
 
 | Spec | Owner target(s) | Server adoption | Client adoption |
 | --- | --- | --- | --- |
-| `v1/gateway.yml` | `FountainApps/gateway-server` | Generator enabled (scoped control plane) | N/A |
+| `v1/gateway.yml` | `FountainApps/gateway-server` | Generator enabled (scoped control plane) | `FountainAPIClients/GatewayAPI` generator enabled |
 | `v1/semantic-browser.yml` | `FountainServiceKit-SemanticBrowser/SemanticBrowserService` | Generator enabled | `FountainAPIClients/SemanticBrowserAPI` generator enabled |
 | `v1/persist.yml` | `FountainServiceKit-Persist/PersistService` | Generator enabled | `FountainAPIClients/PersistAPI` generator enabled |
 | `v1/planner.yml` | `FountainServiceKit-Planner/PlannerService` | Generator enabled | Pending |
-| `v1/function-caller.yml` | `FountainServiceKit-FunctionCaller/FunctionCallerService` | Pending | Pending |
-| `v1/bootstrap.yml` | `FountainServiceKit-Bootstrap/BootstrapService` | Pending | Pending |
-| `v1/tools-factory.yml` | `FountainServiceKit-ToolsFactory/ToolsFactoryService` | Pending | Pending |
-| `v1/tool-server.yml` | `FountainServiceKit-ToolServer` | Manual router, no generator | N/A |
-| `v1/dns.yml` | TBC | Pending | Pending |
-| `v1/llm-gateway.yml` | Gateway plugin (no standalone server) | N/A | N/A |
+| `v1/function-caller.yml` | `FountainServiceKit-FunctionCaller/FunctionCallerService` | Generator enabled | Pending |
+| `v1/bootstrap.yml` | `FountainServiceKit-Bootstrap/BootstrapService` | Generator enabled | Pending |
+| `v1/tools-factory.yml` | `FountainServiceKit-ToolsFactory/ToolsFactoryService` | Generator enabled | Pending |
+| `v1/tool-server.yml` | `FountainServiceKit-ToolServer/ToolServerService` | Generator enabled (OpenAPIHandlers wired) | N/A |
+| `v1/fk-ops.yml` | `FountainServiceKit-FKOps/FKOpsService` | Generator enabled | Pending |
+| `v1/baseline-awareness.yml` | `FountainServiceKit-Awareness/AwarenessService` | Generator enabled | Pending |
+| `v1/dns.yml` | `FountainCore/FountainRuntime` | Pending | Pending |
+| `v1/llm-gateway.yml` | Gateway plugin (no standalone server) | N/A | `FountainAPIClients/LLMGatewayAPI` generator enabled |
 | `v1/openapi-curator.yml` | `FountainTooling` | Pending | N/A |
 
-Status last updated: 2025‑10‑10
+Status last updated: 2025‑10‑10 (fk ops + tool server audit)
 

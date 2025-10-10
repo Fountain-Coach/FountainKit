@@ -28,7 +28,14 @@ let package = Package(
         ),
         .target(
             name: "GatewayAPI",
-            dependencies: ["ApiClientsCore"]
+            dependencies: [
+                "ApiClientsCore",
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
+            ],
+            plugins: [
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
         ),
         .target(
             name: "PersistAPI",

@@ -1,84 +1,49 @@
-# FountainKit OpenAPI-First Adoption Plan — Audit 2025-10-10
+# FountainKit OpenAPI-First Plan — Concise Roadmap
 
-_Audit date: 2025-10-10 (UTC)_  
-_Git HEAD at audit: d39b3acf9f0af8b709d2f2a3a28690960b011e4e_
+Purpose
+- Keep every HTTP surface spec-first, generated, and wired through FountainCore transports. Keep this plan short, current, and practical.
 
-This audit reconciles the historical plan with the current repository state so follow-up work can focus on remaining gaps. The intent is to keep the plan actionable, highlight completed milestones with their supporting commits, and embed the most recent coverage report for future reference.
+Status — Done
+- Generator in use across the workspace:
+  - Clients: `GatewayAPI`, `PersistAPI`, `SemanticBrowserAPI`, `LLMGatewayAPI` generated (URLSession transport).
+  - Servers: `SemanticBrowser`, `Persist`, `Planner` implemented; `Bootstrap` and `FunctionCaller` handlers added in service kits.
+  - Gateway control plane served via generated handlers; Gateway tests are green.
+- UX and infra improvements:
+  - Client factory in FountainCore (URLSession transport + default-header middleware).
+  - Split `semantic-browser-server` into `Packages/FountainApps-SemanticBrowser`; CI builds it separately.
+  - Fixed `/auth/token` date decoding and HTTP framing (Content-Length for non‑chunked).
 
-## Status summary
+Status — In Progress
+- Switch executables to generated routing:
+  - `bootstrap-server` and `function-caller-server` currently run legacy kernels; service kits already expose generated handlers. Flip executables once dependency resolution is stable in CI for partial builds.
+- Service migrations (handlers + routing): `Awareness`, `ToolsFactory`, `ToolServer`.
+- Decision: introduce a generated `DNS` client (if needed by consumers).
 
-### Completed milestones / deliverables
-- **Milestone 0 — Baseline & ownership inventory** ✅: Service ownership and spec index live in [`Packages/FountainSpecCuration/openapi/README.md`](Packages/FountainSpecCuration/openapi/README.md), satisfying the catalog requirement introduced during the initial workspace import (`04ccd0c`) and reinforced by subsequent persona updates (`ce54159`).
-- **Milestone 1 — Generator bootstrap** ✅: Core packages depend on Apple's Swift OpenAPI toolchain, with plugin declarations active in `FountainServiceKit-Persist`, `FountainServiceKit-Planner`, `FountainServiceKit-SemanticBrowser`, `FountainAPIClients`, and the gateway server target (`15dbdc3`, `4d41c12`, `847d83c`, `7bd6464`).
-- **Milestone 2 — Semantic Browser pilot** ✅: The Semantic Browser service and client consume generated types via `NIOOpenAPIServerTransport` and URLSession transport (`4d41c12`, `8b344d5`, `d4db71c`).
-- **Gateway control-plane adoption** ✅: Gateway server routes now flow through generated handlers, backed by integration coverage and runtime wiring (`847d83c`, `422848c`, `4d3a828`, `8f392b7`, `d39b3ac`).
-- **Semantic Browser packaging** ✅: `semantic-browser-server` split into standalone package `FountainApps-SemanticBrowser` to decouple Apps test graph from CNIO dependencies (`5bb7403`, `5a9c3fc`, `230d71f`).
-- **Gateway tokens + framing** ✅: Fixed `/auth/token` date decoding (ISO8601) and ensured Content-Length for non-chunked responses; Gateway tests are fully green (`a1a72a4`, `487c853`).
-- **Gateway + LLM clients generated** ✅: Enabled Apple generator for `GatewayAPI` and `LLMGatewayAPI`; migrated LLM adapter to generated client (`fe539bc`, `febf0d4`).
-- **Client factory** ✅: Added `OpenAPIClientFactory` in FountainCore with URLSession and AsyncHTTPClient transport builders and default header middleware (`645e0bc`, `695e69e`).
+Next Steps (High Priority)
+- Flip `bootstrap-server` and `function-caller-server` to `NIOOpenAPIServerTransport` with `/openapi.yaml` fallback.
+- Wire remaining service kits (Awareness, ToolsFactory, ToolServer) to generated handlers.
+- Add stricter CI checks: spec lint (`Scripts/openapi-lint.sh`) and “must have generator config” guard per target.
+- Retire legacy `FountainCodex` once all clients/servers are generated.
 
-### In-progress / outstanding focus areas
-- **Milestone 3 — Generated clients beyond Persist & Semantic Browser**: `GatewayAPI` now generates types+client; `LLMGatewayAPI` remains hand-authored pending adapter updates; other curated clients still to migrate.
-- **Milestone 4 — Service kit migrations**: Persist, Planner, and Semantic Browser servers are generated, but Bootstrap, Function Caller, Awareness, Tools Factory, and Tool Server still require generator adoption.
-- **Milestone 5 — Gateway plugins**: Plugin surfaces retain manual handlers; specs exist but generated routing has not been introduced.
-- **Milestone 6 — CI + linting**: No automated spec lint or generation verification is wired into CI yet.
-- **Milestone 7 — Legacy codegen retirement**: Custom `FountainCodex` tooling persists and must be deprecated after the generator rollout completes.
+Principles
+- OpenAPI is the source of truth; update specs first and regenerate during build.
+- Do not commit generated Swift; keep configs (`openapi.yaml` symlink + `openapi-generator-config.yaml`) next to targets.
+- Use FountainCore transports; prefer SwiftNIO for servers; URLSession or AsyncHTTPClient for clients.
 
-## Updated milestone roadmap
+Quick Map (truth snapshot)
+- Gateway (Apps): generated control-plane handlers; tests green.
+- Service kits:
+  - `SemanticBrowser`, `Persist`, `Planner`: generated server handlers implemented.
+  - `Bootstrap`, `FunctionCaller`: generated server handlers implemented in kits; executables still legacy (to flip next).
+  - `Awareness`, `ToolsFactory`, `ToolServer`: generator scaffolding underway (Awareness), wiring pending.
+- API clients:
+  - `GatewayAPI`, `PersistAPI`, `SemanticBrowserAPI`, `LLMGatewayAPI`: generated; adapters use generated clients where applicable.
+- Packages: `FountainApps-SemanticBrowser` hosts the semantic browser executable independently.
 
-### Milestone 3 — Generated clients package (partial)
-- Finish migrating `GatewayAPI`, `LLMGatewayAPI`, DNS, and future clients to generated transports.
-- Introduce a `FountainCore` client factory to standardise headers and base URLs for all generated clients.
-- Deprecate and eventually remove the bespoke REST client once all call sites migrate.
+Validate Locally
+- Build everything: `swift build`
+- Gateway tests: `swift test --package-path Packages/FountainApps --filter GatewayServerTests`
 
-### Milestone 4 — Service server migrations (ongoing)
-- Bootstrap, Function Caller, Awareness, Tools Factory, and Tool Server kits need symlinked specs, generator configs, plugin/runtime dependencies, and handler rewrites that wrap existing logic.
-  - Status: Scaffolding added for Bootstrap, Function Caller, and Awareness (spec symlinks, `openapi-generator-config.yaml`, plugin/runtime deps). Bootstrap and Function Caller handlers implemented in service kits; executables remain on legacy kernels for now while we stabilise dependency fetch in partial builds.
-- Maintain `/metrics`, `/health`, `/ready` manually until each migration stabilises.
+Maintainers
+- Keep this file concise. Update only the Done/In Progress/Next Steps sections as changes land.
 
-### Milestone 5 — Gateway control plane + plugins (ongoing)
-- Extend generated handler adoption to plugin routers, ensuring each plugin spec is backed by generated routing.
-- Confirm security/budget hooks remain intact while delegating request parsing to generated types.
-
-### Milestone 6 — CI, lint, and docs (not started)
-- Add `Scripts/openapi-lint.sh` (or equivalent) to CI and ensure `swift build` fails when generator configs are missing.
-- Update onboarding/documents so reviewers enforce the OpenAPI-first checklist.
-
-### Milestone 7 — Retire legacy codegen (not started)
-- Delete `FountainCore/FountainCodex` and related tooling once all services and clients generate from curated specs.
-- Update documentation to reference only Apple's generator workflow.
-
-## Immediate next steps
-1. Assess `dns.yml` for a client target and add generator stubs if needed.
-2. Schedule service-kit migrations starting with Bootstrap and Function Caller to reduce manual schema drift.
-3. Draft CI linting tasks that validate spec + generator parity before deprecating legacy codegen.
-4. Keep adoption coverage tables (`Packages/FountainSpecCuration/openapi/README.md` and `Packages/FountainSpecCuration/OPENAPI_COVERAGE.md`) up to date as targets adopt the generator.
-
-## Appendix A: OpenAPI Generator Coverage Report
-# OpenAPI Generator Coverage Report
-
-_Date: 2025-10-10 (UTC)_
-_Git HEAD: d39b3acf9f0af8b709d2f2a3a28690960b011e4e ("e2e(gateway): add HTTP-level test for metrics auth with token issuance")_
-
-## Coverage overview
-- The curated catalog enumerates gateway plugins, planner and persistence services, core bootstrap/function-caller services, plus tools-factory/tool-server surfaces in [`Packages/FountainSpecCuration/openapi/README.md`](Packages/FountainSpecCuration/openapi/README.md).
-- Only a subset of those specs currently have Swift Package targets wired to Apple's `OpenAPIGenerator` plugin:
-  - `PersistService` server target in `FountainServiceKit-Persist` pulls in the generator plug-in and runtime.
-  - `PlannerService` server target in `FountainServiceKit-Planner` is configured for code generation.
-  - `SemanticBrowserService` server target uses the generator stack as well.
-  - The `gateway-server` executable filters a limited set of admin routes through generated handlers.
-  - On the client side, `PersistAPI`, `SemanticBrowserAPI`, and `GatewayAPI` targets generate URLSession-based clients.
-
-## Gaps and forgotten surfaces
-- Most curated specs—`bootstrap`, `baseline-awareness`, `function-caller`, `dns`, `tools-factory`, `tool-server`, the OpenAPI curator service, and every gateway plugin spec—lack Swift targets that reference the generator plug-in.
-- Gateway-facing client libraries (`GatewayAPI`, `LLMGatewayAPI`) are hand-authored and depend solely on shared client utilities, with no generator support.
-- The Tool Server package only ships `openapi.yaml` as a resource, leaving handlers and clients to be maintained manually.
-- Without generator wiring, specs and implementations risk drifting apart, forcing manual upkeep of request/response shapes.
-
-## Recommended next steps
-1. For each spec missing generated bindings, add an `openapi.yaml` (or curated symlink) plus `openapi-generator-config.yaml` to the appropriate target directory, then declare the generator plug-in and runtime dependencies in `Package.swift`, following the patterns in Persist, Planner, SemanticBrowser, and Gateway server targets.
-2. Prioritise high-traffic surfaces—Function Caller, Bootstrap, and gateway plugins—to reduce manual stubs and keep curated contracts authoritative.
-3. Continue updating specs first, linting via `Scripts/openapi-lint.sh`, and run `swift build` to regenerate bindings so source and schema stay aligned.
-
-## Git history reference
-- Report captured against repository state `d39b3acf9f0af8b709d2f2a3a28690960b011e4e` (see `git show d39b3acf9f0af8b709d2f2a3a28690960b011e4e`).

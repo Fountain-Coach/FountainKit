@@ -78,7 +78,7 @@ final class GatewayServerTests: XCTestCase {
     }
 
     func testCertificateEndpoints() async throws {
-        let api = makeAPI()
+        let api = await makeAPI()
         // Renew should be accepted
         let renew = try await api.renewCertificate(.init(headers: .init()))
         guard case .accepted = renew else { return XCTFail("renew expected accepted") }

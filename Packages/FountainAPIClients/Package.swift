@@ -8,12 +8,17 @@ let package = Package(
     ],
     products: [
         .library(name: "ApiClientsCore", targets: ["ApiClientsCore"]),
+        .library(name: "AwarenessAPI", targets: ["AwarenessAPI"]),
+        .library(name: "BootstrapAPI", targets: ["BootstrapAPI"]),
         .library(name: "GatewayAPI", targets: ["GatewayAPI"]),
+        .library(name: "FKOpsAPI", targets: ["FKOpsAPI"]),
+        .library(name: "FunctionCallerAPI", targets: ["FunctionCallerAPI"]),
         .library(name: "PersistAPI", targets: ["PersistAPI"]),
         .library(name: "SemanticBrowserAPI", targets: ["SemanticBrowserAPI"]),
         .library(name: "LLMGatewayAPI", targets: ["LLMGatewayAPI"]),
         .library(name: "PlannerAPI", targets: ["PlannerAPI"]),
         .library(name: "DNSAPI", targets: ["DNSAPI"]),
+        .library(name: "ToolsFactoryAPI", targets: ["ToolsFactoryAPI"]),
         .library(name: "TutorDashboard", targets: ["TutorDashboard"])
     ],
     dependencies: [
@@ -37,6 +42,32 @@ let package = Package(
             name: "GatewayAPI",
             dependencies: [
                 "ApiClientsCore",
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
+            ],
+            plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
+        .target(
+            name: "AwarenessAPI",
+            dependencies: [
+                "ApiClientsCore",
+                .product(name: "AsyncHTTPClient", package: "async-http-client"),
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
+            ],
+            plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
+        .target(
+            name: "BootstrapAPI",
+            dependencies: [
+                "ApiClientsCore",
+                .product(name: "AsyncHTTPClient", package: "async-http-client"),
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
             ],
@@ -82,6 +113,32 @@ let package = Package(
             ]
         ),
         .target(
+            name: "FKOpsAPI",
+            dependencies: [
+                "ApiClientsCore",
+                .product(name: "AsyncHTTPClient", package: "async-http-client"),
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
+            ],
+            plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
+        .target(
+            name: "FunctionCallerAPI",
+            dependencies: [
+                "ApiClientsCore",
+                .product(name: "AsyncHTTPClient", package: "async-http-client"),
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
+            ],
+            plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
+        .target(
             name: "PlannerAPI",
             dependencies: [
                 "ApiClientsCore",
@@ -101,6 +158,19 @@ let package = Package(
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
                 .product(name: "AsyncHTTPClient", package: "async-http-client")
+            ],
+            plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
+        .target(
+            name: "ToolsFactoryAPI",
+            dependencies: [
+                "ApiClientsCore",
+                .product(name: "AsyncHTTPClient", package: "async-http-client"),
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
             ],
             plugins: [
                 .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),

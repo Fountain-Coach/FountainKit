@@ -19,7 +19,7 @@ let package = Package(
         // OpenAPI generator + runtime for generated clients
         .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
         .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0"),
-        .package(url: "https://github.com/apple/swift-openapi-async-http-client.git", from: "1.4.0")
+        .package(url: "https://github.com/apple/swift-openapi-urlsession.git", from: "1.4.0")
     ],
     targets: [
         .target(
@@ -39,7 +39,7 @@ let package = Package(
             dependencies: [
                 "ApiClientsCore",
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
-                .product(name: "OpenAPIAsyncHTTPClient", package: "swift-openapi-async-http-client")
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
             ],
             plugins: [
                 .plugin(name: "OpenAPIGeneratorPlugin", package: "swift-openapi-generator")

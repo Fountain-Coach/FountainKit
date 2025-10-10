@@ -14,6 +14,8 @@ This audit reconciles the historical plan with the current repository state so f
 - **Gateway control-plane adoption** ✅: Gateway server routes now flow through generated handlers, backed by integration coverage and runtime wiring (`847d83c`, `422848c`, `4d3a828`, `8f392b7`, `d39b3ac`).
 - **Semantic Browser packaging** ✅: `semantic-browser-server` split into standalone package `FountainApps-SemanticBrowser` to decouple Apps test graph from CNIO dependencies (`5bb7403`, `5a9c3fc`, `230d71f`).
 - **Gateway tokens + framing** ✅: Fixed `/auth/token` date decoding (ISO8601) and ensured Content-Length for non-chunked responses; Gateway tests are fully green (`a1a72a4`, `487c853`).
+- **Gateway + LLM clients generated** ✅: Enabled Apple generator for `GatewayAPI` and `LLMGatewayAPI`; migrated LLM adapter to generated client (`fe539bc`, `febf0d4`).
+- **Client factory** ✅: Added `OpenAPIClientFactory` in FountainCore with URLSession and AsyncHTTPClient transport builders and default header middleware (`645e0bc`, `695e69e`).
 
 ### In-progress / outstanding focus areas
 - **Milestone 3 — Generated clients beyond Persist & Semantic Browser**: `GatewayAPI` now generates types+client; `LLMGatewayAPI` remains hand-authored pending adapter updates; other curated clients still to migrate.
@@ -31,6 +33,7 @@ This audit reconciles the historical plan with the current repository state so f
 
 ### Milestone 4 — Service server migrations (ongoing)
 - Bootstrap, Function Caller, Awareness, Tools Factory, and Tool Server kits need symlinked specs, generator configs, plugin/runtime dependencies, and handler rewrites that wrap existing logic.
+  - Status: Scaffolding added for Bootstrap, Function Caller, and Awareness (spec symlinks, `openapi-generator-config.yaml`, plugin/runtime deps). Handlers still to wire.
 - Maintain `/metrics`, `/health`, `/ready` manually until each migration stabilises.
 
 ### Milestone 5 — Gateway control plane + plugins (ongoing)
@@ -46,7 +49,7 @@ This audit reconciles the historical plan with the current repository state so f
 - Update documentation to reference only Apple's generator workflow.
 
 ## Immediate next steps
-1. Finalise client migrations: complete `LLMGatewayAPI` generation (coordinate adapter updates) and assess `dns.yml` for a client target.
+1. Assess `dns.yml` for a client target and add generator stubs if needed.
 2. Schedule service-kit migrations starting with Bootstrap and Function Caller to reduce manual schema drift.
 3. Draft CI linting tasks that validate spec + generator parity before deprecating legacy codegen.
 4. Keep adoption coverage tables (`Packages/FountainSpecCuration/openapi/README.md` and `Packages/FountainSpecCuration/OPENAPI_COVERAGE.md`) up to date as targets adopt the generator.

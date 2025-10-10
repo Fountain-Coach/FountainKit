@@ -11,7 +11,8 @@ let package = Package(
         .executable(name: "openapi-curator-cli", targets: ["openapi-curator-cli"]),
         .executable(name: "openapi-curator-service", targets: ["openapi-curator-service"]),
         .executable(name: "clientgen-service", targets: ["clientgen-service"]),
-        .executable(name: "sse-client", targets: ["sse-client"])
+        .executable(name: "sse-client", targets: ["sse-client"]),
+        .plugin(name: "EnsureOpenAPIConfigPlugin", targets: ["EnsureOpenAPIConfigPlugin"])
     ],
     dependencies: [
         .package(path: "../FountainCore"),
@@ -45,6 +46,10 @@ let package = Package(
         .executableTarget(
             name: "sse-client",
             dependencies: []
+        ),
+        .plugin(
+            name: "EnsureOpenAPIConfigPlugin",
+            capability: .buildTool()
         )
     ]
 )

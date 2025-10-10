@@ -73,6 +73,7 @@ let package = Package(
             ],
             exclude: ["README.md"],
             plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
         ),

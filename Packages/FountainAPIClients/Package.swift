@@ -15,11 +15,12 @@ let package = Package(
         .library(name: "TutorDashboard", targets: ["TutorDashboard"])
     ],
     dependencies: [
-        .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
+        .package(path: "../FountainTooling"),
         // OpenAPI generator + runtime for generated clients
         .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
         .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0"),
-        .package(url: "https://github.com/apple/swift-openapi-urlsession.git", from: "1.2.0")
+        .package(url: "https://github.com/apple/swift-openapi-urlsession.git", from: "1.2.0"),
+        .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0")
     ],
     targets: [
         .target(
@@ -34,6 +35,7 @@ let package = Package(
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
             ],
             plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
         ),
@@ -45,6 +47,7 @@ let package = Package(
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
             ],
             plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
         ),
@@ -56,6 +59,7 @@ let package = Package(
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
             ],
             plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
         ),
@@ -67,6 +71,7 @@ let package = Package(
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
             ],
             plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
         ),

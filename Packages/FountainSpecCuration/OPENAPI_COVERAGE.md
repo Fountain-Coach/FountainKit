@@ -25,3 +25,15 @@ Notes
 
 Status last updated: 2025‑10‑10 (fk ops + tool server audit)
 
+## Executable Task List
+
+1. **Close Pending Client Gaps**
+   - [ ] Promote `PlannerAPI`, `FunctionCallerAPI`, `BootstrapAPI`, and `ToolsFactoryAPI` to generated clients and confirm they compile and run on both macOS and Linux.
+   - [ ] Wire `FKOpsAPI` and `AwarenessAPI` consumers to generated clients; exercise them against live servers on Linux CI.
+2. **Deliver DNS Coverage**
+   - [ ] Finalize the curated `v1/dns.yml` spec (lint + curator submission) and add the generator plugin to the owning target.
+   - [ ] Implement a multi-transport DNS client (URLSession for Darwin, AsyncHTTPClient for Linux) and add regression tests that run in cross-platform CI.
+3. **Curator + Spec Automation**
+   - [ ] Hook this coverage table into CI so that pending entries fail the build if the owning target lacks generator metadata.
+   - [ ] Emit a JSON snapshot of this coverage data for other toolchains to consume (ensures parity between macOS and Linux builds).
+

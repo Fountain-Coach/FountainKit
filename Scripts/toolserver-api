@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BASE=${TOOLSERVER_URL:-http://127.0.0.1:${PORT:-8012}}
+cmd=${1:-help}; shift || true
+
+json() { printf '%s' "$1"; }
+
+case "$cmd" in
+  status)
+    curl -sf "$BASE/_status" | jq . || curl -sf "$BASE/_status" || true ;;
+  imagemagick|ffmpeg|exiftool|pandoc|libplist)
+    tool="$cmd"; shift || true
+    jqbody=$(jq -n --argjson arr "$(printf '%s\n' "$@" | jq -R . | jq -s .)" '{args:$arr}')
+    curl -sf -H 'Content-Type: application/json' -d "$jqbody" "$BASE/$(
+      case "$tool" in
+        imagemagick) echo imagemagick;;
+        ffmpeg) echo ffmpeg;;
+        exiftool) echo exiftool;;
+        pandoc) echo pandoc;;
+        libplist) echo libplist;;
+      esac)" | jq . || true ;;
+  *)
+    cat <<USAGE
+usage: $0 <command>
+
+Commands:
+  status                      GET /_status
+  imagemagick <args...>       POST /imagemagick with {args}
+  ffmpeg <args...>            POST /ffmpeg with {args}
+  exiftool <args...>          POST /exiftool with {args}
+  pandoc <args...>            POST /pandoc with {args}
+  libplist <args...>          POST /libplist with {args}
+
+ENV:
+  TOOLSERVER_URL   Base URL (default: http://127.0.0.1:8012)
+USAGE
+    ;;
+esac

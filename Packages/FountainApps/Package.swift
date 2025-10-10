@@ -40,13 +40,16 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-certificates.git", from: "1.0.0"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
         .package(url: "https://github.com/Fountain-Coach/swiftcurseskit.git", exact: "0.2.0"),
-        .package(url: "https://github.com/Fountain-Coach/swift-secretstore.git", exact: "0.1.0")
+        .package(url: "https://github.com/Fountain-Coach/swift-secretstore.git", exact: "0.1.0"),
+        .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
+        .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0")
     ],
     targets: [
         .executableTarget(
             name: "gateway-server",
             dependencies: [
                 .product(name: "FountainRuntime", package: "FountainCore"),
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "PublishingFrontend", package: "FountainGatewayKit"),
                 .product(name: "LLMGatewayPlugin", package: "FountainGatewayKit"),
                 .product(name: "AuthGatewayPlugin", package: "FountainGatewayKit"),
@@ -64,7 +67,10 @@ let package = Package(
                 .product(name: "X509", package: "swift-certificates"),
                 "Yams"
             ],
-            exclude: ["README.md"]
+            exclude: ["README.md"],
+            plugins: [
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
         ),
         .executableTarget(
             name: "tools-factory-server",

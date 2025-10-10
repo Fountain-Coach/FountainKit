@@ -1,0 +1,13 @@
+generate:
+  - types
+  - server
+accessModifier: public
+filter:
+  paths:
+    - /health
+    - /metrics
+    - /auth/token
+    - /certificates
+    - /certificates/renew
+    - /routes
+    - /routes/{routeId}

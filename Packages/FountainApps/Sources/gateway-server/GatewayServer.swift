@@ -2,6 +2,7 @@ import Foundation
 import NIO
 import NIOHTTP1
 import FountainRuntime
+import OpenAPIRuntime
 import Crypto
 import X509
 import LLMGatewayPlugin
@@ -147,75 +148,64 @@ public final class GatewayServer {
                     return handled
                 }
             }
-            let segments = request.path.split(separator: "/", omittingEmptySubsequences: true)
-            var response: HTTPResponse
-            let start = Date()
-            switch (request.method, segments) {
-            case ("GET", ["health"]):
-                response = self.gatewayHealth()
-            case ("GET", ["live"]):
-                response = self.gatewayLiveness()
-            case ("GET", ["ready"]):
-                response = self.gatewayReadiness()
-            case ("GET", ["metrics"]):
-                response = await self.gatewayMetrics()
-            case ("GET", ["roleguard"]):
-                response = await self.listRoleGuardRules(request)
-            case ("POST", ["roleguard", "reload"]):
-                response = await self.reloadRoleGuardRules(request)
-            case ("POST", ["auth", "token"]):
-                response = await self.issueAuthToken(request)
-            case ("GET", ["certificates"]):
-                response = self.certificateInfo()
-            case ("POST", ["certificates", "renew"]):
-                response = self.renewCertificate()
-            case ("GET", ["routes"]):
-                response = self.listRoutes()
-            case ("POST", ["routes"]):
-                response = self.createRoute(request)
-            case ("POST", ["routes", "reload"]):
-                self.reloadRoutes()
-                response = HTTPResponse(status: 204)
-            case ("PUT", let seg) where seg.count == 2 && seg[0] == "routes":
-                let id = String(seg[1])
-                response = self.updateRoute(id, request: request)
-            case ("DELETE", let seg) where seg.count == 2 && seg[0] == "routes":
-                let id = String(seg[1])
-                response = self.deleteRoute(id)
-            case ("GET", ["zones"]):
-                if let manager = zoneManager {
-                    let zones = await manager.listZones()
-                    let json = try JSONEncoder().encode(ZonesResponse(zones: zones))
-                    response = HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: json)
-                } else {
-                    response = self.error(500, message: "zone manager unavailable")
-                }
-            case ("POST", ["zones"]):
-                response = await self.createZone(request)
-            case ("DELETE", let seg) where seg.count == 2 && seg[0] == "zones":
-                let zoneId = String(seg[1])
-                response = await self.deleteZone(zoneId)
-            case ("GET", let seg) where seg.count == 3 && seg[0] == "zones" && seg[2] == "records":
-                let zoneId = String(seg[1])
-                response = await self.listRecords(zoneId)
-            case ("POST", let seg) where seg.count == 3 && seg[0] == "zones" && seg[2] == "records":
-                let zoneId = seg[1]
-                response = await self.createRecord(String(zoneId), request: request)
-            case ("PUT", let seg) where seg.count == 4 && seg[0] == "zones" && seg[2] == "records":
-                let zoneId = String(seg[1])
-                let recordId = String(seg[3])
-                response = await self.updateRecord(zoneId, recordId: recordId, request: request)
-            case ("DELETE", let seg) where seg.count == 4 && seg[0] == "zones" && seg[2] == "records":
-                let zoneId = String(seg[1])
-                let recordId = String(seg[3])
-                response = await self.deleteRecord(zoneId, recordId: recordId)
-            default:
-                if let proxied = try await self.tryProxy(request) {
-                    response = proxied
-                } else {
-                    response = HTTPResponse(status: 404)
+
+            // Build OpenAPI transport with fallback for non-OpenAPI endpoints and proxying
+            let fallback = HTTPKernel { [zoneManager, self] request in
+                let segments = request.path.split(separator: "/", omittingEmptySubsequences: true)
+                switch (request.method, segments) {
+                case ("GET", ["live"]):
+                    return self.gatewayLiveness()
+                case ("GET", ["ready"]):
+                    return self.gatewayReadiness()
+                case ("GET", ["roleguard"]):
+                    return await self.listRoleGuardRules(request)
+                case ("POST", ["roleguard", "reload"]):
+                    return await self.reloadRoleGuardRules(request)
+                case ("POST", ["routes", "reload"]):
+                    self.reloadRoutes()
+                    return HTTPResponse(status: 204)
+                case ("GET", ["zones"]):
+                    if let manager = zoneManager {
+                        let zones = await manager.listZones()
+                        let json = try JSONEncoder().encode(ZonesResponse(zones: zones))
+                        return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: json)
+                    } else {
+                        return self.error(500, message: "zone manager unavailable")
+                    }
+                case ("POST", ["zones"]):
+                    return await self.createZone(request)
+                case ("DELETE", let seg) where seg.count == 2 && seg[0] == "zones":
+                    let zoneId = String(seg[1])
+                    return await self.deleteZone(zoneId)
+                case ("GET", let seg) where seg.count == 3 && seg[0] == "zones" && seg[2] == "records":
+                    let zoneId = String(seg[1])
+                    return await self.listRecords(zoneId)
+                case ("POST", let seg) where seg.count == 3 && seg[0] == "zones" && seg[2] == "records":
+                    let zoneId = seg[1]
+                    return await self.createRecord(String(zoneId), request: request)
+                case ("PUT", let seg) where seg.count == 4 && seg[0] == "zones" && seg[2] == "records":
+                    let zoneId = String(seg[1])
+                    let recordId = String(seg[3])
+                    return await self.updateRecord(zoneId, recordId: recordId, request: request)
+                case ("DELETE", let seg) where seg.count == 4 && seg[0] == "zones" && seg[2] == "records":
+                    let zoneId = String(seg[1])
+                    let recordId = String(seg[3])
+                    return await self.deleteRecord(zoneId, recordId: recordId)
+                default:
+                    if let proxied = try await self.tryProxy(request) {
+                        return proxied
+                    }
+                    return HTTPResponse(status: 404)
                 }
             }
+
+            let transport = NIOOpenAPIServerTransport(fallback: fallback)
+            let api = GatewayOpenAPI(host: self)
+            try? api.registerHandlers(on: transport)
+            let openapiKernel = transport.asKernel()
+
+            let start = Date()
+            var response = try await openapiKernel.handle(request)
             for plugin in plugins.reversed() {
                 response = try await plugin.respond(response, for: request)
             }

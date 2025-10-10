@@ -52,6 +52,13 @@ EOF
     docker_compose down ;;
   ps)
     docker_compose ps "$@" ;;
+  logs)
+    sub=${1:-compose}; shift || true
+    case "$sub" in
+      compose) docker_compose logs -f "$@" ;;
+      tool-server) tail -f "$ROOT/.build/tool-server.log" ;;
+      *) echo "usage: $0 logs <compose|tool-server>" ;;
+    esac ;;
   run)
     svc=${1:-}; shift || true
     if [[ -z "$svc" ]]; then echo "usage: $0 run <service> [-- args...]"; exit 1; fi

@@ -9,6 +9,15 @@ Quick dev helpers:
 - `Scripts/dev-down` – stop services (use `--force` to clear ports)
 - `Scripts/dev-status` – show service/port/PID status at a glance
 
+Quickstart (fk)
+- `Scripts/fk doctor` — verify swift, docker, jq, curl
+- `Scripts/fk init` — generate/update Tool Server `.env`
+- `Scripts/fk build` — build the entire workspace
+- `Scripts/fk up` / `Scripts/fk down` — start/stop core services
+- `Scripts/fk status` — show status incl. Tool Server
+- `Scripts/fk open tool-server` — open Tool Server `/_status`
+- `Scripts/fk ts-api exiftool -- -ver` — call Tool Server API helpers
+
 ## Service Map
 
 Core (started by `Scripts/dev-up`):

@@ -78,6 +78,8 @@ Commands:
   up              Start core services (dev-up)
   down            Stop core services (dev-down)
   status          Show status of core services and tool-server
+  logs [what]     Stream logs: 'compose' or 'tool-server'
+  open <target>   Open common endpoints in browser
   api <url>       Generic HTTP call with JSON helpers
 
 Shortcuts:
@@ -100,10 +102,33 @@ case "${1:-help}" in
   up) shift; up "$@" ;;
   down) shift; down "$@" ;;
   status) shift; status "$@" ;;
+  logs)
+    shift
+    case "${1:-compose}" in
+      compose) shift; "$ROOT/Scripts/toolserver" logs compose "$@" ;;
+      tool-server) shift; "$ROOT/Scripts/toolserver" logs tool-server "$@" ;;
+      *) echo "usage: fk logs <compose|tool-server>" ;;
+    esac ;;
+  open)
+    shift
+    tgt=${1:-}; shift || true
+    [[ -n "$tgt" ]] || { echo "usage: fk open <gateway|planner|function-caller|persist|bootstrap|awareness|tool-server|semantic-browser>"; exit 1; }
+    url=""
+    case "$tgt" in
+      gateway) url=${TOOLSERVER_URL:-http://127.0.0.1:8010}/metrics ;;
+      planner) url=http://127.0.0.1:8003/metrics ;;
+      function-caller) url=http://127.0.0.1:8004/metrics ;;
+      persist) url=http://127.0.0.1:8005/metrics ;;
+      bootstrap) url=http://127.0.0.1:8002/metrics ;;
+      awareness) url=http://127.0.0.1:8001/metrics ;;
+      tool-server) url=${TOOLSERVER_URL:-http://127.0.0.1:8012}/_status ;;
+      semantic-browser) url=http://127.0.0.1:8007/metrics ;;
+      *) echo "unknown target: $tgt"; exit 1;;
+    esac
+    if command -v open >/dev/null 2>&1; then open "$url"; else xdg-open "$url"; fi ;;
   api) shift; api "$@" ;;
   toolserver) shift; "$ROOT/Scripts/toolserver" "$@" ;;
   ts-api) shift; "$ROOT/Scripts/toolserver-api" "$@" ;;
   help|--help|-h) help ;;
   *) help ;;
 esac
-

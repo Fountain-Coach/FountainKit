@@ -1,4 +1,5 @@
 import Foundation
+#if canImport(OpenAPIRuntime)
 import OpenAPIRuntime
 import HTTPTypes
 
@@ -114,3 +115,5 @@ public final class NIOOpenAPIServerTransport: ServerTransport, @unchecked Sendab
         return params
     }
 }
+
+#endif

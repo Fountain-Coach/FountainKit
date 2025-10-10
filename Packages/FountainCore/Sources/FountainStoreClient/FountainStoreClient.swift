@@ -100,6 +100,7 @@ public actor FountainStoreClient {
         }
         if !query.filters.isEmpty { try await requireCapability("query.filters") }
         if !query.sort.isEmpty { try await requireCapability("query.sort") }
+        if let text = query.text, !text.isEmpty { try await requireCapability("query.text") }
         return try await client.query(corpusId: corpusId, collection: collection, query: query)
     }
 
@@ -110,11 +111,11 @@ public actor FountainStoreClient {
         if let mode = q.mode {
             switch mode {
             case .byId:
-                if !q.filters.isEmpty || !q.sort.isEmpty || q.limit != nil || q.offset != nil {
+                if !q.filters.isEmpty || !q.sort.isEmpty || q.text != nil || q.limit != nil || q.offset != nil {
                     try requestCapability("query.byId.invalid")
                 }
             case .byIndexEq, .prefixScan:
-                if !q.filters.isEmpty {
+                if !q.filters.isEmpty || q.text != nil {
                     try requestCapability("query.modeWithFilters")
                 }
             }
@@ -346,4 +347,3 @@ public extension FountainStoreClient {
 }
 
 // © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.
-

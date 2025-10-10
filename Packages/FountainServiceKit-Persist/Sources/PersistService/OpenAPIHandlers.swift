@@ -198,39 +198,50 @@ public struct PersistOpenAPI: APIProtocol, @unchecked Sendable {
         var filters: [String: String] = ["corpusId": corpusId]
         if let host = input.query.host, !host.isEmpty { filters["host"] = host }
 
-        // If q is provided, fetch broadly and filter/sort locally for correctness
+        // If q is provided, prefer server-side text search; fallback to local filter when unsupported.
         if let qstr = search, !qstr.isEmpty, qstr != "*" {
-            let storeQuery = Query(filters: filters)
-            let resp = try await persistence.query(corpusId: corpusId, collection: "pages", query: storeQuery)
-            var items: [Components.Schemas.Page] = try resp.documents.map { data in
-                let p = try JSONDecoder().decode(Page.self, from: data)
-                return .init(value1: .init(corpusId: p.corpusId), value2: .init(pageId: p.pageId, url: p.url, host: p.host, title: p.title))
-            }
-            let needle = qstr.lowercased()
-            items = items.filter { p in
-                let v = p.value2
-                return [v.title, v.url, v.host, v.pageId].contains { $0.lowercased().contains(needle) }
-            }
-            // Apply optional sort locally (first key only)
-            if let first = parseSort(input.query.sort).first {
-                let key = first.0, asc = first.1
-                items.sort { a, b in
-                    let va: String
-                    let vb: String
-                    switch key {
-                    case "title": va = a.value2.title; vb = b.value2.title
-                    case "host": va = a.value2.host; vb = b.value2.host
-                    case "url": va = a.value2.url; vb = b.value2.url
-                    case "pageId": va = a.value2.pageId; vb = b.value2.pageId
-                    default: va = a.value2.title; vb = b.value2.title
-                    }
-                    return asc ? (va < vb) : (va > vb)
+            do {
+                let q = Query(filters: filters, sort: parseSort(input.query.sort), text: qstr, limit: limit, offset: offset)
+                let resp = try await persistence.query(corpusId: corpusId, collection: "pages", query: q)
+                let items: [Components.Schemas.Page] = try resp.documents.map { data in
+                    let p = try JSONDecoder().decode(Page.self, from: data)
+                    return .init(value1: .init(corpusId: p.corpusId), value2: .init(pageId: p.pageId, url: p.url, host: p.host, title: p.title))
                 }
+                let payload = Operations.listPages.Output.Ok.Body.jsonPayload(total: resp.total, pages: items)
+                return .ok(.init(body: .json(payload)))
+            } catch PersistenceError.notSupported {
+                // Fallback: fetch filtered set and apply in-memory search, then sort/paginate.
+                let storeQuery = Query(filters: filters)
+                let resp = try await persistence.query(corpusId: corpusId, collection: "pages", query: storeQuery)
+                var items: [Components.Schemas.Page] = try resp.documents.map { data in
+                    let p = try JSONDecoder().decode(Page.self, from: data)
+                    return .init(value1: .init(corpusId: p.corpusId), value2: .init(pageId: p.pageId, url: p.url, host: p.host, title: p.title))
+                }
+                let needle = qstr.lowercased()
+                items = items.filter { p in
+                    let v = p.value2
+                    return [v.title, v.url, v.host, v.pageId].contains { $0.lowercased().contains(needle) }
+                }
+                if let first = parseSort(input.query.sort).first {
+                    let key = first.0, asc = first.1
+                    items.sort { a, b in
+                        let va: String
+                        let vb: String
+                        switch key {
+                        case "title": va = a.value2.title; vb = b.value2.title
+                        case "host": va = a.value2.host; vb = b.value2.host
+                        case "url": va = a.value2.url; vb = b.value2.url
+                        case "pageId": va = a.value2.pageId; vb = b.value2.pageId
+                        default: va = a.value2.title; vb = b.value2.title
+                        }
+                        return asc ? (va < vb) : (va > vb)
+                    }
+                }
+                let total = items.count
+                let slice = Array(items.dropFirst(min(offset, total)).prefix(limit))
+                let payload = Operations.listPages.Output.Ok.Body.jsonPayload(total: total, pages: slice)
+                return .ok(.init(body: .json(payload)))
             }
-            let total = items.count
-            let slice = Array(items.dropFirst(min(offset, total)).prefix(limit))
-            let payload = Operations.listPages.Output.Ok.Body.jsonPayload(total: total, pages: slice)
-            return .ok(.init(body: .json(payload)))
         } else {
             let q = Query(filters: filters, sort: parseSort(input.query.sort), limit: limit, offset: offset)
             let resp = try await persistence.query(corpusId: corpusId, collection: "pages", query: q)
@@ -261,35 +272,46 @@ public struct PersistOpenAPI: APIProtocol, @unchecked Sendable {
         if let kind = input.query.kind, !kind.isEmpty { filters["kind"] = kind }
 
         if let qstr = search, !qstr.isEmpty, qstr != "*" {
-            let storeQuery = Query(filters: filters)
-            let resp = try await persistence.query(corpusId: corpusId, collection: "segments", query: storeQuery)
-            var items: [Components.Schemas.Segment] = try resp.documents.map { data in
-                let s = try JSONDecoder().decode(Segment.self, from: data)
-                return .init(value1: .init(corpusId: s.corpusId), value2: .init(segmentId: s.segmentId, pageId: s.pageId, kind: s.kind, text: s.text))
-            }
-            let needle = qstr.lowercased()
-            items = items.filter { s in
-                let v = s.value2
-                return [v.text, v.segmentId, v.pageId].contains { $0.lowercased().contains(needle) }
-            }
-            if let first = parseSort(input.query.sort).first {
-                let key = first.0, asc = first.1
-                items.sort { a, b in
-                    let va: String
-                    let vb: String
-                    switch key {
-                    case "kind": va = a.value2.kind; vb = b.value2.kind
-                    case "segmentId": va = a.value2.segmentId; vb = b.value2.segmentId
-                    case "pageId": va = a.value2.pageId; vb = b.value2.pageId
-                    default: va = a.value2.segmentId; vb = b.value2.segmentId
-                    }
-                    return asc ? (va < vb) : (va > vb)
+            do {
+                let q = Query(filters: filters, sort: parseSort(input.query.sort), text: qstr, limit: limit, offset: offset)
+                let resp = try await persistence.query(corpusId: corpusId, collection: "segments", query: q)
+                let items: [Components.Schemas.Segment] = try resp.documents.map { data in
+                    let s = try JSONDecoder().decode(Segment.self, from: data)
+                    return .init(value1: .init(corpusId: s.corpusId), value2: .init(segmentId: s.segmentId, pageId: s.pageId, kind: s.kind, text: s.text))
                 }
+                let payload = Operations.listSegments.Output.Ok.Body.jsonPayload(total: resp.total, segments: items)
+                return .ok(.init(body: .json(payload)))
+            } catch PersistenceError.notSupported {
+                let storeQuery = Query(filters: filters)
+                let resp = try await persistence.query(corpusId: corpusId, collection: "segments", query: storeQuery)
+                var items: [Components.Schemas.Segment] = try resp.documents.map { data in
+                    let s = try JSONDecoder().decode(Segment.self, from: data)
+                    return .init(value1: .init(corpusId: s.corpusId), value2: .init(segmentId: s.segmentId, pageId: s.pageId, kind: s.kind, text: s.text))
+                }
+                let needle = qstr.lowercased()
+                items = items.filter { s in
+                    let v = s.value2
+                    return [v.text, v.segmentId, v.pageId].contains { $0.lowercased().contains(needle) }
+                }
+                if let first = parseSort(input.query.sort).first {
+                    let key = first.0, asc = first.1
+                    items.sort { a, b in
+                        let va: String
+                        let vb: String
+                        switch key {
+                        case "kind": va = a.value2.kind; vb = b.value2.kind
+                        case "segmentId": va = a.value2.segmentId; vb = b.value2.segmentId
+                        case "pageId": va = a.value2.pageId; vb = b.value2.pageId
+                        default: va = a.value2.segmentId; vb = b.value2.segmentId
+                        }
+                        return asc ? (va < vb) : (va > vb)
+                    }
+                }
+                let total = items.count
+                let slice = Array(items.dropFirst(min(offset, total)).prefix(limit))
+                let payload = Operations.listSegments.Output.Ok.Body.jsonPayload(total: total, segments: slice)
+                return .ok(.init(body: .json(payload)))
             }
-            let total = items.count
-            let slice = Array(items.dropFirst(min(offset, total)).prefix(limit))
-            let payload = Operations.listSegments.Output.Ok.Body.jsonPayload(total: total, segments: slice)
-            return .ok(.init(body: .json(payload)))
         } else {
             let q = Query(filters: filters, sort: parseSort(input.query.sort), limit: limit, offset: offset)
             let resp = try await persistence.query(corpusId: corpusId, collection: "segments", query: q)
@@ -320,35 +342,46 @@ public struct PersistOpenAPI: APIProtocol, @unchecked Sendable {
         if let type = input.query._type, !type.isEmpty { filters["type"] = type }
 
         if let qstr = search, !qstr.isEmpty, qstr != "*" {
-            let storeQuery = Query(filters: filters)
-            let resp = try await persistence.query(corpusId: corpusId, collection: "entities", query: storeQuery)
-            var items: [Components.Schemas.Entity] = try resp.documents.map { data in
-                let e = try JSONDecoder().decode(Entity.self, from: data)
-                return .init(value1: .init(corpusId: e.corpusId), value2: .init(entityId: e.entityId, name: e.name, _type: e.type))
-            }
-            let needle = qstr.lowercased()
-            items = items.filter { e in
-                let v = e.value2
-                return [v.name, v._type, v.entityId].contains { $0.lowercased().contains(needle) }
-            }
-            if let first = parseSort(input.query.sort).first {
-                let key = first.0, asc = first.1
-                items.sort { a, b in
-                    let va: String
-                    let vb: String
-                    switch key {
-                    case "type": va = a.value2._type; vb = b.value2._type
-                    case "name": va = a.value2.name; vb = b.value2.name
-                    case "entityId": va = a.value2.entityId; vb = b.value2.entityId
-                    default: va = a.value2.name; vb = b.value2.name
-                    }
-                    return asc ? (va < vb) : (va > vb)
+            do {
+                let q = Query(filters: filters, sort: parseSort(input.query.sort), text: qstr, limit: limit, offset: offset)
+                let resp = try await persistence.query(corpusId: corpusId, collection: "entities", query: q)
+                let items: [Components.Schemas.Entity] = try resp.documents.map { data in
+                    let e = try JSONDecoder().decode(Entity.self, from: data)
+                    return .init(value1: .init(corpusId: e.corpusId), value2: .init(entityId: e.entityId, name: e.name, _type: e.type))
                 }
+                let payload = Operations.listEntities.Output.Ok.Body.jsonPayload(total: resp.total, entities: items)
+                return .ok(.init(body: .json(payload)))
+            } catch PersistenceError.notSupported {
+                let storeQuery = Query(filters: filters)
+                let resp = try await persistence.query(corpusId: corpusId, collection: "entities", query: storeQuery)
+                var items: [Components.Schemas.Entity] = try resp.documents.map { data in
+                    let e = try JSONDecoder().decode(Entity.self, from: data)
+                    return .init(value1: .init(corpusId: e.corpusId), value2: .init(entityId: e.entityId, name: e.name, _type: e.type))
+                }
+                let needle = qstr.lowercased()
+                items = items.filter { e in
+                    let v = e.value2
+                    return [v.name, v._type, v.entityId].contains { $0.lowercased().contains(needle) }
+                }
+                if let first = parseSort(input.query.sort).first {
+                    let key = first.0, asc = first.1
+                    items.sort { a, b in
+                        let va: String
+                        let vb: String
+                        switch key {
+                        case "type": va = a.value2._type; vb = b.value2._type
+                        case "name": va = a.value2.name; vb = b.value2.name
+                        case "entityId": va = a.value2.entityId; vb = b.value2.entityId
+                        default: va = a.value2.name; vb = b.value2.name
+                        }
+                        return asc ? (va < vb) : (va > vb)
+                    }
+                }
+                let total = items.count
+                let slice = Array(items.dropFirst(min(offset, total)).prefix(limit))
+                let payload = Operations.listEntities.Output.Ok.Body.jsonPayload(total: total, entities: slice)
+                return .ok(.init(body: .json(payload)))
             }
-            let total = items.count
-            let slice = Array(items.dropFirst(min(offset, total)).prefix(limit))
-            let payload = Operations.listEntities.Output.Ok.Body.jsonPayload(total: total, entities: slice)
-            return .ok(.init(body: .json(payload)))
         } else {
             let q = Query(filters: filters, sort: parseSort(input.query.sort), limit: limit, offset: offset)
             let resp = try await persistence.query(corpusId: corpusId, collection: "entities", query: q)

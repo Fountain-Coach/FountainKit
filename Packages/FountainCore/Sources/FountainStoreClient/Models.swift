@@ -171,12 +171,14 @@ public struct Query: Sendable {
     public var mode: Mode?
     public var filters: [String: String]
     public var sort: [(field: String, ascending: Bool)]
+    public var text: String?
     public var limit: Int?
     public var offset: Int?
-    public init(mode: Mode? = nil, filters: [String: String] = [:], sort: [(field: String, ascending: Bool)] = [], limit: Int? = nil, offset: Int? = nil) {
+    public init(mode: Mode? = nil, filters: [String: String] = [:], sort: [(field: String, ascending: Bool)] = [], text: String? = nil, limit: Int? = nil, offset: Int? = nil) {
         self.mode = mode
         self.filters = filters
         self.sort = sort
+        self.text = text
         self.limit = limit
         self.offset = offset
     }

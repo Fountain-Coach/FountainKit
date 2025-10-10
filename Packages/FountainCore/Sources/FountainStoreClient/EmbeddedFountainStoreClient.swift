@@ -14,7 +14,7 @@ public final actor EmbeddedFountainStoreClient: FountainStoreClientProtocol {
     public init(caps: Capabilities = Capabilities(
         corpus: true,
         documents: ["upsert", "get", "delete"],
-        query: ["byId", "byIndexEq", "prefixScan", "filters", "sort"],
+        query: ["byId", "byIndexEq", "prefixScan", "filters", "sort", "text"],
         transactions: ["snapshot", "restore"],
         admin: ["health", "backup", "compaction", "metrics"],
         experimental: []
@@ -92,6 +92,18 @@ public final actor EmbeddedFountainStoreClient: FountainStoreClientProtocol {
             }
         }
 
+        if let text = query.text, !text.isEmpty, text != "*" {
+            let needle = text.lowercased()
+            result = result.filter { data in
+                // naive substring search across all string fields
+                let obj = decode(data)
+                for (_, value) in obj {
+                    if let s = value as? String, s.lowercased().contains(needle) { return true }
+                }
+                return false
+            }
+        }
+
         if let first = query.sort.first {
             let field = first.field
             let asc = first.ascending
@@ -132,4 +144,3 @@ public final actor EmbeddedFountainStoreClient: FountainStoreClientProtocol {
 }
 
 // © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.
-

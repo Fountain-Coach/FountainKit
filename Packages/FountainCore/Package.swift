@@ -63,6 +63,11 @@ let package = Package(
         .target(
             name: "LauncherSignature",
             dependencies: []
+        ),
+        .testTarget(
+            name: "FountainStoreClientTests",
+            dependencies: ["FountainStoreClient"],
+            path: "Tests/FountainStoreClientTests"
         )
     ]
 )

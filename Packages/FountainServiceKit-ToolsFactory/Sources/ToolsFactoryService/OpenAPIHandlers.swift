@@ -26,20 +26,21 @@ public struct ToolsFactoryOpenAPI: APIProtocol, @unchecked Sendable {
                 openapi: nil
             )
         }
-        let body = Operations.list_tools.Output.Ok.Body.jsonPayload(
+        let payload = Components.Schemas.FunctionListResponse(
             functions: items,
             page: p,
             page_size: limit,
             total: total
         )
-        return .ok(.init(body: .json(body)))
+        return .ok(.init(body: .json(payload)))
     }
 
     public func register_openapi(_ input: Operations.register_openapi.Input) async throws -> Operations.register_openapi.Output {
         // TODO: Parse and register tools from the provided OpenAPI document.
         // For now, return the current list to acknowledge receipt.
-        let (_, itemsOut) = try await list_tools(.init(query: .init(page: 1, page_size: 20))).ok
-        return .ok(.init(body: itemsOut.body))
+        let out = try await list_tools(query: .init(page: 1, page_size: 20)).ok
+        let payload = try out.body.json
+        return .ok(.init(body: .json(payload)))
     }
 
     public func metrics_metrics_get(_ input: Operations.metrics_metrics_get.Input) async throws -> Operations.metrics_metrics_get.Output {
@@ -47,4 +48,3 @@ public struct ToolsFactoryOpenAPI: APIProtocol, @unchecked Sendable {
         return .ok(.init(body: .plainText(HTTPBody(body))))
     }
 }
-

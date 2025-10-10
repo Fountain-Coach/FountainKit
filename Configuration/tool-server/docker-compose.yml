@@ -1,0 +1,37 @@
+version: '3.8'
+services:
+  imagemagick:
+    image: dpokidov/imagemagick:7-alpine
+    working_dir: /work
+    volumes:
+      - ${TOOLSERVER_WORKDIR:-.}:/work
+    entrypoint: ["/bin/sh", "-lc"]
+    command: ["magick"]
+
+  ffmpeg:
+    image: jrottenberg/ffmpeg:6.0-alpine
+    working_dir: /work
+    volumes:
+      - ${TOOLSERVER_WORKDIR:-.}:/work
+    entrypoint: ["ffmpeg"]
+
+  exiftool:
+    image: ghcr.io/ianare/exiftool:latest
+    working_dir: /work
+    volumes:
+      - ${TOOLSERVER_WORKDIR:-.}:/work
+    entrypoint: ["exiftool"]
+
+  pandoc:
+    image: pandoc/core:latest
+    working_dir: /work
+    volumes:
+      - ${TOOLSERVER_WORKDIR:-.}:/work
+    entrypoint: ["pandoc"]
+
+  libplist:
+    image: blacktop/plist:latest
+    working_dir: /work
+    volumes:
+      - ${TOOLSERVER_WORKDIR:-.}:/work
+    entrypoint: ["plistutil"]

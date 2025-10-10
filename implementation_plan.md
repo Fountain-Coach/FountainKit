@@ -8,7 +8,7 @@ Status — Done
   - Clients: `GatewayAPI`, `PersistAPI`, `SemanticBrowserAPI`, `LLMGatewayAPI` generated (URLSession transport).
   - Servers: `SemanticBrowser`, `Persist`, `Planner` implemented; `Bootstrap` and `FunctionCaller` handlers added in service kits.
   - Gateway control plane served via generated handlers; Gateway tests are green.
-  - Executables: `bootstrap-server`, `function-caller-server`, and `baseline-awareness-server` now use `NIOOpenAPIServerTransport` with `/openapi.yaml` fallback.
+  - Executables: `bootstrap-server`, `function-caller-server`, `baseline-awareness-server`, `tools-factory-server`, and `tool-server` now use `NIOOpenAPIServerTransport` with `/openapi.yaml` fallback.
 - UX and infra improvements:
   - Client factory in FountainCore (URLSession transport + default-header middleware).
   - Split `semantic-browser-server` into `Packages/FountainApps-SemanticBrowser`; CI builds it separately.
@@ -16,16 +16,12 @@ Status — Done
   - Synced generated handler code to current `swift-openapi-runtime` types (e.g., `OpenAPIValueContainer`, refined enums, `.plainText`).
 
 Status — In Progress
-- Switch executables to generated routing:
-  - Executables: `function-caller-server` now uses `NIOOpenAPIServerTransport` with `/openapi.yaml` fallback.
-- Service migrations (handlers + routing): `Awareness`, `ToolsFactory`, `ToolServer`.
-  - Awareness: Implemented generated server handlers and flipped executable.
+- Service migrations: Completed for Awareness, ToolsFactory, ToolServer (handlers + routing).
 - Decision: introduce a generated `DNS` client (if needed by consumers).
 
 Next Steps (High Priority)
-- Flip `bootstrap-server` and `function-caller-server` to `NIOOpenAPIServerTransport` with `/openapi.yaml` fallback.
-- Wire remaining service kits (Awareness, ToolsFactory, ToolServer) to generated handlers.
 - Add stricter CI checks: spec lint (`Scripts/openapi-lint.sh`) and “must have generator config” guard per target.
+- Evaluate/implement DNS client target if required by consumers.
 - Retire legacy `FountainCodex` once all clients/servers are generated.
 
 Principles
@@ -36,9 +32,7 @@ Principles
 Quick Map (truth snapshot)
 - Gateway (Apps): generated control-plane handlers; tests green.
 - Service kits:
-  - `SemanticBrowser`, `Persist`, `Planner`: generated server handlers implemented.
-  - `Bootstrap`, `FunctionCaller`: generated server handlers implemented in kits; executables still legacy (to flip next).
-  - `Awareness`, `ToolsFactory`, `ToolServer`: generator scaffolding underway (Awareness), wiring pending.
+  - `SemanticBrowser`, `Persist`, `Planner`, `Bootstrap`, `FunctionCaller`, `Awareness`, `ToolsFactory`, `ToolServer`: generated handlers implemented; executables on NIOOpenAPIServerTransport.
 - API clients:
   - `GatewayAPI`, `PersistAPI`, `SemanticBrowserAPI`, `LLMGatewayAPI`: generated; adapters use generated clients where applicable.
 - Packages: `FountainApps-SemanticBrowser` hosts the semantic browser executable independently.

@@ -16,6 +16,8 @@ Quickstart (fk)
 - `Scripts/fk up` / `Scripts/fk down` — start/stop core services
 - `Scripts/fk status` — show status incl. Tool Server
 - `Scripts/fk open tool-server` — open Tool Server `/_status`
+- `Scripts/fk open schema tool-server` — open Tool Server `/openapi.yaml`
+- `Scripts/fk open schema planner` — open Planner `/openapi.yaml` (works for most services)
 - `Scripts/fk ts-api exiftool -- -ver` — call Tool Server API helpers
 
 ## Service Map

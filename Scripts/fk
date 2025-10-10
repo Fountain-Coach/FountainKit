@@ -80,6 +80,7 @@ Commands:
   status          Show status of core services and tool-server
   logs [what]     Stream logs: 'compose' or 'tool-server'
   open <target>   Open common endpoints in browser
+  open schema <target>  Open OpenAPI document (/openapi.yaml) for a target
   api <url>       Generic HTTP call with JSON helpers
 
 Shortcuts:
@@ -111,20 +112,38 @@ case "${1:-help}" in
     esac ;;
   open)
     shift
-    tgt=${1:-}; shift || true
-    [[ -n "$tgt" ]] || { echo "usage: fk open <gateway|planner|function-caller|persist|bootstrap|awareness|tool-server|semantic-browser>"; exit 1; }
-    url=""
-    case "$tgt" in
-      gateway) url=${TOOLSERVER_URL:-http://127.0.0.1:8010}/metrics ;;
-      planner) url=http://127.0.0.1:8003/metrics ;;
-      function-caller) url=http://127.0.0.1:8004/metrics ;;
-      persist) url=http://127.0.0.1:8005/metrics ;;
-      bootstrap) url=http://127.0.0.1:8002/metrics ;;
-      awareness) url=http://127.0.0.1:8001/metrics ;;
-      tool-server) url=${TOOLSERVER_URL:-http://127.0.0.1:8012}/_status ;;
-      semantic-browser) url=http://127.0.0.1:8007/metrics ;;
-      *) echo "unknown target: $tgt"; exit 1;;
-    esac
+    if [[ "${1:-}" == "schema" ]]; then
+      shift
+      tgt=${1:-}; shift || true
+      [[ -n "$tgt" ]] || { echo "usage: fk open schema <gateway|planner|function-caller|persist|bootstrap|awareness|tools-factory|tool-server|semantic-browser>"; exit 1; }
+      case "$tgt" in
+        gateway) url=http://127.0.0.1:8010/openapi.yaml ;;
+        planner) url=http://127.0.0.1:8003/openapi.yaml ;;
+        function-caller) url=http://127.0.0.1:8004/openapi.yaml ;;
+        persist) url=http://127.0.0.1:8005/openapi.yaml ;;
+        bootstrap) url=http://127.0.0.1:8002/openapi.yaml ;;
+        awareness) url=http://127.0.0.1:8001/openapi.yaml ;;
+        tools-factory) url=http://127.0.0.1:8011/openapi.yaml ;;
+        tool-server) url=http://127.0.0.1:8012/openapi.yaml ;;
+        semantic-browser) url=http://127.0.0.1:8007/openapi.yaml ;;
+        *) echo "unknown target: $tgt"; exit 1;;
+      esac
+    else
+      tgt=${1:-}; shift || true
+      [[ -n "$tgt" ]] || { echo "usage: fk open <gateway|planner|function-caller|persist|bootstrap|awareness|tools-factory|tool-server|semantic-browser>"; exit 1; }
+      case "$tgt" in
+        gateway) url=http://127.0.0.1:8010/metrics ;;
+        planner) url=http://127.0.0.1:8003/metrics ;;
+        function-caller) url=http://127.0.0.1:8004/metrics ;;
+        persist) url=http://127.0.0.1:8005/metrics ;;
+        bootstrap) url=http://127.0.0.1:8002/metrics ;;
+        awareness) url=http://127.0.0.1:8001/metrics ;;
+        tools-factory) url=http://127.0.0.1:8011/metrics ;;
+        tool-server) url=http://127.0.0.1:8012/_status ;;
+        semantic-browser) url=http://127.0.0.1:8007/metrics ;;
+        *) echo "unknown target: $tgt"; exit 1;;
+      esac
+    fi
     if command -v open >/dev/null 2>&1; then open "$url"; else xdg-open "$url"; fi ;;
   api) shift; api "$@" ;;
   toolserver) shift; "$ROOT/Scripts/toolserver" "$@" ;;

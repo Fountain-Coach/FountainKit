@@ -1,13 +1,13 @@
 import Foundation
 
-struct DockerComposeManager {
+public struct DockerComposeManager {
     let composeFile: String
     let workdir: String
     let projectName: String
     let timeoutSec: Int
     let dockerBinary: String
 
-    init(
+    public init(
         composeFile: String? = nil,
         workdir: String? = nil,
         projectName: String? = nil,
@@ -58,7 +58,7 @@ struct DockerComposeManager {
         return (proc.terminationStatus, stdout, stderr)
     }
 
-    func available() -> Bool {
+    public func available() -> Bool {
         let (proc, out, err) = makeProcess(args: ["--version"])
         do {
             let (code, _, _) = try runWithTimeout(proc: proc, out: out, err: err)
@@ -67,7 +67,7 @@ struct DockerComposeManager {
     }
 
     @discardableResult
-    func pull(services: [String] = []) throws -> (code: Int32, stdout: Data, stderr: Data) {
+    public func pull(services: [String] = []) throws -> (code: Int32, stdout: Data, stderr: Data) {
         let args = ["compose", "-f", composeFile, "pull"] + services
         let (proc, out, err) = makeProcess(args: args)
         let (code, o, e) = try runWithTimeout(proc: proc, out: out, err: err)
@@ -75,7 +75,7 @@ struct DockerComposeManager {
     }
 
     @discardableResult
-    func up(services: [String] = [], detach: Bool = true) throws -> (code: Int32, stdout: Data, stderr: Data) {
+    public func up(services: [String] = [], detach: Bool = true) throws -> (code: Int32, stdout: Data, stderr: Data) {
         var args = ["compose", "-f", composeFile, "up"]
         if detach { args.append("-d") }
         args += services
@@ -84,13 +84,13 @@ struct DockerComposeManager {
     }
 
     @discardableResult
-    func down() throws -> (code: Int32, stdout: Data, stderr: Data) {
+    public func down() throws -> (code: Int32, stdout: Data, stderr: Data) {
         let (proc, out, err) = makeProcess(args: ["compose", "-f", composeFile, "down"])
         return try runWithTimeout(proc: proc, out: out, err: err)
     }
 
     @discardableResult
-    func ps(json: Bool = false) throws -> (code: Int32, stdout: Data, stderr: Data) {
+    public func ps(json: Bool = false) throws -> (code: Int32, stdout: Data, stderr: Data) {
         var args = ["compose", "-f", composeFile, "ps"]
         if json { args += ["--format", "json"] }
         let (proc, out, err) = makeProcess(args: args)
@@ -99,7 +99,7 @@ struct DockerComposeManager {
 
     /// Runs a tool via `docker compose run --rm` for the given service with provided args.
     @discardableResult
-    func run(service: String, args: [String], extraEnv: [String: String] = [:]) throws -> (code: Int32, stdout: Data, stderr: Data) {
+    public func run(service: String, args: [String], extraEnv: [String: String] = [:]) throws -> (code: Int32, stdout: Data, stderr: Data) {
         let base = ["compose", "-f", composeFile, "run", "--rm", "-T", service]
         let (proc, out, err) = makeProcess(args: base + args, extraEnv: extraEnv)
         return try runWithTimeout(proc: proc, out: out, err: err)

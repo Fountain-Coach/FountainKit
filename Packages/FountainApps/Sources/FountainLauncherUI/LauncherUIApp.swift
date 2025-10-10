@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 #if canImport(SwiftUI) && canImport(AppKit)
 import SwiftUI
 import AppKit

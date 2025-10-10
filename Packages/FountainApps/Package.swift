@@ -20,6 +20,8 @@ let package = Package(
         .executable(name: "FountainLauncherUI", targets: ["FountainLauncherUI"]),
         .executable(name: "local-agent-manager", targets: ["local-agent-manager"]),
         .executable(name: "mock-localagent-server", targets: ["mock-localagent-server"])
+        ,
+        .executable(name: "fk", targets: ["fk"])
     ],
     dependencies: [
         .package(path: "../FountainCore"),
@@ -33,6 +35,7 @@ let package = Package(
         
         .package(path: "../FountainServiceKit-ToolsFactory"),
         .package(path: "../FountainServiceKit-ToolServer"),
+        .package(path: "../FountainServiceKit-FKOps"),
         .package(path: "../FountainTooling"),
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
@@ -41,7 +44,9 @@ let package = Package(
         .package(url: "https://github.com/Fountain-Coach/swiftcurseskit.git", exact: "0.2.0"),
         .package(url: "https://github.com/Fountain-Coach/swift-secretstore.git", exact: "0.1.0"),
         .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
-        .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0")
+        .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0"),
+        .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.0"),
+        .package(url: "https://github.com/apple/swift-openapi-urlsession.git", from: "1.0.0")
     ],
     targets: [
         .executableTarget(
@@ -69,6 +74,12 @@ let package = Package(
             exclude: ["README.md"],
             plugins: [
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
+        .executableTarget(
+            name: "fk",
+            dependencies: [
+                .product(name: "ArgumentParser", package: "swift-argument-parser")
             ]
         ),
         .executableTarget(

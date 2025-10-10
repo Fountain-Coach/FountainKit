@@ -41,7 +41,7 @@ Core services started by default:
 - persist-server (8005)
 
 Optional extras with `--all`:
-- semantic-browser-server (8007)
+- semantic-browser-server (8007) — now lives in `Packages/FountainApps-SemanticBrowser`
 - tools-factory-server (8011)
 - tool-server (8012)
 - publishing-frontend
@@ -63,6 +63,10 @@ Optional extras with `--all`:
   - `Packages/FountainSpecCuration/openapi/README.md:1`
 - Try examples (no external services required):
   - `swift run --package-path Packages/FountainExamples hello-fountainai-teatro`
+  - Semantic Browser server:
+    - Build: `swift build --package-path Packages/FountainApps-SemanticBrowser`
+    - Run: `swift run --package-path Packages/FountainApps-SemanticBrowser semantic-browser-server`
+    - Helper: `Scripts/semantic-browser [build|run]`
 
 ## Troubleshooting
 

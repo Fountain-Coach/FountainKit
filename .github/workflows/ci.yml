@@ -74,6 +74,11 @@ jobs:
             runner: macos-15
             command: swift test --package-path "Packages/FountainApps" --filter GatewayServerTests --parallel
             cache-path: Packages/FountainApps/.build
+          - id: fountainapps-sembrowser-build
+            title: swift build (FountainApps-SemanticBrowser)
+            runner: macos-15
+            command: swift build --package-path "Packages/FountainApps-SemanticBrowser" --explicit-target-dependency-import-check
+            cache-path: Packages/FountainApps-SemanticBrowser/.build
           - id: fountainexamples-tests
             title: swift test (FountainExamples)
             runner: macos-15

@@ -22,7 +22,7 @@ Core (started by `Scripts/dev-up`):
 Extras (started by `Scripts/dev-up --all`):
 - tools-factory-server — port 8011 — readiness: GET `/metrics`
 - tool-server — port 8012 — readiness: GET `/_health` (200) or `/metrics`
-- semantic-browser-server — port 8007 — readiness: GET `/metrics` (or `/v1/health`)
+- semantic-browser-server — port 8007 — readiness: GET `/metrics` (or `/v1/health`) — now built in its own package `FountainApps-SemanticBrowser`
 - publishing-frontend — config-driven port — readiness: via upstream gateway plugin
 
 ## Repository layout
@@ -50,6 +50,7 @@ Extras (started by `Scripts/dev-up --all`):
 | `FountainTelemetryKit` | MIDI 2.0 streaming models, transports, and SSE/MIDI diagnostics (`flexctl`). |
 | `FountainTooling` | OpenAPI curator CLI/service, client generator, SSE client, and GUI diagnostics tools. |
 | `FountainApps` | Executable entry points (gateway server, service daemons, tutor dashboard CLI, macOS launcher). |
+| `FountainApps-SemanticBrowser` | Standalone package containing the `semantic-browser-server` executable. |
 | `FountainSpecCuration` | Authoritative OpenAPI specs, fixtures, and regeneration scripts. |
 | `FountainExamples` | Sample Teatro integrations and showcase applications using the modular kits. |
 
@@ -104,6 +105,15 @@ swift run --package-path Packages/FountainExamples hello-fountainai-teatro
 The executable seeds an in-memory Fountain Store and routes a request through
 the gateway, planner, and function-caller services, providing integration
 coverage alongside the package tests.
+
+### Semantic Browser server (standalone package)
+
+- Build:
+  - `swift build --package-path Packages/FountainApps-SemanticBrowser`
+- Run:
+  - `swift run --package-path Packages/FountainApps-SemanticBrowser semantic-browser-server`
+- Shortcut helper:
+  - `Scripts/semantic-browser build` or `Scripts/semantic-browser run`
 
 ## Development workflow
 

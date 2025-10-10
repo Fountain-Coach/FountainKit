@@ -14,7 +14,7 @@ let svc = FountainStoreClient(client: EmbeddedFountainStoreClient())
 private func serveFunctionCaller() async {
     // Wrap kernel to serve the curated OpenAPI spec for discovery
     let inner = makeFunctionCallerKernel(service: svc)
-    let kernel: HTTPKernel = { req in
+    let kernel = HTTPKernel { req in
         if req.method == "GET" && req.path == "/openapi.yaml" {
             let url = URL(fileURLWithPath: "Packages/FountainSpecCuration/openapi/v1/function-caller.yml")
             if let data = try? Data(contentsOf: url) {

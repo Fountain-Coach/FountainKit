@@ -13,7 +13,7 @@ let svc = FountainStoreClient(client: EmbeddedFountainStoreClient())
 private func serveBaselineAwareness() async {
     // Serve curated OpenAPI spec for discovery alongside the service kernel
     let inner = makeAwarenessKernel(service: svc)
-    let kernel: HTTPKernel = { req in
+    let kernel = HTTPKernel { req in
         if req.method == "GET" && req.path == "/openapi.yaml" {
             let url = URL(fileURLWithPath: "Packages/FountainSpecCuration/openapi/v1/baseline-awareness.yml")
             if let data = try? Data(contentsOf: url) {

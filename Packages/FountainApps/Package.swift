@@ -42,7 +42,8 @@ let package = Package(
         .package(url: "https://github.com/Fountain-Coach/swiftcurseskit.git", exact: "0.2.0"),
         .package(url: "https://github.com/Fountain-Coach/swift-secretstore.git", exact: "0.1.0"),
         .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
-        .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0")
+        .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0"),
+        .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.21.0")
     ],
     targets: [
         .executableTarget(
@@ -148,7 +149,8 @@ let package = Package(
             name: "semantic-browser-server",
             dependencies: [
                 .product(name: "SemanticBrowserService", package: "FountainServiceKit-SemanticBrowser"),
-                .product(name: "LauncherSignature", package: "FountainCore")
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "NIOHTTPCompression", package: "swift-nio-extras")
             ],
             exclude: ["README.md"]
         ),

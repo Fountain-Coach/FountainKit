@@ -23,7 +23,8 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-atomics.git", from: "1.3.0"),
         .package(url: "https://github.com/Fountain-Coach/Fountain-Store.git", exact: "0.2.0"),
         .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0"),
-        .package(url: "https://github.com/apple/swift-openapi-urlsession.git", from: "1.2.0")
+        .package(url: "https://github.com/apple/swift-openapi-urlsession.git", from: "1.2.0"),
+        .package(url: "https://github.com/apple/swift-openapi-async-http-client.git", from: "1.0.0")
     ],
     targets: [
         .target(
@@ -40,7 +41,8 @@ let package = Package(
                 "FountainStoreClient",
                 .product(name: "FountainStore", package: "Fountain-Store"),
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
-                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
+                .product(name: "OpenAPIAsyncHTTPClient", package: "swift-openapi-async-http-client")
             ],
             exclude: ["DNS/README.md"]
         ),

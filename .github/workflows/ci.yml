@@ -15,9 +15,21 @@ defaults:
     shell: bash
 
 jobs:
-  lint-openapi:
-    name: Lint OpenAPI specs
+  lint-openapi-linux:
+    name: Lint OpenAPI specs (Linux)
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run OpenAPI linter
+        run: Scripts/openapi-lint.sh
+
+  lint-openapi-macos:
+    name: Lint OpenAPI specs (macOS)
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node.js
@@ -30,7 +42,8 @@ jobs:
   swift-ci:
     name: ${{ matrix.title }}
     needs:
-      - lint-openapi
+      - lint-openapi-linux
+      - lint-openapi-macos
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     strategy:

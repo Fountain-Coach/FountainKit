@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)
+export ROOT
+
+LAUNCHER_SIGNATURE=${LAUNCHER_SIGNATURE:-B86D7CEE-24C4-4C4C-A107-8D0542D1965B}
+
+die(){ echo "error: $*" >&2; exit 1; }
+req(){ command -v "$1" >/dev/null 2>&1 || die "$1 not found; please install"; }
+
+doctor(){
+  echo "[fk] Doctor: checking tools…"
+  for bin in swift docker jq curl; do
+    if command -v "$bin" >/dev/null 2>&1; then echo "✓ $bin"; else echo "✗ $bin (missing)"; fi
+  done
+}
+
+init(){
+  echo "[fk] Initialize tool-server config (.env)…"
+  "$ROOT/Scripts/toolserver" init
+}
+
+build(){
+  echo "[fk] swift build (workspace)…"
+  swift build
+}
+
+up(){
+  echo "[fk] Bringing up core services…"
+  LAUNCHER_SIGNATURE="$LAUNCHER_SIGNATURE" DEV_UP_USE_BIN=1 DEV_UP_CHECKS=1 bash "$ROOT/Scripts/dev-up"
+}
+
+down(){
+  echo "[fk] Shutting down core services…"
+  bash "$ROOT/Scripts/dev-down" --force
+}
+
+status(){
+  echo "[fk] Status (core)…"
+  bash "$ROOT/Scripts/dev-status" || true
+  echo "[fk] Status (tool-server)…"
+  "$ROOT/Scripts/toolserver" status || true
+}
+
+api(){
+  local url=${1:-}; shift || true
+  local method=${METHOD:-GET}
+  local data=${DATA:-}
+  local file=${FILE:-}
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -X|--method) method=$2; shift 2;;
+      -d|--data) data=$2; shift 2;;
+      -f|--file) file=$2; shift 2;;
+      *) url=${url:-$1}; shift;;
+    esac
+  done
+  [[ -n "$url" ]] || die "usage: fk api <url> [-X METHOD] [-d JSON] [-f FILE]"
+  if [[ -n "$file" ]]; then
+    curl -sf -X "$method" -H 'Content-Type: application/json' --data-binary @"$file" "$url" | jq .
+  elif [[ -n "$data" ]]; then
+    curl -sf -X "$method" -H 'Content-Type: application/json' -d "$data" "$url" | jq .
+  else
+    curl -sf -X "$method" "$url" | jq .
+  fi
+}
+
+help(){ cat <<USAGE
+FountainKit helper CLI (humans + LLMs)
+
+Usage: fk <command>
+
+Commands:
+  doctor          Check required tools (swift, docker, jq, curl)
+  init            Generate/refresh Tool Server .env
+  build           Build entire workspace (swift build)
+  up              Start core services (dev-up)
+  down            Stop core services (dev-down)
+  status          Show status of core services and tool-server
+  api <url>       Generic HTTP call with JSON helpers
+
+Shortcuts:
+  toolserver ...  Proxy to Scripts/toolserver
+  ts-api ...      Proxy to Scripts/toolserver-api
+
+Examples:
+  fk up
+  fk status
+  fk api http://127.0.0.1:8012/_status
+  fk toolserver run exiftool -- -ver
+  fk ts-api imagemagick -- magick -version
+USAGE
+}
+
+case "${1:-help}" in
+  doctor) shift; doctor "$@" ;;
+  init|configure) shift; init "$@" ;;
+  build) shift; build "$@" ;;
+  up) shift; up "$@" ;;
+  down) shift; down "$@" ;;
+  status) shift; status "$@" ;;
+  api) shift; api "$@" ;;
+  toolserver) shift; "$ROOT/Scripts/toolserver" "$@" ;;
+  ts-api) shift; "$ROOT/Scripts/toolserver-api" "$@" ;;
+  help|--help|-h) help ;;
+  *) help ;;
+esac
+

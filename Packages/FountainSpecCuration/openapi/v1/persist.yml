@@ -202,6 +202,11 @@ paths:
           description: Identifier of the corpus to list analyses for.
           schema:
             type: string
+        - name: pageId
+          in: query
+          description: Optional filter to restrict analyses to a specific pageId.
+          schema:
+            type: string
         - name: limit
           in: query
           description: Maximum number of analyses to return.
@@ -486,6 +491,11 @@ paths:
         - name: corpusId
           in: path
           required: true
+          schema:
+            type: string
+        - name: pageId
+          in: query
+          description: Optional filter to restrict tables to a specific pageId.
           schema:
             type: string
         - name: limit

@@ -31,11 +31,15 @@ public struct PersistOpenAPI: APIProtocol, @unchecked Sendable {
         let corpusId = input.path.corpusId
         let limit = input.query.limit ?? 50
         let offset = input.query.offset ?? 0
-        let (total, analyses) = try await persistence.listAnalyses(corpusId: corpusId, limit: limit, offset: offset)
-        let items: [Components.Schemas.Analysis] = analyses.map { a in
-            .init(value1: .init(corpusId: a.corpusId), value2: .init(analysisId: a.analysisId, pageId: a.pageId, summary: a.summary))
+        var filters: [String: String] = ["corpusId": corpusId]
+        if let pageId = input.query.pageId, !pageId.isEmpty { filters["pageId"] = pageId }
+        let q = Query(filters: filters, limit: limit, offset: offset)
+        let resp = try await persistence.query(corpusId: corpusId, collection: "analyses", query: q)
+        let items: [Components.Schemas.Analysis] = try resp.documents.map { data in
+            let a = try JSONDecoder().decode(AnalysisRecord.self, from: data)
+            return .init(value1: .init(corpusId: a.corpusId), value2: .init(analysisId: a.analysisId, pageId: a.pageId, summary: a.summary))
         }
-        let payload = Operations.listAnalyses.Output.Ok.Body.jsonPayload(total: total, analyses: items)
+        let payload = Operations.listAnalyses.Output.Ok.Body.jsonPayload(total: resp.total, analyses: items)
         return .ok(.init(body: .json(payload)))
     }
 
@@ -222,11 +226,15 @@ public struct PersistOpenAPI: APIProtocol, @unchecked Sendable {
         let corpusId = input.path.corpusId
         let limit = input.query.limit ?? 50
         let offset = input.query.offset ?? 0
-        let (total, tables) = try await persistence.listTables(corpusId: corpusId, limit: limit, offset: offset)
-        let items: [Components.Schemas.Table] = tables.map { t in
-            .init(value1: .init(corpusId: t.corpusId), value2: .init(tableId: t.tableId, pageId: t.pageId, csv: t.csv))
+        var filters: [String: String] = ["corpusId": corpusId]
+        if let pageId = input.query.pageId, !pageId.isEmpty { filters["pageId"] = pageId }
+        let q = Query(filters: filters, limit: limit, offset: offset)
+        let resp = try await persistence.query(corpusId: corpusId, collection: "tables", query: q)
+        let items: [Components.Schemas.Table] = try resp.documents.map { data in
+            let t = try JSONDecoder().decode(Table.self, from: data)
+            return .init(value1: .init(corpusId: t.corpusId), value2: .init(tableId: t.tableId, pageId: t.pageId, csv: t.csv))
         }
-        let payload = Operations.listTables.Output.Ok.Body.jsonPayload(total: total, tables: items)
+        let payload = Operations.listTables.Output.Ok.Body.jsonPayload(total: resp.total, tables: items)
         return .ok(.init(body: .json(payload)))
     }
 

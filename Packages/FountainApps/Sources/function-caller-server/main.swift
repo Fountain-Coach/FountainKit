@@ -10,8 +10,7 @@ verifyLauncherSignature()
 let env = ProcessInfo.processInfo.environment
 let corpusId = env["DEFAULT_CORPUS_ID"] ?? "tools-factory"
 let svc = FountainStoreClient(client: EmbeddedFountainStoreClient())
-let _ = Task {
-    await svc.ensureCollections(corpusId: corpusId)
+let _task_fc: Task<(), Never> = Task {
     // Wrap kernel to serve the curated OpenAPI spec for discovery
     let inner = makeFunctionCallerKernel(service: svc)
     let kernel: HTTPKernel = { req in

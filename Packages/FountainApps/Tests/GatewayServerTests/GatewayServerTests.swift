@@ -93,12 +93,9 @@ final class GatewayServerTests: XCTestCase {
         setenv("GATEWAY_ROLE_admin", "admin", 1)
         setenv("GATEWAY_JWT_SECRET", "topsecret", 1)
 
-        let server = GatewayServer()
         // Start on a high, likely-free port
         let port = 18099
-        Task { try? await server.start(port: port) }
-        // Give server a moment to bind
-        try await Task.sleep(nanoseconds: 200_000_000)
+        let running = await ServerTestUtils.startGateway(on: port)
 
         // 1) metrics without token -> 401
         var req = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/metrics")!)
@@ -124,7 +121,60 @@ final class GatewayServerTests: XCTestCase {
         XCTAssertEqual((okR as? HTTPURLResponse)?.statusCode, 200)
 
         // Stop server
-        try? await server.stop()
+        await running.stop()
+    }
+
+    func testE2ERoutesCRUDHTTP() async throws {
+        setenv("GATEWAY_CRED_admin", "s3cr3t", 1)
+        setenv("GATEWAY_ROLE_admin", "admin", 1)
+        setenv("GATEWAY_JWT_SECRET", "topsecret", 1)
+        let port = 18101
+        let running = await ServerTestUtils.startGateway(on: port)
+        defer { Task { await running.stop() } }
+
+        // Issue token
+        let tokenURL = URL(string: "http://127.0.0.1:\(port)/auth/token")!
+        let (td, tr) = try await ServerTestUtils.httpJSON("POST", tokenURL, body: ["clientId": "admin", "clientSecret": "s3cr3t"]) 
+        XCTAssertEqual(tr.statusCode, 200)
+        struct Tok: Decodable { let token: String }
+        let tok = try JSONDecoder().decode(Tok.self, from: td)
+        let auth = ["Authorization": "Bearer \(tok.token)"]
+
+        // Create route
+        let routesURL = URL(string: "http://127.0.0.1:\(port)/routes")!
+        let route: [String: Any] = [
+            "id": "e2e",
+            "path": "/e2e",
+            "target": "http://localhost:9999",
+            "methods": ["GET"],
+            "rateLimit": 5,
+            "proxyEnabled": true
+        ]
+        let (cd, cr) = try await ServerTestUtils.httpJSON("POST", routesURL, headers: auth, body: route)
+        XCTAssertEqual(cr.statusCode, 201, String(data: cd, encoding: .utf8) ?? "")
+
+        // List routes
+        let (ld, lr) = try await ServerTestUtils.httpJSON("GET", routesURL, headers: auth)
+        XCTAssertEqual(lr.statusCode, 200)
+        let list = try JSONDecoder().decode([Components.Schemas.RouteInfo].self, from: ld)
+        XCTAssertTrue(list.contains(where: { $0.id == "e2e" }))
+
+        // Update route
+        let routeUpd: [String: Any] = [
+            "id": "e2e",
+            "path": "/e2e",
+            "target": "http://localhost:9999",
+            "methods": ["GET"],
+            "rateLimit": 10,
+            "proxyEnabled": true
+        ]
+        let updateURL = URL(string: "http://127.0.0.1:\(port)/routes/e2e")!
+        let (ud, ur) = try await ServerTestUtils.httpJSON("PUT", updateURL, headers: auth, body: routeUpd)
+        XCTAssertEqual(ur.statusCode, 200, String(data: ud, encoding: .utf8) ?? "")
+
+        // Delete route
+        let (_, dr) = try await ServerTestUtils.httpJSON("DELETE", updateURL, headers: auth)
+        XCTAssertEqual(dr.statusCode, 204)
     }
 
     func testRoutesReloadFromFile() async throws {

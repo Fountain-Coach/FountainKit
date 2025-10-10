@@ -9,7 +9,7 @@ verifyLauncherSignature()
 let env = ProcessInfo.processInfo.environment
 let corpusId = env["DEFAULT_CORPUS_ID"] ?? "tools-factory"
 let svc = FountainStoreClient(client: EmbeddedFountainStoreClient())
-Task {
+private func serveBootstrap() async {
     // Serve curated OpenAPI spec for discovery alongside the service kernel
     let inner = makeBootstrapKernel(service: svc)
     let kernel: HTTPKernel = { req in
@@ -30,6 +30,8 @@ Task {
         FileHandle.standardError.write(Data("[bootstrap] Failed to start: \(error)\n".utf8))
     }
 }
+
+Task { await serveBootstrap() }
 dispatchMain()
 
 // © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

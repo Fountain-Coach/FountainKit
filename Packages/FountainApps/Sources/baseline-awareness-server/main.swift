@@ -9,7 +9,8 @@ verifyLauncherSignature()
 let env = ProcessInfo.processInfo.environment
 let corpusId = env["DEFAULT_CORPUS_ID"] ?? "tools-factory"
 let svc = FountainStoreClient(client: EmbeddedFountainStoreClient())
-Task {
+
+private func serveBaselineAwareness() async {
     // Serve curated OpenAPI spec for discovery alongside the service kernel
     let inner = makeAwarenessKernel(service: svc)
     let kernel: HTTPKernel = { req in
@@ -30,6 +31,8 @@ Task {
         FileHandle.standardError.write(Data("[baseline-awareness] Failed to start: \(error)\n".utf8))
     }
 }
+
+Task { await serveBaselineAwareness() }
 dispatchMain()
 
 // © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

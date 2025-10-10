@@ -25,6 +25,14 @@ let package = Package(
             plugins: [
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
+        ),
+        .testTarget(
+            name: "PersistServiceTests",
+            dependencies: [
+                "PersistService",
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Tests/PersistServiceTests"
         )
     ]
 )

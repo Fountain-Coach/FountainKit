@@ -1,23 +1,40 @@
 import Foundation
 import FountainAICore
 import LLMGatewayAPI
+import OpenAPIURLSession
 import SemanticBrowserAPI
 import PersistAPI
 
 public final class LLMGatewayAdapter: LLMService {
-    private let client: LLMGatewayClient
-    public init(client: LLMGatewayClient) { self.client = client }
+    private let client: LLMGatewayAPI.Client
+    public init(baseURL: URL, bearerToken: String? = nil) {
+        let transport = OpenAPIURLSession.URLSessionTransport()
+        self.client = LLMGatewayAPI.Client(serverURL: baseURL, transport: transport)
+        self.bearerToken = bearerToken
+    }
+    private let bearerToken: String?
+
     public func chat(model: String, messages: [FountainAICore.ChatMessage]) async throws -> String {
-        let req = ChatRequest(model: model, messages: messages.map { .init(role: $0.role.rawValue, content: $0.content) })
-        let json = try await client.chat(req)
-        // best-effort: extract a text field
-        switch json {
-        case .string(let s): return s
-        case .object(let o):
-            if case let .string(s)? = o["answer"] { return s }
-            if case let .string(s)? = o["text"] { return s }
-            return String(describing: o)
-        default: return String(describing: json)
+        // Map to generated types
+        let msgs: [Components.Schemas.MessageObject] = messages.map { .init(role: $0.role.rawValue, content: $0.content) }
+        let body = Components.Schemas.ChatRequest(model: model, messages: msgs, functions: nil, function_call: nil)
+        var headers = Operations.chatWithObjective.Input.Headers()
+        if let token = bearerToken { headers.authorization = "Bearer \(token)" }
+        let out = try await client.chatWithObjective(.init(headers: headers, body: .json(body)))
+        switch out {
+        case .ok(let ok):
+            if case let .json(obj) = ok.body {
+                // Best-effort extract text/answer from arbitrary JSON
+                if let any = try? obj.get(), let dict = any as? [String: Any] {
+                    if let s = dict["answer"] as? String { return s }
+                    if let s = dict["text"] as? String { return s }
+                    return String(describing: dict)
+                }
+                return "{}"
+            }
+            return ""
+        default:
+            return ""
         }
     }
 }

@@ -35,6 +35,7 @@ let package = Package(
         .package(path: "../FountainServiceKit-ToolsFactory"),
         .package(path: "../FountainServiceKit-ToolServer"),
         .package(path: "../FountainTooling"),
+        .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.28.0"),
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
         .package(url: "https://github.com/apple/swift-certificates.git", from: "1.0.0"),
@@ -153,7 +154,8 @@ let package = Package(
                 .product(name: "SemanticBrowserService", package: "FountainServiceKit-SemanticBrowser"),
                 .product(name: "LauncherSignature", package: "FountainCore"),
                 .product(name: "NIOHTTPCompression", package: "swift-nio-extras"),
-                .product(name: "NIOSSL", package: "swift-nio-ssl")
+                .product(name: "NIOSSL", package: "swift-nio-ssl"),
+                .product(name: "AsyncHTTPClient", package: "async-http-client")
             ],
             exclude: ["README.md"]
         ),

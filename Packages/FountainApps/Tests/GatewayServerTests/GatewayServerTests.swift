@@ -66,5 +66,20 @@ final class GatewayServerTests: XCTestCase {
         let deleted = try await api.deleteRoute(.init(path: .init(routeId: "t1"), headers: .init()))
         guard case .noContent = deleted else { return XCTFail("delete failed") }
     }
-}
 
+    func testMetricsOk() async throws {
+        let api = makeAPI()
+        let out = try await api.gatewayMetrics(.init(headers: .init()))
+        switch out { case .ok: break; default: XCTFail("expected ok metrics") }
+    }
+
+    func testCertificateEndpoints() async throws {
+        let api = makeAPI()
+        // Renew should be accepted
+        let renew = try await api.renewCertificate(.init(headers: .init()))
+        guard case .accepted = renew else { return XCTFail("renew expected accepted") }
+        // Info without configured certificate path should not be ok
+        let info = try await api.certificateInfo(.init(headers: .init()))
+        switch info { case .ok: XCTFail("unexpected ok without cert"); default: break }
+    }
+}

@@ -30,7 +30,9 @@ paths:
   /metrics:
     get:
       summary: Metrics
-      description: Endpoint that serves runtime metrics encoded as JSON.
+      description: |
+        Endpoint that serves runtime metrics encoded as JSON.
+        Note: This endpoint may be unauthenticated in development setups.
       operationId: gatewayMetrics
       x-fountain.visibility: public
       x-fountain.reason: ''
@@ -44,8 +46,7 @@ paths:
                 type: object
                 additionalProperties:
                   type: integer
-      security:
-        - bearerAuth: []
+      security: []
   /auth/token:
     post:
       summary: Issue Authentication Token

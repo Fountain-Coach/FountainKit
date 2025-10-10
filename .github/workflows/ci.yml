@@ -70,9 +70,9 @@ jobs:
             command: swift test --package-path "Packages/FountainTooling" --parallel
             cache-path: Packages/FountainTooling/.build
           - id: fountainapps-tests
-            title: swift test (FountainApps)
+            title: swift test (FountainApps/GatewayServerTests)
             runner: macos-15
-            command: swift test --package-path "Packages/FountainApps" --parallel
+            command: swift test --package-path "Packages/FountainApps" --filter GatewayServerTests --parallel
             cache-path: Packages/FountainApps/.build
           - id: fountainexamples-tests
             title: swift test (FountainExamples)

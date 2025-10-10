@@ -136,7 +136,11 @@ paths:
             minimum: 0
         - name: sort
           in: query
-          description: Comma-separated fields to sort by (prefix with '-' for descending), e.g. `-ts,baselineId`.
+          description: |
+            Sort by a single field. Prefix with '-' for descending.
+            Allowed fields: `baselineId`.
+            Note: multi-field sort is not currently supported by the store;
+            if multiple keys are provided, only the first is applied.
           schema:
             type: string
       responses:
@@ -229,7 +233,11 @@ paths:
             minimum: 0
         - name: sort
           in: query
-          description: Comma-separated fields to sort by (prefix with '-' for descending), e.g. `-analysisId,pageId`.
+          description: |
+            Sort by a single field. Prefix with '-' for descending.
+            Allowed fields: `analysisId`, `pageId`.
+            Note: multi-field sort is not currently supported by the store;
+            if multiple keys are provided, only the first is applied.
           schema:
             type: string
       responses:
@@ -295,6 +303,15 @@ paths:
           description: Optional host filter
           schema:
             type: string
+        - name: q
+          in: query
+          description: |
+            Optional substring text search across `title`, `url`, `host`, and `pageId`.
+            Matching is case-insensitive. If the backing store lacks a text index,
+            the server performs best-effort in-memory filtering; in that case,
+            sorting and pagination are applied after filtering.
+          schema:
+            type: string
         - name: limit
           in: query
           schema:
@@ -310,7 +327,11 @@ paths:
             minimum: 0
         - name: sort
           in: query
-          description: Comma-separated fields to sort by (prefix with '-' for descending), e.g. `title,-host`.
+          description: |
+            Sort by a single field. Prefix with '-' for descending.
+            Allowed fields: `title`, `host`, `url`, `pageId`.
+            Note: multi-field sort is not currently supported by the store;
+            if multiple keys are provided, only the first is applied.
           schema:
             type: string
       responses:
@@ -371,6 +392,15 @@ paths:
           description: Optional segment kind filter
           schema:
             type: string
+        - name: q
+          in: query
+          description: |
+            Optional substring text search across `text`, `segmentId`, and `pageId`.
+            Matching is case-insensitive. If the backing store lacks a text index,
+            the server performs best-effort in-memory filtering; in that case,
+            sorting and pagination are applied after filtering.
+          schema:
+            type: string
         - name: limit
           in: query
           schema:
@@ -386,7 +416,11 @@ paths:
             minimum: 0
         - name: sort
           in: query
-          description: Comma-separated fields to sort by (prefix with '-' for descending), e.g. `kind,-segmentId`.
+          description: |
+            Sort by a single field. Prefix with '-' for descending.
+            Allowed fields: `kind`, `segmentId`, `pageId`.
+            Note: multi-field sort is not currently supported by the store;
+            if multiple keys are provided, only the first is applied.
           schema:
             type: string
       responses:
@@ -447,6 +481,15 @@ paths:
           description: Optional entity type filter
           schema:
             type: string
+        - name: q
+          in: query
+          description: |
+            Optional substring text search across `name`, `type`, and `entityId`.
+            Matching is case-insensitive. If the backing store lacks a text index,
+            the server performs best-effort in-memory filtering; in that case,
+            sorting and pagination are applied after filtering.
+          schema:
+            type: string
         - name: limit
           in: query
           schema:
@@ -462,7 +505,11 @@ paths:
             minimum: 0
         - name: sort
           in: query
-          description: Comma-separated fields to sort by (prefix with '-' for descending), e.g. `type,name`.
+          description: |
+            Sort by a single field. Prefix with '-' for descending.
+            Allowed fields: `type`, `name`, `entityId`.
+            Note: multi-field sort is not currently supported by the store;
+            if multiple keys are provided, only the first is applied.
           schema:
             type: string
       responses:
@@ -613,7 +660,11 @@ paths:
             type: string
         - name: sort
           in: query
-          description: Comma-separated fields to sort by (prefix with '-' for descending), e.g. `name,-functionId`.
+          description: |
+            Sort by a single field. Prefix with '-' for descending.
+            Allowed fields: `name`, `functionId`, `httpPath`, `corpusId`.
+            Note: multi-field sort is not currently supported by the store;
+            if multiple keys are provided, only the first is applied.
           schema:
             type: string
       responses:
@@ -729,7 +780,11 @@ paths:
             minimum: 0
         - name: sort
           in: query
-          description: Comma-separated fields to sort by (prefix with '-' for descending), e.g. `-ts,reflectionId`.
+          description: |
+            Sort by a single field. Prefix with '-' for descending.
+            Allowed fields: `reflectionId`.
+            Note: multi-field sort is not currently supported by the store;
+            if multiple keys are provided, only the first is applied.
           schema:
             type: string
       responses:
@@ -782,7 +837,11 @@ paths:
             type: string
         - name: sort
           in: query
-          description: Comma-separated fields to sort by (prefix with '-' for descending), e.g. `name,-corpusId`.
+          description: |
+            Sort by a single field. Prefix with '-' for descending.
+            Allowed fields: `name`, `functionId`, `httpPath`, `corpusId`.
+            Note: multi-field sort is not currently supported by the store;
+            if multiple keys are provided, only the first is applied.
           schema:
             type: string
       responses:

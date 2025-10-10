@@ -1,0 +1,8 @@
+generate:
+  - types
+  - server
+accessModifier: public
+filter:
+  paths:
+    - /capabilities
+    - /corpora

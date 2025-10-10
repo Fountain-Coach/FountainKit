@@ -12,8 +12,15 @@ let port = Int(env["FOUNTAINSTORE_PORT"] ?? env["PORT"] ?? "8005") ?? 8005
 let svc = FountainStoreClient(client: EmbeddedFountainStoreClient())
 Task {
     await svc.ensureCollections(corpusId: corpusId)
-    let kernel = makePersistKernel(service: svc)
-    let server = NIOHTTPServer(kernel: kernel)
+    // Prefer generated OpenAPI handlers; keep /metrics via fallback kernel
+    let fallback: HTTPKernel = { req in
+        if req.method == "GET" && req.path == "/metrics" { return await metrics_metrics_get() }
+        return HTTPResponse(status: 404)
+    }
+    let transport = NIOOpenAPIServerTransport(fallback: fallback)
+    let api = PersistOpenAPI(persistence: svc)
+    try? api.registerHandlers(on: transport, serverURL: URL(string: "/")!)
+    let server = NIOHTTPServer(kernel: transport.asKernel())
     do {
         _ = try await server.start(port: port)
         print("persist server listening on port \(port)")

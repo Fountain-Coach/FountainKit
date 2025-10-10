@@ -262,6 +262,270 @@ paths:
         '400':
           $ref: '#/components/responses/ErrorResponse'
 
+  /corpora/{corpusId}/pages:
+    get:
+      summary: List pages in a corpus
+      operationId: listPages
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: corpusId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 200
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: Paginated list of pages for the corpus.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  pages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Page'
+    post:
+      summary: Add a page to a corpus
+      operationId: addPage
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: corpusId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Page'
+      responses:
+        '200':
+          description: Page added successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /corpora/{corpusId}/segments:
+    get:
+      summary: List segments in a corpus
+      operationId: listSegments
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: corpusId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 200
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: Paginated list of segments.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  segments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Segment'
+    post:
+      summary: Add a segment to a corpus
+      operationId: addSegment
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: corpusId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Segment'
+      responses:
+        '200':
+          description: Segment added successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /corpora/{corpusId}/entities:
+    get:
+      summary: List entities in a corpus
+      operationId: listEntities
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: corpusId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 200
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: Paginated list of entities.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  entities:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Entity'
+    post:
+      summary: Add an entity to a corpus
+      operationId: addEntity
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: corpusId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Entity'
+      responses:
+        '200':
+          description: Entity added successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /corpora/{corpusId}/tables:
+    get:
+      summary: List tables in a corpus
+      operationId: listTables
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: corpusId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 200
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: Paginated list of tables.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  tables:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Table'
+    post:
+      summary: Add a table to a corpus
+      operationId: addTable
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: corpusId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Table'
+      responses:
+        '200':
+          description: Table added successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
   /corpora/{corpusId}/functions:
     get:
       summary: List functions in a corpus, supports pagination
@@ -623,6 +887,62 @@ components:
             summary:
               type: string
               description: Short textual summary of the page analysis.
+
+    Page:
+      allOf:
+        - $ref: '#/components/schemas/BaseEntity'
+        - type: object
+          required: [pageId, url, host, title]
+          properties:
+            pageId:
+              type: string
+            url:
+              type: string
+            host:
+              type: string
+            title:
+              type: string
+
+    Segment:
+      allOf:
+        - $ref: '#/components/schemas/BaseEntity'
+        - type: object
+          required: [segmentId, pageId, kind, text]
+          properties:
+            segmentId:
+              type: string
+            pageId:
+              type: string
+            kind:
+              type: string
+            text:
+              type: string
+
+    Entity:
+      allOf:
+        - $ref: '#/components/schemas/BaseEntity'
+        - type: object
+          required: [entityId, name, type]
+          properties:
+            entityId:
+              type: string
+            name:
+              type: string
+            type:
+              type: string
+
+    Table:
+      allOf:
+        - $ref: '#/components/schemas/BaseEntity'
+        - type: object
+          required: [tableId, pageId, csv]
+          properties:
+            tableId:
+              type: string
+            pageId:
+              type: string
+            csv:
+              type: string
 
     Function:
       allOf:

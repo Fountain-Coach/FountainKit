@@ -142,4 +142,84 @@ public struct PersistOpenAPI: APIProtocol, @unchecked Sendable {
         let err = Components.Responses.ErrorResponse(body: .json(.init(code: "not_found", message: "function not found")))
         return .notFound(err)
     }
+
+    public func listPages(_ input: Operations.listPages.Input) async throws -> Operations.listPages.Output {
+        let corpusId = input.path.corpusId
+        let limit = input.query.limit ?? 50
+        let offset = input.query.offset ?? 0
+        let (total, pages) = try await persistence.listPages(corpusId: corpusId, limit: limit, offset: offset)
+        let items: [Components.Schemas.Page] = pages.map { p in
+            .init(value1: .init(corpusId: p.corpusId), value2: .init(pageId: p.pageId, url: p.url, host: p.host, title: p.title))
+        }
+        let payload = Operations.listPages.Output.Ok.Body.jsonPayload(total: total, pages: items)
+        return .ok(.init(body: .json(payload)))
+    }
+
+    public func addPage(_ input: Operations.addPage.Input) async throws -> Operations.addPage.Output {
+        let corpusId = input.path.corpusId
+        guard case let .json(req) = input.body else { return .undocumented(statusCode: 422, OpenAPIRuntime.UndocumentedPayload()) }
+        let model = Page(corpusId: corpusId, pageId: req.value2.pageId, url: req.value2.url, host: req.value2.host, title: req.value2.title)
+        let resp = try await persistence.addPage(model)
+        return .ok(.init(body: .json(.init(message: resp.message))))
+    }
+
+    public func listSegments(_ input: Operations.listSegments.Input) async throws -> Operations.listSegments.Output {
+        let corpusId = input.path.corpusId
+        let limit = input.query.limit ?? 50
+        let offset = input.query.offset ?? 0
+        let (total, segments) = try await persistence.listSegments(corpusId: corpusId, limit: limit, offset: offset)
+        let items: [Components.Schemas.Segment] = segments.map { s in
+            .init(value1: .init(corpusId: s.corpusId), value2: .init(segmentId: s.segmentId, pageId: s.pageId, kind: s.kind, text: s.text))
+        }
+        let payload = Operations.listSegments.Output.Ok.Body.jsonPayload(total: total, segments: items)
+        return .ok(.init(body: .json(payload)))
+    }
+
+    public func addSegment(_ input: Operations.addSegment.Input) async throws -> Operations.addSegment.Output {
+        let corpusId = input.path.corpusId
+        guard case let .json(req) = input.body else { return .undocumented(statusCode: 422, OpenAPIRuntime.UndocumentedPayload()) }
+        let model = Segment(corpusId: corpusId, segmentId: req.value2.segmentId, pageId: req.value2.pageId, kind: req.value2.kind, text: req.value2.text)
+        let resp = try await persistence.addSegment(model)
+        return .ok(.init(body: .json(.init(message: resp.message))))
+    }
+
+    public func listEntities(_ input: Operations.listEntities.Input) async throws -> Operations.listEntities.Output {
+        let corpusId = input.path.corpusId
+        let limit = input.query.limit ?? 50
+        let offset = input.query.offset ?? 0
+        let (total, entities) = try await persistence.listEntities(corpusId: corpusId, limit: limit, offset: offset)
+        let items: [Components.Schemas.Entity] = entities.map { e in
+            .init(value1: .init(corpusId: e.corpusId), value2: .init(entityId: e.entityId, name: e.name, _type: e.type))
+        }
+        let payload = Operations.listEntities.Output.Ok.Body.jsonPayload(total: total, entities: items)
+        return .ok(.init(body: .json(payload)))
+    }
+
+    public func addEntity(_ input: Operations.addEntity.Input) async throws -> Operations.addEntity.Output {
+        let corpusId = input.path.corpusId
+        guard case let .json(req) = input.body else { return .undocumented(statusCode: 422, OpenAPIRuntime.UndocumentedPayload()) }
+        let model = Entity(corpusId: corpusId, entityId: req.value2.entityId, name: req.value2.name, type: req.value2._type)
+        let resp = try await persistence.addEntity(model)
+        return .ok(.init(body: .json(.init(message: resp.message))))
+    }
+
+    public func listTables(_ input: Operations.listTables.Input) async throws -> Operations.listTables.Output {
+        let corpusId = input.path.corpusId
+        let limit = input.query.limit ?? 50
+        let offset = input.query.offset ?? 0
+        let (total, tables) = try await persistence.listTables(corpusId: corpusId, limit: limit, offset: offset)
+        let items: [Components.Schemas.Table] = tables.map { t in
+            .init(value1: .init(corpusId: t.corpusId), value2: .init(tableId: t.tableId, pageId: t.pageId, csv: t.csv))
+        }
+        let payload = Operations.listTables.Output.Ok.Body.jsonPayload(total: total, tables: items)
+        return .ok(.init(body: .json(payload)))
+    }
+
+    public func addTable(_ input: Operations.addTable.Input) async throws -> Operations.addTable.Output {
+        let corpusId = input.path.corpusId
+        guard case let .json(req) = input.body else { return .undocumented(statusCode: 422, OpenAPIRuntime.UndocumentedPayload()) }
+        let model = Table(corpusId: corpusId, tableId: req.value2.tableId, pageId: req.value2.pageId, csv: req.value2.csv)
+        let resp = try await persistence.addTable(model)
+        return .ok(.init(body: .json(.init(message: resp.message))))
+    }
 }

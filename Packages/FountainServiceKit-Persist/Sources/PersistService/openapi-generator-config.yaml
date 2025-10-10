@@ -10,5 +10,9 @@ filter:
     - /corpora/{corpusId}/reflections
     - /corpora/{corpusId}/functions
     - /corpora/{corpusId}/analyses
+    - /corpora/{corpusId}/pages
+    - /corpora/{corpusId}/segments
+    - /corpora/{corpusId}/entities
+    - /corpora/{corpusId}/tables
     - /functions
     - /functions/{functionId}

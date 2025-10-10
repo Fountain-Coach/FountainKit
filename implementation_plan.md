@@ -33,7 +33,7 @@ This audit reconciles the historical plan with the current repository state so f
 
 ### Milestone 4 — Service server migrations (ongoing)
 - Bootstrap, Function Caller, Awareness, Tools Factory, and Tool Server kits need symlinked specs, generator configs, plugin/runtime dependencies, and handler rewrites that wrap existing logic.
-  - Status: Scaffolding added for Bootstrap, Function Caller, and Awareness (spec symlinks, `openapi-generator-config.yaml`, plugin/runtime deps). Handlers still to wire.
+  - Status: Scaffolding added for Bootstrap, Function Caller, and Awareness (spec symlinks, `openapi-generator-config.yaml`, plugin/runtime deps). Bootstrap and Function Caller handlers implemented in service kits; executables remain on legacy kernels for now while we stabilise dependency fetch in partial builds.
 - Maintain `/metrics`, `/health`, `/ready` manually until each migration stabilises.
 
 ### Milestone 5 — Gateway control plane + plugins (ongoing)

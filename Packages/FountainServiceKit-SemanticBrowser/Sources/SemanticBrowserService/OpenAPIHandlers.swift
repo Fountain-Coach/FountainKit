@@ -122,7 +122,18 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
         return .ok(.init(body: .json(analysis)))
     }
     public func indexAnalysis(_ input: Operations.indexAnalysis.Input) async throws -> Operations.indexAnalysis.Output {
-        let out = Components.Schemas.IndexResult(pagesUpserted: 0, segmentsUpserted: 0, entitiesUpserted: 0, tablesUpserted: 0)
+        guard case let .json(req) = input.body else {
+            return .undocumented(statusCode: 400, OpenAPIRuntime.UndocumentedPayload())
+        }
+        // Map generated Analysis -> service.FullAnalysis
+        let full = fromGeneratedAnalysis(req.analysis)
+        let res = await service.ingest(full: full)
+        let out = Components.Schemas.IndexResult(
+            pagesUpserted: res.pagesUpserted,
+            segmentsUpserted: res.segmentsUpserted,
+            entitiesUpserted: res.entitiesUpserted,
+            tablesUpserted: res.tablesUpserted
+        )
         return .ok(.init(body: .json(out)))
     }
     public func getPage(_ input: Operations.getPage.Input) async throws -> Operations.getPage.Output {
@@ -133,7 +144,138 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
         }
         return .undocumented(statusCode: 404, OpenAPIRuntime.UndocumentedPayload())
     }
-    public func exportArtifacts(_ input: Operations.exportArtifacts.Input) async throws -> Operations.exportArtifacts.Output { .undocumented(statusCode: 501, OpenAPIRuntime.UndocumentedPayload()) }
+    public func exportArtifacts(_ input: Operations.exportArtifacts.Input) async throws -> Operations.exportArtifacts.Output {
+        let pageId = input.query.pageId
+        switch input.query.format {
+        case .snapshot_period_html:
+            if let s = await resolveSnapshot(pageId: pageId) {
+                return .ok(.init(body: .html(HTTPBody(s.rendered.html))))
+            }
+            return .undocumented(statusCode: 404, OpenAPIRuntime.UndocumentedPayload())
+        case .snapshot_period_text:
+            if let s = await resolveSnapshot(pageId: pageId) {
+                return .ok(.init(body: .plainText(HTTPBody(s.rendered.text))))
+            }
+            return .undocumented(statusCode: 404, OpenAPIRuntime.UndocumentedPayload())
+        case .analysis_period_json:
+            let primary = await resolveAnalysis(pageId: pageId)
+            let fallback = await fallbackAnalysisFromSnapshot(pageId: pageId)
+            if let analysis = primary ?? fallback {
+                let enc = JSONEncoder()
+                enc.dateEncodingStrategy = .iso8601
+                if let data = try? enc.encode(analysis),
+                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let sendable = asSendableJSON(obj) as? [String: (any Sendable)?],
+                   let container = try? OpenAPIRuntime.OpenAPIObjectContainer(unvalidatedValue: sendable) {
+                    return .ok(.init(body: .json(container)))
+                }
+            }
+            return .undocumented(statusCode: 404, OpenAPIRuntime.UndocumentedPayload())
+        case .summary_period_md:
+            if let s = await resolveSnapshot(pageId: pageId) {
+                let text = s.rendered.text
+                let title = text.split(separator: "\n").first.map(String.init) ?? "Summary"
+                let abstract = String(text.prefix(1000))
+                let md = "# \(title)\n\n\(abstract)\n"
+                return .ok(.init(body: .text_markdown(HTTPBody(md))))
+            }
+            return .undocumented(statusCode: 404, OpenAPIRuntime.UndocumentedPayload())
+        case .tables_period_csv:
+            let primary = await resolveAnalysis(pageId: pageId)
+            let fallback = await fallbackAnalysisFromSnapshot(pageId: pageId)
+            if let analysis = primary ?? fallback {
+                // Pick first table from blocks
+                if let table = analysis.blocks.compactMap({ $0.table }).first {
+                    let header = (table.columns ?? []).joined(separator: ",")
+                    let rows = table.rows.map { $0.map { $0.replacingOccurrences(of: ",", with: " ") }.joined(separator: ",") }
+                    let csv = ([header] + rows).joined(separator: "\n")
+                    return .ok(.init(body: .csv(HTTPBody(csv))))
+                }
+                return .undocumented(statusCode: 404, OpenAPIRuntime.UndocumentedPayload())
+            }
+            return .undocumented(statusCode: 404, OpenAPIRuntime.UndocumentedPayload())
+        }
+    }
+
+    // MARK: - Mapping helpers
+    private func fromGeneratedAnalysis(_ a: Components.Schemas.Analysis) -> SemanticMemoryService.FullAnalysis {
+        let envelope = SemanticMemoryService.FullAnalysis.Envelope(
+            id: a.envelope.id,
+            source: .init(uri: a.envelope.source.uri),
+            contentType: a.envelope.contentType,
+            language: a.envelope.language
+        )
+        let blocks: [SemanticMemoryService.FullAnalysis.Block] = a.blocks.map {
+            let table = $0.table.map { SemanticMemoryService.FullAnalysis.Table(caption: $0.caption, columns: $0.columns, rows: $0.rows) }
+            return .init(id: $0.id, kind: $0.kind.rawValue, text: $0.text, table: table)
+        }
+        let ents: [SemanticMemoryService.FullAnalysis.Semantics.Entity]? = a.semantics?.entities?.map { e in
+            .init(id: e.id, name: e.name, type: e._type.rawValue)
+        }
+        let semantics = SemanticMemoryService.FullAnalysis.Semantics(entities: ents)
+        return .init(envelope: envelope, blocks: blocks, semantics: semantics)
+    }
+
+    private func resolveSnapshot(pageId: String) async -> Components.Schemas.Snapshot? {
+        if let s = await service.resolveSnapshot(byPageId: pageId) {
+            // Rehydrate to API schema
+            let page = Components.Schemas.Snapshot.pagePayload(
+                uri: s.url, finalUrl: s.url, fetchedAt: Date(), status: 200, contentType: "text/html"
+            )
+            let rendered = Components.Schemas.Snapshot.renderedPayload(html: s.renderedHTML, text: s.renderedText)
+            return .init(snapshotId: s.id, page: page, rendered: rendered)
+        }
+        return nil
+    }
+
+    private func resolveAnalysis(pageId: String) async -> Components.Schemas.Analysis? {
+        if let a = await service.resolveAnalysis(byPageId: pageId) {
+            // Map service.FullAnalysis -> generated schema
+            let blocks: [Components.Schemas.Block] = a.blocks.map { b in
+                Components.Schemas.Block(
+                    id: b.id,
+                    kind: .init(rawValue: b.kind) ?? .paragraph,
+                    text: b.text,
+                    table: b.table.map { Components.Schemas.Table(caption: $0.caption, columns: $0.columns, rows: $0.rows) }
+                )
+            }
+            let env = Components.Schemas.Analysis.envelopePayload(
+                id: a.envelope.id,
+                source: .init(uri: a.envelope.source?.uri, fetchedAt: nil),
+                contentType: a.envelope.contentType ?? "text/html",
+                language: a.envelope.language ?? "en"
+            )
+            let summaries = Components.Schemas.Analysis.summariesPayload(abstract: nil, keyPoints: nil, tl_semi_dr: nil)
+            let prov = Components.Schemas.Analysis.provenancePayload(pipeline: "stored", model: nil)
+            let ents = a.semantics?.entities?.map { Components.Schemas.Entity(id: $0.id, name: $0.name, _type: .init(rawValue: $0.type) ?? .OTHER, mentions: []) }
+            let sem = Components.Schemas.Analysis.semanticsPayload(outline: nil, entities: ents, claims: nil)
+            return .init(envelope: env, blocks: blocks, semantics: sem, summaries: summaries, provenance: prov)
+        }
+        return nil
+    }
+
+    private func fallbackAnalysisFromSnapshot(pageId: String) async -> Components.Schemas.Analysis? {
+        guard let s = await resolveSnapshot(pageId: pageId) else { return nil }
+        return makeAnalysis(fromHTML: s.rendered.html, text: s.rendered.text, url: s.page.finalUrl ?? s.page.uri, contentType: s.page.contentType)
+    }
+
+    // Convert JSONSerialization trees into Sendable JSON compatible trees.
+    private func asSendableJSON(_ value: Any?) -> Any? {
+        guard let value else { return nil }
+        if value is NSNull { return nil }
+        if let v = value as? String { return v }
+        if let v = value as? Int { return v }
+        if let v = value as? Double { return v }
+        if let v = value as? Bool { return v }
+        if let v = value as? [Any] { return v.compactMap { asSendableJSON($0) } }
+        if let v = value as? [String: Any] {
+            var out: [String: (any Sendable)?] = [:]
+            for (k, val) in v { out[k] = asSendableJSON(val) as? (any Sendable)? }
+            return out
+        }
+        // Fallback: stringify
+        return String(describing: value)
+    }
 
     // MARK: - Helpers
     private func makeSnapshot(url: String) async throws -> Components.Schemas.Snapshot {
@@ -148,7 +290,12 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
         )
         let rendered = Components.Schemas.Snapshot.renderedPayload(html: r.html, text: r.text)
         let requests: [Components.Schemas.Snapshot.networkPayload.requestsPayloadPayload]? = r.network?.map { req in
-            .init(url: req.url, _type: .init(from: req.type), status: req.status, body: req.body)
+            Components.Schemas.Snapshot.networkPayload.requestsPayloadPayload(
+                url: req.url,
+                _type: .init(from: req.type),
+                status: req.status,
+                body: req.body
+            )
         }
         let network = requests.map { Components.Schemas.Snapshot.networkPayload(requests: $0) }
         let snapshot = Components.Schemas.Snapshot(
@@ -158,7 +305,8 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
             network: network,
             diagnostics: nil
         )
-        await service.store(snapshot: .init(id: snapshot.snapshotId, url: snapshot.page.uri, renderedHTML: r.html, renderedText: r.text))
+        let keep = SemanticMemoryService.Snapshot(id: snapshot.snapshotId, url: snapshot.page.uri, renderedHTML: r.html, renderedText: r.text)
+        await service.store(snapshot: keep)
         return snapshot
     }
 

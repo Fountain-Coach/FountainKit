@@ -116,7 +116,30 @@ case "${1:-help}" in
     if [[ "${1:-}" == "list" ]]; then
       shift || true
       host=${HOST:-127.0.0.1}
-      cat <<LIST
+      json=0
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --json|-j) json=1; shift;;
+          --host) host=$2; shift 2;;
+          *) break;;
+        esac
+      done
+      if (( json )); then
+        cat <<JSON
+[
+  {"target":"gateway","port":8010,"metrics":"http://$host:8010/metrics","schema":"http://$host:8010/openapi.yaml"},
+  {"target":"baseline-awareness","port":8001,"metrics":"http://$host:8001/metrics","schema":"http://$host:8001/openapi.yaml"},
+  {"target":"bootstrap","port":8002,"metrics":"http://$host:8002/metrics","schema":"http://$host:8002/openapi.yaml"},
+  {"target":"planner","port":8003,"metrics":"http://$host:8003/metrics","schema":"http://$host:8003/openapi.yaml"},
+  {"target":"function-caller","port":8004,"metrics":"http://$host:8004/metrics","schema":"http://$host:8004/openapi.yaml"},
+  {"target":"persist","port":8005,"metrics":"http://$host:8005/metrics","schema":"http://$host:8005/openapi.yaml"},
+  {"target":"semantic-browser","port":8007,"metrics":"http://$host:8007/metrics","schema":"http://$host:8007/openapi.yaml"},
+  {"target":"tools-factory","port":8011,"metrics":"http://$host:8011/metrics","schema":"http://$host:8011/openapi.yaml"},
+  {"target":"tool-server","port":8012,"status":"http://$host:8012/_status","schema":"http://$host:8012/openapi.yaml"}
+]
+JSON
+      else
+        cat <<LIST
 Target            Port   Metrics/Status URL                         Schema URL
 gateway           8010   http://$host:8010/metrics                   http://$host:8010/openapi.yaml
 baseline-awareness 8001  http://$host:8001/metrics                   http://$host:8001/openapi.yaml
@@ -128,6 +151,7 @@ semantic-browser  8007   http://$host:8007/metrics                   http://$hos
 tools-factory     8011   http://$host:8011/metrics                   http://$host:8011/openapi.yaml
 tool-server       8012   http://$host:8012/_status                  http://$host:8012/openapi.yaml
 LIST
+      fi
       exit 0
     fi
     if [[ "${1:-}" == "schema" ]]; then

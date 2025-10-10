@@ -19,6 +19,7 @@ Quickstart (fk)
 - `Scripts/fk open schema tool-server` — open Tool Server `/openapi.yaml`
 - `Scripts/fk open schema planner` — open Planner `/openapi.yaml` (works for most services)
 - `Scripts/fk open list` — print ports and URLs for all targets
+- `Scripts/fk open list --json` — output JSON array of target endpoints
 - `Scripts/fk ts-api exiftool -- -ver` — call Tool Server API helpers
 
 ## Service Map

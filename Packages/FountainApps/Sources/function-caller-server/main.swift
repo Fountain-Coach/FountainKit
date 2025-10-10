@@ -11,19 +11,24 @@ let env = ProcessInfo.processInfo.environment
 let corpusId = env["DEFAULT_CORPUS_ID"] ?? "tools-factory"
 let svc = FountainStoreClient(client: EmbeddedFountainStoreClient())
 
-private func serveFunctionCaller() async {
-    // Wrap kernel to serve the curated OpenAPI spec for discovery
-    let inner = makeFunctionCallerKernel(service: svc)
-    let kernel = HTTPKernel { req in
+Task {
+    // Serve generated OpenAPI handlers via NIO transport with a simple fallback.
+    let fallback = HTTPKernel { req in
+        if req.method == "GET" && req.path == "/metrics" {
+            return HTTPResponse(status: 200, headers: ["Content-Type": "text/plain"], body: Data("ok\n".utf8))
+        }
         if req.method == "GET" && req.path == "/openapi.yaml" {
-            let url = URL(fileURLWithPath: "Packages/FountainSpecCuration/openapi/v1/function-caller.yml")
+            let url = URL(fileURLWithPath: "Packages/FountainServiceKit-FunctionCaller/Sources/FunctionCallerService/openapi.yaml")
             if let data = try? Data(contentsOf: url) {
                 return HTTPResponse(status: 200, headers: ["Content-Type": "application/yaml"], body: data)
             }
         }
-        return try await inner.handle(req)
+        return HTTPResponse(status: 404)
     }
-    let server = NIOHTTPServer(kernel: kernel)
+    let transport = NIOOpenAPIServerTransport(fallback: fallback)
+    let api = FunctionCallerOpenAPI(persistence: svc)
+    try? api.registerHandlers(on: transport, serverURL: URL(string: "/")!)
+    let server = NIOHTTPServer(kernel: transport.asKernel())
     do {
         let port = Int(env["FUNCTION_CALLER_PORT"] ?? env["PORT"] ?? "8004") ?? 8004
         _ = try await server.start(port: port)
@@ -32,8 +37,6 @@ private func serveFunctionCaller() async {
         FileHandle.standardError.write(Data("[function-caller] Failed to start: \(error)\n".utf8))
     }
 }
-
-Task { await serveFunctionCaller() }
 dispatchMain()
 
 // © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

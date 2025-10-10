@@ -15,7 +15,11 @@ let package = Package(
         .library(name: "TutorDashboard", targets: ["TutorDashboard"])
     ],
     dependencies: [
-        .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0")
+        .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
+        // OpenAPI generator + runtime for generated clients
+        .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
+        .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0"),
+        .package(url: "https://github.com/apple/swift-openapi-async-http-client.git", from: "1.4.0")
     ],
     targets: [
         .target(
@@ -32,7 +36,14 @@ let package = Package(
         ),
         .target(
             name: "SemanticBrowserAPI",
-            dependencies: ["ApiClientsCore"]
+            dependencies: [
+                "ApiClientsCore",
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "OpenAPIAsyncHTTPClient", package: "swift-openapi-async-http-client")
+            ],
+            plugins: [
+                .plugin(name: "OpenAPIGeneratorPlugin", package: "swift-openapi-generator")
+            ]
         ),
         .target(
             name: "LLMGatewayAPI",

@@ -9,6 +9,7 @@ Welcome to FountainKit, the modular SwiftPM workspace for the Fountain Coach org
 - `FountainTelemetryKit`: MIDI 2.0 streaming stack (`MIDI2*`, `SSEOverMIDI`, `FlexBridge`, `flexctl`) and related diagnostics.
 - `FountainTooling`: OpenAPI curator CLI/service, spec validation helpers, diagnostics, GUI tooling.
 - `FountainApps`: Executable entry points (servers, CLIs, macOS launchers) that stitch the kits together.
+- `FountainApps-SemanticBrowser`: Standalone package containing the `semantic-browser-server` executable. See `Packages/FountainApps-SemanticBrowser/AGENTS.md` for package-specific guidance.
 - `FountainSpecCuration`: Canonical OpenAPI specs, fixtures, and regeneration scripts shared across packages.
 - `FountainExamples`: Sample apps and Teatro integrations that consume the published packages.
 

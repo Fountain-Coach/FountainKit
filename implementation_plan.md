@@ -22,10 +22,19 @@ Status — In Progress
 - Decision: introduce a generated `DNS` client (if needed by consumers).
 
 Next Steps (High Priority)
-- Add stricter CI checks: spec lint (`Scripts/openapi-lint.sh`) and “must have generator config” guard per target.
-- Evaluate/implement DNS client target if required by consumers.
-- Retire legacy `FountainCodex` once all clients/servers are generated.
- - Tool Server hardening: add health checks, image pinning, and CI smoke (compose optional) with env guards.
+1. **Spec + Generator Enforcement**
+   - [ ] Land CI guardrail that runs `Scripts/openapi-lint.sh` on Linux and macOS runners.
+   - [ ] Enforce “generator config present” for every target by adding a SwiftPM plugin check (fails the build when missing).
+2. **Cross-Platform Client Coverage**
+   - [ ] Evaluate the need for a generated DNS client (see `OPENAPI_COVERAGE.md`) and implement it with URLSession + AsyncHTTPClient transports.
+   - [ ] Migrate remaining pending clients (`PlannerAPI`, `FunctionCallerAPI`, `BootstrapAPI`, `ToolsFactoryAPI`, `FKOpsAPI`, `AwarenessAPI`) to generated implementations and validate parity on Linux/macOS.
+3. **Runtime Compatibility Sweep**
+   - [ ] Audit `FountainCore` transports for FoundationNetworking availability on Linux and provide shims where required.
+   - [ ] Add integration smoke tests for a representative client/server pair running on both Darwin and Linux Swift toolchains.
+4. **Legacy Decommissioning**
+   - [ ] Retire `FountainCodex` once generated clients pass the cross-platform smoke tests.
+5. **Tool Server Hardening**
+   - [ ] Add health checks, image pinning, and CI smoke (compose optional) with environment guards.
 
 Principles
 - OpenAPI is the source of truth; update specs first and regenerate during build.

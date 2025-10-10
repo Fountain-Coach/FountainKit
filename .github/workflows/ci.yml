@@ -39,6 +39,72 @@ jobs:
       - name: Run OpenAPI linter
         run: Scripts/openapi-lint.sh
 
+  integration-smoke:
+    name: Integration smoke (${{ matrix.platform }})
+    needs:
+      - lint-openapi-linux
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin
+            runner: macos-15
+            cache-path: Packages/FountainApps/.build
+          - platform: linux
+            runner: ubuntu-22.04
+            cache-path: Packages/FountainApps/.build-linux
+            docker-image: swiftlang/swift:nightly-jammy
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure Xcode 16.2
+        if: matrix.platform == 'darwin'
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '16.2'
+
+      - name: Prepare SwiftPM cache directory
+        if: matrix.platform == 'linux'
+        run: mkdir -p Packages/FountainApps/.build-linux
+
+      - name: Restore SwiftPM cache
+        if: matrix.cache-path != ''
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.cache-path }}
+          key: ${{ matrix.runner }}-integration-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            ${{ matrix.runner }}-integration-
+            ${{ matrix.runner }}-
+
+      - name: Run FountainApps integration test (macOS)
+        if: matrix.platform == 'darwin'
+        env:
+          FOUNTAIN_INTEGRATION: '1'
+        run: |
+          swift test --package-path "Packages/FountainApps" \
+            --filter FountainDevScriptsTests/testDevUpStartsGatewayAndDevDownStopsIt
+
+      - name: Run FountainApps integration test (Linux)
+        if: matrix.platform == 'linux'
+        env:
+          FOUNTAIN_INTEGRATION: '1'
+        run: |
+          docker run --rm \
+            -v "$PWD":/workspace \
+            -v "$PWD/Packages/FountainApps/.build-linux":/workspace/Packages/FountainApps/.build \
+            -w /workspace \
+            -e FOUNTAIN_INTEGRATION=1 \
+            "${{ matrix.docker-image }}" \
+            bash -lc 'set -euo pipefail
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update >/dev/null
+              apt-get install -y --no-install-recommends curl lsof >/dev/null
+              swift package --package-path Packages/FountainApps resolve
+              swift test --package-path Packages/FountainApps --filter FountainDevScriptsTests/testDevUpStartsGatewayAndDevDownStopsIt'
+
   swift-ci:
     name: ${{ matrix.title }}
     needs:
@@ -60,32 +126,32 @@ jobs:
           - id: fountaincore-tests
             title: swift test (FountainCore)
             runner: macos-15
-            command: swift test --package-path "Packages/FountainCore" --parallel
+            command: swift test --package-path "Packages/FountainCore"
             cache-path: Packages/FountainCore/.build
           - id: fountainapiclients-tests
             title: swift test (FountainAPIClients)
             runner: macos-15
-            command: swift test --package-path "Packages/FountainAPIClients" --parallel
+            command: swift test --package-path "Packages/FountainAPIClients"
             cache-path: Packages/FountainAPIClients/.build
           - id: fountaingatewaykit-tests
             title: swift test (FountainGatewayKit)
             runner: macos-15
-            command: swift test --package-path "Packages/FountainGatewayKit" --parallel
+            command: swift test --package-path "Packages/FountainGatewayKit"
             cache-path: Packages/FountainGatewayKit/.build
           - id: fountaintelemetrykit-tests
             title: swift test (FountainTelemetryKit)
             runner: macos-15
-            command: swift test --package-path "Packages/FountainTelemetryKit" --parallel
+            command: swift test --package-path "Packages/FountainTelemetryKit"
             cache-path: Packages/FountainTelemetryKit/.build
           - id: fountaintooling-tests
             title: swift test (FountainTooling)
             runner: macos-15
-            command: swift test --package-path "Packages/FountainTooling" --parallel
+            command: swift test --package-path "Packages/FountainTooling"
             cache-path: Packages/FountainTooling/.build
           - id: fountainapps-tests
             title: swift test (FountainApps/GatewayServerTests)
             runner: macos-15
-            command: swift test --package-path "Packages/FountainApps" --filter GatewayServerTests --parallel
+            command: swift test --package-path "Packages/FountainApps" --filter GatewayServerTests
             cache-path: Packages/FountainApps/.build
           - id: fountainapps-sembrowser-build
             title: swift build (FountainApps-SemanticBrowser)
@@ -95,52 +161,52 @@ jobs:
           - id: fountainexamples-tests
             title: swift test (FountainExamples)
             runner: macos-15
-            command: swift test --package-path "Packages/FountainExamples" --parallel
+            command: swift test --package-path "Packages/FountainExamples"
             cache-path: Packages/FountainExamples/.build
           - id: fountainspeccuration-tests
             title: swift test (FountainSpecCuration)
             runner: macos-15
-            command: swift test --package-path "Packages/FountainSpecCuration" --parallel
+            command: swift test --package-path "Packages/FountainSpecCuration"
             cache-path: Packages/FountainSpecCuration/.build
           - id: fountainservicekit-awareness-tests
             title: swift test (FountainServiceKit-Awareness)
             runner: macos-15
-            command: swift test --package-path "Packages/FountainServiceKit-Awareness" --parallel
+            command: swift test --package-path "Packages/FountainServiceKit-Awareness"
             cache-path: Packages/FountainServiceKit-Awareness/.build
           - id: fountainservicekit-bootstrap-tests
             title: swift test (FountainServiceKit-Bootstrap)
             runner: macos-15
-            command: swift test --package-path "Packages/FountainServiceKit-Bootstrap" --parallel
+            command: swift test --package-path "Packages/FountainServiceKit-Bootstrap"
             cache-path: Packages/FountainServiceKit-Bootstrap/.build
           - id: fountainservicekit-functioncaller-tests
             title: swift test (FountainServiceKit-FunctionCaller)
             runner: macos-15
-            command: swift test --package-path "Packages/FountainServiceKit-FunctionCaller" --parallel
+            command: swift test --package-path "Packages/FountainServiceKit-FunctionCaller"
             cache-path: Packages/FountainServiceKit-FunctionCaller/.build
           - id: fountainservicekit-planner-tests
             title: swift test (FountainServiceKit-Planner)
             runner: macos-15
-            command: swift test --package-path "Packages/FountainServiceKit-Planner" --parallel
+            command: swift test --package-path "Packages/FountainServiceKit-Planner"
             cache-path: Packages/FountainServiceKit-Planner/.build
           - id: fountainservicekit-persist-tests
             title: swift test (FountainServiceKit-Persist)
             runner: macos-15
-            command: swift test --package-path "Packages/FountainServiceKit-Persist" --parallel
+            command: swift test --package-path "Packages/FountainServiceKit-Persist"
             cache-path: Packages/FountainServiceKit-Persist/.build
           - id: fountainservicekit-toolsfactory-tests
             title: swift test (FountainServiceKit-ToolsFactory)
             runner: macos-15
-            command: swift test --package-path "Packages/FountainServiceKit-ToolsFactory" --parallel
+            command: swift test --package-path "Packages/FountainServiceKit-ToolsFactory"
             cache-path: Packages/FountainServiceKit-ToolsFactory/.build
           - id: fountainservicekit-toolserver-tests
             title: swift test (FountainServiceKit-ToolServer)
             runner: macos-15
-            command: swift test --package-path "Packages/FountainServiceKit-ToolServer" --parallel
+            command: swift test --package-path "Packages/FountainServiceKit-ToolServer"
             cache-path: Packages/FountainServiceKit-ToolServer/.build
           - id: fountainservicekit-semanticbrowser-tests
             title: swift test (FountainServiceKit-SemanticBrowser)
             runner: macos-15
-            command: swift test --package-path "Packages/FountainServiceKit-SemanticBrowser" --parallel
+            command: swift test --package-path "Packages/FountainServiceKit-SemanticBrowser"
             cache-path: Packages/FountainServiceKit-SemanticBrowser/.build
     steps:
       - uses: actions/checkout@v4

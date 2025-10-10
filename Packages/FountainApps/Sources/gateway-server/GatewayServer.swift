@@ -151,7 +151,13 @@ public final class GatewayServer {
 
             // Build OpenAPI transport with fallback for non-OpenAPI endpoints and proxying
             let fallback = HTTPKernel { [zoneManager, self] request in
-                let segments = request.path.split(separator: "/", omittingEmptySubsequences: true)
+            if request.path == "/openapi.yaml" {
+                let url = URL(fileURLWithPath: "Sources/gateway-server/openapi.yaml")
+                if let data = try? Data(contentsOf: url) {
+                    return HTTPResponse(status: 200, headers: ["Content-Type": "application/yaml"], body: data)
+                }
+            }
+            let segments = request.path.split(separator: "/", omittingEmptySubsequences: true)
                 switch (request.method, segments) {
                 case ("GET", ["live"]):
                     return self.gatewayLiveness()

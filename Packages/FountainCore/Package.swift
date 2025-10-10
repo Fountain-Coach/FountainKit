@@ -21,7 +21,8 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
         .package(url: "https://github.com/apple/swift-atomics.git", from: "1.3.0"),
-        .package(url: "https://github.com/Fountain-Coach/Fountain-Store.git", exact: "0.2.0")
+        .package(url: "https://github.com/Fountain-Coach/Fountain-Store.git", exact: "0.2.0"),
+        .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0")
     ],
     targets: [
         .target(
@@ -36,7 +37,8 @@ let package = Package(
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "Atomics", package: "swift-atomics"),
                 "FountainStoreClient",
-                .product(name: "FountainStore", package: "Fountain-Store")
+                .product(name: "FountainStore", package: "Fountain-Store"),
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
             ],
             exclude: ["DNS/README.md"]
         ),

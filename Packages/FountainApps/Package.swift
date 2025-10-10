@@ -194,6 +194,13 @@ let package = Package(
         .testTarget(
             name: "FountainDevScriptsTests",
             dependencies: []
+        ),
+        .testTarget(
+            name: "GatewayServerTests",
+            dependencies: [
+                "gateway-server",
+                .product(name: "FountainRuntime", package: "FountainCore")
+            ]
         )
     ]
 )

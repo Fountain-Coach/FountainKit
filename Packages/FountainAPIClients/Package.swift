@@ -42,7 +42,7 @@ let package = Package(
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
             ],
             plugins: [
-                .plugin(name: "OpenAPIGeneratorPlugin", package: "swift-openapi-generator")
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
         ),
         .target(

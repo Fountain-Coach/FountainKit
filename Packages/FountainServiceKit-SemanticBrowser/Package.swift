@@ -29,7 +29,7 @@ let package = Package(
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
             ],
             plugins: [
-                .plugin(name: "OpenAPIGeneratorPlugin", package: "swift-openapi-generator")
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
         ),
         .testTarget(

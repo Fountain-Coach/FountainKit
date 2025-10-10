@@ -6,6 +6,10 @@ import LauncherSignature
 verifyLauncherSignature()
 
 Task {
+    let env = ProcessInfo.processInfo.environment
+    if (env["TOOLSERVER_PULL_ON_START"] ?? "1") != "0" {
+        let _ = try? ToolServerService.DockerComposeManager().pull()
+    }
     let fallback = HTTPKernel { req in
         if req.method == "GET" && req.path == "/metrics" {
             return HTTPResponse(status: 200, headers: ["Content-Type": "text/plain"], body: Data("tool_server_up 1\n".utf8))

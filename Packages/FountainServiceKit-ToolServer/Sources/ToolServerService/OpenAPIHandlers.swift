@@ -24,6 +24,42 @@ public struct ToolServerOpenAPI: APIProtocol, @unchecked Sendable {
         }
     }
 
+    public func get_status(_ input: Operations.get_status.Input) async throws -> Operations.get_status.Output {
+        let available = compose.available()
+        var services: [[String: (any Sendable)?]] = []
+        if available {
+            if let (code, out, _) = try? compose.ps(json: true), code == 0,
+               let jsonArray = try? JSONSerialization.jsonObject(with: out) as? [[String: Any]] {
+                for item in jsonArray {
+                    let name = (item["Service"] as? String) ?? (item["Name"] as? String) ?? ""
+                    let state = (item["State"] as? String) ?? (item["Status"] as? String) ?? "unknown"
+                    let running = state.lowercased().contains("running") || state.lowercased().contains("up")
+                    let container = item["ID"] as? String
+                    let image = item["Image"] as? String
+                    services.append([
+                        "name": name,
+                        "running": running,
+                        "container": container as (any Sendable)?,
+                        "image": image as (any Sendable)?,
+                        "state": state
+                    ])
+                }
+            }
+        }
+        let dict: [String: (any Sendable)?] = [
+            "available": available,
+            "project": compose.projectName,
+            "compose_file": compose.composeFile,
+            "workdir": compose.workdir,
+            "timeout_sec": compose.timeoutSec,
+            "services": services
+        ]
+        if let container = try? OpenAPIRuntime.OpenAPIObjectContainer(unvalidatedValue: dict) {
+            return .ok(.init(body: .json(container)))
+        }
+        return .undocumented(statusCode: 200, OpenAPIRuntime.UndocumentedPayload())
+    }
+
     public func runImageMagick(_ input: Operations.runImageMagick.Input) async throws -> Operations.runImageMagick.Output {
         guard case let .json(req) = input.body else { return .undocumented(statusCode: 422, OpenAPIRuntime.UndocumentedPayload()) }
         // Pass request_id into the container environment for traceability.

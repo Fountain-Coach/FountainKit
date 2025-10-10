@@ -15,6 +15,7 @@ Status — Done
   - Fixed `/auth/token` date decoding and HTTP framing (Content-Length for non‑chunked).
   - Synced generated handler code to current `swift-openapi-runtime` types (e.g., `OpenAPIValueContainer`, refined enums, `.plainText`).
   - Tool Server now managed via Docker Compose with a dedicated manager and compose file; handlers run tools via `docker compose run`.
+  - Tool Server supports startup image pull (TOOLSERVER_PULL_ON_START) and a public status endpoint returning compose availability and services.
 
 Status — In Progress
 - Service migrations: Completed for Awareness, ToolsFactory, ToolServer (handlers + routing).

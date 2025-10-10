@@ -90,8 +90,10 @@ struct DockerComposeManager {
     }
 
     @discardableResult
-    func ps() throws -> (code: Int32, stdout: Data, stderr: Data) {
-        let (proc, out, err) = makeProcess(args: ["compose", "-f", composeFile, "ps"])
+    func ps(json: Bool = false) throws -> (code: Int32, stdout: Data, stderr: Data) {
+        var args = ["compose", "-f", composeFile, "ps"]
+        if json { args += ["--format", "json"] }
+        let (proc, out, err) = makeProcess(args: args)
         return try runWithTimeout(proc: proc, out: out, err: err)
     }
 

@@ -5,6 +5,20 @@ info:
   x-fountain.port: 8012
   x-fountain.binary: tool-server
 paths:
+  /_status:
+    get:
+      operationId: get_status
+      x-fountain.visibility: public
+      x-fountain.allow-as-tool: true
+      summary: Tool Server status
+      description: Returns Docker Compose availability and service status for the tool server.
+      responses:
+        '200':
+          description: Current compose status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComposeStatus'
   /imagemagick:
     post:
       operationId: runImageMagick
@@ -163,6 +177,45 @@ paths:
                 $ref: '#/components/schemas/Matrix'
 components:
   schemas:
+    ComposeStatus:
+      type: object
+      required: [available, project, compose_file, workdir, timeout_sec]
+      properties:
+        available:
+          type: boolean
+          description: Whether docker is available on this host.
+        project:
+          type: string
+          description: Compose project name.
+        compose_file:
+          type: string
+          description: Path to the compose file.
+        workdir:
+          type: string
+          description: Host working directory mounted into containers.
+        timeout_sec:
+          type: integer
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceStatus'
+    ServiceStatus:
+      type: object
+      required: [name, running]
+      properties:
+        name:
+          type: string
+        running:
+          type: boolean
+        container:
+          type: string
+          nullable: true
+        image:
+          type: string
+          nullable: true
+        state:
+          type: string
+          nullable: true
     ToolRequest:
       type: object
       properties:

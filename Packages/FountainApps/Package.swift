@@ -15,7 +15,6 @@ let package = Package(
         .executable(name: "persist-server", targets: ["persist-server"]),
         .executable(name: "baseline-awareness-server", targets: ["baseline-awareness-server"]),
         .executable(name: "bootstrap-server", targets: ["bootstrap-server"]),
-        .executable(name: "semantic-browser-server", targets: ["semantic-browser-server"]),
         .executable(name: "publishing-frontend", targets: ["publishing-frontend"]),
         .executable(name: "tutor-dashboard", targets: ["tutor-dashboard"]),
         .executable(name: "FountainLauncherUI", targets: ["FountainLauncherUI"]),
@@ -31,11 +30,10 @@ let package = Package(
         .package(path: "../FountainServiceKit-Bootstrap"),
         .package(path: "../FountainServiceKit-Awareness"),
         .package(path: "../FountainServiceKit-Persist"),
-        .package(path: "../FountainServiceKit-SemanticBrowser"),
+        
         .package(path: "../FountainServiceKit-ToolsFactory"),
         .package(path: "../FountainServiceKit-ToolServer"),
         .package(path: "../FountainTooling"),
-        .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.28.0"),
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
         .package(url: "https://github.com/apple/swift-certificates.git", from: "1.0.0"),
@@ -43,10 +41,7 @@ let package = Package(
         .package(url: "https://github.com/Fountain-Coach/swiftcurseskit.git", exact: "0.2.0"),
         .package(url: "https://github.com/Fountain-Coach/swift-secretstore.git", exact: "0.1.0"),
         .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
-        .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0"),
-        .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.21.0")
-        ,
-        .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.26.0")
+        .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0")
     ],
     targets: [
         .executableTarget(
@@ -145,18 +140,6 @@ let package = Package(
                 .product(name: "FountainStoreClient", package: "FountainCore"),
                 .product(name: "BootstrapService", package: "FountainServiceKit-Bootstrap"),
                 .product(name: "LauncherSignature", package: "FountainCore")
-            ],
-            exclude: ["README.md"]
-        ),
-        .executableTarget(
-            name: "semantic-browser-server",
-            dependencies: [
-                .product(name: "SemanticBrowserService", package: "FountainServiceKit-SemanticBrowser"),
-                .product(name: "LauncherSignature", package: "FountainCore"),
-                .product(name: "FountainRuntime", package: "FountainCore"),
-                .product(name: "NIOHTTPCompression", package: "swift-nio-extras"),
-                .product(name: "NIOSSL", package: "swift-nio-ssl"),
-                .product(name: "AsyncHTTPClient", package: "async-http-client")
             ],
             exclude: ["README.md"]
         ),

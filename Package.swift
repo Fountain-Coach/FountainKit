@@ -23,6 +23,7 @@ let package = Package(
         .package(path: "Packages/FountainServiceKit-ToolServer"),
         .package(path: "Packages/FountainTelemetryKit"),
         .package(path: "Packages/FountainTooling"),
+        .package(path: "Packages/FountainApps-SemanticBrowser"),
         .package(path: "Packages/FountainApps"),
         .package(path: "Packages/FountainSpecCuration"),
         .package(path: "Packages/FountainExamples")

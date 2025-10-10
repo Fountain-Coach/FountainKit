@@ -30,8 +30,21 @@ public struct GatewayOpenAPI: APIProtocol, @unchecked Sendable {
         let data = try JSONSerialization.data(withJSONObject: cred)
         let httpReq = HTTPRequest(method: "POST", path: "/auth/token", headers: ["Content-Type": "application/json"], body: data)
         let resp = await host.issueAuthToken(httpReq)
-        if resp.status == 200, let tok = try? JSONDecoder().decode(Components.Schemas.TokenResponse.self, from: resp.body) {
-            return .ok(.init(body: .json(tok)))
+        if resp.status == 200 {
+            // Decode using ISO8601 strategy to match OpenAPI date-time
+            let dec = JSONDecoder()
+            dec.dateDecodingStrategy = .iso8601
+            if let tok = try? dec.decode(Components.Schemas.TokenResponse.self, from: resp.body) {
+                return .ok(.init(body: .json(tok)))
+            }
+            // Fallback: parse string date then construct typed response
+            if let obj = try? JSONSerialization.jsonObject(with: resp.body) as? [String: Any],
+               let token = obj["token"] as? String,
+               let expires = obj["expiresAt"] as? String,
+               let date = ISO8601DateFormatter().date(from: expires) {
+                let tok = Components.Schemas.TokenResponse(token: token, expiresAt: date)
+                return .ok(.init(body: .json(tok)))
+            }
         } else if resp.status == 401, let err = try? JSONDecoder().decode(Components.Schemas.ErrorResponse.self, from: resp.body) {
             return .unauthorized(.init(body: .json(err)))
         }

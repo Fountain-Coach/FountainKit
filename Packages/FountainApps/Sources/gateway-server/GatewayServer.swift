@@ -210,6 +210,10 @@ public final class GatewayServer {
             try? api.registerHandlers(on: transport)
             let openapiKernel = transport.asKernel()
 
+            // Enforce auth on metrics (OpenAPI routes) before dispatching
+            if request.method == "GET" && request.path.split(separator: "?", maxSplits: 1).first == "/metrics" {
+                if let err = await self.requireAdminAuthorization(request) { return err }
+            }
             let start = Date()
             var response = try await openapiKernel.handle(request)
             for plugin in plugins.reversed() {

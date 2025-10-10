@@ -23,6 +23,12 @@ public func makePersistKernel(service svc: FountainStoreClient) -> HTTPKernel {
         let pathOnly = req.path.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? req.path
         let segments = pathOnly.split(separator: "/", omittingEmptySubsequences: true)
         do {
+            if pathOnly == "/openapi.yaml" {
+                let url = URL(fileURLWithPath: "Packages/FountainServiceKit-Persist/Sources/PersistService/openapi.yaml")
+                if let data = try? Data(contentsOf: url) {
+                    return HTTPResponse(status: 200, headers: ["Content-Type": "application/yaml"], body: data)
+                }
+            }
             switch (req.method, segments) {
             case ("GET", ["metrics"]):
                 return await metrics_metrics_get()

@@ -27,6 +27,26 @@ public struct PersistOpenAPI: APIProtocol, @unchecked Sendable {
         return .ok(.init(body: .json(payload)))
     }
 
+    public func listAnalyses(_ input: Operations.listAnalyses.Input) async throws -> Operations.listAnalyses.Output {
+        let corpusId = input.path.corpusId
+        let limit = input.query.limit ?? 50
+        let offset = input.query.offset ?? 0
+        let (total, analyses) = try await persistence.listAnalyses(corpusId: corpusId, limit: limit, offset: offset)
+        let items: [Components.Schemas.Analysis] = analyses.map { a in
+            .init(value1: .init(corpusId: a.corpusId), value2: .init(analysisId: a.analysisId, pageId: a.pageId, summary: a.summary))
+        }
+        let payload = Operations.listAnalyses.Output.Ok.Body.jsonPayload(total: total, analyses: items)
+        return .ok(.init(body: .json(payload)))
+    }
+
+    public func addAnalysis(_ input: Operations.addAnalysis.Input) async throws -> Operations.addAnalysis.Output {
+        let corpusId = input.path.corpusId
+        guard case let .json(req) = input.body else { return .undocumented(statusCode: 422, OpenAPIRuntime.UndocumentedPayload()) }
+        let record = AnalysisRecord(corpusId: corpusId, analysisId: req.value2.analysisId, pageId: req.value2.pageId, summary: req.value2.summary)
+        let resp = try await persistence.addAnalysis(record)
+        return .ok(.init(body: .json(.init(message: resp.message))))
+    }
+
     public func createCorpus(_ input: Operations.createCorpus.Input) async throws -> Operations.createCorpus.Output {
         guard case let .json(req) = input.body else { return .undocumented(statusCode: 422, OpenAPIRuntime.UndocumentedPayload()) }
         let resp = try await persistence.createCorpus(.init(corpusId: req.corpusId))

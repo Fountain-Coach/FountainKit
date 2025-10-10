@@ -185,6 +185,83 @@ paths:
         '400':
           $ref: '#/components/responses/ErrorResponse'
 
+  /corpora/{corpusId}/analyses:
+    get:
+      summary: List analyses in a corpus, supports pagination
+      description: |
+        Retrieve analysis records stored for the given corpus.
+        Useful for examining processed page analyses over time.
+      operationId: listAnalyses
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: corpusId
+          in: path
+          required: true
+          description: Identifier of the corpus to list analyses for.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Maximum number of analyses to return.
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 200
+        - name: offset
+          in: query
+          description: Number of analyses to skip before returning results.
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: Paginated list of analyses for the corpus.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                    description: Total number of analyses available.
+                  analyses:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Analysis'
+    post:
+      summary: Add an analysis record to a corpus
+      description: Store an analysis summary for a given page within the corpus.
+      operationId: addAnalysis
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: corpusId
+          in: path
+          required: true
+          description: The unique identifier of the corpus to store the analysis in.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Analysis'
+      responses:
+        '200':
+          description: Analysis added successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse'
+
   /corpora/{corpusId}/functions:
     get:
       summary: List functions in a corpus, supports pagination
@@ -527,6 +604,25 @@ components:
             content:
               type: string
               description: Generated response or insight from GPT.
+
+    Analysis:
+      allOf:
+        - $ref: '#/components/schemas/BaseEntity'
+        - type: object
+          required:
+            - analysisId
+            - pageId
+            - summary
+          properties:
+            analysisId:
+              type: string
+              description: Unique identifier for the analysis record.
+            pageId:
+              type: string
+              description: Identifier of the page this analysis references.
+            summary:
+              type: string
+              description: Short textual summary of the page analysis.
 
     Function:
       allOf:

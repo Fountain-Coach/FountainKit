@@ -9,5 +9,6 @@ filter:
     - /corpora/{corpusId}/baselines
     - /corpora/{corpusId}/reflections
     - /corpora/{corpusId}/functions
+    - /corpora/{corpusId}/analyses
     - /functions
     - /functions/{functionId}

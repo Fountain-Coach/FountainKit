@@ -87,6 +87,46 @@ final class GatewayServerTests: XCTestCase {
         switch info { case .ok: XCTFail("unexpected ok without cert"); default: break }
     }
 
+    func testE2EMetricsAuthHTTP() async throws {
+        // Seed env for token issuance and admin role
+        setenv("GATEWAY_CRED_admin", "s3cr3t", 1)
+        setenv("GATEWAY_ROLE_admin", "admin", 1)
+        setenv("GATEWAY_JWT_SECRET", "topsecret", 1)
+
+        let server = GatewayServer()
+        // Start on a high, likely-free port
+        let port = 18099
+        Task { try? await server.start(port: port) }
+        // Give server a moment to bind
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        // 1) metrics without token -> 401
+        var req = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/metrics")!)
+        req.httpMethod = "GET"
+        let (mdata, mresp) = try await URLSession.shared.data(for: req)
+        XCTAssertEqual((mresp as? HTTPURLResponse)?.statusCode, 401, String(data: mdata, encoding: .utf8) ?? "")
+
+        // 2) issue token
+        var tReq = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/auth/token")!)
+        tReq.httpMethod = "POST"
+        tReq.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        tReq.httpBody = try JSONSerialization.data(withJSONObject: ["clientId": "admin", "clientSecret": "s3cr3t"]) 
+        let (td, tr) = try await URLSession.shared.data(for: tReq)
+        XCTAssertEqual((tr as? HTTPURLResponse)?.statusCode, 200, String(data: td, encoding: .utf8) ?? "")
+        struct Tok: Decodable { let token: String }
+        let tok = try JSONDecoder().decode(Tok.self, from: td)
+
+        // 3) metrics with bearer -> 200
+        var okReq = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/metrics")!)
+        okReq.httpMethod = "GET"
+        okReq.setValue("Bearer \(tok.token)", forHTTPHeaderField: "Authorization")
+        let (_, okR) = try await URLSession.shared.data(for: okReq)
+        XCTAssertEqual((okR as? HTTPURLResponse)?.statusCode, 200)
+
+        // Stop server
+        try? await server.stop()
+    }
+
     func testRoutesReloadFromFile() async throws {
         // Prepare temp routes file with one route
         let tmpDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
@@ -130,9 +170,24 @@ final class GatewayServerTests: XCTestCase {
         let recReq = FountainRuntime.HTTPRequest(method: "POST", path: "/zones/\(zone.id)/records", headers: ["Content-Type": "application/json"], body: try JSONEncoder().encode(["name": "www", "type": "A", "value": "1.2.3.4"]))
         let cr = await server.createRecord(zone.id, request: recReq)
         XCTAssertEqual(cr.status, 201)
+        struct Rec: Decodable { let id: String; let name: String; let type: String; let value: String }
+        let created = try JSONDecoder().decode(Rec.self, from: cr.body)
 
         // List records
         let lr = await server.listRecords(zone.id)
         XCTAssertEqual(lr.status, 200)
+
+        // Update record
+        let updReq = FountainRuntime.HTTPRequest(method: "PUT", path: "/zones/\(zone.id)/records/\(created.id)", headers: ["Content-Type": "application/json"], body: try JSONEncoder().encode(["name": "www", "type": "A", "value": "4.3.2.1"]))
+        let ur = await server.updateRecord(zone.id, recordId: created.id, request: updReq)
+        XCTAssertEqual(ur.status, 200)
+
+        // Delete record
+        let dr = await server.deleteRecord(zone.id, recordId: created.id)
+        XCTAssertEqual(dr.status, 204)
+
+        // Error path: listing records for unknown zone
+        let notFound = await server.listRecords(UUID().uuidString)
+        XCTAssertEqual(notFound.status, 404)
     }
 }

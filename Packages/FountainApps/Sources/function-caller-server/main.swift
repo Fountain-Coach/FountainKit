@@ -10,9 +10,19 @@ verifyLauncherSignature()
 let env = ProcessInfo.processInfo.environment
 let corpusId = env["DEFAULT_CORPUS_ID"] ?? "tools-factory"
 let svc = FountainStoreClient(client: EmbeddedFountainStoreClient())
-Task {
+let _ = Task {
     await svc.ensureCollections(corpusId: corpusId)
-    let kernel = makeFunctionCallerKernel(service: svc)
+    // Wrap kernel to serve the curated OpenAPI spec for discovery
+    let inner = makeFunctionCallerKernel(service: svc)
+    let kernel: HTTPKernel = { req in
+        if req.method == "GET" && req.path == "/openapi.yaml" {
+            let url = URL(fileURLWithPath: "Packages/FountainSpecCuration/openapi/v1/function-caller.yml")
+            if let data = try? Data(contentsOf: url) {
+                return HTTPResponse(status: 200, headers: ["Content-Type": "application/yaml"], body: data)
+            }
+        }
+        return try await inner.handle(req)
+    }
     let server = NIOHTTPServer(kernel: kernel)
     do {
         let port = Int(env["FUNCTION_CALLER_PORT"] ?? env["PORT"] ?? "8004") ?? 8004

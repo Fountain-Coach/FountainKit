@@ -1,19 +1,26 @@
 import Foundation
-import SemanticBrowserService
 import LauncherSignature
 import FountainRuntime
+#if canImport(CNIOExtrasZlib)
+import SemanticBrowserService
 
 verifyLauncherSignature()
 
 func buildService() -> SemanticMemoryService { SemanticMemoryService() }
 
-Task {
+let _ = Task {
     let env = ProcessInfo.processInfo.environment
     let service = buildService()
     // Serve generated OpenAPI handlers via a lightweight NIO transport.
     let fallback: HTTPKernel = { req in
         if req.method == "GET" && req.path == "/metrics" {
             return HTTPResponse(status: 200, headers: ["Content-Type": "text/plain"], body: Data("ok\n".utf8))
+        }
+        if req.method == "GET" && req.path == "/openapi.yaml" {
+            let url = URL(fileURLWithPath: "Packages/FountainServiceKit-SemanticBrowser/Sources/SemanticBrowserService/openapi.yaml")
+            if let data = try? Data(contentsOf: url) {
+                return HTTPResponse(status: 200, headers: ["Content-Type": "application/yaml"], body: data)
+            }
         }
         return HTTPResponse(status: 404)
     }
@@ -38,5 +45,10 @@ Task {
     print("semantic-browser listening on \(port)")
 }
 RunLoop.main.run()
+#else
+verifyLauncherSignature()
+print("semantic-browser-server is not supported on this platform (missing CNIOExtrasZlib)")
+RunLoop.main.run()
+#endif
 
 // © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

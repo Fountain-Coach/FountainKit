@@ -44,6 +44,8 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
         .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0"),
         .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.21.0")
+        ,
+        .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.26.0")
     ],
     targets: [
         .executableTarget(
@@ -150,7 +152,8 @@ let package = Package(
             dependencies: [
                 .product(name: "SemanticBrowserService", package: "FountainServiceKit-SemanticBrowser"),
                 .product(name: "LauncherSignature", package: "FountainCore"),
-                .product(name: "NIOHTTPCompression", package: "swift-nio-extras")
+                .product(name: "NIOHTTPCompression", package: "swift-nio-extras"),
+                .product(name: "NIOSSL", package: "swift-nio-ssl")
             ],
             exclude: ["README.md"]
         ),

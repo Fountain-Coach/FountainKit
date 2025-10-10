@@ -6,17 +6,6 @@ import LauncherSignature
 
 verifyLauncherSignature()
 
-let adapters: [String: ToolAdapter] = [
-    "imagemagick": ImageMagickAdapter(),
-    "ffmpeg": FFmpegAdapter(),
-    "exiftool": ExifToolAdapter(),
-    "pandoc": PandocAdapter(),
-    "libplist": LibPlistAdapter(),
-    "scan": PDFScanAdapter(),
-    "index": PDFIndexAdapter(),
-    "query": PDFQueryAdapter(),
-    "export-matrix": PDFExportMatrixAdapter()
-]
 let manifestURL = URL(fileURLWithPath: "tools.json")
 let manifest = (try? ToolManifest.load(from: manifestURL)) ?? ToolManifest(image: .init(name: "", tarball: "", sha256: "", qcow2: "", qcow2_sha256: ""), tools: [:], operations: [])
 let corpusId = ProcessInfo.processInfo.environment["TOOLS_FACTORY_CORPUS_ID"] ??
@@ -26,8 +15,23 @@ let svc = FountainStoreClient(client: EmbeddedFountainStoreClient())
 Task {
     await svc.ensureCollections(corpusId: corpusId)
     try? await publishFunctions(manifest: manifest, corpusId: corpusId, service: svc)
-    let kernel = makeToolsFactoryKernel(service: svc, adapters: adapters, manifest: manifest)
-    let server = NIOHTTPServer(kernel: kernel)
+    // Fallback serves metrics and the spec.
+    let fallback = HTTPKernel { req in
+        if req.method == "GET" && req.path == "/metrics" {
+            return HTTPResponse(status: 200, headers: ["Content-Type": "text/plain"], body: Data("ok\n".utf8))
+        }
+        if req.method == "GET" && req.path == "/openapi.yaml" {
+            let url = URL(fileURLWithPath: "Packages/FountainServiceKit-ToolsFactory/Sources/ToolsFactoryService/openapi.yaml")
+            if let data = try? Data(contentsOf: url) {
+                return HTTPResponse(status: 200, headers: ["Content-Type": "application/yaml"], body: data)
+            }
+        }
+        return HTTPResponse(status: 404)
+    }
+    let transport = NIOOpenAPIServerTransport(fallback: fallback)
+    let api = ToolsFactoryOpenAPI(persistence: svc)
+    try? api.registerHandlers(on: transport, serverURL: URL(string: "/")!)
+    let server = NIOHTTPServer(kernel: transport.asKernel())
     do {
         let port = Int(ProcessInfo.processInfo.environment["TOOLS_FACTORY_PORT"] ?? ProcessInfo.processInfo.environment["PORT"] ?? "8011") ?? 8011
         _ = try await server.start(port: port)

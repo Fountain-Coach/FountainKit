@@ -8,7 +8,7 @@ Status — Done
   - Clients: `GatewayAPI`, `PersistAPI`, `SemanticBrowserAPI`, `LLMGatewayAPI` generated (URLSession transport).
   - Servers: `SemanticBrowser`, `Persist`, `Planner` implemented; `Bootstrap` and `FunctionCaller` handlers added in service kits.
   - Gateway control plane served via generated handlers; Gateway tests are green.
-  - Executables: `bootstrap-server` now uses `NIOOpenAPIServerTransport` with `/openapi.yaml` fallback.
+  - Executables: `bootstrap-server`, `function-caller-server`, and `baseline-awareness-server` now use `NIOOpenAPIServerTransport` with `/openapi.yaml` fallback.
 - UX and infra improvements:
   - Client factory in FountainCore (URLSession transport + default-header middleware).
   - Split `semantic-browser-server` into `Packages/FountainApps-SemanticBrowser`; CI builds it separately.
@@ -19,6 +19,7 @@ Status — In Progress
 - Switch executables to generated routing:
   - Executables: `function-caller-server` now uses `NIOOpenAPIServerTransport` with `/openapi.yaml` fallback.
 - Service migrations (handlers + routing): `Awareness`, `ToolsFactory`, `ToolServer`.
+  - Awareness: Implemented generated server handlers and flipped executable.
 - Decision: introduce a generated `DNS` client (if needed by consumers).
 
 Next Steps (High Priority)

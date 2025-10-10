@@ -11,7 +11,9 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../FountainCore"),
-        .package(path: "../FountainServiceKit-ToolServer")
+        .package(path: "../FountainServiceKit-ToolServer"),
+        .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
+        .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0")
     ],
     targets: [
         .target(
@@ -19,7 +21,11 @@ let package = Package(
             dependencies: [
                 .product(name: "FountainRuntime", package: "FountainCore"),
                 .product(name: "FountainStoreClient", package: "FountainCore"),
-                .product(name: "ToolServer", package: "FountainServiceKit-ToolServer")
+                .product(name: "ToolServer", package: "FountainServiceKit-ToolServer"),
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
+            ],
+            plugins: [
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
         )
     ]

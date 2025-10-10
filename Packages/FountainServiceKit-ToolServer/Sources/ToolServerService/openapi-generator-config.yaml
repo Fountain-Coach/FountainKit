@@ -1,0 +1,6 @@
+config:
+  accessModifier: public
+  namingStrategy: defensive
+  generate:
+    - types
+    - server

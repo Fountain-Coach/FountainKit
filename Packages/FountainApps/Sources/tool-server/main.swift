@@ -5,36 +5,27 @@ import LauncherSignature
 
 verifyLauncherSignature()
 
-let serviceKernel = ToolServerService.HTTPKernel(handlers: Handlers())
-let kernel = HTTPKernel { request in
-    if request.method == "GET" {
-        if request.path == "/metrics" {
-            let body = Data("tool_server_up 1\n".utf8)
-            return HTTPResponse(status: 200, headers: ["Content-Type": "text/plain"], body: body)
-        }
-        if request.path == "/_health" {
-            let body = Data("{\"status\":\"ok\"}".utf8)
-            return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: body)
-        }
-    }
-    let serviceRequest = ToolServerService.HTTPRequest(
-        method: request.method,
-        path: request.path,
-        headers: request.headers,
-        body: request.body
-    )
-    let serviceResponse = try await serviceKernel.handle(serviceRequest)
-    return HTTPResponse(
-        status: serviceResponse.status,
-        headers: serviceResponse.headers,
-        body: serviceResponse.body
-    )
-}
-
-let server = NIOHTTPServer(kernel: kernel)
-let port = Int(ProcessInfo.processInfo.environment["PORT"] ?? "8012") ?? 8012
-
 Task {
+    let fallback = HTTPKernel { req in
+        if req.method == "GET" && req.path == "/metrics" {
+            return HTTPResponse(status: 200, headers: ["Content-Type": "text/plain"], body: Data("tool_server_up 1\n".utf8))
+        }
+        if req.method == "GET" && req.path == "/_health" {
+            return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: Data("{\"status\":\"ok\"}".utf8))
+        }
+        if req.method == "GET" && req.path == "/openapi.yaml" {
+            let url = URL(fileURLWithPath: "Packages/FountainServiceKit-ToolServer/Sources/ToolServerService/openapi.yaml")
+            if let data = try? Data(contentsOf: url) {
+                return HTTPResponse(status: 200, headers: ["Content-Type": "application/yaml"], body: data)
+            }
+        }
+        return HTTPResponse(status: 404)
+    }
+    let transport = NIOOpenAPIServerTransport(fallback: fallback)
+    let api = ToolServerOpenAPI()
+    try? api.registerHandlers(on: transport, serverURL: URL(string: "/")!)
+    let server = NIOHTTPServer(kernel: transport.asKernel())
+    let port = Int(ProcessInfo.processInfo.environment["PORT"] ?? "8012") ?? 8012
     do {
         _ = try await server.start(port: port)
         print("tool-server listening on port \(port)")

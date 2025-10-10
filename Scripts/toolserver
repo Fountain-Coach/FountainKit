@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)
+COMPOSE_FILE=${TOOLSERVER_COMPOSE_FILE:-"$ROOT/Configuration/tool-server/docker-compose.yml"}
+WORKDIR=${TOOLSERVER_WORKDIR:-"$PWD"}
+export TOOLSERVER_WORKDIR="$WORKDIR"
+
+cmd=${1:-help}; shift || true
+
+docker_compose() {
+  docker compose -f "$COMPOSE_FILE" "$@"
+}
+
+case "$cmd" in
+  pull)
+    docker_compose pull "$@" ;;
+  up)
+    docker_compose up -d "$@" ;;
+  down)
+    docker_compose down ;;
+  ps)
+    docker_compose ps "$@" ;;
+  run)
+    svc=${1:-}; shift || true
+    if [[ -z "$svc" ]]; then echo "usage: $0 run <service> [-- args...]"; exit 1; fi
+    docker_compose run --rm -T "$svc" "$@" ;;
+  status)
+    curl -sf "http://127.0.0.1:${PORT:-8012}/_status" | jq . || curl -sf "http://127.0.0.1:${PORT:-8012}/_status" || true ;;
+  *)
+    echo "usage: $0 <pull|up|down|ps|run|status>" ;;
+esac

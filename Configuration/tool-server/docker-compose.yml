@@ -1,37 +1,67 @@
 version: '3.8'
 services:
   imagemagick:
-    image: dpokidov/imagemagick:7-alpine
+    image: ${IMAGEMAGICK_IMAGE:-dpokidov/imagemagick:7-alpine}
+    pull_policy: ${IMAGES_PULL_POLICY:-always}
     working_dir: /work
     volumes:
       - ${TOOLSERVER_WORKDIR:-.}:/work
     entrypoint: ["/bin/sh", "-lc"]
     command: ["magick"]
+    healthcheck:
+      test: ["CMD", "/bin/sh", "-lc", "magick -version >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 5s
+      retries: 2
 
   ffmpeg:
-    image: jrottenberg/ffmpeg:6.0-alpine
+    image: ${FFMPEG_IMAGE:-jrottenberg/ffmpeg:6.0-alpine}
+    pull_policy: ${IMAGES_PULL_POLICY:-always}
     working_dir: /work
     volumes:
       - ${TOOLSERVER_WORKDIR:-.}:/work
     entrypoint: ["ffmpeg"]
+    healthcheck:
+      test: ["CMD", "ffmpeg", "-version"]
+      interval: 30s
+      timeout: 5s
+      retries: 2
 
   exiftool:
-    image: ghcr.io/ianare/exiftool:latest
+    image: ${EXIFTOOL_IMAGE:-ghcr.io/ianare/exiftool:12.76}
+    pull_policy: ${IMAGES_PULL_POLICY:-always}
     working_dir: /work
     volumes:
       - ${TOOLSERVER_WORKDIR:-.}:/work
     entrypoint: ["exiftool"]
+    healthcheck:
+      test: ["CMD", "exiftool", "-ver"]
+      interval: 30s
+      timeout: 5s
+      retries: 2
 
   pandoc:
-    image: pandoc/core:latest
+    image: ${PANDOC_IMAGE:-pandoc/core:3.1}
+    pull_policy: ${IMAGES_PULL_POLICY:-always}
     working_dir: /work
     volumes:
       - ${TOOLSERVER_WORKDIR:-.}:/work
     entrypoint: ["pandoc"]
+    healthcheck:
+      test: ["CMD", "pandoc", "--version"]
+      interval: 30s
+      timeout: 5s
+      retries: 2
 
   libplist:
-    image: blacktop/plist:latest
+    image: ${LIBPLIST_IMAGE:-blacktop/plist:2.4.0}
+    pull_policy: ${IMAGES_PULL_POLICY:-always}
     working_dir: /work
     volumes:
       - ${TOOLSERVER_WORKDIR:-.}:/work
     entrypoint: ["plistutil"]
+    healthcheck:
+      test: ["CMD", "plistutil", "--help"]
+      interval: 30s
+      timeout: 5s
+      retries: 2

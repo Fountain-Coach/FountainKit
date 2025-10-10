@@ -19,16 +19,19 @@ extension OpenAPIClientFactory {
         }
 
         public func intercept(
-            _ request: inout ClientRequest,
+            _ request: HTTPTypes.HTTPRequest,
+            body: OpenAPIRuntime.HTTPBody?,
             baseURL: URL,
             operationID: String,
-            next: (inout ClientRequest, URL) async throws -> ClientResponse
-        ) async throws -> ClientResponse {
+            next: @Sendable (HTTPTypes.HTTPRequest, OpenAPIRuntime.HTTPBody?, URL) async throws -> (HTTPTypes.HTTPResponse, OpenAPIRuntime.HTTPBody?)
+        ) async throws -> (HTTPTypes.HTTPResponse, OpenAPIRuntime.HTTPBody?) {
             // Only add header if not already present on the request.
-            for (name, value) in headers where request.headerFields[name] == nil {
-                request.headerFields.append(HTTPField(name: name, value: value))
+            var req = request
+            var reqBody = body
+            for (name, value) in headers where req.headerFields[name] == nil {
+                req.headerFields[name] = value
             }
-            return try await next(&request, baseURL)
+            return try await next(req, reqBody, baseURL)
         }
     }
 
@@ -44,4 +47,3 @@ extension OpenAPIClientFactory {
         return mws
     }
 }
-

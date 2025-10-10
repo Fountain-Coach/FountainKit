@@ -12,12 +12,27 @@ public struct BootstrapOpenAPI: APIProtocol, @unchecked Sendable {
     // MARK: - Helpers
 
     private func defaultRoles() -> Components.Schemas.RoleDefaults {
-        Components.Schemas.RoleDefaults(
-            drift: "You are Drift, FountainAI’s baseline-drift detective. Compare a new baseline snapshot against prior versions to detect narrative or thematic drift and report the most significant changes.",
-            semantic_arc: "You are Semantic Arc, tasked with tracing the corpus’s overarching narrative arc. Review the corpus history and synthesize a high-level storyline that highlights major turning points and transitions.",
-            patterns: "You are Patterns, a spotter of recurring motifs, themes, or rhetorical structures. Inspect the corpus and list the strongest patterns you find.",
-            history: "You are History, the curator of past reflections and events. Maintain a chronological log showing how the corpus has grown and changed, focusing on context useful for future analysis.",
-            view_creator: "You are View Creator, responsible for assembling human-friendly views of the corpus and analyses. Produce a simple markdown or tabular view to help a human browse the information."
+        let drift = Components.Schemas.RoleDefaults.driftPayload(
+            rawValue: "You are Drift, FountainAI’s baseline-drift detective. Compare a new baseline snapshot against prior versions to detect narrative or thematic drift and report the most significant changes."
+        )!
+        let semanticArc = Components.Schemas.RoleDefaults.semantic_arcPayload(
+            rawValue: "You are Semantic Arc, tasked with tracing the corpus’s overarching narrative arc. Review the corpus history and synthesize a high-level storyline that highlights major turning points and transitions."
+        )!
+        let patterns = Components.Schemas.RoleDefaults.patternsPayload(
+            rawValue: "You are Patterns, a spotter of recurring motifs, themes, or rhetorical structures. Inspect the corpus and list the strongest patterns you find."
+        )!
+        let history = Components.Schemas.RoleDefaults.historyPayload(
+            rawValue: "You are History, the curator of past reflections and events. Maintain a chronological log showing how the corpus has grown and changed, focusing on context useful for future analysis."
+        )!
+        let viewCreator = Components.Schemas.RoleDefaults.view_creatorPayload(
+            rawValue: "You are View Creator, responsible for assembling human-friendly views of the corpus and analyses. Produce a simple markdown or tabular view to help a human browse the information."
+        )!
+        return Components.Schemas.RoleDefaults(
+            drift: drift,
+            semantic_arc: semanticArc,
+            patterns: patterns,
+            history: history,
+            view_creator: viewCreator
         )
     }
 
@@ -26,7 +41,7 @@ public struct BootstrapOpenAPI: APIProtocol, @unchecked Sendable {
     public func metrics_metrics_get(_ input: Operations.metrics_metrics_get.Input) async throws -> Operations.metrics_metrics_get.Output {
         let uptime = Int(ProcessInfo.processInfo.systemUptime)
         let body = "bootstrap_uptime_seconds \(uptime)\n"
-        return .ok(.init(body: .text_plain(.init(HTTPBody(body)))))
+        return .ok(.init(body: .plainText(HTTPBody(body))))
     }
 
     public func bootstrapInitializeCorpus(_ input: Operations.bootstrapInitializeCorpus.Input) async throws -> Operations.bootstrapInitializeCorpus.Output {
@@ -38,11 +53,11 @@ public struct BootstrapOpenAPI: APIProtocol, @unchecked Sendable {
         // 2) Seed default roles
         let roles = defaultRoles()
         let roleDocs: [Role] = [
-            .init(corpusId: req.corpusId, name: "drift", prompt: roles.drift),
-            .init(corpusId: req.corpusId, name: "semantic_arc", prompt: roles.semantic_arc),
-            .init(corpusId: req.corpusId, name: "patterns", prompt: roles.patterns),
-            .init(corpusId: req.corpusId, name: "history", prompt: roles.history),
-            .init(corpusId: req.corpusId, name: "view_creator", prompt: roles.view_creator)
+            .init(corpusId: req.corpusId, name: "drift", prompt: roles.drift.rawValue),
+            .init(corpusId: req.corpusId, name: "semantic_arc", prompt: roles.semantic_arc.rawValue),
+            .init(corpusId: req.corpusId, name: "patterns", prompt: roles.patterns.rawValue),
+            .init(corpusId: req.corpusId, name: "history", prompt: roles.history.rawValue),
+            .init(corpusId: req.corpusId, name: "view_creator", prompt: roles.view_creator.rawValue)
         ]
         _ = try await persistence.seedDefaultRoles(corpusId: req.corpusId, defaults: roleDocs)
         let out = Components.Schemas.InitOut(message: "corpus \(created.corpusId) initialized and roles seeded")
@@ -55,11 +70,11 @@ public struct BootstrapOpenAPI: APIProtocol, @unchecked Sendable {
         }
         let roles = defaultRoles()
         let roleDocs: [Role] = [
-            .init(corpusId: req.corpusId, name: "drift", prompt: roles.drift),
-            .init(corpusId: req.corpusId, name: "semantic_arc", prompt: roles.semantic_arc),
-            .init(corpusId: req.corpusId, name: "patterns", prompt: roles.patterns),
-            .init(corpusId: req.corpusId, name: "history", prompt: roles.history),
-            .init(corpusId: req.corpusId, name: "view_creator", prompt: roles.view_creator)
+            .init(corpusId: req.corpusId, name: "drift", prompt: roles.drift.rawValue),
+            .init(corpusId: req.corpusId, name: "semantic_arc", prompt: roles.semantic_arc.rawValue),
+            .init(corpusId: req.corpusId, name: "patterns", prompt: roles.patterns.rawValue),
+            .init(corpusId: req.corpusId, name: "history", prompt: roles.history.rawValue),
+            .init(corpusId: req.corpusId, name: "view_creator", prompt: roles.view_creator.rawValue)
         ]
         _ = try await persistence.seedDefaultRoles(corpusId: req.corpusId, defaults: roleDocs)
         return .ok(.init(body: .json(roles)))
@@ -71,11 +86,11 @@ public struct BootstrapOpenAPI: APIProtocol, @unchecked Sendable {
         }
         let roles = defaultRoles()
         let roleDocs: [Role] = [
-            .init(corpusId: req.corpusId, name: "drift", prompt: roles.drift),
-            .init(corpusId: req.corpusId, name: "semantic_arc", prompt: roles.semantic_arc),
-            .init(corpusId: req.corpusId, name: "patterns", prompt: roles.patterns),
-            .init(corpusId: req.corpusId, name: "history", prompt: roles.history),
-            .init(corpusId: req.corpusId, name: "view_creator", prompt: roles.view_creator)
+            .init(corpusId: req.corpusId, name: "drift", prompt: roles.drift.rawValue),
+            .init(corpusId: req.corpusId, name: "semantic_arc", prompt: roles.semantic_arc.rawValue),
+            .init(corpusId: req.corpusId, name: "patterns", prompt: roles.patterns.rawValue),
+            .init(corpusId: req.corpusId, name: "history", prompt: roles.history.rawValue),
+            .init(corpusId: req.corpusId, name: "view_creator", prompt: roles.view_creator.rawValue)
         ]
         _ = try await persistence.seedDefaultRoles(corpusId: req.corpusId, defaults: roleDocs)
         return .ok(.init(body: .json(roles)))
@@ -95,10 +110,9 @@ public struct BootstrapOpenAPI: APIProtocol, @unchecked Sendable {
             _ = try? await p.addPatterns(.init(corpusId: cid, patternsId: "\(bid)-patterns", content: "auto-generated patterns"))
         }
         // Minimal JSON acknowledgement
-        if let container = try? OpenAPIRuntime.OpenAPIObjectContainer(unvalidatedValue: ["status": "queued"]) {
+        if let container = try? OpenAPIRuntime.OpenAPIValueContainer(unvalidatedValue: ["status": "queued"]) {
             return .ok(.init(body: .json(container)))
         }
-        return .ok(.init(body: .json(Components.Schemas.InitOut(message: "queued"))))
+        return .undocumented(statusCode: 200, OpenAPIRuntime.UndocumentedPayload())
     }
 }
-

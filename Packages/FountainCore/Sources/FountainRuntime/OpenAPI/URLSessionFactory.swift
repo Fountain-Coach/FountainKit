@@ -13,9 +13,9 @@ extension OpenAPIClientFactory {
         defaultHeaders: [String: String] = [:],
         session: URLSession = .shared
     ) -> (transport: URLSessionTransport, middlewares: [any ClientMiddleware]) {
-        let transport = URLSessionTransport(session: session)
+        // Current URLSessionTransport does not accept a session argument in this version.
+        let transport = URLSessionTransport()
         let mws = defaultMiddlewares(defaultHeaders: defaultHeaders)
         return (transport, mws)
     }
 }
-

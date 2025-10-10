@@ -68,5 +68,60 @@ final class PersistServiceHandlersSearchTests: XCTestCase {
         XCTAssertEqual(body.total, 1)
         XCTAssertEqual(body.segments?.first?.value2.segmentId, "s2")
     }
-}
 
+    func testListEntitiesServerSideTextSearch() async throws {
+        let (api, client) = makeAPI(withTextCapability: true)
+        _ = try await client.createCorpus("cps3")
+        let entities: [Entity] = [
+            .init(corpusId: "cps3", entityId: "e1", name: "Swift", type: "lang"),
+            .init(corpusId: "cps3", entityId: "e2", name: "OpenAPI", type: "spec"),
+            .init(corpusId: "cps3", entityId: "e3", name: "NIO", type: "lib")
+        ]
+        for e in entities { _ = try await client.addEntity(e) }
+
+        let input = Operations.listEntities.Input(
+            path: .init(corpusId: "cps3"),
+            query: .init(_type: nil, q: "api", limit: 50, offset: 0, sort: "name"),
+            headers: .init()
+        )
+        let out = try await api.listEntities(input)
+        guard case let .ok(ok) = out, case let .json(body) = ok.body else {
+            return XCTFail("expected 200 json response")
+        }
+        XCTAssertEqual(body.total, 1)
+        XCTAssertEqual(body.entities?.first?.value2.name, "OpenAPI")
+    }
+
+    func testPagesSortAndPaginationDescending() async throws {
+        let (api, client) = makeAPI(withTextCapability: true)
+        try await seedPages(client, corpusId: "cps4")
+        // Use q to ensure search path; sort by host descending; paginate to first item
+        let input = Operations.listPages.Input(
+            path: .init(corpusId: "cps4"),
+            query: .init(host: nil, q: "https://", limit: 1, offset: 0, sort: "-host"),
+            headers: .init()
+        )
+        let out = try await api.listPages(input)
+        guard case let .ok(ok) = out, case let .json(body) = ok.body, let page = body.pages?.first else {
+            return XCTFail("expected 200 json response")
+        }
+        // Hosts present: swift.org, dev.local, example.com -> descending starts with swift.org
+        XCTAssertEqual(page.value2.host, "swift.org")
+    }
+
+    func testPagesInvalidSortKeyGraceful() async throws {
+        let (api, client) = makeAPI(withTextCapability: false) // force fallback path for visibility
+        try await seedPages(client, corpusId: "cps5")
+        let input = Operations.listPages.Input(
+            path: .init(corpusId: "cps5"),
+            query: .init(host: nil, q: "a", limit: 10, offset: 0, sort: "doesNotExist"),
+            headers: .init()
+        )
+        let out = try await api.listPages(input)
+        guard case let .ok(ok) = out, case let .json(body) = ok.body else {
+            return XCTFail("expected 200 json response")
+        }
+        XCTAssertNotNil(body.pages)
+        XCTAssertGreaterThan((body.pages ?? []).count, 0)
+    }
+}

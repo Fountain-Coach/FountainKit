@@ -12,6 +12,7 @@ let package = Package(
         .library(name: "PersistAPI", targets: ["PersistAPI"]),
         .library(name: "SemanticBrowserAPI", targets: ["SemanticBrowserAPI"]),
         .library(name: "LLMGatewayAPI", targets: ["LLMGatewayAPI"]),
+        .library(name: "DNSAPI", targets: ["DNSAPI"]),
         .library(name: "TutorDashboard", targets: ["TutorDashboard"])
     ],
     dependencies: [
@@ -20,12 +21,16 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
         .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0"),
         .package(url: "https://github.com/apple/swift-openapi-urlsession.git", from: "1.2.0"),
+        .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.21.0"),
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0")
     ],
     targets: [
         .target(
             name: "ApiClientsCore",
-            dependencies: []
+            dependencies: [
+                .product(name: "AsyncHTTPClient", package: "async-http-client"),
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
+            ]
         ),
         .target(
             name: "GatewayAPI",
@@ -69,6 +74,19 @@ let package = Package(
                 "ApiClientsCore",
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
+            ],
+            plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
+        .target(
+            name: "DNSAPI",
+            dependencies: [
+                "ApiClientsCore",
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
+                .product(name: "AsyncHTTPClient", package: "async-http-client")
             ],
             plugins: [
                 .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),

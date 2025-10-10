@@ -9,6 +9,7 @@ Status — Done
   - Servers: `SemanticBrowser`, `Persist`, `Planner` implemented; `Bootstrap` and `FunctionCaller` handlers added in service kits.
   - Gateway control plane served via generated handlers; Gateway tests are green.
   - Executables: `bootstrap-server`, `function-caller-server`, `baseline-awareness-server`, `tools-factory-server`, and `tool-server` now use `NIOOpenAPIServerTransport` with `/openapi.yaml` fallback.
+- Delivered generated DNS client with URLSession + AsyncHTTPClient support for cross-platform consumption.
 - UX and infra improvements:
   - Client factory in FountainCore (URLSession transport + default-header middleware).
   - Split `semantic-browser-server` into `Packages/FountainApps-SemanticBrowser`; CI builds it separately.
@@ -21,14 +22,13 @@ Status — Done
 
 Status — In Progress
 - Service migrations: Completed for Awareness, ToolsFactory, ToolServer (handlers + routing).
-- Decision: introduce a generated `DNS` client (if needed by consumers).
 
 Next Steps (High Priority)
 1. **Spec + Generator Enforcement**
    - [x] Land CI guardrail that runs `Scripts/openapi-lint.sh` on Linux and macOS runners.
    - [x] Enforce “generator config present” for every target by adding a SwiftPM plugin check (fails the build when missing).
 2. **Cross-Platform Client Coverage**
-   - [ ] Evaluate the need for a generated DNS client (see `OPENAPI_COVERAGE.md`) and implement it with URLSession + AsyncHTTPClient transports.
+   - [x] Evaluate the need for a generated DNS client (see `OPENAPI_COVERAGE.md`) and implement it with URLSession + AsyncHTTPClient transports.
    - [ ] Migrate remaining pending clients (`PlannerAPI`, `FunctionCallerAPI`, `BootstrapAPI`, `ToolsFactoryAPI`, `FKOpsAPI`, `AwarenessAPI`) to generated implementations and validate parity on Linux/macOS.
 3. **Runtime Compatibility Sweep**
    - [ ] Audit `FountainCore` transports for FoundationNetworking availability on Linux and provide shims where required.

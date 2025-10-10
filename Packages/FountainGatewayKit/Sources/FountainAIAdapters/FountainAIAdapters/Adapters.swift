@@ -2,25 +2,23 @@ import Foundation
 import FountainAICore
 import LLMGatewayAPI
 import OpenAPIURLSession
+import FountainRuntime
 import SemanticBrowserAPI
 import PersistAPI
 
 public final class LLMGatewayAdapter: LLMService {
     private let client: LLMGatewayAPI.Client
     public init(baseURL: URL, bearerToken: String? = nil) {
-        let transport = OpenAPIURLSession.URLSessionTransport()
-        self.client = LLMGatewayAPI.Client(serverURL: baseURL, transport: transport)
-        self.bearerToken = bearerToken
+        let defaults = bearerToken.map { ["Authorization": "Bearer \($0)"] } ?? [:]
+        let (transport, mws) = OpenAPIClientFactory.makeURLSessionTransport(defaultHeaders: defaults)
+        self.client = LLMGatewayAPI.Client(serverURL: baseURL, transport: transport, middlewares: mws)
     }
-    private let bearerToken: String?
 
     public func chat(model: String, messages: [FountainAICore.ChatMessage]) async throws -> String {
         // Map to generated types
         let msgs: [Components.Schemas.MessageObject] = messages.map { .init(role: $0.role.rawValue, content: $0.content) }
         let body = Components.Schemas.ChatRequest(model: model, messages: msgs, functions: nil, function_call: nil)
-        var headers = Operations.chatWithObjective.Input.Headers()
-        if let token = bearerToken { headers.authorization = "Bearer \(token)" }
-        let out = try await client.chatWithObjective(.init(headers: headers, body: .json(body)))
+        let out = try await client.chatWithObjective(.init(headers: .init(), body: .json(body)))
         switch out {
         case .ok(let ok):
             if case let .json(obj) = ok.body {

@@ -17,8 +17,19 @@ Task {
         }
         return HTTPResponse(status: 404)
     }
+    // Choose engine based on environment
+    let engine: BrowserEngine = {
+        if let ws = env["SB_CDP_URL"], let u = URL(string: ws) { return CDPBrowserEngine(wsURL: u) }
+        if let bin = env["SB_BROWSER_CLI"] {
+            return ShellBrowserEngine(
+                binary: bin,
+                args: (env["SB_BROWSER_ARGS"] ?? "").split(separator: " ").map(String.init)
+            )
+        }
+        return URLFetchBrowserEngine()
+    }()
     let transport = NIOOpenAPIServerTransport(fallback: fallback)
-    let api = SemanticBrowserOpenAPI(service: service)
+    let api = SemanticBrowserOpenAPI(service: service, engine: engine)
     // Register generated handlers; use root prefix.
     try? api.registerHandlers(on: transport, serverURL: URL(string: "/")!)
     let server = NIOHTTPServer(kernel: transport.asKernel())

@@ -26,7 +26,7 @@ Status — In Progress
 
 Next Steps (High Priority)
 1. **Spec + Generator Enforcement**
-   - [x] Land CI guardrail that runs `Scripts/openapi-lint.sh` on Linux and macOS runners.
+   - [x] Land CI guardrail that runs `openapi/lint-matrix.sh` (Redocly) on Linux and macOS runners.
    - [x] Enforce “generator config present” for every target by adding a SwiftPM plugin check (fails the build when missing).
 2. **Cross-Platform Client Coverage**
    - [x] Evaluate the need for a generated DNS client (see `OPENAPI_COVERAGE.md`) and implement it with URLSession + AsyncHTTPClient transports.
@@ -54,6 +54,7 @@ Quick Map (truth snapshot)
 
 Validate Locally
 - Build everything: `swift build`
+- Use `Packages/FountainSpecCuration/openapi/lint-matrix.sh` for per-spec validation and CI parity.
 - Gateway tests: `swift test --package-path Packages/FountainApps --filter GatewayServerTests`
 
 Maintainers

@@ -100,6 +100,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CertificateInfo'
+        '400':
+          $ref: '#/components/responses/BadRequest'
       security:
         - bearerAuth: []
   /certificates/renew:
@@ -117,6 +119,8 @@ paths:
             application/json:
               schema:
                 type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
       security:
         - bearerAuth: []
   /routes:
@@ -136,6 +140,8 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/RouteInfo'
+        '400':
+          $ref: '#/components/responses/BadRequest'
       security:
         - bearerAuth: []
     post:

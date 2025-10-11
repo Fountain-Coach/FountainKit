@@ -9,10 +9,13 @@ info:
   version: 1.0.0
   x-fountain.port: 8004
   x-fountain.binary: function-caller
+  license:
+    name: FountainAI Internal
 servers:
   - url: http://functions.local
     description: Local development
   - url: http://functions.fountain.coach
+security: []
 paths:
   /functions:
     get:
@@ -155,6 +158,8 @@ paths:
             text/plain:
               schema:
                 type: string
+        '400':
+          description: Bad request
 
 components:
   schemas:

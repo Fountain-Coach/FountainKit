@@ -5,6 +5,8 @@ info:
   version: 1.0.0
   x-fountain.port: 8002
   x-fountain.binary: bootstrap
+  license:
+    name: FountainAI Internal
 servers:
   - url: http://bootstrap.local
     description: Local development
@@ -363,9 +365,15 @@ components:
         - $ref: '#/components/schemas/StreamCompleteData'
 
     StreamPayload:
+      description: |
+        Streaming analysis payload emitted while the bootstrap baseline job runs.
       discriminator:
         propertyName: kind
         mapping:
-          drift:
+          drift: '#/components/schemas/StreamDriftData'
+          patterns: '#/components/schemas/StreamPatternsData'
+      oneOf:
+        - $ref: '#/components/schemas/StreamDriftData'
+        - $ref: '#/components/schemas/StreamPatternsData'
 
 # © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

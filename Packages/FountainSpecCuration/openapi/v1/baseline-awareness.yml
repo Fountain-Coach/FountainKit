@@ -7,10 +7,13 @@ info:
   version: 1.0.0
   x-fountain.port: 8001
   x-fountain.binary: baseline-awareness
+  license:
+    name: FountainAI Internal
 servers:
   - url: http://awareness.local
     description: Local development
   - url: http://awareness.fountain.coach
+security: []
 paths:
   /health:
     get:
@@ -26,6 +29,8 @@ paths:
             application/json:
               schema:
                 type: object
+        '400':
+          description: Bad request
   /corpus/init:
     post:
       summary: Initialize a new corpus
@@ -297,6 +302,8 @@ paths:
             text/plain:
               schema:
                 type: string
+        '400':
+          description: Bad request
 components:
   schemas:
     BaselineRequest:
@@ -483,13 +490,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/HistoryEvent'
-    StreamTickData:
-      type: object
-      required: [status]
-      properties:
-        status:
-          type: string
-
     AwarenessTickData:
       type: object
       required: [status, kind]
@@ -502,10 +502,22 @@ components:
           const: tick
     AwarenessCompleteData:
       type: object
+      required: [status, kind]
+      properties:
+        status:
+          type: string
+          enum: [complete]
+        kind:
+          type: string
+          const: complete
     AwarenessStreamEvent:
       discriminator:
         propertyName: kind
         mapping:
-          tick:
+          tick: '#/components/schemas/AwarenessTickData'
+          complete: '#/components/schemas/AwarenessCompleteData'
+      oneOf:
+        - $ref: '#/components/schemas/AwarenessTickData'
+        - $ref: '#/components/schemas/AwarenessCompleteData'
 
 # © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

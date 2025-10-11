@@ -14,12 +14,16 @@ info:
   contact:
     name: FountainAI
     url: https://fountain.coach
+  license:
+    name: FountainAI Internal
   x-fountain.port: 8007
   x-fountain.binary: semantic-browser
 servers:
   - url: http://semantic-browser.local
     description: Local development
   - url: http://semantic-browser.fountain.coach
+security:
+  - ApiKeyAuth: []
 tags:
   - name: Browse
     description: Navigate with a real browser (CDP/WebKit), wait for readiness, 
@@ -166,32 +170,13 @@ paths:
       tags: [Query]
       summary: Search previously persisted pages in FountainStore.
       parameters:
-        - name: q
-          in: query
-          description: Full-text query string.
-          schema: {type: string}
-        - name: host
-          in: query
-          description: Filter by page host (e.g., github.com).
-          schema: {type: string}
-        - name: lang
-          in: query
-          description: ISO language code filter.
-          schema: {type: string, pattern: '^[a-z]{2}(-[A-Z]{2})?$'}
-        - name: after
-          in: query
-          description: Filter pages fetched after this instant (RFC 3339).
-          schema: {type: string, format: date-time}
-        - name: before
-          in: query
-          description: Filter pages fetched before this instant (RFC 3339).
-          schema: {type: string, format: date-time}
-        - name: limit
-          in: query
-          schema: {type: integer, minimum: 1, maximum: 200, default: 20}
-        - name: offset
-          in: query
-          schema: {type: integer, minimum: 0, default: 0}
+        - $ref: '#/components/parameters/q'
+        - $ref: '#/components/parameters/host'
+        - $ref: '#/components/parameters/lang'
+        - $ref: '#/components/parameters/after'
+        - $ref: '#/components/parameters/before'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
       responses:
         '200':
           description: Page hits
@@ -237,10 +222,7 @@ paths:
       tags: [Query]
       summary: Search segments (headings/paragraphs/code/captions/tables).
       parameters:
-        - name: q
-          in: query
-          description: Full-text query string.
-          schema: {type: string}
+        - $ref: '#/components/parameters/q'
         - name: kind
           in: query
           schema:
@@ -250,12 +232,8 @@ paths:
           in: query
           schema: {type: string, description: Filter segments mentioning a 
               canonical entity}
-        - name: limit
-          in: query
-          schema: {type: integer, minimum: 1, maximum: 200, default: 20}
-        - name: offset
-          in: query
-          schema: {type: integer, minimum: 0, default: 0}
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
       responses:
         '200':
           description: Segment hits
@@ -278,19 +256,12 @@ paths:
       tags: [Query]
       summary: Search canonicalized entities.
       parameters:
-        - name: q
-          in: query
-          description: Full-text query string.
-          schema: {type: string}
+        - $ref: '#/components/parameters/q'
         - name: type
           in: query
           schema: {type: string, enum: [PERSON, ORG, LOC, PROD, EVENT, OTHER]}
-        - name: limit
-          in: query
-          schema: {type: integer, minimum: 1, maximum: 200, default: 20}
-        - name: offset
-          in: query
-          schema: {type: integer, minimum: 0, default: 0}
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
       responses:
         '200':
           description: Entity hits

@@ -8,10 +8,13 @@ info:
   version: 1.0.0
   x-fountain.port: 8011
   x-fountain.binary: tools-factory
+  license:
+    name: FountainAI Internal
 servers:
   - url: http://tools-factory.local
     description: Local development
   - url: http://tools-factory.fountain.coach
+security: []
 paths:
   /tools:
     get:
@@ -94,6 +97,8 @@ paths:
             text/plain:
               schema:
                 type: string
+        '400':
+          description: Bad request
 components:
   schemas:
     FunctionInfo:

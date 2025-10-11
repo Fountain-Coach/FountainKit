@@ -4,10 +4,13 @@ info:
   version: 1.0.0
   x-fountain.port: 8020
   x-fountain.binary: fk-ops-server
+  license:
+    name: FountainAI Internal
 servers:
   - url: http://fkops.local
     description: Local development
   - url: http://fkops.fountain.coach
+security: []
 paths:
   /fk/status:
     get:
@@ -101,7 +104,6 @@ components:
           type: string
         reachable:
           type: boolean
-          nullable: true
     Ack:
       type: object
       required: [ok]
@@ -110,4 +112,3 @@ components:
           type: boolean
         message:
           type: string
-          nullable: true

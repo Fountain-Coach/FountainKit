@@ -1,7 +1,12 @@
-openapi: "3.0.0"
+openapi: 3.1.0
 info:
   title: Tool Server API
-  version: "1.0.0"
+  version: 1.0.0
+  license:
+    name: FountainAI Internal
+servers:
+  - url: http://tool-server.local
+    description: Local development
 paths: {}
 
 # © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

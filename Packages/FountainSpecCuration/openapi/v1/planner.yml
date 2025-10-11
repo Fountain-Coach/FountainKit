@@ -7,10 +7,13 @@ info:
   version: 1.0.0
   x-fountain.port: 8003
   x-fountain.binary: planner
+  license:
+    name: FountainAI Internal
 servers:
   - url: http://planner.local
     description: Local development
   - url: http://planner.fountain.coach
+security: []
 paths:
   /planner/reason:
     post:
@@ -94,6 +97,8 @@ paths:
                 title: Response Planner List Corpora
                 items:
                   type: string
+        '400':
+          description: Bad request
   /planner/reflections/{corpus_id}:
     get:
       tags:
@@ -156,7 +161,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /planner/reflections/:
+  /planner/reflections:
     post:
       tags:
         - Reflections
@@ -200,6 +205,8 @@ paths:
             text/plain:
               schema:
                 type: string
+        '400':
+          description: Bad request
 components:
   schemas:
     ChatReflectionRequest:

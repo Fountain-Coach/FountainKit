@@ -4,10 +4,12 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)
 
 # Gather OpenAPI documents (supports *.yaml / *.yml naming).
-mapfile -t OPENAPI_SPECS < <(
+OPENAPI_SPECS=()
+while IFS= read -r spec; do
+  OPENAPI_SPECS+=("$spec")
+done < <(
   find "$ROOT" \
-    -path "$ROOT/.build" -prune -o \
-    -path "$ROOT/.swiftpm" -prune -o \
+    \( -path "$ROOT/.build" -o -path "$ROOT/.swiftpm" -o -path '*/.build' -o -path '*/.swiftpm' \) -prune -o \
     -name 'openapi.yaml' -print -o \
     -name 'openapi.yml' -print -o \
     -name '*.openapi.yaml' -print -o \

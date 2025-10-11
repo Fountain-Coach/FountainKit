@@ -6,11 +6,16 @@ info:
   version: 1.0.0
   x-fountain.port: 8010
   x-fountain.binary: fountain-gateway
+  license:
+    name: FountainAI Internal
+    url: https://fountain.coach/licenses/internal
 x-persona: ../personas/rate-limiter.md
 servers:
   - url: http://rate-limiter.local
     description: Local development
   - url: http://rate-limiter.fountain.coach
+security:
+  - ApiKeyAuth: []
 paths:
   /rate-limit/check:
     post:
@@ -35,6 +40,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RateLimitCheckResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '422':
           description: Validation Error
           content:
@@ -57,7 +64,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RateLimitStatsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
 components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  responses:
+    BadRequest:
+      description: Malformed request payload.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+            required: [error]
   schemas:
     RateLimitCheckRequest:
       title: RateLimitCheckRequest
@@ -73,9 +98,10 @@ components:
           type: string
           title: Clientid
         limitPerMinute:
-          type: integer
           title: Limitperminute
-          nullable: true
+          oneOf:
+            - type: integer
+            - type: 'null'
     RateLimitCheckResponse:
       title: RateLimitCheckResponse
       type: object

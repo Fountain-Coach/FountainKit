@@ -6,11 +6,16 @@ info:
   version: 1.0.0
   x-fountain.port: 8010
   x-fountain.binary: fountain-gateway
+  license:
+    name: FountainAI Internal
+    url: https://fountain.coach/licenses/internal
 x-persona: ../personas/payload-inspection.md
 servers:
   - url: http://payload-inspection.local
     description: Local development
   - url: http://payload-inspection.fountain.coach
+security:
+  - ApiKeyAuth: []
 paths:
   /inspect:
     post:
@@ -35,6 +40,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PayloadInspectionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '422':
           description: Validation Error
           content:
@@ -42,6 +49,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
 components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  responses:
+    BadRequest:
+      description: Malformed request payload.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+            required: [error]
   schemas:
     PayloadInspectionRequest:
       title: PayloadInspectionRequest

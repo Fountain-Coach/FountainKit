@@ -9,11 +9,16 @@ info:
   version: 1.0.2
   x-fountain.port: 8005
   x-fountain.binary: persist
+  license:
+    name: FountainAI Internal
+    url: https://fountain.coach/licenses/internal
 x-persona: ../personas/persist.md
 servers:
   - url: http://persist.local
     description: Local development
   - url: http://persist.fountain.coach
+security:
+  - ApiKeyAuth: []
 paths:
   /capabilities:
     get:
@@ -30,6 +35,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/Capabilities'
 
+        '400':
+          $ref: '#/components/responses/BadRequest'
   /corpora:
     get:
       summary: List all corpora with pagination support
@@ -76,6 +83,8 @@ paths:
                     items:
                       type: string
 
+        '400':
+          $ref: '#/components/responses/BadRequest'
     post:
       summary: Create a new corpus
       description: |
@@ -158,6 +167,8 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Baseline'
+        '400':
+          $ref: '#/components/responses/BadRequest'
     post:
       summary: Add a baseline snapshot to a corpus
       description: |
@@ -255,6 +266,8 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Analysis'
+        '400':
+          $ref: '#/components/responses/BadRequest'
     post:
       summary: Add an analysis record to a corpus
       description: Store an analysis summary for a given page within the corpus.
@@ -348,6 +361,8 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Page'
+        '400':
+          $ref: '#/components/responses/BadRequest'
     post:
       summary: Add a page to a corpus
       operationId: addPage
@@ -374,6 +389,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
 
+        '400':
+          $ref: '#/components/responses/BadRequest'
   /corpora/{corpusId}/segments:
     get:
       summary: List segments in a corpus
@@ -437,6 +454,8 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Segment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
     post:
       summary: Add a segment to a corpus
       operationId: addSegment
@@ -463,6 +482,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
 
+        '400':
+          $ref: '#/components/responses/BadRequest'
   /corpora/{corpusId}/entities:
     get:
       summary: List entities in a corpus
@@ -526,6 +547,8 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Entity'
+        '400':
+          $ref: '#/components/responses/BadRequest'
     post:
       summary: Add an entity to a corpus
       operationId: addEntity
@@ -552,6 +575,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
 
+        '400':
+          $ref: '#/components/responses/BadRequest'
   /corpora/{corpusId}/tables:
     get:
       summary: List tables in a corpus
@@ -597,6 +622,8 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Table'
+        '400':
+          $ref: '#/components/responses/BadRequest'
     post:
       summary: Add a table to a corpus
       operationId: addTable
@@ -623,6 +650,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
 
+        '400':
+          $ref: '#/components/responses/BadRequest'
   /corpora/{corpusId}/functions:
     get:
       summary: List functions in a corpus, supports pagination
@@ -682,6 +711,8 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Function'
+        '400':
+          $ref: '#/components/responses/BadRequest'
     post:
       summary: Add a function to a corpus
       operationId: addFunction
@@ -803,6 +834,8 @@ paths:
                     items:
                       $ref: '#/components/schemas/Reflection'
 
+        '400':
+          $ref: '#/components/responses/BadRequest'
   /functions:
     get:
       summary: List all registered functions with pagination
@@ -860,6 +893,8 @@ paths:
                     items:
                       $ref: '#/components/schemas/Function'
 
+        '400':
+          $ref: '#/components/responses/BadRequest'
   /functions/{functionId}:
     get:
       summary: Get function details by ID
@@ -903,7 +938,14 @@ paths:
               schema:
                 type: string
 
+        '400':
+          $ref: '#/components/responses/BadRequest'
 components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
   schemas:
     Capabilities:
       type: object
@@ -1105,6 +1147,17 @@ components:
           example: Operation successful.
 
   responses:
+    BadRequest:
+      description: Malformed request payload.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+            required:
+              - error
     ErrorResponse:
       description: Standard error response.
       content:
@@ -1125,3 +1178,5 @@ components:
 # © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.
 
 # © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.
+    '400':
+      $ref: '#/components/responses/BadRequest'

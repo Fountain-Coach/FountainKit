@@ -4,14 +4,18 @@ info:
   description: >
     Enforces request budgets with simple health checks.
   version: 1.0.0
-
   x-fountain.port: 8010
   x-fountain.binary: fountain-gateway
+  license:
+    name: FountainAI Internal
+    url: https://fountain.coach/licenses/internal
 x-persona: ../personas/budget-breaker.md
 servers:
   - url: http://budget-breaker.local
     description: Local development
   - url: http://budget-breaker.fountain.coach
+security:
+  - ApiKeyAuth: []
 paths:
   /budget/check:
     post:
@@ -36,6 +40,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BudgetCheckResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '422':
           description: Validation Error
           content:
@@ -59,7 +65,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BudgetHealthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
 components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  responses:
+    BadRequest:
+      description: Malformed request payload.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+            required: [error]
   schemas:
     BudgetCheckRequest:
       title: BudgetCheckRequest

@@ -27,6 +27,7 @@ Build a self-extending “spec → Swift → sandbox” loop where the LLM can:
 - [ ] Build ArcSpec compiler that emits OpenAPI specs with FountainCore conventions.
 - [ ] Integrate compiler into CI: change to ArcSpec regenerates specs and runs `lint-matrix.sh`.
 - [ ] Document ArcSpec authoring (`docs/ArcSpec.md` with examples/operator taxonomy).
+- [ ] **Seed persistence corpus:** import the `the-four-stars` repository into FountainStore as baseline data so ArcSpec derivation has rich context (tracks, translations, annotations).
 
 ### M2 — Sandboxed Studios
 - [ ] Harden Swift sandbox image (non-root, read-only FS, dropped caps, quotas, logging).
@@ -50,6 +51,7 @@ Build a self-extending “spec → Swift → sandbox” loop where the LLM can:
 | --- | --- |
 | **Sandbox hardening** | seccomp/AppArmor, network allowlist, resource limits, hash+log every Swift snippet, SPM cache vendoring. |
 | **Registry & Transport** | Ensure all generated clients rely on FountainCore transports; register new tools with network policy + quotas. |
+| **Corpus Seeding** | Build ingestion pipeline that maps the `the-four-stars` GitHub corpus (texts, translations, annotations) into FountainStore collections before deriving ArcSpecs; maintain reproducible seed scripts. |
 | **DX & Documentation** | Demo repo + Dockerfile showing the full loop; studio authoring guide; ArcSpec examples; lint workflow (`lint-matrix.sh`). |
 | **Observability** | Structured logs (code hash, stdout/stderr, exit status), artifact indexing, Grafana/Kibana dashboards for tool executions. |
 

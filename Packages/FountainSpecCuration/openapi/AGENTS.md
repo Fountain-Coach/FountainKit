@@ -13,7 +13,7 @@
    - Do **not** delete or rewrite existing spec links—only append entries so the README remains a versioned index of every OpenAPI document.
 
 3. **Validation & copyright**
-   - Run the project’s OpenAPI validation tooling after changes.
+   - Run `openapi/lint-matrix.sh <spec>` (or `--list`) after any edits to ensure Redocly passes.
    - End every spec with `© 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.`
 
 4. **Repository linkage**

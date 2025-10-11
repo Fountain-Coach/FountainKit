@@ -20,8 +20,7 @@ let package = Package(
                 .product(name: "SemanticBrowserService", package: "FountainServiceKit-SemanticBrowser"),
                 .product(name: "FountainRuntime", package: "FountainCore"),
                 .product(name: "LauncherSignature", package: "FountainCore")
-            ],
-            exclude: ["README.md"]
+            ]
         )
     ]
 )

@@ -63,7 +63,7 @@ public final class NIOOpenAPIServerTransport: ServerTransport, @unchecked Sendab
                     for (k, v) in req.headers {
                         if let name = HTTPField.Name(k) { fields.append(HTTPField(name: name, value: v)) }
                     }
-                    var httpReq = HTTPTypes.HTTPRequest(method: method, scheme: nil, authority: nil, path: req.path, headerFields: fields)
+                    let httpReq = HTTPTypes.HTTPRequest(method: method, scheme: nil, authority: nil, path: req.path, headerFields: fields)
                     // Build HTTPBody if non-empty.
                     let body: HTTPBody? = req.body.isEmpty ? nil : HTTPBody(req.body)
                     let meta = ServerRequestMetadata(pathParameters: params)
@@ -72,7 +72,7 @@ public final class NIOOpenAPIServerTransport: ServerTransport, @unchecked Sendab
                         // Translate back to FountainRuntime.HTTPResponse
                         var headers: [String: String] = [:]
                         for field in httpResp.headerFields { headers[field.name.description] = field.value }
-                        let data: Data = try await {
+                        let data: Data = await {
                             guard let httpBody else { return Data() }
                             // Collect with a sane upper bound (2MB) to avoid unbounded buffering.
                             if let d = try? await Data(collecting: httpBody, upTo: 2 * 1024 * 1024) { return d }

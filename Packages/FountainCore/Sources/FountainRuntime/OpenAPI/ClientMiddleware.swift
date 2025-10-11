@@ -27,11 +27,10 @@ extension OpenAPIClientFactory {
         ) async throws -> (HTTPTypes.HTTPResponse, OpenAPIRuntime.HTTPBody?) {
             // Only add header if not already present on the request.
             var req = request
-            var reqBody = body
             for (name, value) in headers where req.headerFields[name] == nil {
                 req.headerFields[name] = value
             }
-            return try await next(req, reqBody, baseURL)
+            return try await next(req, body, baseURL)
         }
     }
 

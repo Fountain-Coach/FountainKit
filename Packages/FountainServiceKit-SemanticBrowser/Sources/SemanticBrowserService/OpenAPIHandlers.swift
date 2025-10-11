@@ -260,17 +260,21 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
     }
 
     // Convert JSONSerialization trees into Sendable JSON compatible trees.
-    private func asSendableJSON(_ value: Any?) -> Any? {
+    private func asSendableJSON(_ value: Any?) -> (any Sendable)? {
         guard let value else { return nil }
         if value is NSNull { return nil }
         if let v = value as? String { return v }
         if let v = value as? Int { return v }
         if let v = value as? Double { return v }
         if let v = value as? Bool { return v }
-        if let v = value as? [Any] { return v.compactMap { asSendableJSON($0) } }
+        if let v = value as? [Any] {
+            return v.map { asSendableJSON($0) }
+        }
         if let v = value as? [String: Any] {
             var out: [String: (any Sendable)?] = [:]
-            for (k, val) in v { out[k] = asSendableJSON(val) as? (any Sendable)? }
+            for (k, val) in v {
+                out[k] = asSendableJSON(val)
+            }
             return out
         }
         // Fallback: stringify

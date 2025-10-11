@@ -23,4 +23,8 @@
    - After editing any spec, invoke the FountainAI OpenAPI Curator via `POST /curate` with a list of every `file://openapi/...` document and a `corpusId` for the bundle.
    - The curated output is the single source of truth and may be submitted to the Tools Factory when `submitToToolsFactory` is `true`.
 
+## Active Plans
+
+- **ArcSpec & Studio Implementation Plan** — `openapi/arcspec_studio_plan.md`
+
 Following these guidelines keeps OpenAPI specs discoverable, versioned, and consistently integrated with the Gateway and FountainStore layers.

@@ -13,6 +13,10 @@ Welcome to FountainKit, the modular SwiftPM workspace for the Fountain Coach org
 - `FountainSpecCuration`: Canonical OpenAPI specs, fixtures, and regeneration scripts shared across packages.
 - `FountainExamples`: Sample apps and Teatro integrations that consume the published packages.
 
+### Active Plans
+- `implementation_plan.md` — OpenAPI-first refactor roadmap.
+- `Packages/FountainSpecCuration/openapi/arcspec_studio_plan.md` — ArcSpec → Swift studio rollout.
+
 ## OpenAPI-first development
 - Every HTTP surface must have an authoritative OpenAPI document in `Packages/FountainSpecCuration/openapi`. Update specs *before* writing server or client code.
 - Specs are versioned (`openapi/v{major}/service-name.yml`) and curated via the FountainAI OpenAPI Curator. Keep the curator output as the single source of truth and follow `Packages/FountainSpecCuration/openapi/AGENTS.md` for directory rules.

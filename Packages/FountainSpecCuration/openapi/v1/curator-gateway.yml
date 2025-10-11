@@ -6,10 +6,15 @@ info:
   version: 1.0.0
   x-fountain.port: 8010
   x-fountain.binary: fountain-gateway
+  license:
+    name: FountainAI Internal
+    url: https://fountain.coach/licenses/internal
 servers:
   - url: http://curator-gateway.local
     description: Local development
   - url: http://curator-gateway.fountain.coach
+security:
+  - ApiKeyAuth: []
 paths:
   /curator/check:
     post:
@@ -35,6 +40,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CuratorCheckResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '422':
           description: Validation Error
           content:
@@ -42,6 +49,22 @@ paths:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
 components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  responses:
+    BadRequest:
+      description: Malformed request payload.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+            required: [error]
   schemas:
     CuratorCheckRequest:
       title: CuratorCheckRequest
@@ -62,9 +85,10 @@ components:
           type: boolean
           title: Allowed
         evidence:
-          type: string
           title: Evidence
-          nullable: true
+          oneOf:
+            - type: string
+            - type: 'null'
     HTTPValidationError:
       title: HTTPValidationError
       type: object

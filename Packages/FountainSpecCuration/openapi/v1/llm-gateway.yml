@@ -4,8 +4,13 @@ info:
   title: FountainAI LLM Gateway
   description: Proxy to any LLM with function-calling support.
   version: 2.0.0
+  license:
+    name: FountainAI Internal
+    url: https://fountain.coach/licenses/internal
 servers:
   - url: http://llm-gateway.fountain.coach/api/v1
+security:
+  - ApiKeyAuth: []
 paths:
   /metrics:
     get:
@@ -22,6 +27,8 @@ paths:
             application/json:
               schema:
                 type: object
+        "400":
+          $ref: '#/components/responses/BadRequest'
   /chat:
     post:
       tags:
@@ -48,14 +55,32 @@ paths:
               schema:
                 type: object
                 properties: {}
+        "400":
+          $ref: '#/components/responses/BadRequest'
         "422":
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  components:
-    schemas:
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  responses:
+    BadRequest:
+      description: Malformed request payload.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+            required: [error]
+  schemas:
     ChatRequest:
       title: ChatRequest
       type: object

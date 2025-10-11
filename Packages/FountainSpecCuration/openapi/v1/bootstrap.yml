@@ -7,10 +7,13 @@ info:
   x-fountain.binary: bootstrap
   license:
     name: FountainAI Internal
+    url: https://fountain.coach/licenses/internal
 servers:
   - url: http://bootstrap.local
     description: Local development
   - url: http://bootstrap.fountain.coach
+security:
+  - ApiKeyAuth: []
 paths:
   /bootstrap/corpus/init:
     post:
@@ -37,6 +40,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InitOut'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '422':
           description: Validation Error
           content:
@@ -67,6 +72,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RoleDefaults'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '422':
           description: Validation Error
           content:
@@ -105,6 +112,8 @@ paths:
           description: Successful Response
           content:
             application/json: {}
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '422':
           description: Validation Error
           content:
@@ -136,6 +145,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RoleDefaults'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '422':
           description: Validation Error
           content:
@@ -157,7 +168,25 @@ paths:
             text/plain:
               schema:
                 type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
 components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  responses:
+    BadRequest:
+      description: Malformed request payload.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+            required: [error]
   schemas:
     BaselineIn:
       type: object

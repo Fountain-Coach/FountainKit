@@ -7,10 +7,15 @@ info:
   version: 1.0.0
   x-fountain.port: 8010
   x-fountain.binary: fountain-gateway
+  license:
+    name: FountainAI Internal
+    url: https://fountain.coach/licenses/internal
 servers:
   - url: http://gateway.local
     description: Local development
   - url: http://gateway.fountain.coach
+security:
+  - bearerAuth: []
 paths:
   /health:
     get:
@@ -27,6 +32,8 @@ paths:
             application/json:
               schema:
                 type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
   /metrics:
     get:
       summary: Metrics
@@ -44,6 +51,8 @@ paths:
                 type: object
                 additionalProperties:
                   type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
       security:
         - bearerAuth: []
   /auth/token:
@@ -148,6 +157,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RouteInfo'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '409':
           description: Route already exists
           content:
@@ -183,6 +194,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RouteInfo'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
           description: Route not found
           content:
@@ -207,6 +220,8 @@ paths:
       responses:
         '204':
           description: Route deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
           description: Route not found
           content:
@@ -221,6 +236,13 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+  responses:
+    BadRequest:
+      description: Bad request.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
   schemas:
     CredentialRequest:
       type: object

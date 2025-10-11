@@ -5,10 +5,15 @@ info:
     API for managing internal DNS zones and records.
   version: 1.0.0
   x-fountain.port: 8008
+  license:
+    name: FountainAI Internal
+    url: https://fountain.coach/licenses/internal
 servers:
   - url: http://dns.local
     description: Local development
   - url: http://dns.fountain.coach
+security:
+  - ApiKeyAuth: []
 paths:
   /zones:
     get:
@@ -24,6 +29,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ZonesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
     post:
       summary: Create Zone
       operationId: createZone
@@ -43,6 +50,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Zone'
+        '400':
+          $ref: '#/components/responses/BadRequest'
   /zones/{zoneId}:
     parameters:
       - name: zoneId
@@ -60,6 +69,8 @@ paths:
       responses:
         '204':
           description: Zone Deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
   /zones/{zoneId}/records:
     parameters:
       - name: zoneId
@@ -81,6 +92,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RecordsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
     post:
       summary: Create Record
       operationId: createRecord
@@ -100,6 +113,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Record'
+        '400':
+          $ref: '#/components/responses/BadRequest'
   /zones/{zoneId}/records/{recordId}:
     parameters:
       - name: zoneId
@@ -133,6 +148,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Record'
+        '400':
+          $ref: '#/components/responses/BadRequest'
     delete:
       summary: Delete Record
       operationId: deleteRecord
@@ -142,7 +159,25 @@ paths:
       responses:
         '204':
           description: Record Deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
 components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  responses:
+    BadRequest:
+      description: Malformed request payload.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+            required: [error]
   schemas:
     Zone:
       type: object

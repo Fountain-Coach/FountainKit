@@ -7,11 +7,16 @@ info:
   version: 1.0.0
   x-fountain.port: 8010
   x-fountain.binary: fountain-gateway
+  license:
+    name: FountainAI Internal
+    url: https://fountain.coach/licenses/internal
 x-persona: ../personas/auth.md
 servers:
   - url: http://gateway.local
     description: Local development
   - url: http://gateway.fountain.coach
+security:
+  - BearerAuth: []
 paths:
   /auth/validate:
     post:
@@ -34,6 +39,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           description: Token is invalid or expired
   /auth/claims:
@@ -58,9 +65,27 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ClaimsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           description: Token is missing or invalid
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    BadRequest:
+      description: Malformed request payload.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+            required: [error]
   schemas:
     ValidateRequest:
       type: object
@@ -75,16 +100,18 @@ components:
         valid:
           type: boolean
         role:
-          type: string
-          nullable: true
+          oneOf:
+            - type: string
+            - type: 'null'
       required:
         - valid
     ClaimsResponse:
       type: object
       properties:
         role:
-          type: string
-          nullable: true
+          oneOf:
+            - type: string
+            - type: 'null'
         scopes:
           type: array
           items:

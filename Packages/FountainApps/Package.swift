@@ -21,6 +21,8 @@ let package = Package(
         .executable(name: "local-agent-manager", targets: ["local-agent-manager"]),
         .executable(name: "mock-localagent-server", targets: ["mock-localagent-server"])
         ,
+        .executable(name: "engraver-studio-app", targets: ["engraver-studio-app"]),
+        .library(name: "EngraverStudio", targets: ["EngraverStudio"]),
         .executable(name: "fk", targets: ["fk"])
     ],
     dependencies: [
@@ -37,6 +39,7 @@ let package = Package(
         .package(path: "../FountainServiceKit-ToolServer"),
         .package(path: "../FountainServiceKit-FKOps"),
         .package(path: "../FountainTooling"),
+        .package(path: "../../External/Teatro/Packages/TeatroGUI"),
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
         .package(url: "https://github.com/apple/swift-certificates.git", from: "1.0.0"),
@@ -174,10 +177,18 @@ let package = Package(
         .executableTarget(
             name: "FountainLauncherUI",
             dependencies: [
-                .product(name: "SecretStore", package: "swift-secretstore")
+                .product(name: "SecretStore", package: "swift-secretstore"),
+                "EngraverStudio"
             ],
             path: "Sources/FountainLauncherUI",
             exclude: ["README.md"]
+        ),
+        .executableTarget(
+            name: "engraver-studio-app",
+            dependencies: [
+                "EngraverStudio"
+            ],
+            path: "Sources/engraver-studio-app"
         ),
         .executableTarget(
             name: "local-agent-manager",
@@ -191,6 +202,20 @@ let package = Package(
                 .product(name: "FountainRuntime", package: "FountainCore")
             ]
         ),
+        .target(
+            name: "EngraverStudio",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "FountainRuntime", package: "FountainCore"),
+                .product(name: "FountainAIAdapters", package: "FountainGatewayKit"),
+                .product(name: "LLMGatewayAPI", package: "FountainAPIClients"),
+                .product(name: "ApiClientsCore", package: "FountainAPIClients"),
+                .product(name: "TeatroGUI", package: "TeatroGUI"),
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
+            ],
+            path: "Sources/engraver-studio"
+        ),
         .executableTarget(
             name: "fk-ops-server",
             dependencies: [
@@ -202,6 +227,11 @@ let package = Package(
         .testTarget(
             name: "FountainLauncherUITests",
             dependencies: ["FountainLauncherUI"]
+        ),
+        .testTarget(
+            name: "EngraverStudioTests",
+            dependencies: ["EngraverStudio"],
+            path: "Tests/EngraverStudioTests"
         ),
         .testTarget(
             name: "FountainDevScriptsTests",

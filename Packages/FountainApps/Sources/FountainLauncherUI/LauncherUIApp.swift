@@ -5,6 +5,7 @@ import FoundationNetworking
 #if canImport(SwiftUI) && canImport(AppKit)
 import SwiftUI
 import AppKit
+import EngraverStudio
 
 @main
 struct LauncherUIApp: App {
@@ -17,6 +18,9 @@ struct LauncherUIApp: App {
             CommandMenu("View") {
                 Button("Control") { vm.tab = .control }.keyboardShortcut("1")
                 Button("Environment") { vm.tab = .environment }.keyboardShortcut("2")
+                if #available(macOS 13.0, *) {
+                    Button("Engraver Studio") { vm.tab = .engraver }.keyboardShortcut("3")
+                }
             }
         }
     }
@@ -33,7 +37,7 @@ final class LauncherViewModel: ObservableObject {
     @Published var logText: String = ""
     @Published var errorMessage: String? = nil
     @Published var services: [CPServiceStatus] = []
-    enum Tab { case control, environment }
+    enum Tab { case control, environment, engraver }
     @Published var tab: Tab = .control
 
     private var tailProc: Process?
@@ -177,6 +181,27 @@ final class LauncherViewModel: ObservableObject {
         }
         if let openai = KeychainHelper.read(service: "FountainAI", account: "OPENAI_API_KEY") { env["OPENAI_API_KEY"] = openai }
         if let storeKey = KeychainHelper.read(service: "FountainAI", account: "FOUNTAINSTORE_API_KEY") { env["FOUNTAINSTORE_API_KEY"] = storeKey }
+        if let gateway = UserDefaults.standard.string(forKey: "FountainAI.GATEWAY_URL"), !gateway.isEmpty {
+            env["FOUNTAIN_GATEWAY_URL"] = gateway
+        }
+        if let gatewayToken = KeychainHelper.read(service: "FountainAI", account: "GATEWAY_BEARER"), !gatewayToken.isEmpty {
+            env["GATEWAY_BEARER"] = gatewayToken
+        }
+        if let corpus = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_CORPUS_ID"), !corpus.isEmpty {
+            env["ENGRAVER_CORPUS_ID"] = corpus
+        }
+        if let collection = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_COLLECTION"), !collection.isEmpty {
+            env["ENGRAVER_COLLECTION"] = collection
+        }
+        if let models = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_MODELS"), !models.isEmpty {
+            env["ENGRAVER_MODELS"] = models
+        }
+        if let defaultModel = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_DEFAULT_MODEL"), !defaultModel.isEmpty {
+            env["ENGRAVER_DEFAULT_MODEL"] = defaultModel
+        }
+        if UserDefaults.standard.bool(forKey: "FountainAI.ENGRAVER_DEBUG") {
+            env["ENGRAVER_DEBUG"] = "1"
+        }
         if let repo = repoPath {
             env["FOUNTAINAI_ROOT"] = repo
             env["FOUNTAINAI_SERVICES_DIR"] = URL(fileURLWithPath: repo).appendingPathComponent("dist/bin").path
@@ -204,19 +229,41 @@ final class LauncherViewModel: ObservableObject {
     @Published var openAIKeyInput: String = ""
     @Published var storeURLInput: String = UserDefaults.standard.string(forKey: "FountainAI.FOUNTAINSTORE_URL") ?? ""
     @Published var storeKeyInput: String = ""
+    @Published var gatewayURLInput: String = UserDefaults.standard.string(forKey: "FountainAI.GATEWAY_URL") ?? ""
+    @Published var gatewayTokenInput: String = ""
+    @Published var engraverCorpusInput: String = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_CORPUS_ID") ?? "engraver-space"
+    @Published var engraverCollectionInput: String = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_COLLECTION") ?? "chat-turns"
+    @Published var engraverModelsInput: String = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_MODELS") ?? "gpt-4o-mini,gpt-4o"
+    @Published var engraverDefaultModelInput: String = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_DEFAULT_MODEL") ?? "gpt-4o-mini"
+    @Published var engraverDebugEnabled: Bool = UserDefaults.standard.bool(forKey: "FountainAI.ENGRAVER_DEBUG")
     func saveEnv() {
         if !openAIKeyInput.isEmpty { _ = KeychainHelper.save(service: "FountainAI", account: "OPENAI_API_KEY", secret: openAIKeyInput); openAIKeyInput = "" }
         if !storeKeyInput.isEmpty { _ = KeychainHelper.save(service: "FountainAI", account: "FOUNTAINSTORE_API_KEY", secret: storeKeyInput); storeKeyInput = "" }
         UserDefaults.standard.set(storeURLInput, forKey: "FountainAI.FOUNTAINSTORE_URL")
+        if !gatewayTokenInput.isEmpty { _ = KeychainHelper.save(service: "FountainAI", account: "GATEWAY_BEARER", secret: gatewayTokenInput); gatewayTokenInput = "" }
+        UserDefaults.standard.set(gatewayURLInput, forKey: "FountainAI.GATEWAY_URL")
+        UserDefaults.standard.set(engraverCorpusInput, forKey: "FountainAI.ENGRAVER_CORPUS_ID")
+        UserDefaults.standard.set(engraverCollectionInput, forKey: "FountainAI.ENGRAVER_COLLECTION")
+        UserDefaults.standard.set(engraverModelsInput, forKey: "FountainAI.ENGRAVER_MODELS")
+        UserDefaults.standard.set(engraverDefaultModelInput, forKey: "FountainAI.ENGRAVER_DEFAULT_MODEL")
+        UserDefaults.standard.set(engraverDebugEnabled, forKey: "FountainAI.ENGRAVER_DEBUG")
     }
     func clearOpenAIKey() { _ = KeychainHelper.delete(service: "FountainAI", account: "OPENAI_API_KEY") }
     func clearStoreKey() { _ = KeychainHelper.delete(service: "FountainAI", account: "FOUNTAINSTORE_API_KEY") }
+    func clearGatewayToken() { _ = KeychainHelper.delete(service: "FountainAI", account: "GATEWAY_BEARER") }
     func exportDotEnv() {
         guard let repoPath else { errorMessage = "Select repository first"; return }
         var lines: [String] = []
         if let v = UserDefaults.standard.string(forKey: "FountainAI.FOUNTAINSTORE_URL"), !v.isEmpty { lines.append("FOUNTAINSTORE_URL=\(v)") }
         if let v = KeychainHelper.read(service: "FountainAI", account: "OPENAI_API_KEY"), !v.isEmpty { lines.append("OPENAI_API_KEY=\(v)") }
         if let v = KeychainHelper.read(service: "FountainAI", account: "FOUNTAINSTORE_API_KEY"), !v.isEmpty { lines.append("FOUNTAINSTORE_API_KEY=\(v)") }
+        if let v = UserDefaults.standard.string(forKey: "FountainAI.GATEWAY_URL"), !v.isEmpty { lines.append("FOUNTAIN_GATEWAY_URL=\(v)") }
+        if let v = KeychainHelper.read(service: "FountainAI", account: "GATEWAY_BEARER"), !v.isEmpty { lines.append("GATEWAY_BEARER=\(v)") }
+        if let v = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_CORPUS_ID"), !v.isEmpty { lines.append("ENGRAVER_CORPUS_ID=\(v)") }
+        if let v = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_COLLECTION"), !v.isEmpty { lines.append("ENGRAVER_COLLECTION=\(v)") }
+        if let v = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_MODELS"), !v.isEmpty { lines.append("ENGRAVER_MODELS=\(v)") }
+        if let v = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_DEFAULT_MODEL"), !v.isEmpty { lines.append("ENGRAVER_DEFAULT_MODEL=\(v)") }
+        lines.append("ENGRAVER_DEBUG=\(engraverDebugEnabled ? 1 : 0)")
         let content = lines.joined(separator: "\n") + "\n"
         let url = URL(fileURLWithPath: repoPath).appendingPathComponent(".env")
         do {
@@ -226,6 +273,23 @@ final class LauncherViewModel: ObservableObject {
         } catch {
             presentAlert(title: "Failed to write .env", message: String(describing: error))
         }
+    }
+    func makeEngraverConfiguration() -> EngraverStudioConfiguration {
+        var env = processEnv()
+        if (env["ENGRAVER_CORPUS_ID"] ?? "").isEmpty {
+            env["ENGRAVER_CORPUS_ID"] = "engraver-space"
+        }
+        if (env["ENGRAVER_COLLECTION"] ?? "").isEmpty {
+            env["ENGRAVER_COLLECTION"] = "chat-turns"
+        }
+        if (env["ENGRAVER_MODELS"] ?? "").isEmpty {
+            env["ENGRAVER_MODELS"] = "gpt-4o-mini,gpt-4o"
+        }
+        if (env["ENGRAVER_DEFAULT_MODEL"] ?? "").isEmpty {
+            env["ENGRAVER_DEFAULT_MODEL"] = "gpt-4o-mini"
+        }
+        env["ENGRAVER_DEBUG"] = engraverDebugEnabled ? "1" : "0"
+        return EngraverStudioConfiguration(environment: env)
     }
     private func startStatusPolling() {
         statusTimer?.invalidate()
@@ -295,6 +359,8 @@ final class LauncherViewModel: ObservableObject {
 
 struct ContentView: View {
     @ObservedObject var vm: LauncherViewModel
+    private var minWidth: CGFloat { vm.tab == .engraver ? 960 : 760 }
+    private var minHeight: CGFloat { vm.tab == .engraver ? 620 : 480 }
     var body: some View {
         TabView(selection: $vm.tab) {
             ControlTab(vm: vm)
@@ -303,8 +369,13 @@ struct ContentView: View {
             EnvTab(vm: vm)
                 .tabItem { Label("Environment", systemImage: "key.fill") }
                 .tag(LauncherViewModel.Tab.environment)
+            if #available(macOS 13.0, *) {
+                EngraverTab(vm: vm)
+                    .tabItem { Label("Engraver", systemImage: "wand.and.stars") }
+                    .tag(LauncherViewModel.Tab.engraver)
+            }
         }
-        .frame(minWidth: 760, minHeight: 480)
+        .frame(minWidth: minWidth, minHeight: minHeight)
     }
 }
 
@@ -412,6 +483,17 @@ struct EnvTab: View {
                     HStack { SecureField("OPENAI_API_KEY", text: $vm.openAIKeyInput); Button("Clear") { vm.clearOpenAIKey() } }
                     HStack { TextField("FOUNTAINSTORE_URL", text: $vm.storeURLInput) }
                     HStack { SecureField("FOUNTAINSTORE_API_KEY", text: $vm.storeKeyInput); Button("Clear") { vm.clearStoreKey() } }
+                    Divider()
+                    HStack { TextField("FOUNTAIN_GATEWAY_URL", text: $vm.gatewayURLInput) }
+                    HStack { SecureField("GATEWAY_BEARER", text: $vm.gatewayTokenInput); Button("Clear") { vm.clearGatewayToken() } }
+                    Divider()
+                    HStack { TextField("ENGRAVER_CORPUS_ID", text: $vm.engraverCorpusInput) }
+                    HStack { TextField("ENGRAVER_COLLECTION", text: $vm.engraverCollectionInput) }
+                    HStack { TextField("ENGRAVER_MODELS (comma separated)", text: $vm.engraverModelsInput) }
+                    HStack { TextField("ENGRAVER_DEFAULT_MODEL", text: $vm.engraverDefaultModelInput) }
+                    Toggle("Enable Diagnostics (ENGRAVER_DEBUG)", isOn: $vm.engraverDebugEnabled)
+                        .toggleStyle(.switch)
+                        .help("When enabled the studio records verbose logs and exposes them in the Diagnostics panel.")
                     HStack {
                         Button("Save Env") { vm.saveEnv() }
                         Button("Export .env (0600)") { vm.exportDotEnv() }
@@ -420,7 +502,26 @@ struct EnvTab: View {
                             let hasOA = KeychainHelper.read(service: "FountainAI", account: "OPENAI_API_KEY") != nil
                             let hasFS = KeychainHelper.read(service: "FountainAI", account: "FOUNTAINSTORE_API_KEY") != nil
                             let url = UserDefaults.standard.string(forKey: "FountainAI.FOUNTAINSTORE_URL") ?? ""
-                            let report = "Env Report\nOPENAI_API_KEY=\(hasOA ? "***" : "(missing)")\nFOUNTAINSTORE_URL=\(url.isEmpty ? "(missing)" : url)\nFOUNTAINSTORE_API_KEY=\(hasFS ? "***" : "(missing)")\n"
+                            let gatewayURL = UserDefaults.standard.string(forKey: "FountainAI.GATEWAY_URL") ?? ""
+                            let hasGateway = KeychainHelper.read(service: "FountainAI", account: "GATEWAY_BEARER") != nil
+                            let engraverCorpus = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_CORPUS_ID") ?? ""
+                            let engraverCollection = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_COLLECTION") ?? ""
+                            let engraverModels = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_MODELS") ?? ""
+                            let engraverDefault = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_DEFAULT_MODEL") ?? ""
+                            let engraverDebug = UserDefaults.standard.bool(forKey: "FountainAI.ENGRAVER_DEBUG")
+                            let report = """
+Env Report
+OPENAI_API_KEY=\(hasOA ? "***" : "(missing)")
+FOUNTAINSTORE_URL=\(url.isEmpty ? "(missing)" : url)
+FOUNTAINSTORE_API_KEY=\(hasFS ? "***" : "(missing)")
+FOUNTAIN_GATEWAY_URL=\(gatewayURL.isEmpty ? "(missing)" : gatewayURL)
+GATEWAY_BEARER=\(hasGateway ? "***" : "(missing)")
+ENGRAVER_CORPUS_ID=\(engraverCorpus.isEmpty ? "(missing)" : engraverCorpus)
+ENGRAVER_COLLECTION=\(engraverCollection.isEmpty ? "(missing)" : engraverCollection)
+ENGRAVER_MODELS=\(engraverModels.isEmpty ? "(missing)" : engraverModels)
+ENGRAVER_DEFAULT_MODEL=\(engraverDefault.isEmpty ? "(missing)" : engraverDefault)
+ENGRAVER_DEBUG=\(engraverDebug ? "enabled" : "disabled")
+"""
                             NSPasteboard.general.clearContents(); NSPasteboard.general.setString(report, forType: .string)
                             copied = true
                             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { copied = false }
@@ -434,6 +535,47 @@ struct EnvTab: View {
         .overlay(alignment: .topTrailing) {
             if copied { Text("Copied").padding(6).background(Color.black.opacity(0.7)).foregroundColor(.white).cornerRadius(6).padding() }
         }
+    }
+}
+
+struct EngraverTab: View {
+    @ObservedObject var vm: LauncherViewModel
+
+    var body: some View {
+        if #available(macOS 13.0, *) {
+            let config = vm.makeEngraverConfiguration()
+            EngraverStudioRoot(configuration: config)
+                .id(configIdentity(config))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Engraver Studio requires macOS 13 or newer.")
+                    .font(.headline)
+                Text("Upgrade the operating system to interact with the live token stream UI.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding(24)
+        }
+    }
+
+    @available(macOS 13.0, *)
+    private func configIdentity(_ config: EngraverStudioConfiguration) -> String {
+        let models = config.availableModels.joined(separator: ",")
+        let prompts = config.systemPrompts.joined(separator: "|")
+        let persistenceKey = config.persistenceStore == nil ? "transient" : "persisted"
+        let tokenFlag = config.bearerToken == nil ? "token:none" : "token:set"
+        return [
+            config.gatewayURL.absoluteString,
+            config.corpusId,
+            config.collection,
+            models,
+            config.defaultModel,
+            persistenceKey,
+            tokenFlag,
+            prompts
+        ].joined(separator: "#")
     }
 }
 

@@ -123,6 +123,13 @@ let package = Package(
                 "PublishingFrontend",
                 .product(name: "FountainRuntime", package: "FountainCore")
             ]
+        ),
+        .testTarget(
+            name: "FountainAIAdaptersTests",
+            dependencies: [
+                "FountainAIAdapters"
+            ],
+            path: "Tests/FountainAIAdaptersTests"
         )
     ]
 )

@@ -240,3 +240,12 @@ private extension Data {
         self = data
     }
 }
+
+/// Lightweight abstraction so higher level presenters can be tested by
+/// providing a fake chat client without depending on `URLSession`.
+public protocol GatewayChatStreaming: Sendable {
+    func stream(request: ChatRequest, preferStreaming: Bool) -> AsyncThrowingStream<GatewayChatChunk, Error>
+    func complete(request: ChatRequest) async throws -> GatewayChatResponse
+}
+
+extension GatewayChatClient: GatewayChatStreaming {}

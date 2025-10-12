@@ -131,7 +131,7 @@ struct PersistenceSeeder {
                 "index": String(speech.index)
             ]
             metadata = metadata.filter { !$0.value.isEmpty }
-            let relativePath = "derived/the-four-stars/act-\(speech.act)/scene-\(speech.scene.replacingOccurrences(of: " ", with: "-").lowercased())/\(speech.speaker.lowercased())-\(speech.index)"
+            let relativePath = "derived/the-four-stars/act-\(sanitizePathComponent(speech.act))/scene-\(sanitizePathComponent(speech.scene))/\(sanitizePathComponent(speech.speaker))-\(speech.index)"
             return SeedManifest.FileEntry(
                 path: relativePath,
                 sha256: hasher.sha256(data: data),
@@ -150,7 +150,6 @@ struct PersistenceSeeder {
         try fileManager.createDirectory(at: output, withIntermediateDirectories: true)
         try data.write(to: fileURL, options: .atomic)
     }
-}
 
     private func sanitizePathComponent(_ value: String) -> String {
         let lowered = value.lowercased()
@@ -160,3 +159,4 @@ struct PersistenceSeeder {
         cleaned = cleaned.replacingOccurrences(of: "-+", with: "-", options: .regularExpression)
         return cleaned.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
     }
+}

@@ -16,17 +16,18 @@ public final class LLMGatewayAdapter: LLMService {
 
     public func chat(model: String, messages: [FountainAICore.ChatMessage]) async throws -> String {
         // Map to generated types
-        let msgs: [Components.Schemas.MessageObject] = messages.map { .init(role: $0.role.rawValue, content: $0.content) }
-        let body = Components.Schemas.ChatRequest(model: model, messages: msgs, functions: nil, function_call: nil)
+        typealias ChatComponents = LLMGatewayAPI.Components
+        let msgs: [ChatComponents.Schemas.MessageObject] = messages.map { .init(role: $0.role.rawValue, content: $0.content) }
+        let body = ChatComponents.Schemas.ChatRequest(model: model, messages: msgs, functions: nil, function_call: nil)
         let out = try await client.chatWithObjective(.init(headers: .init(), body: .json(body)))
         switch out {
         case .ok(let ok):
             if case let .json(obj) = ok.body {
                 // Best-effort extract text/answer from arbitrary JSON
-                if let any = try? obj.get(), let dict = any as? [String: Any] {
-                    if let s = dict["answer"] as? String { return s }
-                    if let s = dict["text"] as? String { return s }
-                    return String(describing: dict)
+                if let answer = obj.value["answer"] as? String { return answer }
+                if let text = obj.value["text"] as? String { return text }
+                if let data = try? JSONEncoder().encode(obj), let json = String(data: data, encoding: .utf8) {
+                    return json
                 }
                 return "{}"
             }

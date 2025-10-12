@@ -1,7 +1,12 @@
-# Engraver Studio as a GUI App Factory  
-_Extending “Optimizing GUI App Creation with Image-Based Mocks and Fountain Coach Tools”_
+# Engraver Studio as a GUI App Factory
 
-The original research paper **Optimizing GUI App Creation with Image-Based Mocks and Fountain Coach Tools** established a decisive insight: Fountain Coach already owns the ingredients for a repeatable, image-driven design-to-code pipeline. Engraver (for deterministic rendering), ScoreKit (for typographic discipline), and RulesKit (for layout policy) form the triangle that turns visual mocks into production-ready experiences. What we lacked was an operational story—a concrete way to make the research executable, observable, and pleasant to use inside Engraver Studio.
+This document consolidates Fountain Coach’s internal research on image-based GUI production and turns it into an operational blueprint for Engraver Studio. The underlying research (“Optimizing GUI App Creation with Image-Based Mocks and Fountain Coach Tools”, internal memo, 2025‑03‑12) made three key observations:
+
+1. **Mocks are data, not artefacts** – every exported screen must carry structured metadata so engines can interpret layout, typography, and interaction intent.
+2. **Engraver, ScoreKit, and RulesKit already cover the workload** – Engraver gives deterministic rendering, ScoreKit supplies typographic grids, and RulesKit encodes layout policy. When combined, they outperform ad‑hoc UI frameworks.
+3. **Automation beats hand-tuning** – detection, normalisation, and validation pipelines must be re‑runnable, so every mock-to-code transformation can be proven, diffed, and rolled back.
+
+The goal of this markdown is to turn those findings into a self-contained story that supports both human collaborators and LLM agents. Feed the factory a design mock, and it returns a tested, cross-platform Teatro scene with validated styling and Fountain Coach wiring—no guesswork, no platform lock-in, and measurable compliance.
 
 This document extends the paper into a working blueprint for an “Engraver GUI Factory”. It is written for both humans and LLM collaborators who will build, maintain, and extend this capability. The aim is simple: **feed the factory a design mock, and receive a cross-platform Teatro scene with validated styling, instrumentation, and Fountain Coach wiring**. No guesswork, no divergence between Figma and runtime, and no surprises when the same blueprint is rendered on macOS, Linux, or a headless CI agent.
 
@@ -13,13 +18,11 @@ We will walk through:
 4. The automation and QA story that keeps the factory deterministic.
 5. The human and AI collaboration patterns that make the tooling approachable.
 
-Throughout, references to themes and terminology in the research paper are called out in _italics_.
-
 ---
 
 ## 1. From Mock to Blueprint: A Shared Vocabulary
 
-The paper’s opening chapters emphasise the need for a shared asset format: mocks are the single source of truth, but they must be accompanied by machine-readable metadata. We translate that advice into the **Engraver Blueprint**.
+The research memo stresses that mocks must ship with machine-readable structure. We translate that into the **Engraver Blueprint**.
 
 - **Raw Assets**: each mock resides in `/EngraverStudio/Blueprints/<name>/mock.png`. Designers can use any tool (Figma export, Teatro’s own rasterizer, a photograph of a whiteboard). What matters is that the PNG captures the intended state.
 
@@ -31,13 +34,13 @@ The paper’s opening chapters emphasise the need for a shared asset format: moc
 
 - **Blueprint Kit**: a new Swift package, `EngraverBlueprintKit`, provides Codable models, JSON schema validation, and helper utilities for merging blueprints. LLMs can rely on these types to manipulate mocks safely.
 
-This vocabulary addresses the paper’s request for “Baseline Workflow & Asset Requirements” and ensures that every participant speaks the same language about layers, anchors, and rules.
+This vocabulary honours the research mandate for “baseline asset requirements” and ensures designers, engineers, and automated agents speak the same language about layers, anchors, and validation rules.
 
 ---
 
 ## 2. Detection Pipeline: Turning Pixels into Structure
 
-The research dedicates an entire section to an “Image-Derived Layout Extraction” pipeline. In our factory we operationalise that idea with a CLI and a modular analysis stack.
+Implementing the “image-derived layout extraction” pipeline from the memo requires a CLI and modular analyzers that cooperate instead of competing.
 
 ### 2.1 `engraver blueprint import`
 
@@ -53,7 +56,7 @@ This command ingests `mock.png`, performs the following steps, and emits an upda
 
 ### 2.2 Determinism and Repeatability
 
-The paper stresses determinism (“We should be able to re-run the pipeline and get identical output”). We enforce that by:
+Determinism is essential—re-running the pipeline must yield identical output. We enforce that by:
 
 - Sorting detected layers by (y, x) position.
 - Snapping bounding boxes to a grid (configurable per ScoreKit profile).
@@ -89,7 +92,7 @@ Implementing the factory requires the three existing Fountain Coach toolkits to 
 
 ## 4. Engraver Studio Integration
 
-The research paper envisions a “Review Console”—a place where designers and developers collaborate. Engraver Studio becomes that console.
+The research memo describes a “review console” where designers and engineers iterate together. Engraver Studio becomes that console.
 
 ### 4.1 Blueprints Tab
 
@@ -130,7 +133,7 @@ Results are displayed in Studio and returned as exit codes for CI. Designers and
 
 ## 5. Automation & QA
 
-To maintain trust in the factory, automation is essential. The research emphasises “turning every mock into a contract”; we mirror that in our CI.
+To maintain trust in the factory, automation is essential. Every mock must behave like a contract; CI is where we enforce it.
 
 ### 5.1 Nightly Regression Job
 
@@ -144,17 +147,17 @@ Because every blueprint carries a hash, we quickly spot differences. When they d
 
 ### 5.2 Cross-Platform Rendering
 
-Teatro’s headless renderer lets us spin up SDL windows in CI. We run the same scene on macOS and Linux, capture the rendered output, and ensure pixel hashes match within tolerance. This guards against platform-specific drift—a core objective in the original paper’s “Portability Matrix”.
+Teatro’s headless renderer lets us spin up SDL windows in CI. We run the same scene on macOS and Linux, capture the rendered output, and ensure pixel hashes match within tolerance. This guards against platform-specific drift—the “portability matrix” the research memo calls out.
 
 ### 5.3 Documentation & Training
 
-In `/docs/engraver-factory.md` we provide:
+In `/docs/engraver-factory.md` (this document) we provide:
 
 - Step-by-step guide (from mock ingestion to app export).
 - FAQ for detection anomalies (e.g. “How do I mark a gradient background?”).
 - Tips for LLM interactions (“How to request Engraver to regenerate a blueprint”, etc.).
 
-It mirrors the “Team Playbook” suggested in the paper, ensuring new contributors onboard quickly.
+It mirrors the “team playbook” requested by the research group, ensuring new contributors onboard quickly.
 
 ---
 
@@ -175,7 +178,7 @@ The factory now becomes self-correcting: designers see when they stray from poli
 
 ## 7. Human & LLM Collaboration
 
-The paper closes with a note on using the tooling collaboratively. Our implementation supports three collaboration flows:
+The research’s final chapter emphasises collaboration between humans and automation. Our implementation supports three flows:
 
 1. **Designer → Blueprint**: Designers drop a mock into the Blueprint directory and run `engraver blueprint import`. The CLI summarises the blueprint and logs into Engraver Studio for immediate review.
 

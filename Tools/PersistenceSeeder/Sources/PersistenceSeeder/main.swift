@@ -10,6 +10,7 @@ struct PersistenceSeederCLI {
         var analyzeOnly = false
         var persistURLString: String?
         var persistAPIKey: String?
+        var persistSecretRef: (service: String, account: String)?
 
         var idx = 1
         let args = CommandLine.arguments
@@ -43,6 +44,16 @@ struct PersistenceSeederCLI {
                 guard idx + 1 < args.count else { throw CLIError.invalidArguments("--persist-api-key requires a value") }
                 persistAPIKey = args[idx + 1]
                 idx += 2
+            case "--persist-api-key-secret":
+                guard idx + 1 < args.count else { throw CLIError.invalidArguments("--persist-api-key-secret requires a value") }
+                let token = args[idx + 1]
+                guard let separator = token.firstIndex(of: ":") else {
+                    throw CLIError.invalidArguments("--persist-api-key-secret expects service:account")
+                }
+                let service = String(token[..<separator])
+                let account = String(token[token.index(after: separator)...])
+                persistSecretRef = (service: service, account: account)
+                idx += 2
             case "-h", "--help":
                 printUsage()
                 return
@@ -73,6 +84,14 @@ struct PersistenceSeederCLI {
                 try printer.print(result.manifest)
                 if let persistURLString,
                    let baseURL = URL(string: persistURLString) {
+                    if let secretRef = persistSecretRef, persistAPIKey == nil {
+                        do {
+                            persistAPIKey = try SecretLoader.load(service: secretRef.service, account: secretRef.account)
+                        } catch {
+                            fputs("ERROR: failed to load persist secret (\(error))\n", stderr)
+                            exit(1)
+                        }
+                    }
                     let uploader = PersistUploader(baseURL: baseURL, apiKey: persistAPIKey)
                     do {
                         try await uploader.apply(manifest: result.manifest, speeches: result.speeches)
@@ -101,8 +120,9 @@ struct PersistenceSeederCLI {
           --corpus <id>            Target corpus ID (default: the-four-stars).
           --source <url>           Source repository URL for manifest metadata.
           --out <dir>              Output directory for seed-manifest.json (default: ./.fountain/seeding/the-four-stars).
-          --persist-url <url>      Optional PersistService base URL; triggers ingestion when provided.
-          --persist-api-key <key>  Optional API key attached as X-API-Key for PersistService.
+          --persist-url <url>              Optional PersistService base URL; triggers ingestion when provided.
+          --persist-api-key <key>          Optional API key attached as X-API-Key for PersistService.
+          --persist-api-key-secret <ref>   Fetch API key from the local secret store; format service:account.
         """)
     }
 

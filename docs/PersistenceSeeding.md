@@ -55,6 +55,7 @@ swift run --package-path Tools/PersistenceSeeder \  persistence-seeder \  --repo
 ```
 
 Output: `.fountain/seeding/the-four-stars/seed-manifest.json`
+> Tip: Store the Persist API key securely using the system secret store (Keychain on macOS, SecretService on Linux) and invoke the seeder with `--persist-api-key-secret service:account` to retrieve it at runtime.
 
 To ingest directly into the running Persist service during seeding, provide `--persist-url` (and optionally `--persist-api-key`).
 

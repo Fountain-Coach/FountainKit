@@ -52,6 +52,9 @@ swift run --package-path Tools/PersistenceSeeder \  persistence-seeder --repo /p
 
 # Generate seed manifest with derived speeches
 swift run --package-path Tools/PersistenceSeeder \  persistence-seeder \  --repo /path/to/the-four-stars \  --corpus the-four-stars \  --source https://github.com/Fountain-Coach/the-four-stars \  --out .fountain/seeding/the-four-stars
+
+# Print a concise summary instead of the full manifest
+swift run --package-path Tools/PersistenceSeeder \  persistence-seeder \  --repo /path/to/the-four-stars \  --summary
 ```
 
 Output: `.fountain/seeding/the-four-stars/seed-manifest.json`

@@ -8,6 +8,7 @@ struct PersistenceSeederCLI {
         var sourceRepo = "https://github.com/Fountain-Coach/the-four-stars"
         var outputDir = "./.fountain/seeding/the-four-stars"
         var analyzeOnly = false
+        var summaryOnly = false
         var persistURLString: String?
         var persistAPIKey: String?
         var persistSecretRef: (service: String, account: String)?
@@ -23,6 +24,9 @@ struct PersistenceSeederCLI {
                 idx += 2
             case "--analyze":
                 analyzeOnly = true
+                idx += 1
+            case "--summary":
+                summaryOnly = true
                 idx += 1
             case "--corpus":
                 guard idx + 1 < args.count else { throw CLIError.invalidArguments("--corpus requires a value") }
@@ -81,7 +85,12 @@ struct PersistenceSeederCLI {
             let seeder = PersistenceSeeder()
             do {
                 let result = try seeder.seed(repoPath: repoPath, corpusId: corpusId, sourceRepo: sourceRepo, output: URL(fileURLWithPath: outputDir, isDirectory: true))
-                try printer.print(result.manifest)
+                if summaryOnly {
+                    let formatter = ManifestSummaryFormatter()
+                    print(formatter.format(result: result))
+                } else {
+                    try printer.print(result.manifest)
+                }
                 if let persistURLString,
                    let baseURL = URL(string: persistURLString) {
                     if let secretRef = persistSecretRef, persistAPIKey == nil {
@@ -120,6 +129,7 @@ struct PersistenceSeederCLI {
           --corpus <id>            Target corpus ID (default: the-four-stars).
           --source <url>           Source repository URL for manifest metadata.
           --out <dir>              Output directory for seed-manifest.json (default: ./.fountain/seeding/the-four-stars).
+          --summary                Print a concise manifest summary instead of the full JSON.
           --persist-url <url>              Optional PersistService base URL; triggers ingestion when provided.
           --persist-api-key <key>          Optional API key attached as X-API-Key for PersistService.
           --persist-api-key-secret <ref>   Fetch API key from the local secret store; format service:account.

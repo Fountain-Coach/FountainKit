@@ -42,9 +42,6 @@ tags:
   - name: Admin
     description: Health, version, and runtime information.
 
-security:
-  - ApiKeyAuth: []
-
 paths:
   /v1/browse:
     post:

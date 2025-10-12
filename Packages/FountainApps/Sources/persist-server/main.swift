@@ -3,6 +3,7 @@ import Dispatch
 import FountainRuntime
 import FountainStoreClient
 import PersistService
+import SpeechAtlasService
 import LauncherSignature
 
 verifyLauncherSignature()
@@ -21,6 +22,8 @@ Task {
     let transport = NIOOpenAPIServerTransport(fallback: fallback)
     let api = PersistOpenAPI(persistence: svc)
     try? api.registerHandlers(on: transport, serverURL: URL(string: "/")!)
+    let speechAtlas = SpeechAtlasHandlers(store: svc)
+    try? speechAtlas.registerHandlers(on: transport, serverURL: URL(string: "/arcs/the-four-stars")!)
     let server = NIOHTTPServer(kernel: transport.asKernel())
     do {
         _ = try await server.start(port: port)

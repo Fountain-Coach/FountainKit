@@ -130,6 +130,7 @@ let package = Package(
                 .product(name: "FountainRuntime", package: "FountainCore"),
                 .product(name: "FountainStoreClient", package: "FountainCore"),
                 .product(name: "PersistService", package: "FountainServiceKit-Persist"),
+                .product(name: "SpeechAtlasService", package: "FountainServiceKit-Persist"),
                 "Yams",
                 .product(name: "LauncherSignature", package: "FountainCore")
             ],

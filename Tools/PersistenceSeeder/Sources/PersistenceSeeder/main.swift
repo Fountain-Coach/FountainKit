@@ -12,6 +12,7 @@ struct PersistenceSeederCLI {
         var persistURLString: String?
         var persistAPIKey: String?
         var persistSecretRef: (service: String, account: String)?
+        var uploadLimit: Int?
 
         var idx = 1
         let args = CommandLine.arguments
@@ -58,6 +59,13 @@ struct PersistenceSeederCLI {
                 let account = String(token[token.index(after: separator)...])
                 persistSecretRef = (service: service, account: account)
                 idx += 2
+            case "--upload-limit":
+                guard idx + 1 < args.count else { throw CLIError.invalidArguments("--upload-limit requires a numeric value") }
+                guard let parsed = Int(args[idx + 1]), parsed > 0 else {
+                    throw CLIError.invalidArguments("--upload-limit expects a positive integer")
+                }
+                uploadLimit = parsed
+                idx += 2
             case "-h", "--help":
                 printUsage()
                 return
@@ -103,7 +111,7 @@ struct PersistenceSeederCLI {
                     }
                     let uploader = PersistUploader(baseURL: baseURL, apiKey: persistAPIKey)
                     do {
-                        try await uploader.apply(manifest: result.manifest, speeches: result.speeches)
+                        try await uploader.apply(manifest: result.manifest, speeches: result.speeches, uploadLimit: uploadLimit)
                     } catch {
                         fputs("UPLOAD ERROR: \(error)\n", stderr)
                         exit(1)
@@ -133,6 +141,7 @@ struct PersistenceSeederCLI {
           --persist-url <url>              Optional PersistService base URL; triggers ingestion when provided.
           --persist-api-key <key>          Optional API key attached as X-API-Key for PersistService.
           --persist-api-key-secret <ref>   Fetch API key from the local secret store; format service:account.
+          --upload-limit <n>               Limit the number of derived speeches uploaded when --persist-url is set.
         """)
     }
 

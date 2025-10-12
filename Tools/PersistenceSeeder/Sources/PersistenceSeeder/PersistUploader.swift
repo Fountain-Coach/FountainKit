@@ -8,9 +8,15 @@ struct PersistUploader {
         self.client = PersistServiceClient(baseURL: baseURL, apiKey: apiKey)
     }
 
-    func apply(manifest: SeedManifest, speeches: [TheFourStarsParser.Speech]) async throws {
+    func apply(manifest: SeedManifest, speeches: [TheFourStarsParser.Speech], uploadLimit: Int? = nil) async throws {
         try await ensureCorpus(manifest.corpusId)
-        try await uploadPagesAndSegments(corpusId: manifest.corpusId, speeches: speeches)
+        let payloadSpeeches: [TheFourStarsParser.Speech]
+        if let uploadLimit, uploadLimit > 0 {
+            payloadSpeeches = Array(speeches.prefix(uploadLimit))
+        } else {
+            payloadSpeeches = speeches
+        }
+        try await uploadPagesAndSegments(corpusId: manifest.corpusId, speeches: payloadSpeeches)
     }
 
     private func ensureCorpus(_ corpusId: String) async throws {

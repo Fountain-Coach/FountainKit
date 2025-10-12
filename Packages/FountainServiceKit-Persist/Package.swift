@@ -32,6 +32,7 @@ let package = Package(
         .target(
             name: "SpeechAtlasService",
             dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
             ],
             plugins: [
@@ -43,6 +44,7 @@ let package = Package(
             name: "PersistServiceTests",
             dependencies: [
                 "PersistService",
+                "SpeechAtlasService",
                 .product(name: "FountainStoreClient", package: "FountainCore")
             ],
             path: "Tests/PersistServiceTests"

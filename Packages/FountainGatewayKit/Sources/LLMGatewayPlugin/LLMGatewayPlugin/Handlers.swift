@@ -23,9 +23,8 @@ public struct Handlers: Sendable {
     private let session: URLSession
     private let metrics: MetricsRecorder
 
-    public init(environment: [String: String] = ProcessInfo.processInfo.environment,
-                session: URLSession = .shared) {
-        self.session = session
+    public init(environment: [String: String] = ProcessInfo.processInfo.environment) {
+        let defaultSession = URLSession.shared
         if let backendName = environment["LLM_BACKEND"]?.lowercased(),
            (backendName == "openai" || backendName == "open-ai"),
            let apiKey = environment["OPENAI_API_KEY"], !apiKey.isEmpty {
@@ -33,15 +32,28 @@ public struct Handlers: Sendable {
             let model = environment["OPENAI_MODEL"] ?? "gpt-4o-mini"
             let temperature = Double(environment["OPENAI_TEMPERATURE"] ?? "")
             let topP = Double(environment["OPENAI_TOP_P"] ?? "")
-            self.backend = .openAI(.init(apiKey: apiKey, endpoint: endpoint, model: model, temperature: temperature, topP: topP))
+            let timeout = TimeInterval(Double(environment["OPENAI_TIMEOUT_SECONDS"] ?? "") ?? 20)
+            let configuration = URLSessionConfiguration.default
+            configuration.timeoutIntervalForRequest = timeout
+            configuration.timeoutIntervalForResource = timeout + 10
+            configuration.httpAdditionalHeaders = ["Accept": "application/json"]
+            let openAISession = URLSession(configuration: configuration)
+            self.session = openAISession
+            self.backend = .openAI(.init(apiKey: apiKey,
+                                         endpoint: endpoint,
+                                         model: model,
+                                         temperature: temperature,
+                                         topP: topP,
+                                         timeout: timeout))
         } else {
             self.backend = .local(LocalAgentClient())
+            self.session = defaultSession
         }
         self.metrics = MetricsRecorder(backendLabel: backend.label)
     }
 
     public init() {
-        self.init(environment: ProcessInfo.processInfo.environment, session: .shared)
+        self.init(environment: ProcessInfo.processInfo.environment)
     }
 
     /// Forwards chat requests to the configured backend.
@@ -135,7 +147,9 @@ public struct Handlers: Sendable {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
         req.httpBody = try JSONSerialization.data(withJSONObject: payload, options: [])
+        req.timeoutInterval = config.timeout
 
+        log("[llm] \(backend.label) request started model=\(config.model)")
         let (data, resp) = try await session.data(for: req)
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 500
 
@@ -184,6 +198,7 @@ public struct Handlers: Sendable {
     }
 
     private func makeErrorResponse(status: Int = 502, message: String, raw: String? = nil) -> HTTPResponse {
+        log("[llm] \(backend.label) error status=\(status) message=\(message)")
         var payload: [String: Any] = [
             "error": message,
             "provider": backend.label,
@@ -201,6 +216,7 @@ private struct OpenAIConfig: Sendable {
     let model: String
     let temperature: Double?
     let topP: Double?
+    let timeout: TimeInterval
 }
 
 private actor MetricsRecorder {
@@ -226,6 +242,11 @@ private actor MetricsRecorder {
     func snapshot() -> (label: String, successes: Int, failures: Int, lastError: String?) {
         (label: label, successes: successes, failures: failures, lastError: lastError)
     }
+}
+
+@inline(__always)
+private func log(_ message: String) {
+    FileHandle.standardError.write(Data((message + "\n").utf8))
 }
 
 // MARK: - LocalAgent configuration and client

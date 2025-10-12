@@ -22,7 +22,7 @@ struct PersistenceSeeder {
     let parser = MarkdownParser()
     let hasher = FileHasher()
 
-    func seed(repoPath: String, corpusId: String, sourceRepo: String, output: URL) throws -> SeedManifest {
+    func seed(repoPath: String, corpusId: String, sourceRepo: String, output: URL) throws -> SeedResult {
         let repoURL = URL(fileURLWithPath: repoPath, isDirectory: true)
         var isDir: ObjCBool = false
         guard fileManager.fileExists(atPath: repoURL.path, isDirectory: &isDir), isDir.boolValue else {
@@ -34,8 +34,8 @@ struct PersistenceSeeder {
         let annotations = try collectJSONEntries(root: repoURL, subdirectory: "annotations")
         let audio = try collectBinaryEntries(root: repoURL, subdirectory: "audio")
 
-        let derivedSpeeches = try collectTheFourStarsSpeeches(root: repoURL)
-        documents.append(contentsOf: derivedSpeeches)
+        let derived = try collectTheFourStarsSpeeches(root: repoURL)
+        documents.append(contentsOf: derived.entries)
 
         let manifest = SeedManifest(
             corpusId: corpusId,
@@ -48,7 +48,7 @@ struct PersistenceSeeder {
         )
 
         try writeManifest(manifest, to: output)
-        return manifest
+        return SeedResult(manifest: manifest, speeches: derived.speeches)
     }
 
     private func collectMarkdownEntries(root: URL, subdirectory: String, extraMetadata: [String:String]) throws -> [SeedManifest.FileEntry] {
@@ -114,12 +114,12 @@ struct PersistenceSeeder {
         return entries.sorted { $0.path < $1.path }
     }
 
-    private func collectTheFourStarsSpeeches(root: URL) throws -> [SeedManifest.FileEntry] {
+    private func collectTheFourStarsSpeeches(root: URL) throws -> (entries: [SeedManifest.FileEntry], speeches: [TheFourStarsParser.Speech]) {
         let playURL = root.appendingPathComponent("the four stars.txt")
-        guard FileManager.default.fileExists(atPath: playURL.path) else { return [] }
+        guard FileManager.default.fileExists(atPath: playURL.path) else { return ([], []) }
         let parser = TheFourStarsParser()
         let speeches = try parser.parse(fileURL: playURL)
-        return speeches.map { speech in
+        let entries = speeches.map { speech -> SeedManifest.FileEntry in
             let text = speech.lines.joined(separator: "\n")
             let data = text.data(using: .utf8) ?? Data()
             var metadata: [String:String] = [
@@ -139,6 +139,7 @@ struct PersistenceSeeder {
                 metadata: metadata
             )
         }
+        return (entries, speeches)
     }
 
     private func writeManifest(_ manifest: SeedManifest, to output: URL) throws {

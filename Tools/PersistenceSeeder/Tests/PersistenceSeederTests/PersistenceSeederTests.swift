@@ -47,7 +47,8 @@ final class PersistenceSeederTests: XCTestCase {
 
         let seeder = PersistenceSeeder()
         let outputDir = tempDir.appendingPathComponent("out")
-        let manifest = try seeder.seed(repoPath: tempDir.path, corpusId: "test-corpus", sourceRepo: "https://example.com/repo", output: outputDir)
+        let result = try seeder.seed(repoPath: tempDir.path, corpusId: "test-corpus", sourceRepo: "https://example.com/repo", output: outputDir)
+        let manifest = result.manifest
 
         XCTAssertEqual(manifest.corpusId, "test-corpus")
         XCTAssertGreaterThanOrEqual(manifest.documents.count, 2)
@@ -57,5 +58,6 @@ final class PersistenceSeederTests: XCTestCase {
 
         let manifestURL = outputDir.appendingPathComponent("seed-manifest.json")
         XCTAssertTrue(FileManager.default.fileExists(atPath: manifestURL.path))
+        XCTAssertFalse(result.speeches.isEmpty)
     }
 }

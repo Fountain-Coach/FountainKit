@@ -16,3 +16,8 @@ struct SeedManifest: Codable, Equatable {
     let annotations: [FileEntry]
     let audio: [FileEntry]
 }
+
+struct SeedResult {
+    let manifest: SeedManifest
+    let speeches: [TheFourStarsParser.Speech]
+}

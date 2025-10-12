@@ -11,13 +11,15 @@ let package = Package(
         .executable(name: "persistence-seeder", targets: ["PersistenceSeeder"])
     ],
     dependencies: [
-        .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.1")
+        .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.1"),
+        .package(path: "../../Packages/FountainAPIClients")
     ],
     targets: [
         .executableTarget(
             name: "PersistenceSeeder",
             dependencies: [
-                .product(name: "Yams", package: "Yams")
+        .product(name: "Yams", package: "Yams"),
+        .product(name: "ApiClientsCore", package: "FountainAPIClients")
             ],
             path: "Sources",
             swiftSettings: [

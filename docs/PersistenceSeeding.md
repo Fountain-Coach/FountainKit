@@ -56,6 +56,8 @@ swift run --package-path Tools/PersistenceSeeder \  persistence-seeder \  --repo
 
 Output: `.fountain/seeding/the-four-stars/seed-manifest.json`
 
+To ingest directly into the running Persist service during seeding, provide `--persist-url` (and optionally `--persist-api-key`).
+
 ## Idempotency & Replay
 
 - Use deterministic IDs derived from file paths or explicit front-matter IDs.

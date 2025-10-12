@@ -2,12 +2,14 @@ import Foundation
 
 @main
 struct PersistenceSeederCLI {
-    static func main() throws {
+    static func main() async throws {
         var repoPath: String?
         var corpusId = "the-four-stars"
         var sourceRepo = "https://github.com/Fountain-Coach/the-four-stars"
         var outputDir = "./.fountain/seeding/the-four-stars"
         var analyzeOnly = false
+        var persistURLString: String?
+        var persistAPIKey: String?
 
         var idx = 1
         let args = CommandLine.arguments
@@ -32,6 +34,14 @@ struct PersistenceSeederCLI {
             case "--out":
                 guard idx + 1 < args.count else { throw CLIError.invalidArguments("--out requires a value") }
                 outputDir = args[idx + 1]
+                idx += 2
+            case "--persist-url":
+                guard idx + 1 < args.count else { throw CLIError.invalidArguments("--persist-url requires a value") }
+                persistURLString = args[idx + 1]
+                idx += 2
+            case "--persist-api-key":
+                guard idx + 1 < args.count else { throw CLIError.invalidArguments("--persist-api-key requires a value") }
+                persistAPIKey = args[idx + 1]
                 idx += 2
             case "-h", "--help":
                 printUsage()
@@ -59,8 +69,18 @@ struct PersistenceSeederCLI {
         } else {
             let seeder = PersistenceSeeder()
             do {
-                let manifest = try seeder.seed(repoPath: repoPath, corpusId: corpusId, sourceRepo: sourceRepo, output: URL(fileURLWithPath: outputDir, isDirectory: true))
-                try printer.print(manifest)
+                let result = try seeder.seed(repoPath: repoPath, corpusId: corpusId, sourceRepo: sourceRepo, output: URL(fileURLWithPath: outputDir, isDirectory: true))
+                try printer.print(result.manifest)
+                if let persistURLString,
+                   let baseURL = URL(string: persistURLString) {
+                    let uploader = PersistUploader(baseURL: baseURL, apiKey: persistAPIKey)
+                    do {
+                        try await uploader.apply(manifest: result.manifest, speeches: result.speeches)
+                    } catch {
+                        fputs("UPLOAD ERROR: \(error)\n", stderr)
+                        exit(1)
+                    }
+                }
             } catch {
                 fputs("ERROR: \(error)\n", stderr)
                 exit(1)
@@ -76,11 +96,13 @@ struct PersistenceSeederCLI {
           persistence-seeder --repo <path> [--analyze] [--corpus <id>] [--source <url>] [--out <dir>]
 
         Options:
-          --repo <path>    Local path to the cloned 'the-four-stars' repository.
-          --analyze        Print a repository profile instead of generating the seed manifest.
-          --corpus <id>    Target corpus ID (default: the-four-stars).
-          --source <url>   Source repository URL for manifest metadata.
-          --out <dir>      Output directory for seed-manifest.json (default: ./.fountain/seeding/the-four-stars).
+          --repo <path>            Local path to the cloned 'the-four-stars' repository.
+          --analyze                Print a repository profile instead of generating the seed manifest.
+          --corpus <id>            Target corpus ID (default: the-four-stars).
+          --source <url>           Source repository URL for manifest metadata.
+          --out <dir>              Output directory for seed-manifest.json (default: ./.fountain/seeding/the-four-stars).
+          --persist-url <url>      Optional PersistService base URL; triggers ingestion when provided.
+          --persist-api-key <key>  Optional API key attached as X-API-Key for PersistService.
         """)
     }
 

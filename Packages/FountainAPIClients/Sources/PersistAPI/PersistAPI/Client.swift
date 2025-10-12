@@ -67,6 +67,38 @@ public struct ListFunctionsResponse: Codable, Sendable, Equatable {
     public var functions: [FunctionModel]
 }
 
+public struct Page: Codable, Sendable, Equatable {
+    public var corpusId: String
+    public var pageId: String
+    public var url: String
+    public var host: String
+    public var title: String
+
+    public init(corpusId: String, pageId: String, url: String, host: String, title: String) {
+        self.corpusId = corpusId
+        self.pageId = pageId
+        self.url = url
+        self.host = host
+        self.title = title
+    }
+}
+
+public struct Segment: Codable, Sendable, Equatable {
+    public var corpusId: String
+    public var segmentId: String
+    public var pageId: String
+    public var kind: String
+    public var text: String
+
+    public init(corpusId: String, segmentId: String, pageId: String, kind: String, text: String) {
+        self.corpusId = corpusId
+        self.segmentId = segmentId
+        self.pageId = pageId
+        self.kind = kind
+        self.text = text
+    }
+}
+
 public actor PersistClient {
     private let http: RESTClient
 
@@ -126,6 +158,20 @@ public actor PersistClient {
     public func addBaseline(corpusId: String, baseline: Baseline) async throws -> SuccessResponse {
         guard let url = http.buildURL(path: "/corpora/\(corpusId)/baselines") else { throw APIError.invalidURL }
         let body = try JSONEncoder().encode(baseline)
+        let resp = try await http.send(APIRequest(method: .POST, url: url, headers: ["Content-Type": "application/json"], body: body))
+        return try JSONDecoder().decode(SuccessResponse.self, from: resp.data)
+    }
+
+    public func addPage(corpusId: String, page: Page) async throws -> SuccessResponse {
+        guard let url = http.buildURL(path: "/corpora/\(corpusId)/pages") else { throw APIError.invalidURL }
+        let body = try JSONEncoder().encode(page)
+        let resp = try await http.send(APIRequest(method: .POST, url: url, headers: ["Content-Type": "application/json"], body: body))
+        return try JSONDecoder().decode(SuccessResponse.self, from: resp.data)
+    }
+
+    public func addSegment(corpusId: String, segment: Segment) async throws -> SuccessResponse {
+        guard let url = http.buildURL(path: "/corpora/\(corpusId)/segments") else { throw APIError.invalidURL }
+        let body = try JSONEncoder().encode(segment)
         let resp = try await http.send(APIRequest(method: .POST, url: url, headers: ["Content-Type": "application/json"], body: body))
         return try JSONDecoder().decode(SuccessResponse.self, from: resp.data)
     }

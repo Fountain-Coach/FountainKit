@@ -7,7 +7,8 @@ let package = Package(
         .macOS(.v13)
     ],
     products: [
-        .library(name: "PersistService", targets: ["PersistService"])
+        .library(name: "PersistService", targets: ["PersistService"]),
+        .library(name: "SpeechAtlasService", targets: ["SpeechAtlasService"])
     ],
     dependencies: [
         .package(path: "../FountainCore"),
@@ -21,6 +22,16 @@ let package = Package(
             dependencies: [
                 .product(name: "FountainRuntime", package: "FountainCore"),
                 .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
+            ],
+            plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
+        .target(
+            name: "SpeechAtlasService",
+            dependencies: [
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
             ],
             plugins: [

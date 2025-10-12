@@ -1,0 +1,345 @@
+openapi: 3.1.0
+info:
+  title: The Four Stars – Speech Atlas
+  version: 0.1.0
+  summary: Speech-centric surfaces derived from the seeded Four Stars corpus.
+  license:
+    name: FountainAI Internal
+    url: https://fountain.coach/licenses/internal
+  x-fountain:
+    corpusId: the-four-stars
+    arcSpec: Packages/FountainSpecCuration/arcspec/the-four-stars/speech-atlas.arc.yml
+servers:
+  - url: https://persist.internal.fountainkit.dev/arcs/the-four-stars
+    description: Persist service namespace for the Four Stars speech atlas.
+security:
+  - ApiKeyAuth: []
+paths:
+  /speeches/list:
+    post:
+      tags: [Speeches]
+      summary: List speeches filtered by act, scene, or speaker.
+      description: Returns a paged list of speeches derived from the Four Stars corpus with optional metadata filters.
+      operationId: speechesList
+      x-fountain.visibility: internal
+      x-fountain.reason: Provide catalogue browsing for studios synthesising Four Stars speeches.
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpeechesListRequest'
+      responses:
+        '200':
+          description: Successful response containing the requested page of speeches.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpeechesListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /speeches/detail:
+    post:
+      tags: [Speeches]
+      summary: Return a single speech with surrounding context.
+      description: Fetches the canonical speech text and optionally neighbouring speeches for playback or analysis.
+      operationId: speechesDetail
+      x-fountain.visibility: internal
+      x-fountain.reason: Retrieve canonical speech text and context for ArcSpec studios.
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpeechesDetailRequest'
+      responses:
+        '200':
+          description: Successful response containing the requested speech.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpeechesDetailResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /speeches/summary:
+    post:
+      tags: [Speeches]
+      summary: Summarise a set of speeches and surface recurring speakers.
+      description: Produces a deterministic aggregation over the requested speeches for studio dashboards.
+      operationId: speechesSummary
+      x-fountain.visibility: internal
+      x-fountain.reason: Generate deterministic speech aggregates for ArcSpec-driven studios.
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpeechesSummaryRequest'
+      responses:
+        '200':
+          description: Successful response containing the summarised view.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpeechesSummaryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - error
+            properties:
+              error:
+                type: string
+  schemas:
+    SpeechesListRequest:
+      type: object
+      title: SpeechesListRequest
+      properties:
+        act:
+          $ref: '#/components/schemas/ActCode'
+        scene:
+          $ref: '#/components/schemas/SceneCode'
+        speaker:
+          $ref: '#/components/schemas/SpeakerID'
+        limit:
+          type: integer
+          format: int32
+          default: 100
+          minimum: 1
+          maximum: 500
+        offset:
+          type: integer
+          format: int32
+          default: 0
+          minimum: 0
+      required:
+        - limit
+        - offset
+    SpeechesListResponse:
+      type: object
+      title: SpeechesListResponse
+      required:
+        - result
+      properties:
+        result:
+          $ref: '#/components/schemas/SpeechList'
+      x-fountain-guarantees:
+        - stable ordering
+        - idempotent queries
+    SpeechesDetailRequest:
+      type: object
+      title: SpeechesDetailRequest
+      required:
+        - speech_id
+      properties:
+        speech_id:
+          $ref: '#/components/schemas/SpeechID'
+        include_context:
+          type: boolean
+          default: true
+    SpeechesDetailResponse:
+      type: object
+      title: SpeechesDetailResponse
+      required:
+        - result
+      properties:
+        result:
+          $ref: '#/components/schemas/SpeechDetail'
+      x-fountain-guarantees:
+        - canonical text
+        - includes metadata
+    SpeechesSummaryRequest:
+      type: object
+      title: SpeechesSummaryRequest
+      required:
+        - speech_ids
+      properties:
+        speech_ids:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/SpeechID'
+        max_speakers:
+          type: integer
+          format: int32
+          default: 5
+          minimum: 1
+          maximum: 20
+    SpeechesSummaryResponse:
+      type: object
+      title: SpeechesSummaryResponse
+      required:
+        - result
+      properties:
+        result:
+          $ref: '#/components/schemas/SpeechSummary'
+      x-fountain-guarantees:
+        - cites source speeches
+        - deterministic for identical inputs
+    SpeechList:
+      type: object
+      title: SpeechList
+      required:
+        - total
+        - items
+      properties:
+        total:
+          type: integer
+          format: int32
+          description: Total number of speeches matching the filter.
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpeechListItem'
+    SpeechListItem:
+      type: object
+      title: SpeechListItem
+      required:
+        - speech_id
+        - act
+        - scene
+        - speaker
+        - index
+        - snippet
+      properties:
+        speech_id:
+          $ref: '#/components/schemas/SpeechID'
+        act:
+          $ref: '#/components/schemas/ActCode'
+        scene:
+          $ref: '#/components/schemas/SceneCode'
+        speaker:
+          $ref: '#/components/schemas/SpeakerID'
+        location:
+          type: string
+          description: Location metadata extracted from stage directions.
+        index:
+          type: integer
+          format: int32
+          description: Stable per-speaker index within the act/scene.
+        snippet:
+          type: string
+          description: First 200 characters of the speech text.
+    SpeechDetail:
+      type: object
+      title: SpeechDetail
+      required:
+        - speech
+        - lines
+      properties:
+        speech:
+          $ref: '#/components/schemas/SpeechListItem'
+        lines:
+          type: array
+          items:
+            type: string
+          description: Canonical lines for the speech.
+        context_before:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpeechListItem'
+          description: Optional list of speeches immediately preceding the requested speech.
+        context_after:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpeechListItem'
+          description: Optional list of speeches immediately following the requested speech.
+    SpeechSummary:
+      type: object
+      title: SpeechSummary
+      required:
+        - speech_count
+        - top_speakers
+      properties:
+        speech_count:
+          type: integer
+          format: int32
+        top_speakers:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpeakerCount'
+        acts_covered:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActSummary'
+        scenes_covered:
+          type: array
+          items:
+            $ref: '#/components/schemas/SceneSummary'
+    SpeakerCount:
+      type: object
+      title: SpeakerCount
+      required:
+        - speaker
+        - speeches
+      properties:
+        speaker:
+          $ref: '#/components/schemas/SpeakerID'
+        speeches:
+          type: integer
+          format: int32
+    ActSummary:
+      type: object
+      title: ActSummary
+      required:
+        - act
+        - speech_count
+      properties:
+        act:
+          $ref: '#/components/schemas/ActCode'
+        speech_count:
+          type: integer
+          format: int32
+    SceneSummary:
+      type: object
+      title: SceneSummary
+      required:
+        - act
+        - scene
+        - speech_count
+      properties:
+        act:
+          $ref: '#/components/schemas/ActCode'
+        scene:
+          $ref: '#/components/schemas/SceneCode'
+        speech_count:
+          type: integer
+          format: int32
+    ActCode:
+      type: string
+      title: ActCode
+      description: Upper-case Roman numeral referencing the play act.
+      pattern: '^(I|II|III|IV|V)$'
+    SceneCode:
+      type: string
+      title: SceneCode
+      description: Upper-case Roman numeral referencing the scene within an act.
+      pattern: '^(I|II|III|IV|V|VI|VII|VIII|IX|X)$'
+    SpeakerID:
+      type: string
+      title: SpeakerID
+      description: Canonical speaker identifier matching the seeded corpus metadata.
+      minLength: 1
+    SpeechID:
+      type: string
+      title: SpeechID
+      description: Stable speech identifier derived from act, scene, speaker, and index.
+      minLength: 1
+
+# © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

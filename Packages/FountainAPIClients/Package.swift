@@ -14,6 +14,7 @@ let package = Package(
         .library(name: "FKOpsAPI", targets: ["FKOpsAPI"]),
         .library(name: "FunctionCallerAPI", targets: ["FunctionCallerAPI"]),
         .library(name: "PersistAPI", targets: ["PersistAPI"]),
+        .library(name: "SpeechAtlasAPI", targets: ["SpeechAtlasAPI"]),
         .library(name: "SemanticBrowserAPI", targets: ["SemanticBrowserAPI"]),
         .library(name: "LLMGatewayAPI", targets: ["LLMGatewayAPI"]),
         .library(name: "PlannerAPI", targets: ["PlannerAPI"]),
@@ -80,6 +81,19 @@ let package = Package(
             name: "PersistAPI",
             dependencies: [
                 "ApiClientsCore",
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
+            ],
+            plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
+        .target(
+            name: "SpeechAtlasAPI",
+            dependencies: [
+                "ApiClientsCore",
+                .product(name: "AsyncHTTPClient", package: "async-http-client"),
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
             ],

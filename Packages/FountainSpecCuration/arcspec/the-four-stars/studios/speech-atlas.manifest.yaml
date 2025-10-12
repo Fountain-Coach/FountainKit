@@ -1,0 +1,42 @@
+studio: speech-atlas
+version: 0.1.0
+arcSpec: ../speech-atlas.arc.yml
+corpusId: the-four-stars
+owner: Contexter alias Benedikt Eickhoff
+entrypoint:
+  tool: fk
+  args:
+    - studio
+    - run
+    - speech-atlas
+targets:
+  service:
+    package: FountainServiceKit-Persist
+    target: SpeechAtlasService
+    spec: ../../../../openapi/v1/the-four-stars-speech-atlas.yml
+  client:
+    package: FountainAPIClients
+    target: SpeechAtlasAPI
+    spec: ../../../../openapi/v1/the-four-stars-speech-atlas.yml
+scenarios:
+  - id: speaker-rollup
+    description: Summarise speeches for a set of speakers and list high-frequency acts.
+    steps:
+      - call: speechesList
+        request:
+          speaker: ORLANDO
+          limit: 25
+      - call: speechesSummary
+        request:
+          speech_ids: "{{ steps[0].result.items | map(attribute='speech_id') }}"
+          max_speakers: 5
+  - id: fetch-context
+    description: Fetch a primary speech and the immediate surrounding context.
+    steps:
+      - call: speechesDetail
+        request:
+          speech_id: the-four-stars/act-i/scene-i/orlando-1
+          include_context: true
+notes:
+  - Map this manifest into the studio registry once SpeechAtlasService implements the handlers.
+  - Persist the manifests under `/data/corpora/the-four-stars/studios/speech-atlas/` after execution for replay.

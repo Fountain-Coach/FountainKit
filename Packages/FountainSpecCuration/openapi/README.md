@@ -19,6 +19,7 @@ For a repository‑wide index of OpenAPI coverage and adoption status, see [../O
 | Function Caller Service | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/function-caller.yml](v1/function-caller.yml) |
 | Gateway | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/gateway.yml](v1/gateway.yml) |
 | LLM Gateway Plugin | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/llm-gateway.yml](v1/llm-gateway.yml) |
+| The Four Stars – Speech Atlas | 0.1.0 | Contexter alias Benedikt Eickhoff | [v1/the-four-stars-speech-atlas.yml](v1/the-four-stars-speech-atlas.yml) |
 | OpenAPI Curator Service | 1.0.2 | Contexter alias Benedikt Eickhoff | [v1/openapi-curator.yml](v1/openapi-curator.yml) |
 | Payload Inspection Gateway Plugin | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/payload-inspection-gateway.yml](v1/payload-inspection-gateway.yml) |
 | Persistence Service | 1.0.2 | Contexter alias Benedikt Eickhoff | [v1/persist.yml](v1/persist.yml) |
@@ -48,6 +49,7 @@ This section tracks ownership and adoption of Apple’s Swift OpenAPI Generator.
 | `v1/dns.yml` | TBC | Pending | Pending |
 | `v1/llm-gateway.yml` | Gateway plugin (no standalone server) | N/A | N/A |
 | `v1/openapi-curator.yml` | `FountainTooling` | Pending | N/A |
+| `v1/the-four-stars-speech-atlas.yml` | `FountainServiceKit-Persist` (ArcSpec surfaces) | Pending | Pending |
 
 
 ## Gateway Plugins
@@ -69,6 +71,7 @@ This section tracks ownership and adoption of Apple’s Swift OpenAPI Generator.
 | Service | Owner | Status | Spec |
 | --- | --- | --- | --- |
 | Persistence Service | Contexter alias Benedikt Eickhoff | ✅ | [v1/persist.yml](v1/persist.yml) |
+| Speech Atlas (Four Stars) | Contexter alias Benedikt Eickhoff | ❌ | [v1/the-four-stars-speech-atlas.yml](v1/the-four-stars-speech-atlas.yml) |
 
 ## Linting
 

@@ -29,6 +29,19 @@ final class PersistenceSeederTests: XCTestCase {
         // Audio file
         let audioDir = tempDir.appendingPathComponent("audio")
         try FileManager.default.createDirectory(at: audioDir, withIntermediateDirectories: true)
+
+        // Play script
+        let playURL = tempDir.appendingPathComponent("the four stars.txt")
+        try """
+        As You Like It
+        **** ACT I ****
+        **** SCENE I. Orchard. ****
+        ORLANDO
+        Line one.
+        ADAM
+        Line two.
+        """.write(to: playURL, atomically: true, encoding: .utf8)
+
         let audioURL = audioDir.appendingPathComponent("clip.mid")
         try Data([0,1,2,3]).write(to: audioURL)
 
@@ -37,7 +50,8 @@ final class PersistenceSeederTests: XCTestCase {
         let manifest = try seeder.seed(repoPath: tempDir.path, corpusId: "test-corpus", sourceRepo: "https://example.com/repo", output: outputDir)
 
         XCTAssertEqual(manifest.corpusId, "test-corpus")
-        XCTAssertEqual(manifest.documents.count, 1)
+        XCTAssertGreaterThanOrEqual(manifest.documents.count, 2)
+        XCTAssertTrue(manifest.documents.contains(where: { $0.metadata["type"] == "speech" }))
         XCTAssertEqual(manifest.annotations.count, 1)
         XCTAssertEqual(manifest.audio.count, 1)
 

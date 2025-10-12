@@ -46,16 +46,12 @@ struct PersistenceSeederCLI {
             return
         }
 
+        let printer = JSONPrinter()
         if analyzeOnly {
             let analyzer = RepositoryAnalyzer()
             do {
                 let profile = try analyzer.analyze(repoPath: repoPath, maxSamples: 20)
-                let encoder = JSONEncoder()
-                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-                let data = try encoder.encode(profile)
-                if let string = String(data: data, encoding: .utf8) {
-                    print(string)
-                }
+                try printer.print(profile)
             } catch {
                 fputs("ERROR: \(error)\n", stderr)
                 exit(1)
@@ -64,13 +60,7 @@ struct PersistenceSeederCLI {
             let seeder = PersistenceSeeder()
             do {
                 let manifest = try seeder.seed(repoPath: repoPath, corpusId: corpusId, sourceRepo: sourceRepo, output: URL(fileURLWithPath: outputDir, isDirectory: true))
-                let encoder = JSONEncoder()
-                encoder.outputFormatting = [.prettyPrinted]
-                encoder.dateEncodingStrategy = .iso8601
-                let summaryData = try encoder.encode(manifest)
-                if let string = String(data: summaryData, encoding: .utf8) {
-                    print(string)
-                }
+                try printer.print(manifest)
             } catch {
                 fputs("ERROR: \(error)\n", stderr)
                 exit(1)

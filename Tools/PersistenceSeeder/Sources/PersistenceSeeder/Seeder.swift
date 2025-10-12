@@ -29,10 +29,13 @@ struct PersistenceSeeder {
             throw SeederError.repoNotFound(repoURL.path)
         }
 
-        let documents = try collectMarkdownEntries(root: repoURL, subdirectory: "texts", extraMetadata: ["type": "document"])
+        var documents = try collectMarkdownEntries(root: repoURL, subdirectory: "texts", extraMetadata: ["type": "document"])
         let translations = try collectMarkdownEntries(root: repoURL, subdirectory: "translations", extraMetadata: ["type": "translation"])
         let annotations = try collectJSONEntries(root: repoURL, subdirectory: "annotations")
         let audio = try collectBinaryEntries(root: repoURL, subdirectory: "audio")
+
+        let derivedSpeeches = try collectTheFourStarsSpeeches(root: repoURL)
+        documents.append(contentsOf: derivedSpeeches)
 
         let manifest = SeedManifest(
             corpusId: corpusId,
@@ -111,6 +114,33 @@ struct PersistenceSeeder {
         return entries.sorted { $0.path < $1.path }
     }
 
+    private func collectTheFourStarsSpeeches(root: URL) throws -> [SeedManifest.FileEntry] {
+        let playURL = root.appendingPathComponent("the four stars.txt")
+        guard FileManager.default.fileExists(atPath: playURL.path) else { return [] }
+        let parser = TheFourStarsParser()
+        let speeches = try parser.parse(fileURL: playURL)
+        return speeches.map { speech in
+            let text = speech.lines.joined(separator: "\n")
+            let data = text.data(using: .utf8) ?? Data()
+            var metadata: [String:String] = [
+                "type": "speech",
+                "act": speech.act,
+                "scene": speech.scene,
+                "location": speech.location,
+                "speaker": speech.speaker,
+                "index": String(speech.index)
+            ]
+            metadata = metadata.filter { !$0.value.isEmpty }
+            let relativePath = "derived/the-four-stars/act-\(speech.act)/scene-\(speech.scene.replacingOccurrences(of: " ", with: "-").lowercased())/\(speech.speaker.lowercased())-\(speech.index)"
+            return SeedManifest.FileEntry(
+                path: relativePath,
+                sha256: hasher.sha256(data: data),
+                size: data.count,
+                metadata: metadata
+            )
+        }
+    }
+
     private func writeManifest(_ manifest: SeedManifest, to output: URL) throws {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -121,3 +151,12 @@ struct PersistenceSeeder {
         try data.write(to: fileURL, options: .atomic)
     }
 }
+
+    private func sanitizePathComponent(_ value: String) -> String {
+        let lowered = value.lowercased()
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-"))
+        var cleaned = lowered.replacingOccurrences(of: " ", with: "-")
+        cleaned = cleaned.unicodeScalars.map { allowed.contains($0) ? Character($0) : "-" }.map(String.init).joined()
+        cleaned = cleaned.replacingOccurrences(of: "-+", with: "-", options: .regularExpression)
+        return cleaned.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+    }

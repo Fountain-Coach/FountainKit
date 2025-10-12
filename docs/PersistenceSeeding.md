@@ -9,31 +9,52 @@ so studios can derive meaningful arcs.
 - GitHub: <https://github.com/Fountain-Coach/the-four-stars>
 - Contents: multilingual texts, commentaries, MIDI stems, annotations.
 
-## Target Layout
+## Current Corpus Structure
 
-| Collection | Description | Source path |
-| --- | --- | --- |
-| `corpus_documents` | Canonical text passages with metadata (language, stanza, meter). | `texts/*.md` |
-| `translations` | Translation pairs linked to source passage IDs. | `translations/*.md` |
-| `annotations` | Commentary, argument threads, motif tags. | `annotations/*.json` |
-| `audio_refs` | MIDI / audio references with cue points. | `audio/**/*.mid` |
+`the-four-stars` currently ships a single transcript (`the four stars.txt`). The
+`persistence-seeder` CLI performs two key actions:
 
-Each record should be tagged with `corpusId = "the-four-stars"` and stored under
-`/data/corpora/the-four-stars/…` in FountainStore.
+1. **Analysis (`--analyze`)** – enumerates extensions/directories and samples
+   metadata so we can understand the corpus layout.
+2. **Derivation (default mode)** – parses the transcript into individual
+   speeches, one per narrator, tagging each with act, scene, location, and
+   speaker.
 
-## Seeding Script (draft)
+The derived speeches are emitted under logical paths such as:
 
-Create a Swift script / CLI (`swift run seeder --repo <path> --corpus the-four-stars`)
-that performs:
+```
+derived/the-four-stars/act-i/scene-1/orlando-1
+derived/the-four-stars/act-i/scene-1/adam-2
+...
+```
 
-1. Clone/update the repo to a local cache (read-only).
-2. Walk expected directories, parsing content:
-   - Markdown → structured text passages (use front-matter for IDs).
-   - JSON annotations → typed models.
-   - Audio/MIDI → copy to artifact store and record metadata.
-3. Write batches into FountainStore via the existing persistence service client
-   (`PersistAPI`).
-4. Emit an ingestion manifest (`seed-manifest.json`) with checksums for replay.
+Each record carries metadata similar to:
+
+```json
+{
+  "type": "speech",
+  "act": "I",
+  "scene": "I",
+  "location": "Orchard of Oliver's house.",
+  "speaker": "ORLANDO",
+  "index": "1"
+}
+```
+
+The CLI writes a deterministic `seed-manifest.json` with SHA-256 hashes so the
+ingest step can be replayed or diffed safely.
+
+## Usage
+
+```bash
+# Inspect repository structure
+swift run --package-path Tools/PersistenceSeeder \  persistence-seeder --repo /path/to/the-four-stars --analyze
+
+# Generate seed manifest with derived speeches
+swift run --package-path Tools/PersistenceSeeder \  persistence-seeder \  --repo /path/to/the-four-stars \  --corpus the-four-stars \  --source https://github.com/Fountain-Coach/the-four-stars \  --out .fountain/seeding/the-four-stars
+```
+
+Output: `.fountain/seeding/the-four-stars/seed-manifest.json`
 
 ## Idempotency & Replay
 
@@ -50,7 +71,7 @@ that performs:
 
 ## Next Steps
 
-- [ ] Implement seeding CLI (Swift executable or script).
-- [ ] Define mapping from Markdown metadata → `PersistAPI` request models.
+- [x] Implement seeding CLI (`Tools/PersistenceSeeder`).
+- [ ] Define mapping from derived speeches → `PersistAPI` request models.
 - [ ] Agree on artifact storage quotas for MIDI/Audio assets.
 - [ ] Automate periodic re-seeding (cron or GitHub Actions trigger).

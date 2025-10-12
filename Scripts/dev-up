@@ -48,6 +48,20 @@ for a in "$@"; do
   if [[ "$a" == "--check" ]]; then CHECK=1; fi
 done
 
+# Populate optional OpenAI configuration from Keychain when available.
+if [[ -z "${OPENAI_API_KEY:-}" ]]; then
+  if command -v security >/dev/null 2>&1; then
+    if security find-generic-password -s FountainAI -a OPENAI_API_KEY -w >/dev/null 2>&1; then
+      OPENAI_API_KEY="$(security find-generic-password -s FountainAI -a OPENAI_API_KEY -w 2>/dev/null || true)"
+      export OPENAI_API_KEY
+    fi
+  fi
+fi
+
+if [[ -n "${OPENAI_API_KEY:-}" && -z "${LLM_BACKEND:-}" ]]; then
+  export LLM_BACKEND=openai
+fi
+
 # Helpers
 port_for() {
   case "$1" in

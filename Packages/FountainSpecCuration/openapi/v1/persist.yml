@@ -1,11 +1,7 @@
 openapi: 3.1.0
 info:
   title: FountainStore Persistence Service
-  description: >
-    Persistence and semantic indexing API for FountainAI corpora and related
-    semantic artifacts (baselines, drifts, reflections, functions, history).
-    Collection schemas for pages, segments, entities, tables, and analyses are
-    described in [docs/fountainstore-collections.md](../../docs/fountainstore-collections.md).
+  description: Persistence and semantic indexing API for FountainAI corpora.
   version: 1.0.2
   x-fountain.port: 8005
   x-fountain.binary: persist
@@ -1176,7 +1172,3 @@ components:
                 description: Human-readable error message.
 
 # © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.
-
-# © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.
-    '400':
-      $ref: '#/components/responses/BadRequest'

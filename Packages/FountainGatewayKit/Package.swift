@@ -38,7 +38,8 @@ let package = Package(
                 .product(name: "FountainAICore", package: "FountainCore"),
                 .product(name: "LLMGatewayAPI", package: "FountainAPIClients"),
                 .product(name: "SemanticBrowserAPI", package: "FountainAPIClients"),
-                .product(name: "PersistAPI", package: "FountainAPIClients")
+                .product(name: "PersistAPI", package: "FountainAPIClients"),
+                .product(name: "ApiClientsCore", package: "FountainAPIClients")
             ]
         ),
         .target(

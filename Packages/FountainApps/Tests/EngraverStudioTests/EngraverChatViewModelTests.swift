@@ -1,5 +1,5 @@
 import XCTest
-@testable import EngraverStudio
+@testable import EngraverChatCore
 import FountainAIAdapters
 import LLMGatewayAPI
 
@@ -82,6 +82,82 @@ final class EngraverChatViewModelTests: XCTestCase {
         let status = await MainActor.run { (viewModel.state, viewModel.diagnostics) }
         XCTAssertEqual(status.0, .idle)
         XCTAssertTrue(status.1.contains { $0.contains("Cancel requested") })
+    }
+
+    func testSessionAutoNamingFromPrompt() async throws {
+        let response = GatewayChatResponse(
+            answer: "Sure",
+            provider: "mock",
+            model: "mock-model",
+            usage: nil,
+            raw: nil,
+            functionCall: nil
+        )
+        let streaming = MockGatewayChatStreaming(
+            chunks: [
+                GatewayChatChunk(text: "Sure", isFinal: true, response: response)
+            ],
+            finalResponse: response
+        )
+
+        let viewModel = await MainActor.run {
+            EngraverChatViewModel(
+                chatClient: streaming,
+                persistenceStore: nil,
+                debugEnabled: false
+            )
+        }
+
+        await MainActor.run {
+            viewModel.send(prompt: "Plan the expo booth logistics", systemPrompts: [])
+        }
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        let sessionName = await MainActor.run { viewModel.sessionName }
+        XCTAssertEqual(sessionName, "Plan the expo booth logistics")
+    }
+
+    func testStartNewSessionResetsState() async throws {
+        let response = GatewayChatResponse(
+            answer: "Done",
+            provider: "mock",
+            model: "mock-model",
+            usage: nil,
+            raw: nil,
+            functionCall: nil
+        )
+        let streaming = MockGatewayChatStreaming(
+            chunks: [GatewayChatChunk(text: "Done", isFinal: true, response: response)],
+            finalResponse: response
+        )
+
+        let viewModel = await MainActor.run {
+            EngraverChatViewModel(
+                chatClient: streaming,
+                persistenceStore: nil,
+                debugEnabled: true
+            )
+        }
+
+        await MainActor.run {
+            viewModel.send(prompt: "First turn", systemPrompts: [])
+        }
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        let previousSessionId = await MainActor.run { viewModel.sessionId }
+
+        await MainActor.run {
+            viewModel.startNewSession()
+        }
+
+        let snapshot = await MainActor.run { () -> (Int, UUID, String?, [String]) in
+            (viewModel.turns.count, viewModel.sessionId, viewModel.sessionName, viewModel.diagnostics)
+        }
+
+        XCTAssertEqual(snapshot.0, 0)
+        XCTAssertNotEqual(snapshot.1, previousSessionId)
+        XCTAssertNil(snapshot.2)
+        XCTAssertTrue(snapshot.3.last?.contains("Started new chat session") ?? false)
     }
 }
 

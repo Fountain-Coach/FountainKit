@@ -6,6 +6,7 @@ import FoundationNetworking
 import SwiftUI
 import AppKit
 import EngraverStudio
+import EngraverChatCore
 
 @main
 struct LauncherUIApp: App {

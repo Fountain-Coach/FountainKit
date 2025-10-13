@@ -120,6 +120,51 @@ final class GatewayChatClientTests: XCTestCase {
             XCTAssertEqual(message, "{\"error\":\"unauthorized\"}")
         }
     }
+
+    func testOpenAIFormattedResponseIsAccepted() async throws {
+        let payload = """
+        {
+          "id": "chatcmpl-abc123",
+          "object": "chat.completion",
+          "created": 1760343606,
+          "model": "gpt-4o-mini",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "Echo: hello"
+              },
+              "finish_reason": "stop"
+            }
+          ]
+        }
+        """
+
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return .init(response: response, data: Data(payload.utf8))
+        }
+
+        let client = GatewayChatClient(
+            baseURL: URL(string: "https://example.com")!,
+            tokenProvider: { nil },
+            session: makeSession()
+        )
+
+        let response = try await client.complete(
+            request: ChatRequest(model: "gpt-4o-mini", messages: [.init(role: "user", content: "Hello")])
+        )
+
+        XCTAssertEqual(response.answer, "Echo: hello")
+        XCTAssertEqual(response.provider, "openai")
+        XCTAssertEqual(response.model, "gpt-4o-mini")
+    }
 }
 
 // MARK: - Helpers

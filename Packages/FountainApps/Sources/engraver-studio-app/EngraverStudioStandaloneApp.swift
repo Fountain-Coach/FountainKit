@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import AppKit
 import EngraverStudio
+import EngraverChatCore
 import Security
 
 @main

@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import AppKit
 import TeatroGUI
+import EngraverChatCore
 
 @available(macOS 13.0, *)
 struct EngraverStudioView: View {
@@ -193,7 +194,7 @@ struct EngraverStudioView: View {
         return viewModel.turns.last
     }
 
-private func sendPrompt() {
+    private func sendPrompt() {
         let content = draftPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty else { return }
         viewModel.send(

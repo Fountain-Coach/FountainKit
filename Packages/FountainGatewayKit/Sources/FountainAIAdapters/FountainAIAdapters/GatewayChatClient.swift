@@ -130,43 +130,67 @@ public struct GatewayChatClient: Sendable {
     private func handleEventStream(bytes: URLSession.AsyncBytes,
                                    continuation: AsyncThrowingStream<GatewayChatChunk, Error>.Continuation) async throws {
         var buffer = ""
-        var hasYielded = false
 
-        func process(payload: String) throws {
-            guard !payload.isEmpty else { return }
-            let envelope = try decodeEnvelope(from: Data(payload.utf8))
+        func emit(envelope: GatewayChatEnvelope) {
             if let delta = envelope.delta?.content, !delta.isEmpty {
                 continuation.yield(.init(text: delta, isFinal: false, response: nil))
-                hasYielded = true
             }
             if let answer = envelope.answer, !answer.isEmpty {
                 let response = makeResponse(from: envelope)
                 continuation.yield(.init(text: answer, isFinal: true, response: response))
-                hasYielded = true
             }
         }
 
-        for try await line in bytes.lines {
-            if line.hasPrefix("data:") {
-                let payload = line.dropFirst("data:".count).trimmingCharacters(in: .whitespaces)
-                if payload == "[DONE]" {
+        func process(payload: String) throws {
+            let cleaned = payload.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !cleaned.isEmpty else { return }
+
+            do {
+                let envelope = try decodeEnvelope(from: Data(cleaned.utf8))
+                emit(envelope: envelope)
+                return
+            } catch {
+                var didEmit = false
+                let fragments = cleaned.split(separator: "\n")
+                for fragment in fragments {
+                    let trimmed = fragment.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty, let data = trimmed.data(using: .utf8) else { continue }
+                    if let envelope = try? decodeEnvelope(from: data) {
+                        emit(envelope: envelope)
+                        didEmit = true
+                    }
+                }
+                if didEmit {
+                    return
+                }
+                throw error
+            }
+        }
+
+        for try await rawLine in bytes.lines {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("event:") {
+                // Ignore event lines for now; payloads arrive via data fields.
+                continue
+            } else if line.hasPrefix("data:") {
+                let value = line.dropFirst("data:".count).trimmingCharacters(in: .whitespaces)
+                if value == "[DONE]" {
                     break
                 }
-                try process(payload: payload)
-            } else if line.isEmpty {
+                if !buffer.isEmpty {
+                    buffer.append("\n")
+                }
+                buffer.append(value)
+            } else if line.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 if !buffer.isEmpty {
                     try process(payload: buffer)
-                    buffer.removeAll()
+                    buffer.removeAll(keepingCapacity: true)
                 }
-            } else {
-                buffer.append(line)
             }
         }
 
-        if !hasYielded && !buffer.isEmpty {
-            let envelope = try decodeEnvelope(from: Data(buffer.utf8))
-            let response = makeResponse(from: envelope)
-            continuation.yield(.init(text: response.answer, isFinal: true, response: response))
+        if !buffer.isEmpty {
+            try process(payload: buffer)
         }
     }
 
@@ -182,7 +206,18 @@ public struct GatewayChatClient: Sendable {
     private func decodeEnvelope(from data: Data) throws -> GatewayChatEnvelope {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode(GatewayChatEnvelope.self, from: data)
+        if let envelope = try? decoder.decode(GatewayChatEnvelope.self, from: data),
+           envelope.containsContent {
+            return envelope
+        }
+        if let fallback = try? decoder.decode(OpenAIChatCompletionEnvelope.self, from: data) {
+            return fallback.toGatewayEnvelope(rawData: data)
+        }
+        if let fallback = decodeOpenAIEnvelopeFallback(from: data) {
+            return fallback
+        }
+        let message = String(data: data, encoding: .utf8)
+        throw GatewayChatError.serverError(statusCode: 200, message: message)
     }
 
     private func makeResponse(from envelope: GatewayChatEnvelope) -> GatewayChatResponse {
@@ -209,9 +244,170 @@ private struct GatewayChatEnvelope: Decodable {
     let delta: GatewayChatDelta?
 }
 
+private extension GatewayChatEnvelope {
+    var containsContent: Bool {
+        if let answer, !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
+        if let delta {
+            if let content = delta.content, !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
+            if delta.function_call != nil { return true }
+        }
+        if function_call != nil { return true }
+        return false
+    }
+}
+
 private struct GatewayChatDelta: Decodable {
     let content: String?
     let function_call: JSONValue?
+}
+
+private extension GatewayChatEnvelope {
+    init(answer: String?,
+         provider: String?,
+         model: String?,
+         usage: JSONValue?,
+         raw: JSONValue?,
+         functionCall: JSONValue?,
+         delta: GatewayChatDelta?) {
+        self.answer = answer
+        self.provider = provider
+        self.model = model
+        self.usage = usage
+        self.raw = raw
+        self.function_call = functionCall
+        self.delta = delta
+    }
+}
+
+private struct OpenAIChatCompletionEnvelope: Decodable {
+    struct Choice: Decodable {
+        struct Message: Decodable {
+            let role: String?
+            let content: String?
+            let function_call: JSONValue?
+        }
+
+        struct Delta: Decodable {
+            let role: String?
+            let content: String?
+            let function_call: JSONValue?
+        }
+
+        let index: Int?
+        let message: Message?
+        let delta: Delta?
+        let finish_reason: String?
+    }
+
+    let id: String?
+    let model: String?
+    let choices: [Choice]
+    let usage: JSONValue?
+
+    func toGatewayEnvelope(rawData: Data) -> GatewayChatEnvelope {
+        let choice = choices.first
+        let message = choice?.message
+        let delta = choice?.delta
+        let answer = message?.content ?? delta?.content ?? ""
+        let functionCall = message?.function_call ?? delta?.function_call
+        let raw = (try? JSONDecoder().decode(JSONValue.self, from: rawData))
+
+        let gatewayDelta: GatewayChatDelta?
+        if let delta {
+            gatewayDelta = GatewayChatDelta(content: delta.content, function_call: delta.function_call)
+        } else {
+            gatewayDelta = nil
+        }
+
+        return GatewayChatEnvelope(
+            answer: answer,
+            provider: guessProvider(for: model),
+            model: model,
+            usage: usage,
+            raw: raw,
+            functionCall: functionCall,
+            delta: gatewayDelta
+        )
+    }
+}
+
+private func guessProvider(for model: String?) -> String? {
+    guard let model else { return nil }
+    let lowered = model.lowercased()
+    if lowered.contains("gpt") || lowered.contains("openai") {
+        return "openai"
+    }
+    return nil
+}
+
+private func decodeOpenAIEnvelopeFallback(from data: Data) -> GatewayChatEnvelope? {
+    guard
+        let json = try? JSONSerialization.jsonObject(with: data),
+        let object = json as? [String: Any]
+    else {
+        return nil
+    }
+
+    let choices = object["choices"] as? [[String: Any]]
+    let first = choices?.first
+    let message = first?["message"] as? [String: Any]
+    let delta = first?["delta"] as? [String: Any]
+
+    let answer = (message?["content"] as? String) ?? (delta?["content"] as? String) ?? ""
+    let functionCallAny = message?["function_call"] ?? delta?["function_call"]
+
+    let gatewayDelta: GatewayChatDelta?
+    if let delta {
+        gatewayDelta = GatewayChatDelta(
+            content: delta["content"] as? String,
+            function_call: JSONValue(jsonObject: delta["function_call"])
+        )
+    } else {
+        gatewayDelta = nil
+    }
+
+    let model = object["model"] as? String
+
+    return GatewayChatEnvelope(
+        answer: answer,
+        provider: guessProvider(for: model),
+        model: model,
+        usage: JSONValue(jsonObject: object["usage"]),
+        raw: JSONValue(jsonObject: object),
+        functionCall: JSONValue(jsonObject: functionCallAny),
+        delta: gatewayDelta
+    )
+}
+
+private extension JSONValue {
+    init?(jsonObject: Any?) {
+        guard let jsonObject else { return nil }
+        switch jsonObject {
+        case let value as String:
+            self = .string(value)
+        case let value as NSNumber:
+            if CFGetTypeID(value) == CFBooleanGetTypeID() {
+                self = .bool(value.boolValue)
+            } else {
+                self = .number(value.doubleValue)
+            }
+        case let value as [String: Any]:
+            var mapped: [String: JSONValue] = [:]
+            for (key, item) in value {
+                if let converted = JSONValue(jsonObject: item) {
+                    mapped[key] = converted
+                }
+            }
+            self = .object(mapped)
+        case let value as [Any]:
+            let converted = value.compactMap { JSONValue(jsonObject: $0) }
+            self = .array(converted)
+        case _ as NSNull:
+            self = .null
+        default:
+            return nil
+        }
+    }
 }
 
 public enum GatewayChatError: LocalizedError {

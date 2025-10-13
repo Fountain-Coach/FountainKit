@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import TeatroGUI
 import FountainAIAdapters
+import EngraverChatCore
 
 @available(macOS 13.0, *)
 public struct EngraverStudioRoot: View {

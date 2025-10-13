@@ -22,6 +22,8 @@ let package = Package(
         .executable(name: "mock-localagent-server", targets: ["mock-localagent-server"])
         ,
         .executable(name: "engraver-studio-app", targets: ["engraver-studio-app"]),
+        .executable(name: "engraver-chat-tui", targets: ["engraver-chat-tui"]),
+        .library(name: "EngraverChatCore", targets: ["EngraverChatCore"]),
         .library(name: "EngraverStudio", targets: ["EngraverStudio"]),
         .executable(name: "fk", targets: ["fk"])
     ],
@@ -203,18 +205,35 @@ let package = Package(
             ]
         ),
         .target(
-            name: "EngraverStudio",
+            name: "EngraverChatCore",
             dependencies: [
                 .product(name: "FountainStoreClient", package: "FountainCore"),
                 .product(name: "FountainRuntime", package: "FountainCore"),
                 .product(name: "FountainAIAdapters", package: "FountainGatewayKit"),
                 .product(name: "LLMGatewayAPI", package: "FountainAPIClients"),
                 .product(name: "ApiClientsCore", package: "FountainAPIClients"),
-                .product(name: "TeatroGUI", package: "TeatroGUI"),
-                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
-                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
+                .product(name: "SecretStore", package: "swift-secretstore")
+            ],
+            path: "Sources/EngraverChatCore"
+        ),
+        .target(
+            name: "EngraverStudio",
+            dependencies: [
+                "EngraverChatCore",
+                .product(name: "FountainAIAdapters", package: "FountainGatewayKit"),
+                .product(name: "TeatroGUI", package: "TeatroGUI")
             ],
             path: "Sources/engraver-studio"
+        ),
+        .executableTarget(
+            name: "engraver-chat-tui",
+            dependencies: [
+                "EngraverChatCore",
+                .product(name: "SwiftCursesKit", package: "swiftcurseskit"),
+                .product(name: "FountainAIAdapters", package: "FountainGatewayKit"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/engraver-chat-tui"
         ),
         .executableTarget(
             name: "fk-ops-server",
@@ -230,7 +249,7 @@ let package = Package(
         ),
         .testTarget(
             name: "EngraverStudioTests",
-            dependencies: ["EngraverStudio"],
+            dependencies: ["EngraverStudio", "EngraverChatCore", "engraver-chat-tui"],
             path: "Tests/EngraverStudioTests"
         ),
         .testTarget(

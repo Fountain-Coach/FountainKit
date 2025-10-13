@@ -116,6 +116,8 @@ public final class EngraverChatViewModel: ObservableObject {
     private let initialCorpusId: String
     private var awarenessSummary: String? = nil
     private var persistedRecords: [EngraverChatRecord] = []
+    private let bootstrapBaseURL: URL?
+    private var didBootstrapCorpus: Bool = false
     private static let sessionTitleFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMM d, HH:mm"
@@ -138,6 +140,7 @@ public final class EngraverChatViewModel: ObservableObject {
         defaultModel: String? = nil,
         debugEnabled: Bool = false,
         awarenessBaseURL: URL? = nil,
+        bootstrapBaseURL: URL? = nil,
         idGenerator: @escaping @Sendable () -> UUID = { UUID() },
         dateProvider: @escaping @Sendable () -> Date = { Date() }
     ) {
@@ -155,6 +158,7 @@ public final class EngraverChatViewModel: ObservableObject {
         self.logger = Logger(subsystem: "FountainApps.EngraverChat", category: "ViewModel")
         self.awarenessBaseURL = awarenessBaseURL
         self.initialCorpusId = corpusId
+        self.bootstrapBaseURL = bootstrapBaseURL
 
         let initialSessionId = idGenerator()
         self.sessionId = initialSessionId
@@ -170,6 +174,11 @@ public final class EngraverChatViewModel: ObservableObject {
         if awarenessBaseURL != nil {
             Task { [weak self] in
                 await self?.refreshAwarenessSummary()
+            }
+        }
+        if bootstrapBaseURL != nil {
+            Task { [weak self] in
+                await self?.bootstrapCorpusIfNeeded()
             }
         }
     }
@@ -551,9 +560,53 @@ public final class EngraverChatViewModel: ObservableObject {
         }
     }
 
-    private struct AwarenessSummaryResponse: Decodable {
-        let summary: String
+private struct AwarenessSummaryResponse: Decodable {
+    let summary: String
+}
+
+private func bootstrapCorpusIfNeeded() async {
+    guard !didBootstrapCorpus, let bootstrapBaseURL else { return }
+    let corpus = persistenceContext?.corpusId ?? initialCorpusId
+    let url = bootstrapBaseURL
+        .appendingPathComponent("bootstrap", isDirectory: false)
+        .appendingPathComponent("corpus", isDirectory: false)
+        .appendingPathComponent("init", isDirectory: false)
+    var request = URLRequest(url: url)
+    request.httpMethod = "POST"
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.httpBody = try? JSONEncoder().encode(BootstrapInitRequest(corpusId: corpus))
+    do {
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw NSError(domain: "EngraverChat", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid bootstrap response"])
+        }
+        switch http.statusCode {
+        case 200:
+            if let message = try? JSONDecoder().decode(BootstrapInitResponse.self, from: data).message {
+                emitDiagnostic("Bootstrap initialized corpus: \(message)")
+            } else {
+                emitDiagnostic("Bootstrap initialized corpus (no message)")
+            }
+            didBootstrapCorpus = true
+        case 409, 422:
+            emitDiagnostic("Bootstrap corpus already initialized or validation warning (status \(http.statusCode)).")
+            didBootstrapCorpus = true
+        default:
+            let body = String(data: data, encoding: .utf8) ?? "<binary>"
+            throw NSError(domain: "EngraverChat", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Bootstrap status \(http.statusCode): \(body)"])
+        }
+    } catch {
+        emitDiagnostic("Bootstrap error: \(error)")
     }
+}
+
+private struct BootstrapInitRequest: Encodable {
+    let corpusId: String
+}
+
+private struct BootstrapInitResponse: Decodable {
+    let message: String?
+}
 
     private func truncateForContext(_ text: String, limit: Int = 160) -> String {
         let singleLine = text.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -569,6 +622,10 @@ public final class EngraverChatViewModel: ObservableObject {
         if awarenessBaseURL != nil {
             let endpointDescription = awarenessBaseURL?.absoluteString ?? "http://127.0.0.1:8001"
             prompts.append("You have access to the Baseline Awareness service at \(endpointDescription). It provides baselines, drift events, narrative patterns, and reflections for this corpus. Reference it when discussing long-term context.")
+        }
+        if bootstrapBaseURL != nil {
+            let endpoint = bootstrapBaseURL?.absoluteString ?? "http://127.0.0.1:8002"
+            prompts.append("Bootstrap service is available at \(endpoint). Use it to initialize corpora, seed default GPT roles, and register new baselines when needed.")
         }
         return prompts
     }

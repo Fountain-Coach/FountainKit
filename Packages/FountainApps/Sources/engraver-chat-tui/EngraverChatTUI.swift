@@ -155,7 +155,8 @@ actor ChatSession {
                 availableModels: configuration.availableModels,
                 defaultModel: configuration.defaultModel,
                 debugEnabled: configuration.debugEnabled,
-                awarenessBaseURL: configuration.awarenessBaseURL
+                awarenessBaseURL: configuration.awarenessBaseURL,
+                bootstrapBaseURL: configuration.bootstrapBaseURL
             )
         }
     }

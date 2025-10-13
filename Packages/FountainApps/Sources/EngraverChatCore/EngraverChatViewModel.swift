@@ -55,10 +55,10 @@ private struct EngraverChatRecord: Codable, Sendable {
 
     let recordId: String
     let corpusId: String
-    let sessionId: UUID
+    let sessionId: UUID?
     let sessionName: String?
-    let sessionStartedAt: Date
-    let turnIndex: Int
+    let sessionStartedAt: Date?
+    let turnIndex: Int?
     let createdAt: Date
     let prompt: String
     let answer: String
@@ -147,6 +147,12 @@ public final class EngraverChatViewModel: ObservableObject {
         self.sessionStartedAt = dateProvider()
 
         emitDiagnostic("EngraverChatViewModel initialised • corpus=\(corpusId) collection=\(collection) debug=\(debugEnabled)")
+
+        if persistenceContext != nil {
+            Task { [weak self] in
+                await self?.hydrateFromPersistence()
+            }
+        }
     }
 
     deinit {
@@ -332,12 +338,88 @@ public final class EngraverChatViewModel: ObservableObject {
 
     private func ensureSessionName(using prompt: String) {
         guard sessionName == nil else { return }
-        let generated = generateSessionName(from: prompt)
+        let generated = generateSessionName(from: prompt, startedAt: sessionStartedAt)
         sessionName = generated
         emitDiagnostic("Session named \"\(generated)\"")
     }
 
-    private func generateSessionName(from prompt: String) -> String {
+    private func hydrateFromPersistence() async {
+        guard let context = persistenceContext else { return }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        do {
+            let response = try await context.store.query(
+                corpusId: context.corpusId,
+                collection: context.collection,
+                query: Query(sort: [("createdAt", false)], limit: 400)
+            )
+            let records = response.documents.compactMap { data -> EngraverChatRecord? in
+                return try? decoder.decode(EngraverChatRecord.self, from: data)
+            }
+            guard !records.isEmpty else {
+                emitDiagnostic("No persisted sessions found to hydrate.")
+                return
+            }
+            applyPersistedSession(records: records)
+            emitDiagnostic("Hydrated session from persistence • turns=\(turns.count) session=\(sessionName ?? "(untitled)")")
+        } catch {
+            emitDiagnostic("Hydration error: \(error)")
+        }
+    }
+
+    private func applyPersistedSession(records: [EngraverChatRecord]) {
+        let grouped = Dictionary(grouping: records) { record -> UUID in
+            if let id = record.sessionId {
+                return id
+            }
+            if let uuid = UUID(uuidString: record.recordId) {
+                return uuid
+            }
+            return sessionId
+        }
+        guard let latest = grouped.values.max(by: { lhs, rhs in
+            let lhsDate = lhs.map { $0.createdAt }.max() ?? .distantPast
+            let rhsDate = rhs.map { $0.createdAt }.max() ?? .distantPast
+            return lhsDate < rhsDate
+        }) else { return }
+
+        let sorted = latest.sorted { $0.createdAt < $1.createdAt }
+        guard let first = sorted.first else { return }
+
+        let resolvedSessionId = first.sessionId ?? UUID(uuidString: first.recordId) ?? sessionId
+        sessionId = resolvedSessionId
+        let resolvedStart = first.sessionStartedAt ?? first.createdAt
+        sessionStartedAt = resolvedStart
+        if let name = first.sessionName, !name.isEmpty {
+            sessionName = name
+        } else {
+            sessionName = generateSessionName(from: first.prompt, startedAt: resolvedStart)
+        }
+
+        turns = sorted.map { record in
+            let response = GatewayChatResponse(
+                answer: record.answer,
+                provider: record.provider,
+                model: record.model,
+                usage: record.usage,
+                raw: record.raw,
+                functionCall: record.functionCall
+            )
+            return EngraverChatTurn(
+                id: UUID(uuidString: record.recordId) ?? UUID(),
+                sessionId: resolvedSessionId,
+                createdAt: record.createdAt,
+                prompt: record.prompt,
+                answer: record.answer,
+                provider: record.provider,
+                model: record.model,
+                tokens: record.tokens,
+                response: response
+            )
+        }
+    }
+
+    private func generateSessionName(from prompt: String, startedAt: Date? = nil) -> String {
         let singleLine = prompt
             .replacingOccurrences(of: "\n", with: " ")
             .replacingOccurrences(of: "\t", with: " ")
@@ -348,7 +430,8 @@ public final class EngraverChatViewModel: ObservableObject {
             .prefix(12)
         var candidate = components.joined(separator: " ")
         if candidate.isEmpty {
-            candidate = Self.sessionTitleFormatter.string(from: sessionStartedAt)
+            let reference = startedAt ?? sessionStartedAt
+            candidate = Self.sessionTitleFormatter.string(from: reference)
         }
         let maxLength = 48
         if candidate.count > maxLength {

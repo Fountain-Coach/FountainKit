@@ -160,8 +160,8 @@ actor ChatSession {
     }
 
     func submit(prompt: String) async {
-        let prompts = configuration.systemPrompts
         await MainActor.run {
+            let prompts = viewModel.makeSystemPrompts(base: configuration.systemPrompts)
             viewModel.send(prompt: prompt, systemPrompts: prompts)
         }
     }

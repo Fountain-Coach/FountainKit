@@ -100,6 +100,7 @@ public final class EngraverChatViewModel: ObservableObject {
     @Published public private(set) var sessionId: UUID
     @Published public private(set) var sessionName: String? = nil
     @Published public private(set) var sessionStartedAt: Date
+    @Published public private(set) var historicalContext: String? = nil
     @Published public var selectedModel: String
 
     public let availableModels: [String]
@@ -117,6 +118,13 @@ public final class EngraverChatViewModel: ObservableObject {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         return formatter
     }()
+    private static let contextTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d 'at' HH:mm"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter
+    }()
+    private var persistedRecords: [EngraverChatRecord] = []
 
     public init(
         chatClient: GatewayChatStreaming,
@@ -303,10 +311,16 @@ public final class EngraverChatViewModel: ObservableObject {
         lastError = nil
         state = .idle
         diagnostics.removeAll()
+        historicalContext = persistedRecords.isEmpty ? nil : historicalContext
         let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines)
         sessionId = idGenerator()
         sessionStartedAt = dateProvider()
         sessionName = (trimmed?.isEmpty ?? true) ? nil : trimmed
+        if !persistedRecords.isEmpty {
+            updateHistoricalContext(excluding: sessionId)
+        } else {
+            historicalContext = nil
+        }
         emitDiagnostic("Started new chat session • id=\(sessionId)")
         if let sessionName {
             emitDiagnostic("Session named \"\(sessionName)\"")
@@ -361,6 +375,8 @@ public final class EngraverChatViewModel: ObservableObject {
                 return
             }
             applyPersistedSession(records: records)
+            persistedRecords = records
+            updateHistoricalContext(excluding: sessionId)
             emitDiagnostic("Hydrated session from persistence • turns=\(turns.count) session=\(sessionName ?? "(untitled)")")
         } catch {
             emitDiagnostic("Hydration error: \(error)")
@@ -441,6 +457,50 @@ public final class EngraverChatViewModel: ObservableObject {
         return candidate
     }
 
+    private func updateHistoricalContext(excluding session: UUID) {
+        let grouped = Dictionary(grouping: persistedRecords) { record -> UUID in
+            if let identifier = record.sessionId {
+                return identifier
+            }
+            return UUID(uuidString: record.recordId) ?? session
+        }
+
+        let summaries = grouped
+            .filter { $0.key != session }
+            .sorted { lhs, rhs in
+                let lhsUpdated = lhs.value.map { $0.createdAt }.max() ?? .distantPast
+                let rhsUpdated = rhs.value.map { $0.createdAt }.max() ?? .distantPast
+                return lhsUpdated > rhsUpdated
+            }
+            .prefix(3)
+            .map { entry -> String in
+                let records = entry.value.sorted { $0.createdAt < $1.createdAt }
+                let trimmedName = records.first?.sessionName?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let displayName = (trimmedName?.isEmpty == false ? trimmedName : nil) ?? "Session \(entry.key.uuidString.prefix(8))"
+                let updatedAt = records.last?.createdAt ?? .distantPast
+                let timestamp = Self.contextTimeFormatter.string(from: updatedAt)
+                let lastPrompt = truncateForContext(records.last?.prompt ?? "")
+                let lastAnswer = truncateForContext(records.last?.answer ?? "")
+                return "• \(displayName) (last \(timestamp))\n  ├─ User: \(lastPrompt)\n  └─ Assistant: \(lastAnswer)"
+            }
+
+        historicalContext = summaries.isEmpty ? nil : "Prior Engraver sessions for this corpus:\n\n" + summaries.joined(separator: "\n")
+    }
+
+    private func truncateForContext(_ text: String, limit: Int = 160) -> String {
+        let singleLine = text.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard singleLine.count > limit else { return singleLine }
+        return String(singleLine.prefix(limit - 1)) + "…"
+    }
+
+    public func makeSystemPrompts(base: [String]) -> [String] {
+        var prompts = base
+        if let context = historicalContext, !context.isEmpty {
+            prompts.append("Historical context from your prior sessions:\n\n\(context)\n\nIncorporate this knowledge when answering the user, while prioritising the latest instructions.")
+        }
+        return prompts
+    }
+
     private func persist(
         turn: EngraverChatTurn,
         context: PersistenceContext,
@@ -492,6 +552,8 @@ public final class EngraverChatViewModel: ObservableObject {
                 body: data
             )
             emitDiagnostic("Persisted turn \(record.recordId) to FountainStore.")
+            persistedRecords.append(record)
+            updateHistoricalContext(excluding: sessionId)
         } catch PersistenceError.notSupported {
             // FountainStore lacks required capability; ignore for now.
             emitDiagnostic("Persistence skipped: FountainStore missing capability.")

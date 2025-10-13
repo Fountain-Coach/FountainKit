@@ -12,6 +12,7 @@ public struct EngraverStudioConfiguration: Sendable {
     public let defaultModel: String
     public let persistenceStore: FountainStoreClient?
     public let debugEnabled: Bool
+    public let awarenessBaseURL: URL?
 
     public init(environment: [String: String] = ProcessInfo.processInfo.environment) {
         var env = environment
@@ -69,6 +70,12 @@ public struct EngraverStudioConfiguration: Sendable {
         } else {
             self.debugEnabled = false
         }
+
+        if let disableAwareness = env["ENGRAVER_DISABLE_AWARENESS"]?.lowercased(), disableAwareness == "true" {
+            self.awarenessBaseURL = nil
+        } else {
+            self.awarenessBaseURL = Self.resolveAwarenessURL(from: env)
+        }
     }
 
     public func tokenProvider() -> GatewayChatClient.TokenProvider {
@@ -97,5 +104,13 @@ extension EngraverStudioConfiguration {
             expanded = rawPath
         }
         return URL(fileURLWithPath: expanded, isDirectory: true)
+    }
+
+    private static func resolveAwarenessURL(from env: [String: String]) -> URL? {
+        if let raw = env["AWARENESS_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty,
+           let url = URL(string: raw) {
+            return url
+        }
+        return URL(string: "http://127.0.0.1:8001")
     }
 }

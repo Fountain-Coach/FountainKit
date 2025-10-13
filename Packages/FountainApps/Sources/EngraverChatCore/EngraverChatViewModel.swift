@@ -112,6 +112,10 @@ public final class EngraverChatViewModel: ObservableObject {
     private let dateProvider: @Sendable () -> Date
     private let debugEnabled: Bool
     private let logger: Logger
+    private let awarenessBaseURL: URL?
+    private let initialCorpusId: String
+    private var awarenessSummary: String? = nil
+    private var persistedRecords: [EngraverChatRecord] = []
     private static let sessionTitleFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMM d, HH:mm"
@@ -124,7 +128,6 @@ public final class EngraverChatViewModel: ObservableObject {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         return formatter
     }()
-    private var persistedRecords: [EngraverChatRecord] = []
 
     public init(
         chatClient: GatewayChatStreaming,
@@ -134,6 +137,7 @@ public final class EngraverChatViewModel: ObservableObject {
         availableModels: [String] = ["gpt-4o-mini"],
         defaultModel: String? = nil,
         debugEnabled: Bool = false,
+        awarenessBaseURL: URL? = nil,
         idGenerator: @escaping @Sendable () -> UUID = { UUID() },
         dateProvider: @escaping @Sendable () -> Date = { Date() }
     ) {
@@ -149,6 +153,8 @@ public final class EngraverChatViewModel: ObservableObject {
         self.idGenerator = idGenerator
         self.dateProvider = dateProvider
         self.logger = Logger(subsystem: "FountainApps.EngraverChat", category: "ViewModel")
+        self.awarenessBaseURL = awarenessBaseURL
+        self.initialCorpusId = corpusId
 
         let initialSessionId = idGenerator()
         self.sessionId = initialSessionId
@@ -159,6 +165,11 @@ public final class EngraverChatViewModel: ObservableObject {
         if persistenceContext != nil {
             Task { [weak self] in
                 await self?.hydrateFromPersistence()
+            }
+        }
+        if awarenessBaseURL != nil {
+            Task { [weak self] in
+                await self?.refreshAwarenessSummary()
             }
         }
     }
@@ -311,15 +322,14 @@ public final class EngraverChatViewModel: ObservableObject {
         lastError = nil
         state = .idle
         diagnostics.removeAll()
-        historicalContext = persistedRecords.isEmpty ? nil : historicalContext
         let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines)
         sessionId = idGenerator()
         sessionStartedAt = dateProvider()
         sessionName = (trimmed?.isEmpty ?? true) ? nil : trimmed
-        if !persistedRecords.isEmpty {
-            updateHistoricalContext(excluding: sessionId)
-        } else {
+        if persistedRecords.isEmpty && (awarenessSummary?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) {
             historicalContext = nil
+        } else {
+            updateHistoricalContext(excluding: sessionId)
         }
         emitDiagnostic("Started new chat session • id=\(sessionId)")
         if let sessionName {
@@ -375,8 +385,6 @@ public final class EngraverChatViewModel: ObservableObject {
                 return
             }
             applyPersistedSession(records: records)
-            persistedRecords = records
-            updateHistoricalContext(excluding: sessionId)
             emitDiagnostic("Hydrated session from persistence • turns=\(turns.count) session=\(sessionName ?? "(untitled)")")
         } catch {
             emitDiagnostic("Hydration error: \(error)")
@@ -433,6 +441,16 @@ public final class EngraverChatViewModel: ObservableObject {
                 response: response
             )
         }
+        persistedRecords = records
+        updateHistoricalContext(excluding: resolvedSessionId)
+    }
+
+    private func cachePersistedRecord(_ record: EngraverChatRecord) {
+        if let index = persistedRecords.firstIndex(where: { $0.recordId == record.recordId }) {
+            persistedRecords[index] = record
+        } else {
+            persistedRecords.append(record)
+        }
     }
 
     private func generateSessionName(from prompt: String, startedAt: Date? = nil) -> String {
@@ -458,6 +476,25 @@ public final class EngraverChatViewModel: ObservableObject {
     }
 
     private func updateHistoricalContext(excluding session: UUID) {
+        var sections: [String] = []
+
+        if let awarenessSummary = awarenessSummary?.trimmingCharacters(in: .whitespacesAndNewlines), !awarenessSummary.isEmpty {
+            var awarenessBlock = "Baseline Awareness summary:\n\(awarenessSummary)"
+            if let awarenessBaseURL {
+                awarenessBlock.append("\n(Service endpoint: \(awarenessBaseURL.absoluteString))")
+            }
+            sections.append(awarenessBlock)
+        }
+
+        let sessionSummaries = makeSessionSummaries(excluding: session)
+        if !sessionSummaries.isEmpty {
+            sections.append("Recent Engraver sessions for this corpus:\n\n" + sessionSummaries.joined(separator: "\n"))
+        }
+
+        historicalContext = sections.isEmpty ? nil : sections.joined(separator: "\n\n")
+    }
+
+    private func makeSessionSummaries(excluding session: UUID) -> [String] {
         let grouped = Dictionary(grouping: persistedRecords) { record -> UUID in
             if let identifier = record.sessionId {
                 return identifier
@@ -465,7 +502,7 @@ public final class EngraverChatViewModel: ObservableObject {
             return UUID(uuidString: record.recordId) ?? session
         }
 
-        let summaries = grouped
+        return grouped
             .filter { $0.key != session }
             .sorted { lhs, rhs in
                 let lhsUpdated = lhs.value.map { $0.createdAt }.max() ?? .distantPast
@@ -483,8 +520,39 @@ public final class EngraverChatViewModel: ObservableObject {
                 let lastAnswer = truncateForContext(records.last?.answer ?? "")
                 return "• \(displayName) (last \(timestamp))\n  ├─ User: \(lastPrompt)\n  └─ Assistant: \(lastAnswer)"
             }
+    }
 
-        historicalContext = summaries.isEmpty ? nil : "Prior Engraver sessions for this corpus:\n\n" + summaries.joined(separator: "\n")
+    private func refreshAwarenessSummary() async {
+        guard let awarenessBaseURL else { return }
+        let corpus = persistenceContext?.corpusId ?? initialCorpusId
+        let summaryURL = awarenessBaseURL
+            .appendingPathComponent("corpus", isDirectory: false)
+            .appendingPathComponent("summary", isDirectory: false)
+            .appendingPathComponent(corpus, isDirectory: false)
+        var request = URLRequest(url: summaryURL)
+        request.httpMethod = "GET"
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw NSError(domain: "EngraverChat", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid awareness response"])
+            }
+            if http.statusCode == 200 {
+                let decoded = try JSONDecoder().decode(AwarenessSummaryResponse.self, from: data)
+                let trimmed = decoded.summary.trimmingCharacters(in: .whitespacesAndNewlines)
+                awarenessSummary = trimmed.isEmpty ? nil : trimmed
+            } else if http.statusCode == 404 {
+                awarenessSummary = nil
+            } else {
+                throw NSError(domain: "EngraverChat", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Awareness summary status \(http.statusCode)"])
+            }
+            updateHistoricalContext(excluding: sessionId)
+        } catch {
+            emitDiagnostic("Awareness summary error: \(error)")
+        }
+    }
+
+    private struct AwarenessSummaryResponse: Decodable {
+        let summary: String
     }
 
     private func truncateForContext(_ text: String, limit: Int = 160) -> String {
@@ -496,7 +564,11 @@ public final class EngraverChatViewModel: ObservableObject {
     public func makeSystemPrompts(base: [String]) -> [String] {
         var prompts = base
         if let context = historicalContext, !context.isEmpty {
-            prompts.append("Historical context from your prior sessions:\n\n\(context)\n\nIncorporate this knowledge when answering the user, while prioritising the latest instructions.")
+            prompts.append("Historical context from your prior sessions and services:\n\n\(context)\n\nUse this knowledge when assisting the user, while prioritising their latest instructions.")
+        }
+        if awarenessBaseURL != nil {
+            let endpointDescription = awarenessBaseURL?.absoluteString ?? "http://127.0.0.1:8001"
+            prompts.append("You have access to the Baseline Awareness service at \(endpointDescription). It provides baselines, drift events, narrative patterns, and reflections for this corpus. Reference it when discussing long-term context.")
         }
         return prompts
     }
@@ -552,8 +624,9 @@ public final class EngraverChatViewModel: ObservableObject {
                 body: data
             )
             emitDiagnostic("Persisted turn \(record.recordId) to FountainStore.")
-            persistedRecords.append(record)
+            cachePersistedRecord(record)
             updateHistoricalContext(excluding: sessionId)
+            await refreshAwarenessSummary()
         } catch PersistenceError.notSupported {
             // FountainStore lacks required capability; ignore for now.
             emitDiagnostic("Persistence skipped: FountainStore missing capability.")

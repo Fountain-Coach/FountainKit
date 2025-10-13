@@ -199,7 +199,7 @@ struct EngraverStudioView: View {
         guard !content.isEmpty else { return }
         viewModel.send(
             prompt: content,
-            systemPrompts: systemPrompts
+            systemPrompts: viewModel.makeSystemPrompts(base: systemPrompts)
         )
         draftPrompt = ""
     }

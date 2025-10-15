@@ -381,6 +381,7 @@ struct BorderedLogView: Scene {
     var title: String
     var lines: [String]
     var maximumVisibleLines: Int
+    var scrollOffset: Int
 
     func makeSceneNodes() -> [SceneNode] {
         [
@@ -390,7 +391,8 @@ struct BorderedLogView: Scene {
                         BorderedLogWidget(
                             title: title,
                             lines: lines,
-                            maximumVisibleLines: maximumVisibleLines
+                            maximumVisibleLines: maximumVisibleLines,
+                            scrollOffset: scrollOffset
                         )
                     )
                 )
@@ -403,6 +405,7 @@ private struct BorderedLogWidget: Widget {
     var title: String
     var lines: [String]
     var maximumVisibleLines: Int
+    var scrollOffset: Int
 
     func measure(in constraints: LayoutConstraints) -> LayoutSize {
         let contentWidth = lines.map(\.count).max() ?? 0
@@ -439,7 +442,11 @@ private struct BorderedLogWidget: Widget {
 
         let innerWidth = width - 2
         let availableRows = height - 2
-        let visibleLines = lines.suffix(availableRows)
+        let maxOffset = max(0, lines.count - availableRows)
+        let clampedOffset = min(max(0, scrollOffset), maxOffset)
+        let startIndex = max(0, lines.count - availableRows - clampedOffset)
+        let endIndex = min(lines.count, startIndex + availableRows)
+        let visibleLines = lines[startIndex..<endIndex]
         var currentRow = 0
         for line in visibleLines {
             guard currentRow < availableRows else { break }
@@ -515,6 +522,19 @@ struct TranscriptFormatter {
 // MARK: - Terminal App
 
 struct EngraverChatTUI: TerminalApp {
+    private enum ScrollViewTarget: CaseIterable {
+        case transcript
+        case corpus
+        case diagnostics
+    }
+
+    private enum EscapeSequenceState {
+        case idle
+        case sawEscape
+        case sawBracket
+        case collectingDigits(String)
+    }
+
     var options: ChatCLIOptions
     let session: ChatSession
     var bootSequence: BootSequence?
@@ -535,6 +555,11 @@ struct EngraverChatTUI: TerminalApp {
     var terminalColumns: Int = 80
     var lastCorpusRefreshTick: Int = 0
     var lastSnapshotTick: Int = 0
+    var transcriptScrollOffset: Int = 0
+    var diagnosticsScrollOffset: Int = 0
+    var corpusScrollOffset: Int = 0
+    private var escapeState: EscapeSequenceState = .idle
+    private var activeScrollView: ScrollViewTarget = .transcript
 
     private static let corpusTimeFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -565,12 +590,27 @@ struct EngraverChatTUI: TerminalApp {
         Screen {
             VStack(spacing: 1) {
                 Title("Engraver Chat Session")
-                BorderedLogView(title: "Transcript", lines: transcriptLines, maximumVisibleLines: options.transcriptLines)
+                BorderedLogView(
+                    title: logTitle(for: .transcript),
+                    lines: transcriptLines,
+                    maximumVisibleLines: options.transcriptLines,
+                    scrollOffset: transcriptScrollOffset
+                )
                 if showCorpusBrowser {
-                    BorderedLogView(title: "Corpus", lines: corpusLines, maximumVisibleLines: options.corpusLines)
+                    BorderedLogView(
+                        title: logTitle(for: .corpus),
+                        lines: corpusLines,
+                        maximumVisibleLines: options.corpusLines,
+                        scrollOffset: corpusScrollOffset
+                    )
                 }
                 if showDiagnostics {
-                    BorderedLogView(title: "Diagnostics", lines: diagnosticsLines, maximumVisibleLines: options.diagnosticsLines)
+                    BorderedLogView(
+                        title: logTitle(for: .diagnostics),
+                        lines: diagnosticsLines,
+                        maximumVisibleLines: options.diagnosticsLines,
+                        scrollOffset: diagnosticsScrollOffset
+                    )
                 }
                 WidgetView(
                     PromptLineWidget(
@@ -579,17 +619,204 @@ struct EngraverChatTUI: TerminalApp {
                         cursorGlyph: cursorGlyph()
                     )
                 )
-                StatusBar(items: [
-                    .label("Enter: send"),
-                    .label("Ctrl+C/q: quit"),
-                    .label("Ctrl+D: toggle diagnostics"),
-                    .label("Ctrl+P: corpus"),
-                    .label("Ctrl+N: new chat"),
-                    .label(statusLine)
-                ])
+                StatusBar(items: statusBarItems)
             }
             .padding(1)
         }
+    }
+
+    private var statusBarItems: [StatusBar.Item] {
+        [
+            .label("Enter: send"),
+            .label("Ctrl+C/q: quit"),
+            .label("Ctrl+D: diagnostics"),
+            .label("Ctrl+P: corpus"),
+            .label("Ctrl+N: new chat"),
+            .label("Left/Right: view"),
+            .label("Up/Down PgUp/PgDn: scroll"),
+            .label(statusLine)
+        ]
+    }
+
+    private func displayName(for target: ScrollViewTarget) -> String {
+        switch target {
+        case .transcript:
+            return "Transcript"
+        case .corpus:
+            return "Corpus"
+        case .diagnostics:
+            return "Diagnostics"
+        }
+    }
+
+    private func logTitle(for target: ScrollViewTarget) -> String {
+        let base = displayName(for: target)
+        let indicator = activeScrollView == target ? "> " : ""
+        let maxOffset = maxScrollOffset(for: target)
+        let offset = scrollOffset(for: target)
+        let suffix: String
+        if maxOffset == 0 {
+            suffix = ""
+        } else if offset == 0 {
+            suffix = " (bottom)"
+        } else if offset >= maxOffset {
+            suffix = " (top)"
+        } else {
+            suffix = " (\(offset)/\(maxOffset))"
+        }
+        return indicator + base + suffix
+    }
+
+    private func lines(for target: ScrollViewTarget) -> [String] {
+        switch target {
+        case .transcript:
+            return transcriptLines
+        case .corpus:
+            return corpusLines
+        case .diagnostics:
+            return diagnosticsLines
+        }
+    }
+
+    private func visibleLineLimit(for target: ScrollViewTarget) -> Int {
+        switch target {
+        case .transcript:
+            return options.transcriptLines
+        case .corpus:
+            return options.corpusLines
+        case .diagnostics:
+            return options.diagnosticsLines
+        }
+    }
+
+    private func maxScrollOffset(for target: ScrollViewTarget) -> Int {
+        let limit = max(1, visibleLineLimit(for: target))
+        let total = lines(for: target).count
+        return max(0, total - limit)
+    }
+
+    private func scrollOffset(for target: ScrollViewTarget) -> Int {
+        switch target {
+        case .transcript:
+            return transcriptScrollOffset
+        case .corpus:
+            return corpusScrollOffset
+        case .diagnostics:
+            return diagnosticsScrollOffset
+        }
+    }
+
+    private mutating func setScrollOffset(_ value: Int, for target: ScrollViewTarget) {
+        let clamped = max(0, min(value, maxScrollOffset(for: target)))
+        switch target {
+        case .transcript:
+            transcriptScrollOffset = clamped
+        case .corpus:
+            corpusScrollOffset = clamped
+        case .diagnostics:
+            diagnosticsScrollOffset = clamped
+        }
+    }
+
+    private func isViewVisible(_ target: ScrollViewTarget) -> Bool {
+        switch target {
+        case .transcript:
+            return true
+        case .corpus:
+            return showCorpusBrowser
+        case .diagnostics:
+            return showDiagnostics
+        }
+    }
+
+    private var visibleScrollViews: [ScrollViewTarget] {
+        ScrollViewTarget.allCases.filter { isViewVisible($0) }
+    }
+
+    private mutating func ensureActiveScrollViewIsVisible() {
+        let available = visibleScrollViews
+        guard !available.isEmpty else {
+            activeScrollView = .transcript
+            return
+        }
+        if !available.contains(activeScrollView) {
+            activeScrollView = available.first ?? .transcript
+        }
+    }
+
+    private mutating func focusNextScrollView() {
+        let available = visibleScrollViews
+        guard !available.isEmpty else { return }
+        if let index = available.firstIndex(of: activeScrollView) {
+            let nextIndex = (index + 1) % available.count
+            activeScrollView = available[nextIndex]
+        } else {
+            activeScrollView = available[0]
+        }
+        statusLine = "\(displayName(for: activeScrollView)) focused"
+    }
+
+    private mutating func focusPreviousScrollView() {
+        let available = visibleScrollViews
+        guard !available.isEmpty else { return }
+        if let index = available.firstIndex(of: activeScrollView) {
+            let previousIndex = (index - 1 + available.count) % available.count
+            activeScrollView = available[previousIndex]
+        } else {
+            activeScrollView = available[0]
+        }
+        statusLine = "\(displayName(for: activeScrollView)) focused"
+    }
+
+    private mutating func scroll(_ target: ScrollViewTarget, by delta: Int) {
+        guard delta != 0 else { return }
+        let maxOffset = maxScrollOffset(for: target)
+        let current = scrollOffset(for: target)
+        let updated = max(0, min(maxOffset, current + delta))
+        if updated != current {
+            setScrollOffset(updated, for: target)
+        }
+        reportScrollChange(for: target)
+    }
+
+    private mutating func pageScroll(_ target: ScrollViewTarget, direction: Int) {
+        guard direction != 0 else { return }
+        let step = max(1, visibleLineLimit(for: target) - 1)
+        scroll(target, by: step * direction)
+    }
+
+    private mutating func scrollToTop(_ target: ScrollViewTarget) {
+        let maxOffset = maxScrollOffset(for: target)
+        setScrollOffset(maxOffset, for: target)
+        reportScrollChange(for: target)
+    }
+
+    private mutating func scrollToBottom(_ target: ScrollViewTarget) {
+        setScrollOffset(0, for: target)
+        reportScrollChange(for: target)
+    }
+
+    private mutating func reportScrollChange(for target: ScrollViewTarget) {
+        let name = displayName(for: target)
+        let maxOffset = maxScrollOffset(for: target)
+        let offset = min(scrollOffset(for: target), maxOffset)
+        let message: String
+        if maxOffset == 0 {
+            message = "\(name) showing latest lines"
+        } else if offset == 0 {
+            message = "\(name) at bottom"
+        } else if offset >= maxOffset {
+            message = "\(name) at top"
+        } else {
+            message = "\(name) offset \(offset)/\(maxOffset)"
+        }
+        statusLine = message
+    }
+
+    private mutating func clampScrollOffsets() {
+        setScrollOffset(transcriptScrollOffset, for: .transcript)
+        setScrollOffset(diagnosticsScrollOffset, for: .diagnostics)
+        setScrollOffset(corpusScrollOffset, for: .corpus)
     }
 
     mutating func onEvent(_ event: Event, context: AppContext) async {
@@ -609,6 +836,78 @@ struct EngraverChatTUI: TerminalApp {
     // MARK: - Event Handling
 
     private mutating func handle(character: Character, context: AppContext) async {
+        switch escapeState {
+        case .idle:
+            if character == "\u{1B}" {
+                escapeState = .sawEscape
+                return
+            }
+            await handleBaseCharacter(character, context: context)
+        case .sawEscape:
+            if character == "[" {
+                escapeState = .sawBracket
+                return
+            }
+            escapeState = .idle
+            await handleBaseCharacter(character, context: context)
+        case .sawBracket:
+            if character.isNumber {
+                escapeState = .collectingDigits(String(character))
+                return
+            }
+            escapeState = .idle
+            handleEscapeCommand(character)
+        case .collectingDigits(let digits):
+            if character.isNumber {
+                escapeState = .collectingDigits(digits + String(character))
+                return
+            }
+            escapeState = .idle
+            if character == "~" {
+                handleBracketNumberSequence(digits)
+            } else {
+                await handleBaseCharacter(character, context: context)
+            }
+        }
+    }
+
+    private mutating func handleEscapeCommand(_ character: Character) {
+        switch character {
+        case "A":
+            scroll(activeScrollView, by: 1)
+        case "B":
+            scroll(activeScrollView, by: -1)
+        case "C":
+            focusNextScrollView()
+        case "D":
+            focusPreviousScrollView()
+        case "H":
+            scrollToTop(activeScrollView)
+        case "F":
+            scrollToBottom(activeScrollView)
+        case "Z":
+            focusPreviousScrollView()
+        default:
+            break
+        }
+    }
+
+    private mutating func handleBracketNumberSequence(_ digits: String) {
+        switch digits {
+        case "5":
+            pageScroll(activeScrollView, direction: 1)
+        case "6":
+            pageScroll(activeScrollView, direction: -1)
+        case "1":
+            scrollToTop(activeScrollView)
+        case "4":
+            scrollToBottom(activeScrollView)
+        default:
+            break
+        }
+    }
+
+    private mutating func handleBaseCharacter(_ character: Character, context: AppContext) async {
         let scalar = character.unicodeScalars.first?.value ?? 0
 
         switch scalar {
@@ -619,8 +918,15 @@ struct EngraverChatTUI: TerminalApp {
             showDiagnostics.toggle()
             if showDiagnostics {
                 refreshDiagnosticsLines()
+                setScrollOffset(0, for: .diagnostics)
+                activeScrollView = .diagnostics
             }
+            clampScrollOffsets()
+            ensureActiveScrollViewIsVisible()
             statusLine = showDiagnostics ? "Diagnostics visible" : "Diagnostics hidden"
+            return
+        case 9:
+            focusNextScrollView()
             return
         case 14:
             await startNewChat()
@@ -628,12 +934,14 @@ struct EngraverChatTUI: TerminalApp {
         case 16:
             showCorpusBrowser.toggle()
             if showCorpusBrowser {
+                setScrollOffset(0, for: .corpus)
                 lastCorpusRefreshTick = 0
                 await refreshCorpusView(force: true)
-                statusLine = "Corpus browser visible"
-            } else {
-                statusLine = "Corpus browser hidden"
+                activeScrollView = .corpus
             }
+            clampScrollOffsets()
+            ensureActiveScrollViewIsVisible()
+            statusLine = showCorpusBrowser ? "Corpus browser visible" : "Corpus browser hidden"
             return
         case 21:
             inputBuffer.removeAll(keepingCapacity: false)
@@ -690,6 +998,11 @@ struct EngraverChatTUI: TerminalApp {
         lastTurnCount = 0
         lastSnapshotTick = 0
         lastCorpusRefreshTick = 0
+        transcriptScrollOffset = 0
+        diagnosticsScrollOffset = 0
+        corpusScrollOffset = 0
+        escapeState = .idle
+        activeScrollView = .transcript
         statusLine = "Started new chat session"
         await refreshSnapshot(force: true)
         if showCorpusBrowser {
@@ -743,6 +1056,7 @@ struct EngraverChatTUI: TerminalApp {
             wrapWidth: transcriptWrapWidth
         )
         transcriptLines = formatter.lines(for: snapshot)
+        clampScrollOffsets()
 
         if snapshot.diagnostics.count > lastEngDiagnosticsCount {
             let newEntries = snapshot.diagnostics[lastEngDiagnosticsCount..<snapshot.diagnostics.count]
@@ -821,6 +1135,7 @@ struct EngraverChatTUI: TerminalApp {
 
     private mutating func refreshDiagnosticsLines() {
         diagnosticsLines = Array(diagnosticsBuffer.suffix(options.diagnosticsLines))
+        clampScrollOffsets()
     }
 
     private mutating func refreshCorpusView(force: Bool) async {
@@ -835,6 +1150,7 @@ struct EngraverChatTUI: TerminalApp {
                 "Corpus browser",
                 "  Persistence disabled (ENGRAVER_DISABLE_PERSISTENCE=true)"
             ]
+            clampScrollOffsets()
             return
         }
         if lastSnapshot == nil {
@@ -844,12 +1160,14 @@ struct EngraverChatTUI: TerminalApp {
             let fetchLimit = max(options.corpusLines, 5)
             let sessions = try await session.fetchCorpusSessions(limit: fetchLimit)
             corpusLines = formatCorpusSessions(sessions, snapshot: lastSnapshot)
+            clampScrollOffsets()
         } catch {
             let message = truncate(error.localizedDescription, limit: max(24, corpusWrapWidth - 4))
             corpusLines = [
                 "Corpus browser",
                 "  Fetch failed: \(message)"
             ]
+            clampScrollOffsets()
         }
     }
 

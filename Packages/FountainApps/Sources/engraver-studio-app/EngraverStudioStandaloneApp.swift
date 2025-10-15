@@ -8,6 +8,7 @@ import Security
 @main
 @available(macOS 13.0, *)
 struct EngraverStudioStandaloneApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     private let configuration: EngraverStudioConfiguration
 
     init() {
@@ -28,11 +29,19 @@ struct EngraverStudioStandaloneApp: App {
         WindowGroup {
             EngraverStudioRoot(configuration: configuration)
                 .frame(minWidth: 960, minHeight: 620)
-                .onAppear {
-                    NSApp.activate(ignoringOtherApps: true)
-                }
         }
         .windowResizability(.contentSize)
+    }
+
+    final class AppDelegate: NSObject, NSApplicationDelegate {
+        func applicationDidFinishLaunching(_ notification: Notification) {
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate(ignoringOtherApps: true)
+        }
+
+        func applicationDidBecomeActive(_ notification: Notification) {
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 }
 

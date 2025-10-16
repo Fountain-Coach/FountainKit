@@ -34,11 +34,13 @@ let authPlugin = AuthGatewayPlugin()
 let attachmentClient = FountainStoreClient(client: EmbeddedFountainStoreClient())
 let attachmentMetadataStore = GatewayAttachmentStore(store: attachmentClient)
 let attachmentUploadStore = ChatKitUploadStore(store: attachmentClient)
+let threadStore = GatewayThreadStore(store: attachmentClient)
 let chatKitSessionStore = ChatKitSessionStore()
 let chatKitLogger = ChatKitLogging.makeLogger()
 let chatKitPlugin = ChatKitGatewayPlugin(store: chatKitSessionStore,
                                          uploadStore: attachmentUploadStore,
                                          metadataStore: attachmentMetadataStore,
+                                         threadStore: threadStore,
                                          responder: ChatKitGatewayResponder(),
                                          maxAttachmentBytes: chatKitConfig.maxAttachmentBytes,
                                          allowedAttachmentMIMEs: chatKitConfig.allowedMimeTypes,

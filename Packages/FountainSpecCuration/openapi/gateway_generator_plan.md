@@ -3,11 +3,11 @@
 Purpose: Expand Swift OpenAPI Generator coverage for the Fountain Gateway so that curated specs drive both control-plane and plugin surfaces end-to-end.
 
 ## Milestone A — Spec Alignment & Configuration
-- [ ] Inventory existing gateway specs (`openapi/v1/gateway.yml`, plugin specs) and confirm missing operations in generator filters.
-- [ ] Update `openapi/v1/gateway.yml` (and per-plugin specs) to reflect latest request/response models, annotating auth, pagination, and upload/download behaviors.
-- [ ] Run `openapi/lint-matrix.sh gateway` to ensure specs pass Redocly linting.
-- [ ] Review `Packages/FountainSpecCuration/openapi/README.md` tables and update status entries once specs are refreshed.
-- [ ] Add or adjust `openapi-generator-config.yaml` filter paths in `Packages/FountainApps/Sources/GatewayServer` so ChatKit and plugin endpoints generate alongside control-plane routes.
+- [x] Inventory existing gateway specs (`openapi/v1/gateway.yml`, plugin specs) and confirm missing operations in generator filters. _(2025-10-16 — ChatKit routes were absent from the generator scope.)_
+- [x] Update `openapi/v1/gateway.yml` (and per-plugin specs) to reflect latest request/response models, annotating auth, pagination, and upload/download behaviors. _(ChatKit session, thread, and attachment flows now document security, size limits, and SSE/tool event metadata.)_
+- [x] Run `openapi/lint-matrix.sh gateway` to ensure specs pass Redocly linting.
+- [x] Review `Packages/FountainSpecCuration/openapi/README.md` tables and update status entries once specs are refreshed.
+- [x] Add or adjust `openapi-generator-config.yaml` filter paths in `Packages/FountainApps/Sources/GatewayServer` so ChatKit and plugin endpoints generate alongside control-plane routes.
 
 ## Milestone B — Generated Server Adoption
 - [ ] Run `swift build --product gateway-server` to regenerate server interfaces and surface compile errors introduced by broader generation.

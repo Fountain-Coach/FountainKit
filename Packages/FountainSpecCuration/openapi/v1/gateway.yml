@@ -23,7 +23,7 @@ paths:
       description: Returns 200 if the gateway is running.
       operationId: gatewayHealth
       x-fountain.visibility: public
-      x-fountain.reason: ''
+      x-fountain.reason: Ensures active ChatKit sessions can rotate compromised or expiring client secrets.
       x-fountain.allow-as-tool: true
       responses:
         '200':
@@ -40,7 +40,7 @@ paths:
       description: Endpoint that serves runtime metrics encoded as JSON.
       operationId: gatewayMetrics
       x-fountain.visibility: public
-      x-fountain.reason: ''
+      x-fountain.reason: Streams assistant completions (JSON or SSE) after validating the ChatKit session secret.
       x-fountain.allow-as-tool: true
       responses:
         '200':
@@ -63,7 +63,7 @@ paths:
         protected routes.
       operationId: issueAuthToken
       x-fountain.visibility: public
-      x-fountain.reason: ''
+      x-fountain.reason: Persists structured conversations tied to the session for later retrieval and tooling.
       x-fountain.allow-as-tool: true
       requestBody:
         required: true
@@ -91,7 +91,7 @@ paths:
       description: Returns metadata about the active TLS certificate.
       operationId: certificateInfo
       x-fountain.visibility: public
-      x-fountain.reason: ''
+      x-fountain.reason: Retrieves historical assistant messages, tool calls, and metadata for a specific session thread.
       x-fountain.allow-as-tool: true
       responses:
         '200':
@@ -110,7 +110,7 @@ paths:
       description: Manually invoke the renewal process for the TLS certificate.
       operationId: renewCertificate
       x-fountain.visibility: public
-      x-fountain.reason: ''
+      x-fountain.reason: Enforces user-driven deletion of stored ChatKit history scoped to the session secret.
       x-fountain.allow-as-tool: true
       responses:
         '202':
@@ -126,10 +126,10 @@ paths:
   /chatkit/session:
     post:
       summary: Start ChatKit session
-      description: Issues a short-lived client secret used to authenticate chat requests.
+      description: Issues a short-lived client secret used to authenticate chat requests. Persona, user, and metadata hints are captured so downstream plugins can personalise prompts and storage scopes.
       operationId: startChatKitSession
       x-fountain.visibility: public
-      x-fountain.reason: ''
+      x-fountain.reason: Requires bootstrap of a ChatKit session before any message, attachment, or thread APIs can be invoked.
       x-fountain.allow-as-tool: false
       requestBody:
         required: false
@@ -152,7 +152,7 @@ paths:
       description: Rotates the client secret associated with an active chat session.
       operationId: refreshChatKitSession
       x-fountain.visibility: public
-      x-fountain.reason: ''
+      x-fountain.reason: Ensures active ChatKit sessions can rotate compromised or expiring client secrets.
       x-fountain.allow-as-tool: false
       requestBody:
         required: true
@@ -170,18 +170,14 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/Unauthorized'
   /chatkit/messages:
     post:
       summary: Submit ChatKit message batch
       description: Accepts conversation messages and forwards them to the LLM pipeline.
       operationId: postChatKitMessage
       x-fountain.visibility: public
-      x-fountain.reason: ''
+      x-fountain.reason: Streams assistant completions (JSON or SSE) after validating the ChatKit session secret.
       x-fountain.allow-as-tool: false
       requestBody:
         required: true
@@ -205,18 +201,14 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/Unauthorized'
   /chatkit/upload:
     post:
       summary: Upload attachment for ChatKit
-      description: Stores an attachment and returns an identifier for later reference.
+      description: Stores an attachment and returns an identifier for later reference. Attachments are validated against the configured MIME allow list and 25 MB size ceiling and expire 24 hours after upload.
       operationId: uploadChatKitAttachment
       x-fountain.visibility: public
-      x-fountain.reason: ''
+      x-fountain.reason: Persists large user inputs (files, images) for reference by downstream ChatKit messages.
       x-fountain.allow-as-tool: false
       requestBody:
         required: true
@@ -234,18 +226,14 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/Unauthorized'
   /chatkit/attachments/{attachmentId}:
     get:
       summary: Download ChatKit attachment
       description: Returns the raw bytes for a previously uploaded attachment after validating the session secret and metadata.
       operationId: downloadChatKitAttachment
       x-fountain.visibility: public
-      x-fountain.reason: ''
+      x-fountain.reason: Validates attachment ownership and checksum integrity before streaming binary content.
       x-fountain.allow-as-tool: false
       parameters:
         - name: attachmentId
@@ -263,6 +251,20 @@ paths:
       responses:
         '200':
           description: Attachment bytes
+          headers:
+            Cache-Control:
+              description: Prevents caching of sensitive attachment payloads.
+              schema:
+                type: string
+                example: no-store
+            Content-Disposition:
+              description: Suggests a filename when the attachment is downloaded by browsers.
+              schema:
+                type: string
+            ETag:
+              description: SHA-256 checksum clients can use to verify attachment integrity.
+              schema:
+                type: string
           content:
             application/octet-stream:
               schema:
@@ -271,11 +273,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/Unauthorized'
         '403':
           description: Attachment does not belong to the provided session.
           content:
@@ -300,7 +298,7 @@ paths:
       description: Creates a new chat thread scoped to the authenticated session.
       operationId: createChatKitThread
       x-fountain.visibility: public
-      x-fountain.reason: ''
+      x-fountain.reason: Persists structured conversations tied to the session for later retrieval and tooling.
       x-fountain.allow-as-tool: false
       requestBody:
         required: true
@@ -321,10 +319,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
     get:
       summary: List chat threads
-      description: Lists threads associated with the provided session secret.
+      description: Lists threads associated with the provided session secret. Results are sorted by most recently updated; pagination will be added once thread counts grow beyond small batches.
       operationId: listChatKitThreads
       x-fountain.visibility: public
-      x-fountain.reason: ''
+      x-fountain.reason: Provides ChatKit clients with thread discovery scoped to the caller's session secret.
       x-fountain.allow-as-tool: false
       parameters:
         - name: client_secret
@@ -350,7 +348,7 @@ paths:
       description: Returns stored assistant responses and tool calls for the requested thread.
       operationId: getChatKitThread
       x-fountain.visibility: public
-      x-fountain.reason: ''
+      x-fountain.reason: Retrieves historical assistant messages, tool calls, and metadata for a specific session thread.
       x-fountain.allow-as-tool: false
       parameters:
         - name: threadId
@@ -387,7 +385,7 @@ paths:
       description: Removes the thread and any persisted assistant responses.
       operationId: deleteChatKitThread
       x-fountain.visibility: public
-      x-fountain.reason: ''
+      x-fountain.reason: Enforces user-driven deletion of stored ChatKit history scoped to the session secret.
       x-fountain.allow-as-tool: false
       parameters:
         - name: threadId
@@ -537,6 +535,12 @@ components:
   responses:
     BadRequest:
       description: Bad request.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Authentication failed or the supplied secret is invalid.
       content:
         application/json:
           schema:
@@ -726,6 +730,9 @@ components:
           $ref: '#/components/schemas/ErrorResponse'
     ChatKitUploadRequest:
       type: object
+      required:
+        - client_secret
+        - file
       properties:
         client_secret:
           type: string
@@ -734,6 +741,7 @@ components:
         file:
           type: string
           format: binary
+      description: Multipart form data containing the session secret, optional target thread identifier, and binary attachment contents. Supported MIME types include PNG, JPEG, WEBP, GIF, PDF, plain text, JSON, and generic octet streams.
     ChatKitUploadResponse:
       type: object
       required:
@@ -747,129 +755,7 @@ components:
           description: Location from which the attachment can be fetched (e.g. `fountain://chatkit/attachments/<id>`).
         mime_type:
           type: string
-    ChatKitThreadCreateRequest:
-      type: object
-      required:
-        - client_secret
-      properties:
-        client_secret:
-          type: string
-        title:
-          type: string
-        metadata:
-          type: object
-          additionalProperties:
-            type: string
-    ChatKitThreadListResponse:
-      type: object
-      required:
-        - threads
-      properties:
-        threads:
-          type: array
-          items:
-            $ref: '#/components/schemas/ChatKitThreadSummary'
-    ChatKitThreadSummary:
-      type: object
-      required:
-        - thread_id
-        - session_id
-        - created_at
-        - updated_at
-        - message_count
-      properties:
-        thread_id:
-          type: string
-        session_id:
-          type: string
-        title:
-          type: string
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-        message_count:
-          type: integer
-          minimum: 0
-    ChatKitThread:
-      type: object
-      required:
-        - thread_id
-        - session_id
-        - created_at
-        - updated_at
-        - messages
-      properties:
-        thread_id:
-          type: string
-        session_id:
-          type: string
-        title:
-          type: string
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-        metadata:
-          type: object
-          additionalProperties:
-            type: string
-        messages:
-          type: array
-          items:
-            $ref: '#/components/schemas/ChatKitThreadMessage'
-    ChatKitThreadMessage:
-      type: object
-      required:
-        - id
-        - role
-        - content
-        - created_at
-      properties:
-        id:
-          type: string
-        role:
-          type: string
-        content:
-          type: string
-        created_at:
-          type: string
-          format: date-time
-        attachments:
-          type: array
-          items:
-            $ref: '#/components/schemas/ChatKitAttachment'
-        tool_calls:
-          type: array
-          items:
-            $ref: '#/components/schemas/ChatKitToolCall'
-        response_id:
-          type: string
-        usage:
-          type: object
-          additionalProperties:
-            type: number
-    ChatKitToolCall:
-      type: object
-      required:
-        - id
-        - name
-        - arguments
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        arguments:
-          type: string
-        status:
-          type: string
-        result:
-          type: string
+      description: Metadata returned after a successful upload. Attachments expire 24 hours after creation and must be re-uploaded thereafter.
     ChatKitThreadCreateRequest:
       type: object
       required:

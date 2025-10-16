@@ -14,13 +14,16 @@ servers:
     description: Production gateway
   - url: http://localhost:8010/api
     description: Local development
+security: []
 paths:
   /chatkit/session:
     post:
       summary: Start ChatKit session
       description: >
         Issues a short-lived client secret that ChatKit uses to authenticate
-        subsequent message and upload requests.
+        subsequent message and upload requests. Persona, user, and metadata
+        hints are captured so downstream plugins can personalise prompts and
+        storage scopes.
       operationId: startChatKitSession
       tags: [ChatKit Sessions]
       requestBody:
@@ -101,7 +104,9 @@ paths:
       summary: Upload attachment
       description: >
         Direct upload endpoint used by ChatKit when attachments are enabled.
-        The uploaded file is associated with the provided session.
+        The uploaded file is associated with the provided session. Uploads are
+        limited to 25 MB, validated against the configured MIME allow list, and
+        expire 24 hours after creation.
       operationId: uploadChatKitAttachment
       tags: [ChatKit Attachments]
       requestBody:
@@ -157,6 +162,20 @@ paths:
       responses:
         '200':
           description: Attachment bytes
+          headers:
+            Cache-Control:
+              description: Prevents caching of sensitive attachment payloads.
+              schema:
+                type: string
+                example: no-store
+            Content-Disposition:
+              description: Suggests a filename when the attachment is downloaded by browsers.
+              schema:
+                type: string
+            ETag:
+              description: SHA-256 checksum clients can use to verify attachment integrity.
+              schema:
+                type: string
           content:
             application/octet-stream:
               schema:
@@ -184,6 +203,119 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
+  /chatkit/threads:
+    post:
+      summary: Create chat thread
+      description: Creates a new chat thread scoped to the authenticated session.
+      operationId: createChatKitThread
+      tags: [ChatKit Threads]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatKitThreadCreateRequest'
+      responses:
+        '201':
+          description: Thread created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatKitThread'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    get:
+      summary: List chat threads
+      description: Lists threads associated with the provided session secret. Results are sorted by most recently updated; pagination will follow once thread counts grow beyond small batches.
+      operationId: listChatKitThreads
+      tags: [ChatKit Threads]
+      parameters:
+        - name: client_secret
+          in: query
+          required: true
+          description: Session secret issued by `/chatkit/session`.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Thread list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatKitThreadListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /chatkit/threads/{threadId}:
+    get:
+      summary: Fetch chat thread
+      description: Returns stored assistant responses and tool calls for the requested thread.
+      operationId: getChatKitThread
+      tags: [ChatKit Threads]
+      parameters:
+        - name: threadId
+          in: path
+          required: true
+          description: Identifier of the thread to fetch.
+          schema:
+            type: string
+        - name: client_secret
+          in: query
+          required: true
+          description: Session secret issued by `/chatkit/session`.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Thread payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatKitThread'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Thread not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Delete chat thread
+      description: Removes the thread and any persisted assistant responses.
+      operationId: deleteChatKitThread
+      tags: [ChatKit Threads]
+      parameters:
+        - name: threadId
+          in: path
+          required: true
+          description: Identifier of the thread to delete.
+          schema:
+            type: string
+        - name: client_secret
+          in: query
+          required: true
+          description: Session secret issued by `/chatkit/session`.
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Thread deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Thread not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   responses:
     BadRequest:
@@ -344,44 +476,52 @@ components:
           description: Additional metadata returned by the agent runtime.
     ChatKitStreamEvent:
       type: object
-      description: >
-        Server-sent event payload delivered when streaming a response.
+      description: Server-sent event emitted while streaming ChatKit responses.
+      required:
+        - event
       properties:
         id:
           type: string
-          description: Event identifier.
+          description: Stable identifier for the SSE frame. When omitted the client should not expect replay support.
         event:
           type: string
-          enum: [delta, completion, error]
-          description: SSE event type.
+          enum: [delta, completion, error, tool_call, tool_result]
+          description: Event type. `delta` frames deliver incremental tokens while `completion` marks the terminal payload. `tool_call` and `tool_result` frames expose function execution metadata.
         delta:
           type: object
-          required: [content]
           properties:
             content:
               type: string
-              description: Token delta appended to the transcript.
+              description: Incremental assistant output token. Empty strings SHOULD be ignored.
+          description: Payload describing the incremental assistant update.
         answer:
           type: string
-          description: Final answer when the stream completes.
+          description: Final assistant message once streaming completes.
         done:
           type: boolean
-          description: True when the stream has finished sending content.
         thread_id:
           type: string
-          description: Thread identifier associated with the streamed response.
         response_id:
           type: string
-          description: Unique identifier for the streamed response envelope.
         created_at:
           type: string
           format: date-time
-          description: Timestamp emitted alongside the completion event.
+        provider:
+          type: string
+          description: Upstream LLM provider name associated with the response.
+        model:
+          type: string
+          description: Identifier of the model that produced the tokens.
+        usage:
+          type: object
+          additionalProperties:
+            type: number
+          description: Token accounting emitted by the upstream model when available.
         metadata:
           type: object
           additionalProperties:
             type: string
-          description: Metadata surface returned with the completion event.
+          description: Additional metadata propagated from ChatKit session and request context.
         error:
           $ref: '#/components/schemas/ErrorResponse'
     ChatKitUploadRequest:
@@ -391,13 +531,14 @@ components:
         client_secret:
           type: string
           description: Client secret authorising the upload.
+        thread_id:
+          type: string
+          description: Optional thread identifier to associate with the upload.
         file:
           type: string
           format: binary
           description: File payload.
-        thread_id:
-          type: string
-          description: Optional thread identifier to associate with the upload.
+      description: Multipart form data containing the session secret, optional target thread identifier, and binary attachment contents. Supported MIME types include PNG, JPEG, WEBP, GIF, PDF, plain text, JSON, and generic octet streams.
     ChatKitUploadResponse:
       type: object
       required: [attachment_id]
@@ -412,6 +553,115 @@ components:
         mime_type:
           type: string
           description: MIME type detected for the attachment.
+      description: Metadata returned after a successful upload. Attachments expire 24 hours after creation and must be re-uploaded thereafter.
+    ChatKitThreadCreateRequest:
+      type: object
+      required: [client_secret]
+      properties:
+        client_secret:
+          type: string
+          description: Session secret issued by `/chatkit/session`.
+        title:
+          type: string
+          description: Optional human readable title for the thread.
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: Arbitrary metadata stored alongside the thread.
+    ChatKitThreadListResponse:
+      type: object
+      required: [threads]
+      properties:
+        threads:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatKitThreadSummary'
+          description: Thread summaries ordered by most recent activity.
+    ChatKitThreadSummary:
+      type: object
+      required: [thread_id, session_id, created_at, updated_at, message_count]
+      properties:
+        thread_id:
+          type: string
+        session_id:
+          type: string
+        title:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        message_count:
+          type: integer
+          minimum: 0
+    ChatKitThread:
+      type: object
+      required: [thread_id, session_id, created_at, updated_at, messages]
+      properties:
+        thread_id:
+          type: string
+        session_id:
+          type: string
+        title:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatKitThreadMessage'
+    ChatKitThreadMessage:
+      type: object
+      required: [id, role, content, created_at]
+      properties:
+        id:
+          type: string
+        role:
+          type: string
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatKitAttachment'
+        tool_calls:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatKitToolCall'
+        response_id:
+          type: string
+        usage:
+          type: object
+          additionalProperties:
+            type: number
+    ChatKitToolCall:
+      type: object
+      required: [id, name, arguments]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        arguments:
+          type: string
+        status:
+          type: string
+        result:
+          type: string
     ErrorResponse:
       type: object
       required:

@@ -7,6 +7,7 @@ import Crypto
 /// Plugin exposing gateway endpoints compatible with the ChatKit front-end.
 public struct ChatKitGatewayPlugin: Sendable {
     public let router: Router
+    private let handlers: Handlers
 
     public init(store: ChatKitSessionStore = ChatKitSessionStore(),
                 uploadStore: ChatKitUploadStore = ChatKitUploadStore(),
@@ -25,13 +26,19 @@ public struct ChatKitGatewayPlugin: Sendable {
             maxAttachmentBytes: maxAttachmentBytes ?? AttachmentValidationPolicy.default.maxAttachmentBytes,
             allowedMimeTypes: allowedAttachmentMIMEs ?? AttachmentValidationPolicy.default.allowedMimeTypes
         )
-        self.router = Router(handlers: Handlers(store: store,
-                                                uploadStore: uploadStore,
-                                                metadataStore: resolvedMetadataStore,
-                                                threadStore: resolvedThreadStore,
-                                                responder: resolvedResponder,
-                                                attachmentPolicy: policy,
-                                                logger: logger))
+        let coreHandlers = Handlers(store: store,
+                                    uploadStore: uploadStore,
+                                    metadataStore: resolvedMetadataStore,
+                                    threadStore: resolvedThreadStore,
+                                    responder: resolvedResponder,
+                                    attachmentPolicy: policy,
+                                    logger: logger)
+        self.handlers = coreHandlers
+        self.router = Router(handlers: coreHandlers)
+    }
+
+    public func makeGeneratedHandlers() -> ChatKitGeneratedHandlers {
+        ChatKitGeneratedHandlers(handlers: handlers)
     }
 }
 
@@ -320,14 +327,24 @@ public struct ChatKitThread: Codable, Sendable, Equatable {
     }
 }
 
-public struct ChatKitThreadCreateRequest: Decodable {
-    let client_secret: String
-    let title: String?
-    let metadata: [String: String]?
+public struct ChatKitThreadCreateRequest: Codable, Sendable {
+    public let client_secret: String
+    public let title: String?
+    public let metadata: [String: String]?
+
+    public init(client_secret: String, title: String?, metadata: [String: String]?) {
+        self.client_secret = client_secret
+        self.title = title
+        self.metadata = metadata
+    }
 }
 
-struct ChatKitThreadListResponse: Encodable {
-    let threads: [ChatKitThreadSummary]
+public struct ChatKitThreadListResponse: Codable, Sendable {
+    public let threads: [ChatKitThreadSummary]
+
+    public init(threads: [ChatKitThreadSummary]) {
+        self.threads = threads
+    }
 }
 
 public protocol ChatKitThreadStore: Sendable {
@@ -1642,23 +1659,33 @@ public actor ChatKitUploadStore {
 
 // MARK: - Models & Errors
 
-struct ChatKitSessionRequest: Decodable {
-    let persona: String?
-    let userId: String?
-    let metadata: [String: String]?
+public struct ChatKitSessionRequest: Codable, Sendable {
+    public let persona: String?
+    public let userId: String?
+    public let metadata: [String: String]?
+
+    public init(persona: String?, userId: String?, metadata: [String: String]?) {
+        self.persona = persona
+        self.userId = userId
+        self.metadata = metadata
+    }
 }
 
-struct ChatKitSessionRefreshRequest: Decodable {
-    let client_secret: String
+public struct ChatKitSessionRefreshRequest: Codable, Sendable {
+    public let client_secret: String
+
+    public init(client_secret: String) {
+        self.client_secret = client_secret
+    }
 }
 
-struct ChatKitSessionResponse: Encodable {
-    let session_id: String
-    let client_secret: String
-    let expires_at: String
-    let metadata: [String: String]?
+public struct ChatKitSessionResponse: Codable, Sendable {
+    public let session_id: String
+    public let client_secret: String
+    public let expires_at: String
+    public let metadata: [String: String]?
 
-    init(session: ChatKitSessionStore.StoredSession) {
+    public init(session: ChatKitSessionStore.StoredSession) {
         session_id = session.id
         client_secret = session.secret
         let formatter = ISO8601DateFormatter()
@@ -1668,17 +1695,25 @@ struct ChatKitSessionResponse: Encodable {
     }
 }
 
-struct ChatKitErrorResponse: Encodable {
+struct ChatKitErrorResponse: Codable {
     let error: String
     let code: String
 }
 
-public struct ChatKitMessageRequest: Decodable, Sendable {
+public struct ChatKitMessageRequest: Codable, Sendable {
     public let client_secret: String
     public let thread_id: String?
     public let messages: [ChatKitMessage]
     public let stream: Bool?
     public let metadata: [String: String]?
+
+    public init(client_secret: String, thread_id: String?, messages: [ChatKitMessage], stream: Bool?, metadata: [String: String]?) {
+        self.client_secret = client_secret
+        self.thread_id = thread_id
+        self.messages = messages
+        self.stream = stream
+        self.metadata = metadata
+    }
 
     /// Accessor mirroring `client_secret` using Swift naming conventions.
     public var clientSecret: String { client_secret }
@@ -1687,12 +1722,20 @@ public struct ChatKitMessageRequest: Decodable, Sendable {
     public var threadId: String? { thread_id }
 }
 
-public struct ChatKitMessage: Decodable, Sendable {
+public struct ChatKitMessage: Codable, Sendable {
     public let id: String?
     public let role: String
     public let content: String
     public let created_at: String?
     public let attachments: [ChatKitAttachment]?
+
+    public init(id: String?, role: String, content: String, created_at: String?, attachments: [ChatKitAttachment]?) {
+        self.id = id
+        self.role = role
+        self.content = content
+        self.created_at = created_at
+        self.attachments = attachments
+    }
 
     /// Accessor mirroring `created_at` using Swift naming conventions.
     public var createdAt: String? { created_at }
@@ -1724,18 +1767,29 @@ public struct ChatKitAttachment: Codable, Sendable, Equatable {
     }
 }
 
-struct ChatKitMessageResponse: Encodable {
-    let answer: String
-    let thread_id: String
-    let response_id: String
-    let created_at: String
-    let provider: String?
-    let model: String?
-    let usage: [String: Double]?
-    let metadata: [String: String]?
+public struct ChatKitMessageResponse: Codable, Sendable {
+    public let answer: String
+    public let thread_id: String
+    public let response_id: String
+    public let created_at: String
+    public let provider: String?
+    public let model: String?
+    public let usage: [String: Double]?
+    public let metadata: [String: String]?
+
+    public init(answer: String, thread_id: String, response_id: String, created_at: String, provider: String?, model: String?, usage: [String: Double]?, metadata: [String: String]?) {
+        self.answer = answer
+        self.thread_id = thread_id
+        self.response_id = response_id
+        self.created_at = created_at
+        self.provider = provider
+        self.model = model
+        self.usage = usage
+        self.metadata = metadata
+    }
 }
 
-public struct ChatKitStreamEventEnvelope: Encodable, Sendable {
+public struct ChatKitStreamEventEnvelope: Codable, Sendable {
     public let id: String?
     public let event: String
     public let delta: ChatKitStreamDelta?
@@ -1767,7 +1821,7 @@ public struct ChatKitStreamEventEnvelope: Encodable, Sendable {
     }
 }
 
-public struct ChatKitStreamDelta: Encodable, Sendable {
+public struct ChatKitStreamDelta: Codable, Sendable {
     public let content: String
 
     public init(content: String) {
@@ -1775,10 +1829,262 @@ public struct ChatKitStreamDelta: Encodable, Sendable {
     }
 }
 
-struct ChatKitUploadResponse: Encodable {
-    let attachment_id: String
-    let upload_url: String
-    let mime_type: String?
+public struct ChatKitUploadResponse: Codable, Sendable {
+    public let attachment_id: String
+    public let upload_url: String
+    public let mime_type: String?
+
+    public init(attachment_id: String, upload_url: String, mime_type: String?) {
+        self.attachment_id = attachment_id
+        self.upload_url = upload_url
+        self.mime_type = mime_type
+    }
+}
+
+public struct ChatKitGeneratedHandlers: Sendable {
+    public struct OperationError: Error, Sendable {
+        public let status: Int
+        public let code: String
+        public let message: String
+
+        public init(status: Int, code: String, message: String) {
+            self.status = status
+            self.code = code
+            self.message = message
+        }
+    }
+
+    public struct PostMessageResult: Sendable {
+        public enum Body: Sendable {
+            case json(ChatKitMessageResponse)
+            case stream(Data, headers: [String: String])
+        }
+
+        public let body: Body
+    }
+
+    public struct UploadPayload: Sendable {
+        public let clientSecret: String
+        public let threadId: String?
+        public let fileName: String
+        public let mimeType: String
+        public let data: Data
+
+        public init(clientSecret: String,
+                    threadId: String?,
+                    fileName: String,
+                    mimeType: String,
+                    data: Data) {
+            self.clientSecret = clientSecret
+            self.threadId = threadId
+            self.fileName = fileName
+            self.mimeType = mimeType
+            self.data = data
+        }
+    }
+
+    public struct DownloadResult: Sendable {
+        public let data: Data
+        public let headers: [String: String]
+
+        public init(data: Data, headers: [String: String]) {
+            self.data = data
+            self.headers = headers
+        }
+    }
+
+    private let handlers: Handlers
+
+    init(handlers: Handlers) {
+        self.handlers = handlers
+    }
+
+    public func startSession(_ request: ChatKitSessionRequest?) async throws -> ChatKitSessionResponse {
+        var headers: [String: String] = [:]
+        let body: Data
+        if let request {
+            body = try encodeJSON(request)
+            headers["Content-Type"] = "application/json"
+        } else {
+            body = Data()
+        }
+        let httpRequest = HTTPRequest(method: "POST", path: "/chatkit/session", headers: headers, body: body)
+        let response = await handlers.startSession(httpRequest)
+        if response.status == 201 {
+            return try decodeJSON(response.body, as: ChatKitSessionResponse.self)
+        }
+        throw try makeError(from: response)
+    }
+
+    public func refreshSession(_ request: ChatKitSessionRefreshRequest) async throws -> ChatKitSessionResponse {
+        let httpRequest = try makeJSONRequest(method: "POST", path: "/chatkit/session/refresh", body: request)
+        let response = await handlers.refreshSession(httpRequest)
+        if response.status == 200 {
+            return try decodeJSON(response.body, as: ChatKitSessionResponse.self)
+        }
+        throw try makeError(from: response)
+    }
+
+    public func postMessage(_ request: ChatKitMessageRequest) async throws -> PostMessageResult {
+        let httpRequest = try makeJSONRequest(method: "POST", path: "/chatkit/messages", body: request)
+        let response = await handlers.postMessage(httpRequest)
+        switch response.status {
+        case 200:
+            let payload = try decodeJSON(response.body, as: ChatKitMessageResponse.self)
+            return PostMessageResult(body: .json(payload))
+        case 202:
+            return PostMessageResult(body: .stream(response.body, headers: response.headers))
+        default:
+            throw try makeError(from: response)
+        }
+    }
+
+    public func createThread(_ request: ChatKitThreadCreateRequest) async throws -> ChatKitThread {
+        let httpRequest = try makeJSONRequest(method: "POST", path: "/chatkit/threads", body: request)
+        let response = await handlers.createThread(httpRequest)
+        if response.status == 201 {
+            return try decodeJSON(response.body, as: ChatKitThread.self)
+        }
+        throw try makeError(from: response)
+    }
+
+    public func listThreads(clientSecret: String) async throws -> ChatKitThreadListResponse {
+        let path = "/chatkit/threads\(query(from: ["client_secret": clientSecret]))"
+        let httpRequest = HTTPRequest(method: "GET", path: path)
+        let response = await handlers.listThreads(httpRequest)
+        if response.status == 200 {
+            return try decodeJSON(response.body, as: ChatKitThreadListResponse.self)
+        }
+        throw try makeError(from: response)
+    }
+
+    public func getThread(clientSecret: String, threadId: String) async throws -> ChatKitThread {
+        let path = "/chatkit/threads/\(encodePathComponent(threadId))\(query(from: ["client_secret": clientSecret]))"
+        let httpRequest = HTTPRequest(method: "GET", path: path)
+        let response = await handlers.getThread(httpRequest, threadId: threadId)
+        if response.status == 200 {
+            return try decodeJSON(response.body, as: ChatKitThread.self)
+        }
+        throw try makeError(from: response)
+    }
+
+    public func deleteThread(clientSecret: String, threadId: String) async throws {
+        let path = "/chatkit/threads/\(encodePathComponent(threadId))\(query(from: ["client_secret": clientSecret]))"
+        let httpRequest = HTTPRequest(method: "DELETE", path: path)
+        let response = await handlers.deleteThread(httpRequest, threadId: threadId)
+        guard response.status == 204 else {
+            throw try makeError(from: response)
+        }
+    }
+
+    public func uploadAttachment(_ payload: UploadPayload) async throws -> ChatKitUploadResponse {
+        let (body, boundary) = encodeMultipart(payload: payload)
+        let headers = [
+            "Content-Type": "multipart/form-data; boundary=\(boundary)",
+            "Content-Length": "\(body.count)"
+        ]
+        let httpRequest = HTTPRequest(method: "POST", path: "/chatkit/upload", headers: headers, body: body)
+        let response = await handlers.uploadAttachment(httpRequest)
+        if response.status == 201 {
+            return try decodeJSON(response.body, as: ChatKitUploadResponse.self)
+        }
+        throw try makeError(from: response)
+    }
+
+    public func downloadAttachment(clientSecret: String, attachmentId: String) async throws -> DownloadResult {
+        let path = "/chatkit/attachments/\(encodePathComponent(attachmentId))\(query(from: ["client_secret": clientSecret]))"
+        let httpRequest = HTTPRequest(method: "GET", path: path)
+        let response = await handlers.downloadAttachment(httpRequest, attachmentId: attachmentId)
+        if response.status == 200 {
+            return DownloadResult(data: response.body, headers: response.headers)
+        }
+        throw try makeError(from: response)
+    }
+
+    private func makeJSONRequest<T: Encodable>(method: String, path: String, body: T) throws -> HTTPRequest {
+        let data = try encodeJSON(body)
+        return HTTPRequest(method: method,
+                           path: path,
+                           headers: ["Content-Type": "application/json", "Content-Length": "\(data.count)"],
+                           body: data)
+    }
+
+    private func encodeJSON<T: Encodable>(_ value: T) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return try encoder.encode(value)
+    }
+
+    private func decodeJSON<T: Decodable>(_ data: Data, as type: T.Type) throws -> T {
+        let decoder = JSONDecoder()
+        return try decoder.decode(T.self, from: data)
+    }
+
+    private func makeError(from response: HTTPResponse) throws -> OperationError {
+        let decoder = JSONDecoder()
+        if let error = try? decoder.decode(ChatKitErrorResponse.self, from: response.body) {
+            return OperationError(status: response.status, code: error.code, message: error.error)
+        } else {
+            return OperationError(status: response.status, code: "unexpected_response", message: "Unexpected ChatKit gateway response")
+        }
+    }
+
+    private func query(from parameters: [String: String]) -> String {
+        guard !parameters.isEmpty else { return "" }
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+        let components = parameters.compactMap { key, value -> String? in
+            guard let encodedKey = key.addingPercentEncoding(withAllowedCharacters: allowed),
+                  let encodedValue = value.addingPercentEncoding(withAllowedCharacters: allowed) else {
+                return nil
+            }
+            return "\(encodedKey)=\(encodedValue)"
+        }
+        guard !components.isEmpty else { return "" }
+        return "?" + components.joined(separator: "&")
+    }
+
+    private func encodeMultipart(payload: UploadPayload) -> (Data, String) {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var data = Data()
+        appendMultipartPart(into: &data,
+                            boundary: boundary,
+                            headers: ["Content-Disposition": "form-data; name=\"client_secret\""],
+                            body: Data(payload.clientSecret.utf8))
+        if let threadId = payload.threadId, !threadId.isEmpty {
+            appendMultipartPart(into: &data,
+                                boundary: boundary,
+                                headers: ["Content-Disposition": "form-data; name=\"thread_id\""],
+                                body: Data(threadId.utf8))
+        }
+        let fileHeaders = [
+            "Content-Disposition": "form-data; name=\"file\"; filename=\"\(payload.fileName)\"",
+            "Content-Type": payload.mimeType
+        ]
+        appendMultipartPart(into: &data,
+                            boundary: boundary,
+                            headers: fileHeaders,
+                            body: payload.data)
+        data.append(Data("--\(boundary)--\r\n".utf8))
+        return (data, boundary)
+    }
+
+    private func encodePathComponent(_ value: String) -> String {
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+    }
+
+    private func appendMultipartPart(into data: inout Data,
+                                     boundary: String,
+                                     headers: [String: String],
+                                     body: Data) {
+        data.append(Data("--\(boundary)\r\n".utf8))
+        for (key, value) in headers {
+            data.append(Data("\(key): \(value)\r\n".utf8))
+        }
+        data.append(Data("\r\n".utf8))
+        data.append(body)
+        data.append(Data("\r\n".utf8))
+    }
 }
 
 /// Errors surfaced while proxying requests through the ChatKit gateway.

@@ -2,6 +2,9 @@ import Foundation
 import OpenAPIRuntime
 import HTTPTypes
 import FountainRuntime
+#if canImport(ChatKitGatewayPlugin)
+import ChatKitGatewayPlugin
+#endif
 
 // Generated handlers bridge to GatewayServer logic.
 public struct GatewayOpenAPI: APIProtocol, @unchecked Sendable {
@@ -69,356 +72,247 @@ public struct GatewayOpenAPI: APIProtocol, @unchecked Sendable {
     }
 
     public func startChatKitSession(_ input: Operations.startChatKitSession.Input) async throws -> Operations.startChatKitSession.Output {
-        var headers: [String: String] = [:]
-        if let accept = input.headers.accept.first {
-            headers["Accept"] = accept.rawValue
+        guard let handlers = await host.chatKitGeneratedHandlers() else {
+            return .undocumented(statusCode: 501, unavailablePayload())
         }
 
-        var bodyData = Data()
+        let requestModel: ChatKitSessionRequest?
         if let body = input.body {
             switch body {
             case .json(let payload):
-                bodyData = try encodeJSON(payload)
-                headers["Content-Type"] = "application/json"
+                requestModel = ChatKitSessionRequest(
+                    persona: payload.persona,
+                    userId: payload.userId,
+                    metadata: payload.metadata?.additionalProperties
+                )
             }
+        } else {
+            requestModel = nil
         }
 
-        let response = await host.dispatchChatKitRequest(
-            method: "POST",
-            path: "/chatkit/session",
-            headers: headers,
-            body: bodyData
-        )
-
-        switch response.status {
-        case 201:
-            if let payload = try? decodeJSON(response.body, as: Components.Schemas.ChatKitSessionResponse.self) {
-                return .created(.init(body: .json(payload)))
+        do {
+            let session = try await handlers.startSession(requestModel)
+            let response = try convertSessionResponse(session)
+            return .created(.init(body: .json(response)))
+        } catch let error as ChatKitGeneratedHandlers.OperationError {
+            switch error.status {
+            case 400:
+                return .badRequest(.init(body: .json(makeErrorBody(error))))
+            default:
+                return .undocumented(statusCode: error.status, undocumentedPayload(status: error.status, error: error))
             }
-        case 400:
-            if let error = decodeErrorResponse(response.body) {
-                return .badRequest(.init(body: .json(error)))
-            }
-        default:
-            break
         }
-
-        return .undocumented(statusCode: response.status, makeUndocumentedPayload(from: response))
     }
 
     public func refreshChatKitSession(_ input: Operations.refreshChatKitSession.Input) async throws -> Operations.refreshChatKitSession.Output {
-        var headers: [String: String] = [:]
-        if let accept = input.headers.accept.first {
-            headers["Accept"] = accept.rawValue
+        guard let handlers = await host.chatKitGeneratedHandlers() else {
+            return .undocumented(statusCode: 501, unavailablePayload())
         }
 
-        let bodyData: Data
+        let requestModel: ChatKitSessionRefreshRequest
         switch input.body {
         case .json(let payload):
-            bodyData = try encodeJSON(payload)
-            headers["Content-Type"] = "application/json"
+            requestModel = ChatKitSessionRefreshRequest(client_secret: payload.client_secret)
         }
 
-        let response = await host.dispatchChatKitRequest(
-            method: "POST",
-            path: "/chatkit/session/refresh",
-            headers: headers,
-            body: bodyData
-        )
-
-        switch response.status {
-        case 200:
-            if let payload = try? decodeJSON(response.body, as: Components.Schemas.ChatKitSessionResponse.self) {
-                return .ok(.init(body: .json(payload)))
+        do {
+            let session = try await handlers.refreshSession(requestModel)
+            let response = try convertSessionResponse(session)
+            return .ok(.init(body: .json(response)))
+        } catch let error as ChatKitGeneratedHandlers.OperationError {
+            switch error.status {
+            case 400:
+                return .badRequest(.init(body: .json(makeErrorBody(error))))
+            case 401:
+                return .unauthorized(.init(body: .json(makeErrorBody(error))))
+            default:
+                return .undocumented(statusCode: error.status, undocumentedPayload(status: error.status, error: error))
             }
-        case 400:
-            if let error = decodeErrorResponse(response.body) {
-                return .badRequest(.init(body: .json(error)))
-            }
-        case 401:
-            if let error = decodeErrorResponse(response.body) {
-                return .unauthorized(.init(body: .json(error)))
-            }
-        default:
-            break
         }
-
-        return .undocumented(statusCode: response.status, makeUndocumentedPayload(from: response))
     }
 
     public func postChatKitMessage(_ input: Operations.postChatKitMessage.Input) async throws -> Operations.postChatKitMessage.Output {
-        var headers: [String: String] = [:]
-        if let accept = input.headers.accept.first {
-            headers["Accept"] = accept.rawValue
+        guard let handlers = await host.chatKitGeneratedHandlers() else {
+            return .undocumented(statusCode: 501, unavailablePayload())
         }
 
-        let bodyData: Data
+        let requestModel: ChatKitMessageRequest
         switch input.body {
         case .json(let payload):
-            bodyData = try encodeJSON(payload)
-            headers["Content-Type"] = "application/json"
+            requestModel = try convertMessageRequest(payload)
         }
 
-        let response = await host.dispatchChatKitRequest(
-            method: "POST",
-            path: "/chatkit/messages",
-            headers: headers,
-            body: bodyData
-        )
-
-        switch response.status {
-        case 200:
-            if let payload = try? decodeJSON(response.body, as: Components.Schemas.ChatKitMessageResponse.self) {
-                return .ok(.init(body: .json(payload)))
+        do {
+            let result = try await handlers.postMessage(requestModel)
+            switch result.body {
+            case .json(let payload):
+                let converted = try convertMessageResponse(payload)
+                return .ok(.init(body: .json(converted)))
+            case .stream(let data, _):
+                return .accepted(.init(body: .text_event_hyphen_stream(OpenAPIRuntime.HTTPBody(data))))
             }
-        case 202:
-            let body = OpenAPIRuntime.HTTPBody(response.body)
-            return .accepted(.init(body: .text_event_hyphen_stream(body)))
-        case 400:
-            if let error = decodeErrorResponse(response.body) {
-                return .badRequest(.init(body: .json(error)))
+        } catch let error as ChatKitGeneratedHandlers.OperationError {
+            switch error.status {
+            case 400:
+                return .badRequest(.init(body: .json(makeErrorBody(error))))
+            case 401:
+                return .unauthorized(.init(body: .json(makeErrorBody(error))))
+            default:
+                return .undocumented(statusCode: error.status, undocumentedPayload(status: error.status, error: error))
             }
-        case 401:
-            if let error = decodeErrorResponse(response.body) {
-                return .unauthorized(.init(body: .json(error)))
-            }
-        default:
-            break
         }
-
-        return .undocumented(statusCode: response.status, makeUndocumentedPayload(from: response))
     }
 
     public func uploadChatKitAttachment(_ input: Operations.uploadChatKitAttachment.Input) async throws -> Operations.uploadChatKitAttachment.Output {
-        var headers: [String: String] = [:]
-        if let accept = input.headers.accept.first {
-            headers["Accept"] = accept.rawValue
+        guard let handlers = await host.chatKitGeneratedHandlers() else {
+            return .undocumented(statusCode: 501, unavailablePayload())
         }
 
-        let (bodyData, boundary) = try await encodeMultipart(input.body)
-        headers["Content-Type"] = "multipart/form-data; boundary=\(boundary)"
-        headers["Content-Length"] = "\(bodyData.count)"
+        let payload = try await parseUploadPayload(input.body)
 
-        let response = await host.dispatchChatKitRequest(
-            method: "POST",
-            path: "/chatkit/upload",
-            headers: headers,
-            body: bodyData
-        )
-
-        switch response.status {
-        case 201:
-            if let payload = try? decodeJSON(response.body, as: Components.Schemas.ChatKitUploadResponse.self) {
-                return .created(.init(body: .json(payload)))
+        do {
+            let response = try await handlers.uploadAttachment(payload)
+            let converted = convertUploadResponse(response)
+            return .created(.init(body: .json(converted)))
+        } catch let error as ChatKitGeneratedHandlers.OperationError {
+            switch error.status {
+            case 400:
+                return .badRequest(.init(body: .json(makeErrorBody(error))))
+            case 401:
+                return .unauthorized(.init(body: .json(makeErrorBody(error))))
+            default:
+                return .undocumented(statusCode: error.status, undocumentedPayload(status: error.status, error: error))
             }
-        case 400:
-            if let error = decodeErrorResponse(response.body) {
-                return .badRequest(.init(body: .json(error)))
-            }
-        case 401:
-            if let error = decodeErrorResponse(response.body) {
-                return .unauthorized(.init(body: .json(error)))
-            }
-        default:
-            break
         }
-
-        return .undocumented(statusCode: response.status, makeUndocumentedPayload(from: response))
     }
 
     public func downloadChatKitAttachment(_ input: Operations.downloadChatKitAttachment.Input) async throws -> Operations.downloadChatKitAttachment.Output {
-        var headers: [String: String] = [:]
-        if let accept = input.headers.accept.first {
-            headers["Accept"] = accept.rawValue
+        guard let handlers = await host.chatKitGeneratedHandlers() else {
+            return .undocumented(statusCode: 501, unavailablePayload())
         }
 
-        let query = makeQueryString(["client_secret": input.query.client_secret])
-        let response = await host.dispatchChatKitRequest(
-            method: "GET",
-            path: "/chatkit/attachments/\(input.path.attachmentId)\(query)",
-            headers: headers
-        )
-
-        switch response.status {
-        case 200:
+        do {
+            let result = try await handlers.downloadAttachment(clientSecret: input.query.client_secret, attachmentId: input.path.attachmentId)
             let okHeaders = Operations.downloadChatKitAttachment.Output.Ok.Headers(
-                Cache_hyphen_Control: response.headers["Cache-Control"],
-                Content_hyphen_Disposition: response.headers["Content-Disposition"],
-                ETag: response.headers["ETag"]
+                Cache_hyphen_Control: result.headers["Cache-Control"],
+                Content_hyphen_Disposition: result.headers["Content-Disposition"],
+                ETag: result.headers["ETag"]
             )
-            return .ok(.init(headers: okHeaders, body: .binary(HTTPBody(response.body))))
-        case 400:
-            if let error = decodeErrorResponse(response.body) {
-                return .badRequest(.init(body: .json(error)))
+            return .ok(.init(headers: okHeaders, body: .binary(OpenAPIRuntime.HTTPBody(result.data))))
+        } catch let error as ChatKitGeneratedHandlers.OperationError {
+            switch error.status {
+            case 400:
+                return .badRequest(.init(body: .json(makeErrorBody(error))))
+            case 401:
+                return .unauthorized(.init(body: .json(makeErrorBody(error))))
+            case 403:
+                return .forbidden(.init(body: .json(makeErrorBody(error))))
+            case 404:
+                return .notFound(.init(body: .json(makeErrorBody(error))))
+            case 409:
+                return .conflict(.init(body: .json(makeErrorBody(error))))
+            default:
+                return .undocumented(statusCode: error.status, undocumentedPayload(status: error.status, error: error))
             }
-        case 401:
-            if let error = decodeErrorResponse(response.body) {
-                return .unauthorized(.init(body: .json(error)))
-            }
-        case 403:
-            if let error = decodeErrorResponse(response.body) {
-                return .forbidden(.init(body: .json(error)))
-            }
-        case 404:
-            if let error = decodeErrorResponse(response.body) {
-                return .notFound(.init(body: .json(error)))
-            }
-        case 409:
-            if let error = decodeErrorResponse(response.body) {
-                return .conflict(.init(body: .json(error)))
-            }
-        default:
-            break
         }
-
-        return .undocumented(statusCode: response.status, makeUndocumentedPayload(from: response))
     }
 
     public func listChatKitThreads(_ input: Operations.listChatKitThreads.Input) async throws -> Operations.listChatKitThreads.Output {
-        var headers: [String: String] = [:]
-        if let accept = input.headers.accept.first {
-            headers["Accept"] = accept.rawValue
+        guard let handlers = await host.chatKitGeneratedHandlers() else {
+            return .undocumented(statusCode: 501, unavailablePayload())
         }
 
-        let query = makeQueryString(["client_secret": input.query.client_secret])
-        let response = await host.dispatchChatKitRequest(
-            method: "GET",
-            path: "/chatkit/threads\(query)",
-            headers: headers
-        )
-
-        switch response.status {
-        case 200:
-            if let payload = try? decodeJSON(response.body, as: Components.Schemas.ChatKitThreadListResponse.self) {
-                return .ok(.init(body: .json(payload)))
+        do {
+            let threads = try await handlers.listThreads(clientSecret: input.query.client_secret)
+            let converted = try convertThreadListResponse(threads)
+            return .ok(.init(body: .json(converted)))
+        } catch let error as ChatKitGeneratedHandlers.OperationError {
+            switch error.status {
+            case 400:
+                return .badRequest(.init(body: .json(makeErrorBody(error))))
+            case 401:
+                return .unauthorized(.init(body: .json(makeErrorBody(error))))
+            default:
+                return .undocumented(statusCode: error.status, undocumentedPayload(status: error.status, error: error))
             }
-        case 400:
-            if let error = decodeErrorResponse(response.body) {
-                return .badRequest(.init(body: .json(error)))
-            }
-        case 401:
-            if let error = decodeErrorResponse(response.body) {
-                return .unauthorized(.init(body: .json(error)))
-            }
-        default:
-            break
         }
-
-        return .undocumented(statusCode: response.status, makeUndocumentedPayload(from: response))
     }
 
     public func createChatKitThread(_ input: Operations.createChatKitThread.Input) async throws -> Operations.createChatKitThread.Output {
-        var headers: [String: String] = [:]
-        if let accept = input.headers.accept.first {
-            headers["Accept"] = accept.rawValue
+        guard let handlers = await host.chatKitGeneratedHandlers() else {
+            return .undocumented(statusCode: 501, unavailablePayload())
         }
 
-        let bodyData: Data
+        let requestModel: ChatKitThreadCreateRequest
         switch input.body {
         case .json(let payload):
-            bodyData = try encodeJSON(payload)
-            headers["Content-Type"] = "application/json"
+            requestModel = ChatKitThreadCreateRequest(
+                client_secret: payload.client_secret,
+                title: payload.title,
+                metadata: payload.metadata?.additionalProperties
+            )
         }
 
-        let response = await host.dispatchChatKitRequest(
-            method: "POST",
-            path: "/chatkit/threads",
-            headers: headers,
-            body: bodyData
-        )
-
-        switch response.status {
-        case 201:
-            if let payload = try? decodeJSON(response.body, as: Components.Schemas.ChatKitThread.self) {
-                return .created(.init(body: .json(payload)))
+        do {
+            let thread = try await handlers.createThread(requestModel)
+            let converted = try convertThread(thread)
+            return .created(.init(body: .json(converted)))
+        } catch let error as ChatKitGeneratedHandlers.OperationError {
+            switch error.status {
+            case 400:
+                return .badRequest(.init(body: .json(makeErrorBody(error))))
+            case 401:
+                return .unauthorized(.init(body: .json(makeErrorBody(error))))
+            default:
+                return .undocumented(statusCode: error.status, undocumentedPayload(status: error.status, error: error))
             }
-        case 400:
-            if let error = decodeErrorResponse(response.body) {
-                return .badRequest(.init(body: .json(error)))
-            }
-        case 401:
-            if let error = decodeErrorResponse(response.body) {
-                return .unauthorized(.init(body: .json(error)))
-            }
-        default:
-            break
         }
-
-        return .undocumented(statusCode: response.status, makeUndocumentedPayload(from: response))
     }
 
     public func getChatKitThread(_ input: Operations.getChatKitThread.Input) async throws -> Operations.getChatKitThread.Output {
-        var headers: [String: String] = [:]
-        if let accept = input.headers.accept.first {
-            headers["Accept"] = accept.rawValue
+        guard let handlers = await host.chatKitGeneratedHandlers() else {
+            return .undocumented(statusCode: 501, unavailablePayload())
         }
 
-        let query = makeQueryString(["client_secret": input.query.client_secret])
-        let response = await host.dispatchChatKitRequest(
-            method: "GET",
-            path: "/chatkit/threads/\(input.path.threadId)\(query)",
-            headers: headers
-        )
-
-        switch response.status {
-        case 200:
-            if let payload = try? decodeJSON(response.body, as: Components.Schemas.ChatKitThread.self) {
-                return .ok(.init(body: .json(payload)))
+        do {
+            let thread = try await handlers.getThread(clientSecret: input.query.client_secret, threadId: input.path.threadId)
+            let converted = try convertThread(thread)
+            return .ok(.init(body: .json(converted)))
+        } catch let error as ChatKitGeneratedHandlers.OperationError {
+            switch error.status {
+            case 400:
+                return .badRequest(.init(body: .json(makeErrorBody(error))))
+            case 401:
+                return .unauthorized(.init(body: .json(makeErrorBody(error))))
+            case 404:
+                return .notFound(.init(body: .json(makeErrorBody(error))))
+            default:
+                return .undocumented(statusCode: error.status, undocumentedPayload(status: error.status, error: error))
             }
-        case 400:
-            if let error = decodeErrorResponse(response.body) {
-                return .badRequest(.init(body: .json(error)))
-            }
-        case 401:
-            if let error = decodeErrorResponse(response.body) {
-                return .unauthorized(.init(body: .json(error)))
-            }
-        case 404:
-            if let error = decodeErrorResponse(response.body) {
-                return .notFound(.init(body: .json(error)))
-            }
-        default:
-            break
         }
-
-        return .undocumented(statusCode: response.status, makeUndocumentedPayload(from: response))
     }
 
     public func deleteChatKitThread(_ input: Operations.deleteChatKitThread.Input) async throws -> Operations.deleteChatKitThread.Output {
-        var headers: [String: String] = [:]
-        if let accept = input.headers.accept.first {
-            headers["Accept"] = accept.rawValue
+        guard let handlers = await host.chatKitGeneratedHandlers() else {
+            return .undocumented(statusCode: 501, unavailablePayload())
         }
 
-        let query = makeQueryString(["client_secret": input.query.client_secret])
-        let response = await host.dispatchChatKitRequest(
-            method: "DELETE",
-            path: "/chatkit/threads/\(input.path.threadId)\(query)",
-            headers: headers
-        )
-
-        switch response.status {
-        case 204:
+        do {
+            try await handlers.deleteThread(clientSecret: input.query.client_secret, threadId: input.path.threadId)
             return .noContent(.init())
-        case 400:
-            if let error = decodeErrorResponse(response.body) {
-                return .badRequest(.init(body: .json(error)))
+        } catch let error as ChatKitGeneratedHandlers.OperationError {
+            switch error.status {
+            case 400:
+                return .badRequest(.init(body: .json(makeErrorBody(error))))
+            case 401:
+                return .unauthorized(.init(body: .json(makeErrorBody(error))))
+            case 404:
+                return .notFound(.init(body: .json(makeErrorBody(error))))
+            default:
+                return .undocumented(statusCode: error.status, undocumentedPayload(status: error.status, error: error))
             }
-        case 401:
-            if let error = decodeErrorResponse(response.body) {
-                return .unauthorized(.init(body: .json(error)))
-            }
-        case 404:
-            if let error = decodeErrorResponse(response.body) {
-                return .notFound(.init(body: .json(error)))
-            }
-        default:
-            break
         }
-
-        return .undocumented(statusCode: response.status, makeUndocumentedPayload(from: response))
     }
-
     public func listRoutes(_ input: Operations.listRoutes.Input) async throws -> Operations.listRoutes.Output {
         let resp = await host.listRoutes()
         if resp.status == 200, let routes = try? JSONDecoder().decode([Components.Schemas.RouteInfo].self, from: resp.body) {
@@ -480,146 +374,222 @@ private extension GatewayOpenAPI {
     static let queryAllowedCharacters = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
     static let maxMultipartBytes = 64 * 1024 * 1024
 
-    func encodeJSON<T: Encodable>(_ value: T) throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .custom { date, encoder in
-            var container = encoder.singleValueContainer()
-            try container.encode(Self.iso8601WithFractional.string(from: date))
-        }
-        return try encoder.encode(value)
+    func unavailablePayload() -> OpenAPIRuntime.UndocumentedPayload {
+        let body = try? JSONEncoder().encode(["error": "chatkit plugin unavailable"])
+        var fields = HTTPFields()
+        fields[.contentType] = "application/json"
+        return OpenAPIRuntime.UndocumentedPayload(headerFields: fields, body: body.map { HTTPBody($0) })
     }
 
-    func decodeJSON<T: Decodable>(_ data: Data, as type: T.Type) throws -> T {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .custom { decoder in
-            let container = try decoder.singleValueContainer()
-            let value = try container.decode(String.self)
-            if let date = Self.iso8601WithFractional.date(from: value) ?? Self.iso8601Basic.date(from: value) {
-                return date
+    func undocumentedPayload(status: Int, error: ChatKitGeneratedHandlers.OperationError) -> OpenAPIRuntime.UndocumentedPayload {
+        let body = try? JSONEncoder().encode(["error": error.message, "code": error.code])
+        var fields = HTTPFields()
+        fields[.contentType] = "application/json"
+        return OpenAPIRuntime.UndocumentedPayload(headerFields: fields, body: body.map { HTTPBody($0) })
+    }
+
+    func makeErrorBody(_ error: ChatKitGeneratedHandlers.OperationError) -> Components.Schemas.ErrorResponse {
+        Components.Schemas.ErrorResponse(error: "[\(error.code)] \(error.message)")
+    }
+
+    func convertSessionResponse(_ response: ChatKitSessionResponse) throws -> Components.Schemas.ChatKitSessionResponse {
+        let expires = try parseDate(response.expires_at)
+        let metadata = response.metadata.map { Components.Schemas.ChatKitSessionResponse.metadataPayload(additionalProperties: $0) }
+        return Components.Schemas.ChatKitSessionResponse(
+            session_id: response.session_id,
+            client_secret: response.client_secret,
+            expires_at: expires,
+            metadata: metadata
+        )
+    }
+
+    func convertMessageRequest(_ request: Components.Schemas.ChatKitMessageRequest) throws -> ChatKitMessageRequest {
+        let messages = try request.messages.map { try convertMessage($0) }
+        return ChatKitMessageRequest(
+            client_secret: request.client_secret,
+            thread_id: request.thread_id,
+            messages: messages,
+            stream: request.stream,
+            metadata: request.metadata?.additionalProperties
+        )
+    }
+
+    func convertMessage(_ message: Components.Schemas.ChatKitMessage) throws -> ChatKitMessage {
+        let created = message.created_at.map { formatDate($0) }
+        let attachments = message.attachments?.map { convertAttachment($0) }
+        return ChatKitMessage(
+            id: message.id,
+            role: message.role.rawValue,
+            content: message.content,
+            created_at: created,
+            attachments: attachments
+        )
+    }
+
+    func convertMessageResponse(_ response: ChatKitMessageResponse) throws -> Components.Schemas.ChatKitMessageResponse {
+        let created = try parseDate(response.created_at)
+        let usage = response.usage.map { Components.Schemas.ChatKitMessageResponse.usagePayload(additionalProperties: $0) }
+        let metadata = response.metadata.map { Components.Schemas.ChatKitMessageResponse.metadataPayload(additionalProperties: $0) }
+        return Components.Schemas.ChatKitMessageResponse(
+            answer: response.answer,
+            thread_id: response.thread_id,
+            response_id: response.response_id,
+            created_at: created,
+            usage: usage,
+            provider: response.provider,
+            model: response.model,
+            metadata: metadata
+        )
+    }
+
+    func convertUploadResponse(_ response: ChatKitUploadResponse) -> Components.Schemas.ChatKitUploadResponse {
+        Components.Schemas.ChatKitUploadResponse(
+            attachment_id: response.attachment_id,
+            upload_url: response.upload_url,
+            mime_type: response.mime_type
+        )
+    }
+
+    func convertThreadListResponse(_ response: ChatKitThreadListResponse) throws -> Components.Schemas.ChatKitThreadListResponse {
+        let threads = try response.threads.map { try convertThreadSummary($0) }
+        return Components.Schemas.ChatKitThreadListResponse(threads: threads)
+    }
+
+    func convertThreadSummary(_ summary: ChatKitThreadSummary) throws -> Components.Schemas.ChatKitThreadSummary {
+        let created = try parseDate(summary.created_at)
+        let updated = try parseDate(summary.updated_at)
+        return Components.Schemas.ChatKitThreadSummary(
+            thread_id: summary.thread_id,
+            session_id: summary.session_id,
+            title: summary.title,
+            created_at: created,
+            updated_at: updated,
+            message_count: summary.message_count
+        )
+    }
+
+    func convertThread(_ thread: ChatKitThread) throws -> Components.Schemas.ChatKitThread {
+        let created = try parseDate(thread.created_at)
+        let updated = try parseDate(thread.updated_at)
+        let metadata = thread.metadata.map { Components.Schemas.ChatKitThread.metadataPayload(additionalProperties: $0) }
+        let messages = try thread.messages.map { try convertThreadMessage($0) }
+        return Components.Schemas.ChatKitThread(
+            thread_id: thread.thread_id,
+            session_id: thread.session_id,
+            title: thread.title,
+            created_at: created,
+            updated_at: updated,
+            metadata: metadata,
+            messages: messages
+        )
+    }
+
+    func convertThreadMessage(_ message: ChatKitThreadMessage) throws -> Components.Schemas.ChatKitThreadMessage {
+        let created = try parseDate(message.created_at)
+        let attachments = message.attachments?.map { convertAttachment($0) }
+        let toolCalls = message.tool_calls?.map { convertToolCall($0) }
+        let usage = message.usage.map { Components.Schemas.ChatKitThreadMessage.usagePayload(additionalProperties: $0) }
+        return Components.Schemas.ChatKitThreadMessage(
+            id: message.id,
+            role: message.role,
+            content: message.content,
+            created_at: created,
+            attachments: attachments,
+            tool_calls: toolCalls,
+            response_id: message.response_id,
+            usage: usage
+        )
+    }
+
+    func convertToolCall(_ call: ChatKitToolCall) -> Components.Schemas.ChatKitToolCall {
+        Components.Schemas.ChatKitToolCall(
+            id: call.id,
+            name: call.name,
+            arguments: call.arguments,
+            status: call.status,
+            result: call.result
+        )
+    }
+
+    func convertAttachment(_ attachment: Components.Schemas.ChatKitAttachment) -> ChatKitAttachment {
+        ChatKitAttachment(
+            id: attachment.id,
+            type: attachment._type.rawValue,
+            name: attachment.name,
+            mime_type: attachment.mime_type,
+            size_bytes: attachment.size_bytes
+        )
+    }
+
+    func convertAttachment(_ attachment: ChatKitAttachment) -> Components.Schemas.ChatKitAttachment {
+        let payload = Components.Schemas.ChatKitAttachment._typePayload(rawValue: attachment.type) ?? .file
+        return Components.Schemas.ChatKitAttachment(
+            id: attachment.id,
+            _type: payload,
+            name: attachment.name,
+            mime_type: attachment.mime_type,
+            size_bytes: attachment.size_bytes
+        )
+    }
+
+    func parseUploadPayload(_ body: Operations.uploadChatKitAttachment.Input.Body) async throws -> ChatKitGeneratedHandlers.UploadPayload {
+        switch body {
+        case .multipartForm(let multipart):
+            var clientSecret: String?
+            var threadId: String?
+            var fileData: Data?
+            var fileName: String?
+            var mimeType = "application/octet-stream"
+
+            for try await part in multipart {
+                switch part {
+                case .client_secret(let wrapper):
+                    clientSecret = try await string(from: wrapper.payload.body).trimmingCharacters(in: .whitespacesAndNewlines)
+                case .thread_id(let wrapper):
+                    let value = try await string(from: wrapper.payload.body).trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !value.isEmpty { threadId = value }
+                case .file(let wrapper):
+                    fileData = try await collectBody(wrapper.payload.body)
+                    fileName = wrapper.filename ?? "attachment"
+                case .undocumented(let raw):
+                    let name = raw.headerFields[.contentDisposition] ?? ""
+                    let value = try await string(from: raw.body).trimmingCharacters(in: .whitespacesAndNewlines)
+                    if name.contains("client_secret") { clientSecret = value }
+                    if name.contains("thread_id") && !value.isEmpty { threadId = value }
+                }
             }
-            throw DecodingError.dataCorrupted(
-                DecodingError.Context(
-                    codingPath: decoder.codingPath,
-                    debugDescription: "Invalid ISO8601 date: \(value)"
-                )
+
+            guard let secret = clientSecret, let data = fileData, let finalName = fileName else {
+                throw ChatKitGeneratedHandlers.OperationError(status: 400, code: "invalid_request", message: "multipart form missing required parts")
+            }
+
+            return ChatKitGeneratedHandlers.UploadPayload(
+                clientSecret: secret,
+                threadId: threadId,
+                fileName: finalName,
+                mimeType: mimeType,
+                data: data
             )
         }
-        return try decoder.decode(T.self, from: data)
-    }
-
-    func decodeErrorResponse(_ data: Data) -> Components.Schemas.ErrorResponse? {
-        try? decodeJSON(data, as: Components.Schemas.ErrorResponse.self)
-    }
-
-    func makeUndocumentedPayload(from response: FountainRuntime.HTTPResponse) -> OpenAPIRuntime.UndocumentedPayload {
-        var fields = HTTPFields()
-        for (key, value) in response.headers {
-            guard let name = HTTPField.Name(key) else { continue }
-            fields[name] = value
-        }
-        let body = response.body.isEmpty ? nil : HTTPBody(response.body)
-        return OpenAPIRuntime.UndocumentedPayload(headerFields: fields, body: body)
-    }
-
-    func makeQueryString(_ parameters: [String: String]) -> String {
-        guard !parameters.isEmpty else { return "" }
-        let components = parameters
-            .sorted { $0.key < $1.key }
-            .map { key, value -> String in
-                let encodedKey = key.addingPercentEncoding(withAllowedCharacters: Self.queryAllowedCharacters) ?? key
-                let encodedValue = value.addingPercentEncoding(withAllowedCharacters: Self.queryAllowedCharacters) ?? value
-                return "\(encodedKey)=\(encodedValue)"
-            }
-        guard !components.isEmpty else { return "" }
-        return "?" + components.joined(separator: "&")
     }
 
     func collectBody(_ body: OpenAPIRuntime.HTTPBody) async throws -> Data {
         try await Data(collecting: body, upTo: Self.maxMultipartBytes)
     }
 
-    func appendMultipartPart(into data: inout Data, boundary: String, headerLines: [String], body: Data) {
-        appendString("--\(boundary)\r\n", to: &data)
-        for line in headerLines {
-            appendString("\(line)\r\n", to: &data)
-        }
-        appendString("\r\n", to: &data)
-        data.append(body)
-        appendString("\r\n", to: &data)
+    func string(from body: OpenAPIRuntime.HTTPBody) async throws -> String {
+        let data = try await collectBody(body)
+        return String(decoding: data, as: UTF8.self)
     }
 
-    func appendString(_ string: String, to data: inout Data) {
-        if let encoded = string.data(using: .utf8) {
-            data.append(encoded)
+    func parseDate(_ string: String) throws -> Date {
+        if let date = Self.iso8601WithFractional.date(from: string) ?? Self.iso8601Basic.date(from: string) {
+            return date
         }
+        throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Invalid date: \(string)"))
     }
 
-    func appendClosingBoundary(_ boundary: String, to data: inout Data) {
-        appendString("--\(boundary)--\r\n", to: &data)
-    }
-
-    func contentDisposition(name: String, filename: String? = nil) -> String {
-        var value = "form-data; name=\"\(name)\""
-        if let filename {
-            value += "; filename=\"\(filename)\""
-        }
-        return value
-    }
-
-    func encodeMultipart(_ body: Operations.uploadChatKitAttachment.Input.Body) async throws -> (Data, String) {
-        switch body {
-        case .multipartForm(let multipart):
-            let boundary = "Boundary-\(UUID().uuidString)"
-            var data = Data()
-            for try await part in multipart {
-                switch part {
-                case .client_secret(let wrapper):
-                    let bytes = try await collectBody(wrapper.payload.body)
-                    appendMultipartPart(
-                        into: &data,
-                        boundary: boundary,
-                        headerLines: ["Content-Disposition: \(contentDisposition(name: "client_secret"))"],
-                        body: bytes
-                    )
-                case .thread_id(let wrapper):
-                    let bytes = try await collectBody(wrapper.payload.body)
-                    guard !bytes.isEmpty else { continue }
-                    appendMultipartPart(
-                        into: &data,
-                        boundary: boundary,
-                        headerLines: ["Content-Disposition: \(contentDisposition(name: "thread_id"))"],
-                        body: bytes
-                    )
-                case .file(let wrapper):
-                    let bytes = try await collectBody(wrapper.payload.body)
-                    appendMultipartPart(
-                        into: &data,
-                        boundary: boundary,
-                        headerLines: [
-                            "Content-Disposition: \(contentDisposition(name: "file", filename: wrapper.filename ?? "attachment"))",
-                            "Content-Type: application/octet-stream"
-                        ],
-                        body: bytes
-                    )
-                case .undocumented(let raw):
-                    let bytes = try await collectBody(raw.body)
-                    var headerLines: [String] = []
-                    for field in raw.headerFields {
-                        headerLines.append("\(field.name.canonicalName): \(field.value)")
-                    }
-                    if headerLines.isEmpty {
-                        headerLines.append("Content-Disposition: form-data")
-                    }
-                    appendMultipartPart(
-                        into: &data,
-                        boundary: boundary,
-                        headerLines: headerLines,
-                        body: bytes
-                    )
-                }
-            }
-            appendClosingBoundary(boundary, to: &data)
-            return (data, boundary)
-        }
+    func formatDate(_ date: Date) -> String {
+        Self.iso8601WithFractional.string(from: date)
     }
 }

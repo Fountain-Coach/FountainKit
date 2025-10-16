@@ -44,7 +44,7 @@ public final class GatewayServer {
     private var roleGuardReloader: RoleGuardConfigReloader?
     private let personaOrchestrator: GatewayPersonaOrchestrator?
 #if canImport(ChatKitGatewayPlugin)
-    private let chatKitPlugin: ChatKitGatewayPlugin?
+    private let chatKitHandlers: ChatKitGeneratedHandlers?
 #endif
 
     private struct ZoneCreateRequest: Codable { let name: String }
@@ -101,7 +101,7 @@ public final class GatewayServer {
         self.roleGuardStore = roleGuardStore
         self.personaOrchestrator = personaOrchestrator
 #if canImport(ChatKitGatewayPlugin)
-        self.chatKitPlugin = plugins.compactMap { $0 as? ChatKitGatewayPlugin }.first
+        self.chatKitHandlers = plugins.compactMap { ($0 as? ChatKitGatewayPlugin)?.makeGeneratedHandlers() }.first
 #endif
         self.group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         self.routes = [:]
@@ -259,37 +259,13 @@ public final class GatewayServer {
 
 #if canImport(ChatKitGatewayPlugin)
     @MainActor
-    func dispatchChatKitRequest(method: String,
-                                path: String,
-                                headers: [String: String] = [:],
-                                body: Data = Data()) async -> HTTPResponse {
-        guard let plugin = chatKitPlugin else {
-            let payload = ["error": "chatkit plugin unavailable"]
-            let data = (try? JSONSerialization.data(withJSONObject: payload)) ?? Data()
-            return HTTPResponse(status: 501, headers: ["Content-Type": "application/json"], body: data)
-        }
-        let request = HTTPRequest(method: method, path: path, headers: headers, body: body)
-        do {
-            if let response = try await plugin.router.route(request) {
-                return response
-            } else {
-                return HTTPResponse(status: 404)
-            }
-        } catch {
-            let payload = ["error": "chatkit routing failure"]
-            let data = (try? JSONSerialization.data(withJSONObject: payload)) ?? Data()
-            return HTTPResponse(status: 500, headers: ["Content-Type": "application/json"], body: data)
-        }
+    func chatKitGeneratedHandlers() -> ChatKitGeneratedHandlers? {
+        chatKitHandlers
     }
 #else
     @MainActor
-    func dispatchChatKitRequest(method: String,
-                                path: String,
-                                headers: [String: String] = [:],
-                                body: Data = Data()) async -> HTTPResponse {
-        let payload = ["error": "chatkit plugin unavailable"]
-        let data = (try? JSONSerialization.data(withJSONObject: payload)) ?? Data()
-        return HTTPResponse(status: 501, headers: ["Content-Type": "application/json"], body: data)
+    func chatKitGeneratedHandlers() -> ChatKitGeneratedHandlers? {
+        nil
     }
 #endif
 

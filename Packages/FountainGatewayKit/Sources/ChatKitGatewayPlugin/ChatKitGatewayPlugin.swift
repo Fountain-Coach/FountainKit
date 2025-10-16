@@ -8,18 +8,12 @@ public struct ChatKitGatewayPlugin: Sendable {
     public let router: Router
 
     public init(store: ChatKitSessionStore = ChatKitSessionStore(),
-                uploadStore: ChatKitUploadStore = ChatKitUploadStore()) {
+                uploadStore: ChatKitUploadStore = ChatKitUploadStore(),
+                responder: (any ChatResponder)? = nil) {
+        let resolvedResponder: any ChatResponder = responder ?? LLMChatResponder()
         self.router = Router(handlers: Handlers(store: store,
                                                 uploadStore: uploadStore,
-                                                responder: LLMChatResponder()))
-    }
-
-    init(store: ChatKitSessionStore,
-         uploadStore: ChatKitUploadStore,
-         responder: any ChatResponder) {
-        self.router = Router(handlers: Handlers(store: store,
-                                                uploadStore: uploadStore,
-                                                responder: responder))
+                                                responder: resolvedResponder))
     }
 }
 
@@ -60,15 +54,28 @@ public struct Router: Sendable {
 // MARK: - Responder Abstractions
 
 /// Normalised result returned by a chat responder.
-struct ChatResponderResult: Sendable {
+public struct ChatResponderResult: Sendable {
     public let answer: String
     public let provider: String?
     public let model: String?
     public let usage: [String: Double]?
+    public let streamEvents: [ChatKitStreamEventEnvelope]?
+
+    public init(answer: String,
+                provider: String?,
+                model: String?,
+                usage: [String: Double]?,
+                streamEvents: [ChatKitStreamEventEnvelope]?) {
+        self.answer = answer
+        self.provider = provider
+        self.model = model
+        self.usage = usage
+        self.streamEvents = streamEvents
+    }
 }
 
 /// Strategy interface used to fulfil ChatKit message requests.
-protocol ChatResponder: Sendable {
+public protocol ChatResponder: Sendable {
     func respond(session: ChatKitSessionStore.StoredSession,
                  request: ChatKitMessageRequest,
                  preferStreaming: Bool) async throws -> ChatResponderResult
@@ -141,7 +148,8 @@ struct LLMChatResponder: ChatResponder {
         return ChatResponderResult(answer: answer,
                                    provider: provider,
                                    model: model,
-                                   usage: usage)
+                                   usage: usage,
+                                   streamEvents: nil)
     }
 
     private func decodeSSEPayload(_ data: Data) throws -> ChatResponderResult {
@@ -183,7 +191,8 @@ struct LLMChatResponder: ChatResponder {
         return ChatResponderResult(answer: answer,
                                    provider: provider,
                                    model: model,
-                                   usage: usage)
+                                   usage: usage,
+                                   streamEvents: nil)
     }
 
     private func extractAnswer(from object: [String: Any]) -> String? {
@@ -283,7 +292,8 @@ struct Handlers: Sendable {
                                                      request: payload,
                                                      preferStreaming: preferStreaming)
             if preferStreaming {
-                return makeStreamResponse(answer: result.answer,
+                return makeStreamResponse(events: result.streamEvents,
+                                          answer: result.answer,
                                           provider: result.provider,
                                           model: result.model,
                                           usage: result.usage,
@@ -389,7 +399,8 @@ private func mergeMetadata(_ session: [String: String],
         return formatter.string(from: date)
     }
 
-    private func makeStreamResponse(answer: String,
+    private func makeStreamResponse(events: [ChatKitStreamEventEnvelope]?,
+                                    answer: String,
                                     provider: String?,
                                     model: String?,
                                     usage: [String: Double]?,
@@ -407,35 +418,42 @@ private func mergeMetadata(_ session: [String: String],
         }
         let envelopeMetadata = metadataBlock.isEmpty ? nil : metadataBlock
 
-        let deltaEvent = ChatKitStreamEventEnvelope(
-            id: UUID().uuidString.lowercased(),
-            event: "delta",
-            delta: .init(content: answer),
-            answer: nil,
-            done: nil,
-            thread_id: nil,
-            response_id: nil,
-            created_at: nil,
-            metadata: nil
-        )
-
-        let completionEvent = ChatKitStreamEventEnvelope(
-            id: UUID().uuidString.lowercased(),
-            event: "completion",
-            delta: nil,
-            answer: answer,
-            done: true,
-            thread_id: threadId,
-            response_id: responseId,
-            created_at: createdAt,
-            metadata: envelopeMetadata
-        )
-
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        let events = [deltaEvent, completionEvent]
         var body = ""
-        for event in events {
+
+        var eventEnvelopes = events ?? []
+        if eventEnvelopes.isEmpty {
+            eventEnvelopes.append(
+                ChatKitStreamEventEnvelope(
+                    id: UUID().uuidString.lowercased(),
+                    event: "delta",
+                    delta: .init(content: answer),
+                    answer: nil,
+                    done: nil,
+                    thread_id: nil,
+                    response_id: nil,
+                    created_at: nil,
+                    metadata: nil
+                )
+            )
+        }
+
+        eventEnvelopes.append(
+            ChatKitStreamEventEnvelope(
+                id: UUID().uuidString.lowercased(),
+                event: "completion",
+                delta: nil,
+                answer: answer,
+                done: true,
+                thread_id: threadId,
+                response_id: responseId,
+                created_at: createdAt,
+                metadata: envelopeMetadata
+            )
+        )
+
+        for event in eventEnvelopes {
             guard let data = try? encoder.encode(event),
                   let json = String(data: data, encoding: .utf8) else { continue }
             if let id = event.id {
@@ -760,20 +778,44 @@ struct ChatKitMessageResponse: Encodable {
     let metadata: [String: String]?
 }
 
-struct ChatKitStreamEventEnvelope: Encodable {
-    let id: String?
-    let event: String
-    let delta: ChatKitStreamDelta?
-    let answer: String?
-    let done: Bool?
-    let thread_id: String?
-    let response_id: String?
-    let created_at: String?
-    let metadata: [String: String]?
+public struct ChatKitStreamEventEnvelope: Encodable, Sendable {
+    public let id: String?
+    public let event: String
+    public let delta: ChatKitStreamDelta?
+    public let answer: String?
+    public let done: Bool?
+    public let thread_id: String?
+    public let response_id: String?
+    public let created_at: String?
+    public let metadata: [String: String]?
+
+    public init(id: String?,
+                event: String,
+                delta: ChatKitStreamDelta?,
+                answer: String?,
+                done: Bool?,
+                thread_id: String?,
+                response_id: String?,
+                created_at: String?,
+                metadata: [String: String]?) {
+        self.id = id
+        self.event = event
+        self.delta = delta
+        self.answer = answer
+        self.done = done
+        self.thread_id = thread_id
+        self.response_id = response_id
+        self.created_at = created_at
+        self.metadata = metadata
+    }
 }
 
-struct ChatKitStreamDelta: Encodable {
-    let content: String
+public struct ChatKitStreamDelta: Encodable, Sendable {
+    public let content: String
+
+    public init(content: String) {
+        self.content = content
+    }
 }
 
 struct ChatKitUploadResponse: Encodable {

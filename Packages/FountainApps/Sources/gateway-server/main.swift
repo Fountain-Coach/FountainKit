@@ -30,7 +30,7 @@ let rateLimiter = RateLimiterGatewayPlugin(defaultLimit: gatewayConfig?.rateLimi
 let curatorPlugin = CuratorGatewayPlugin()
 let llmPlugin = LLMGatewayPlugin()
 let authPlugin = AuthGatewayPlugin()
-let chatKitPlugin = ChatKitGatewayPlugin()
+let chatKitPlugin = ChatKitGatewayPlugin(responder: ChatKitGatewayResponder())
 var routesURL: URL?
 if let data = configStore?.getSync("routes.json") {
     let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("routes.json")

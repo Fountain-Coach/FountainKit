@@ -15,7 +15,8 @@ private struct StubResponder: ChatResponder {
         return ChatResponderResult(answer: answer,
                                    provider: "stub",
                                    model: "stub-model",
-                                   usage: ["prompt_tokens": 1])
+                                   usage: ["prompt_tokens": 1],
+                                   streamEvents: nil)
     }
 }
 
@@ -34,13 +35,13 @@ final class ChatKitGatewayTests: XCTestCase {
         let mime_type: String?
     }
 
-    func startGateway() async -> ServerTestUtils.RunningServer {
+    func startGateway(responder overrideResponder: (any ChatResponder)? = nil) async -> ServerTestUtils.RunningServer {
         let sessionStore = ChatKitSessionStore()
         let uploadClient = FountainStoreClient(client: EmbeddedFountainStoreClient())
         let uploadStore = ChatKitUploadStore(store: uploadClient)
         let plugin = ChatKitGatewayPlugin(store: sessionStore,
                                           uploadStore: uploadStore,
-                                          responder: responder)
+                                          responder: overrideResponder ?? responder)
         return await ServerTestUtils.startGateway(on: 18121, plugins: [plugin])
     }
 
@@ -138,6 +139,73 @@ final class ChatKitGatewayTests: XCTestCase {
         XCTAssertTrue(sse.contains("Hello Fountain"))
         XCTAssertTrue(sse.contains("event: completion"))
         XCTAssertTrue(sse.contains("\"done\":true"))
+    }
+
+    func testStreamingBridgeEmitsIncrementalEvents() async throws {
+        struct StreamingResponder: ChatResponder {
+            func respond(session: ChatKitSessionStore.StoredSession,
+                         request: ChatKitMessageRequest,
+                         preferStreaming: Bool) async throws -> ChatResponderResult {
+                let events = [
+                    ChatKitStreamEventEnvelope(id: "1",
+                                                event: "delta",
+                                                delta: ChatKitStreamDelta(content: "Hel"),
+                                                answer: nil,
+                                                done: nil,
+                                                thread_id: nil,
+                                                response_id: nil,
+                                                created_at: nil,
+                                                metadata: nil),
+                    ChatKitStreamEventEnvelope(id: "2",
+                                                event: "delta",
+                                                delta: ChatKitStreamDelta(content: "lo Fountain"),
+                                                answer: nil,
+                                                done: nil,
+                                                thread_id: nil,
+                                                response_id: nil,
+                                                created_at: nil,
+                                                metadata: nil)
+                ]
+                return ChatResponderResult(answer: "Hello Fountain",
+                                           provider: "stub",
+                                           model: "stub-model",
+                                           usage: nil,
+                                           streamEvents: events)
+            }
+        }
+
+        let running = await startGateway(responder: StreamingResponder())
+        defer { Task { await running.stop() } }
+
+        let session = try await createSession(on: running.port)
+        let body: [String: Any] = [
+            "client_secret": session.client_secret,
+            "messages": [["role": "user", "content": "Hello Fountain"]],
+            "stream": true
+        ]
+
+        let messageURL = URL(string: "http://127.0.0.1:\(running.port)/chatkit/messages")!
+        var request = URLRequest(url: messageURL)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 202)
+
+        guard let sse = String(data: data, encoding: .utf8) else {
+            return XCTFail("expected utf8 body")
+        }
+
+        let firstIndex = sse.range(of: "Hel")?.lowerBound
+        let secondIndex = sse.range(of: "lo Fountain")?.lowerBound
+        XCTAssertNotNil(firstIndex)
+        XCTAssertNotNil(secondIndex)
+        if let firstIndex, let secondIndex {
+            XCTAssertLessThan(firstIndex, secondIndex)
+        }
+        XCTAssertTrue(sse.contains("event: completion"))
+        XCTAssertTrue(sse.contains("\"answer\":\"Hello Fountain\""))
     }
 
     func testChatKitMessageNonStreamingReturnsJSON() async throws {

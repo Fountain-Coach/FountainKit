@@ -7,6 +7,10 @@ Persona definitions for Gateway plugins live in `personas/` and are referenced v
 
 For a repository‑wide index of OpenAPI coverage and adoption status, see [../OPENAPI_COVERAGE.md](../OPENAPI_COVERAGE.md).
 
+### Recent Updates
+
+- 2025-10-16 – Documented SSE incremental token framing for the ChatKit message stream (`v1/gateway.yml`).
+
 | Service | Version | Owner | Spec |
 | --- | --- | --- | --- |
 | Auth Gateway Plugin | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/auth-gateway.yml](v1/auth-gateway.yml) |

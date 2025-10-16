@@ -1,0 +1,361 @@
+---
+openapi: 3.1.0
+info:
+  title: FountainAI ChatKit Gateway
+  description: >
+    Session bootstrap and message streaming endpoints that allow the
+    FountainKit gateway to power ChatKit front-ends.
+  version: 0.1.0
+  license:
+    name: FountainAI Internal
+    url: https://fountain.coach/licenses/internal
+servers:
+  - url: https://gateway.fountain.coach/api
+    description: Production gateway
+  - url: http://localhost:8010/api
+    description: Local development
+paths:
+  /chatkit/session:
+    post:
+      summary: Start ChatKit session
+      description: >
+        Issues a short-lived client secret that ChatKit uses to authenticate
+        subsequent message and upload requests.
+      operationId: startChatKitSession
+      tags: [ChatKit Sessions]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatKitSessionRequest'
+      responses:
+        '201':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatKitSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /chatkit/session/refresh:
+    post:
+      summary: Refresh ChatKit session secret
+      description: >
+        Rotates the client secret associated with an active session. The
+        previous secret becomes invalid immediately after the refresh succeeds.
+      operationId: refreshChatKitSession
+      tags: [ChatKit Sessions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatKitSessionRefreshRequest'
+      responses:
+        '200':
+          description: Session secret refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatKitSessionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /chatkit/messages:
+    post:
+      summary: Submit chat message
+      description: >
+        Accepts a batch of conversation messages and forwards them to the
+        configured LLM pipeline. When `stream` is true the response is returned
+        as an SSE stream; otherwise a JSON response is returned once the model
+        completes.
+      operationId: postChatKitMessage
+      tags: [ChatKit Messages]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatKitMessageRequest'
+      responses:
+        '200':
+          description: Final response body when streaming is disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatKitMessageResponse'
+        '202':
+          description: Streaming response
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/ChatKitStreamEvent'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /chatkit/upload:
+    post:
+      summary: Upload attachment
+      description: >
+        Direct upload endpoint used by ChatKit when attachments are enabled.
+        The uploaded file is associated with the provided session.
+      operationId: uploadChatKitAttachment
+      tags: [ChatKit Attachments]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChatKitUploadRequest'
+      responses:
+        '201':
+          description: Attachment stored successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatKitUploadResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: Attachment too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '415':
+          description: Unsupported media type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+components:
+  responses:
+    BadRequest:
+      description: Malformed request payload.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Authentication failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    ChatKitSessionRequest:
+      type: object
+      description: Optional metadata describing the session being created.
+      properties:
+        persona:
+          type: string
+          description: Identifier of the persona or workflow to load.
+        userId:
+          type: string
+          description: Stable identifier for the end user, used for persistence.
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: Arbitrary metadata echoed back in session events.
+    ChatKitSessionResponse:
+      type: object
+      required: [client_secret, session_id, expires_at]
+      properties:
+        session_id:
+          type: string
+          description: Stable identifier for the created session.
+        client_secret:
+          type: string
+          description: Bearer token used to authenticate subsequent requests.
+        expires_at:
+          type: string
+          format: date-time
+          description: Expiration timestamp for the current client secret.
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: Metadata echoed from the request.
+    ChatKitSessionRefreshRequest:
+      type: object
+      required: [client_secret]
+      properties:
+        client_secret:
+          type: string
+          description: Previously issued client secret to rotate.
+    ChatKitMessageRequest:
+      type: object
+      required: [client_secret, messages]
+      properties:
+        client_secret:
+          type: string
+          description: Active client secret obtained from session start or refresh.
+        thread_id:
+          type: string
+          description: >
+            Optional identifier for the conversation thread. When omitted a new
+            thread is created implicitly.
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatKitMessage'
+          description: Ordered conversation turns including the user prompt.
+        stream:
+          type: boolean
+          default: true
+          description: When true the response is streamed over SSE.
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: Arbitrary key/value metadata forwarded to the agent runtime.
+    ChatKitMessage:
+      type: object
+      required: [role, content]
+      properties:
+        id:
+          type: string
+          description: Unique identifier supplied by the client.
+        role:
+          type: string
+          enum: [user, assistant, tool, system]
+          description: Role of the message author.
+        content:
+          type: string
+          description: Message body rendered in the conversation.
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp supplied by the client.
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatKitAttachment'
+          description: File attachments referenced by the message.
+    ChatKitAttachment:
+      type: object
+      required: [id, type]
+      properties:
+        id:
+          type: string
+          description: Identifier returned by the upload endpoint.
+        type:
+          type: string
+          enum: [file, image]
+          description: Attachment modality.
+        name:
+          type: string
+          description: Original filename.
+        mime_type:
+          type: string
+          description: MIME type supplied during upload.
+        size_bytes:
+          type: integer
+          description: Size of the attachment in bytes.
+    ChatKitMessageResponse:
+      type: object
+      required: [answer, thread_id]
+      properties:
+        answer:
+          type: string
+          description: Assistant response text.
+        thread_id:
+          type: string
+          description: Thread identifier associated with the response.
+        response_id:
+          type: string
+          description: Unique identifier of the response.
+        created_at:
+          type: string
+          format: date-time
+          description: Response creation timestamp.
+        usage:
+          type: object
+          additionalProperties:
+            type: number
+          description: Token accounting details.
+        provider:
+          type: string
+          description: Underlying provider used to generate the response.
+        model:
+          type: string
+          description: Model identifier selected by FountainKit.
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: Additional metadata returned by the agent runtime.
+    ChatKitStreamEvent:
+      type: object
+      description: >
+        Server-sent event payload delivered when streaming a response.
+      properties:
+        id:
+          type: string
+          description: Event identifier.
+        event:
+          type: string
+          enum: [delta, completion, error]
+          description: SSE event type.
+        delta:
+          type: object
+          required: [content]
+          properties:
+            content:
+              type: string
+              description: Token delta appended to the transcript.
+        answer:
+          type: string
+          description: Final answer when the stream completes.
+        done:
+          type: boolean
+          description: True when the stream has finished sending content.
+        error:
+          $ref: '#/components/schemas/ErrorResponse'
+    ChatKitUploadRequest:
+      type: object
+      required: [client_secret, file]
+      properties:
+        client_secret:
+          type: string
+          description: Client secret authorising the upload.
+        file:
+          type: string
+          format: binary
+          description: File payload.
+        thread_id:
+          type: string
+          description: Optional thread identifier to associate with the upload.
+    ChatKitUploadResponse:
+      type: object
+      required: [attachment_id]
+      properties:
+        attachment_id:
+          type: string
+          description: Identifier used to reference the attachment in messages.
+        upload_url:
+          type: string
+          format: uri
+          description: Location from which the attachment can be fetched.
+        mime_type:
+          type: string
+          description: MIME type detected for the attachment.
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Human readable error message.
+        code:
+          type: string
+          description: Stable error code for programmatic handling.
+
+# © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

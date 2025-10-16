@@ -12,8 +12,8 @@ enum ServerTestUtils {
         func stop() async { try? await server.stop() }
     }
 
-    static func startGateway(on port: Int = 18111) async -> RunningServer {
-        let server = await GatewayServer()
+    static func startGateway(on port: Int = 18111, plugins: [any GatewayPlugin] = []) async -> RunningServer {
+        let server = await GatewayServer(plugins: plugins)
         try? await server.start(port: port)
         return RunningServer(server: server, port: port)
     }

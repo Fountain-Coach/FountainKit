@@ -70,6 +70,7 @@ let package = Package(
                 .product(name: "DestructiveGuardianGatewayPlugin", package: "FountainGatewayKit"),
                 .product(name: "RoleHealthCheckGatewayPlugin", package: "FountainGatewayKit"),
                 .product(name: "SecuritySentinelGatewayPlugin", package: "FountainGatewayKit"),
+                .product(name: "ChatKitGatewayPlugin", package: "FountainGatewayKit"),
                 .product(name: "GatewayPersonaOrchestrator", package: "FountainGatewayKit"),
                 .product(name: "LauncherSignature", package: "FountainCore"),
                 .product(name: "FountainStoreClient", package: "FountainCore"),
@@ -263,7 +264,8 @@ let package = Package(
             name: "GatewayServerTests",
             dependencies: [
                 "gateway-server",
-                .product(name: "FountainRuntime", package: "FountainCore")
+                .product(name: "FountainRuntime", package: "FountainCore"),
+                .product(name: "ChatKitGatewayPlugin", package: "FountainGatewayKit")
             ]
         )
     ]

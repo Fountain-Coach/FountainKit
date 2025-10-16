@@ -8,6 +8,9 @@ import X509
 import LLMGatewayPlugin
 import AuthGatewayPlugin
 import RateLimiterGatewayPlugin
+#if canImport(ChatKitGatewayPlugin)
+import ChatKitGatewayPlugin
+#endif
 #if canImport(GatewayPersonaOrchestrator)
 import GatewayPersonaOrchestrator
 #endif
@@ -139,6 +142,10 @@ public final class GatewayServer {
 
             // Allow plugins with routers to handle requests before builtin routes.
             for plugin in plugins {
+                if let chat = plugin as? ChatKitGatewayPlugin,
+                   let handled = try await chat.router.route(request) {
+                    return handled
+                }
                 if let llm = plugin as? LLMGatewayPlugin,
                    let handled = try await llm.router.route(request) {
                     return handled

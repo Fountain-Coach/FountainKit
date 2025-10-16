@@ -123,6 +123,122 @@ paths:
           $ref: '#/components/responses/BadRequest'
       security:
         - bearerAuth: []
+  /chatkit/session:
+    post:
+      summary: Start ChatKit session
+      description: Issues a short-lived client secret used to authenticate chat requests.
+      operationId: startChatKitSession
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: false
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatKitSessionRequest'
+      responses:
+        '201':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatKitSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /chatkit/session/refresh:
+    post:
+      summary: Refresh ChatKit session secret
+      description: Rotates the client secret associated with an active chat session.
+      operationId: refreshChatKitSession
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatKitSessionRefreshRequest'
+      responses:
+        '200':
+          description: Session secret refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatKitSessionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /chatkit/messages:
+    post:
+      summary: Submit ChatKit message batch
+      description: Accepts conversation messages and forwards them to the LLM pipeline.
+      operationId: postChatKitMessage
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatKitMessageRequest'
+      responses:
+        '200':
+          description: Final response when streaming is disabled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatKitMessageResponse'
+        '202':
+          description: Streaming response
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/ChatKitStreamEvent'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /chatkit/upload:
+    post:
+      summary: Upload attachment for ChatKit
+      description: Stores an attachment and returns an identifier for later reference.
+      operationId: uploadChatKitAttachment
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: false
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChatKitUploadRequest'
+      responses:
+        '201':
+          description: Attachment stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatKitUploadResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /routes:
     get:
       summary: List Configured Routes
@@ -250,6 +366,176 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
   schemas:
+    ChatKitSessionRequest:
+      type: object
+      properties:
+        persona:
+          type: string
+        userId:
+          type: string
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+    ChatKitSessionRefreshRequest:
+      type: object
+      required:
+        - client_secret
+      properties:
+        client_secret:
+          type: string
+    ChatKitSessionResponse:
+      type: object
+      required:
+        - client_secret
+        - session_id
+        - expires_at
+      properties:
+        session_id:
+          type: string
+        client_secret:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+    ChatKitMessageRequest:
+      type: object
+      required:
+        - client_secret
+        - messages
+      properties:
+        client_secret:
+          type: string
+        thread_id:
+          type: string
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatKitMessage'
+        stream:
+          type: boolean
+          default: true
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+    ChatKitMessage:
+      type: object
+      required:
+        - role
+        - content
+      properties:
+        id:
+          type: string
+        role:
+          type: string
+          enum:
+            - user
+            - assistant
+            - tool
+            - system
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatKitAttachment'
+    ChatKitAttachment:
+      type: object
+      required:
+        - id
+        - type
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum:
+            - file
+            - image
+        name:
+          type: string
+        mime_type:
+          type: string
+        size_bytes:
+          type: integer
+    ChatKitMessageResponse:
+      type: object
+      required:
+        - answer
+        - thread_id
+      properties:
+        answer:
+          type: string
+        thread_id:
+          type: string
+        response_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        usage:
+          type: object
+          additionalProperties:
+            type: number
+        provider:
+          type: string
+        model:
+          type: string
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+    ChatKitStreamEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        event:
+          type: string
+          enum:
+            - delta
+            - completion
+            - error
+        delta:
+          type: object
+          properties:
+            content:
+              type: string
+        answer:
+          type: string
+        done:
+          type: boolean
+        error:
+          $ref: '#/components/schemas/ErrorResponse'
+    ChatKitUploadRequest:
+      type: object
+      properties:
+        client_secret:
+          type: string
+        thread_id:
+          type: string
+        file:
+          type: string
+          format: binary
+    ChatKitUploadResponse:
+      type: object
+      required:
+        - attachment_id
+      properties:
+        attachment_id:
+          type: string
+        upload_url:
+          type: string
+        mime_type:
+          type: string
     CredentialRequest:
       type: object
       required:

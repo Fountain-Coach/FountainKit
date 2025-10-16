@@ -6,6 +6,7 @@ import LLMGatewayPlugin
 import AuthGatewayPlugin
 import RateLimiterGatewayPlugin
 import CuratorGatewayPlugin
+import ChatKitGatewayPlugin
 import LauncherSignature
 import GatewayPersonaOrchestrator
 import FountainStoreClient
@@ -29,6 +30,7 @@ let rateLimiter = RateLimiterGatewayPlugin(defaultLimit: gatewayConfig?.rateLimi
 let curatorPlugin = CuratorGatewayPlugin()
 let llmPlugin = LLMGatewayPlugin()
 let authPlugin = AuthGatewayPlugin()
+let chatKitPlugin = ChatKitGatewayPlugin()
 var routesURL: URL?
 if let data = configStore?.getSync("routes.json") {
     let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("routes.json")
@@ -51,6 +53,7 @@ if let jwksURL = env["GATEWAY_JWKS_URL"], let provider = JWKSKeyProvider(jwksURL
 plugins.append(contentsOf: [
     authPlugin as any GatewayPlugin,
     curatorPlugin as any GatewayPlugin,
+    chatKitPlugin as any GatewayPlugin,
     llmPlugin as any GatewayPlugin,
     rateLimiter as any GatewayPlugin,
     LoggingPlugin() as any GatewayPlugin,

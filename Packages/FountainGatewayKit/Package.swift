@@ -18,6 +18,7 @@ let package = Package(
         .library(name: "RoleHealthCheckGatewayPlugin", targets: ["RoleHealthCheckGatewayPlugin"]),
         .library(name: "SecuritySentinelGatewayPlugin", targets: ["SecuritySentinelGatewayPlugin"]),
         .library(name: "CuratorGatewayPlugin", targets: ["CuratorGatewayPlugin"]),
+        .library(name: "ChatKitGatewayPlugin", targets: ["ChatKitGatewayPlugin"]),
         .library(name: "PublishingFrontend", targets: ["PublishingFrontend"])
     ],
     dependencies: [
@@ -100,6 +101,12 @@ let package = Package(
             dependencies: [
                 .product(name: "FountainRuntime", package: "FountainCore"),
                 .product(name: "OpenAPICurator", package: "FountainTooling")
+            ]
+        ),
+        .target(
+            name: "ChatKitGatewayPlugin",
+            dependencies: [
+                .product(name: "FountainRuntime", package: "FountainCore")
             ]
         ),
         .target(

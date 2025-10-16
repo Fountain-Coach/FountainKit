@@ -684,7 +684,9 @@ components:
             - delta
             - completion
             - error
-          description: Event type. `delta` frames deliver incremental tokens while `completion` marks the terminal payload.
+            - tool_call
+            - tool_result
+          description: Event type. `delta` frames deliver incremental tokens while `completion` marks the terminal payload. `tool_call` and `tool_result` frames expose function execution metadata.
         delta:
           type: object
           properties:

@@ -410,6 +410,92 @@ final class ChatKitGatewayTests: XCTestCase {
         XCTAssertEqual((downloadResponse as? HTTPURLResponse)?.statusCode, 409)
     }
 
+    func testToolCallSurfacing() async throws {
+        struct ToolCallResponder: ChatResponder {
+            let toolCalls: [ChatKitToolCall]
+
+            func respond(session: ChatKitSessionStore.StoredSession,
+                         request: ChatKitMessageRequest,
+                         preferStreaming: Bool) async throws -> ChatResponderResult {
+                let events = ToolCallBridge.events(for: toolCalls)
+                return ChatResponderResult(answer: "Tool response",
+                                           provider: "stub",
+                                           model: "stub-model",
+                                           usage: nil,
+                                           streamEvents: events,
+                                           toolCalls: toolCalls)
+            }
+        }
+
+        let call = ChatKitToolCall(id: "call-1",
+                                   name: "search",
+                                   arguments: "{\"query\":\"fountain\"}",
+                                   status: "completed",
+                                   result: "{\"hits\":1}")
+        let responder = ToolCallResponder(toolCalls: [call])
+
+        let running = await startGateway(responder: responder)
+        defer { Task { await running.stop() } }
+
+        let session = try await createSession(on: running.port)
+        let body: [String: Any] = [
+            "client_secret": session.client_secret,
+            "messages": [["role": "user", "content": "Trigger tool"]],
+            "stream": true
+        ]
+
+        let messageURL = URL(string: "http://127.0.0.1:\(running.port)/chatkit/messages")!
+        var request = URLRequest(url: messageURL)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 202)
+
+        guard let sse = String(data: data, encoding: .utf8) else {
+            return XCTFail("expected utf8 body")
+        }
+
+        XCTAssertTrue(sse.contains("event: delta"), "missing delta frame in \(sse)")
+        XCTAssertTrue(sse.contains("event: tool_call"), "missing tool_call frame in \(sse)")
+        XCTAssertTrue(sse.contains("\"tool.name\":\"search\""), "missing tool metadata in \(sse)")
+        XCTAssertTrue(sse.contains("event: tool_result"), "missing tool_result frame in \(sse)")
+        XCTAssertTrue(sse.contains("\"tool.result\":\"{\\\"hits\\\":1}\""), "missing tool result metadata in \(sse)")
+
+        var completionThreadId: String?
+        let dataLines = sse.split(separator: "\n").filter { $0.hasPrefix("data:") && !$0.contains("[DONE]") }
+        for line in dataLines {
+            let jsonString = line.dropFirst("data:".count).trimmingCharacters(in: .whitespaces)
+            guard let jsonData = jsonString.data(using: .utf8),
+                  let object = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else { continue }
+            if let eventName = object["event"] as? String, eventName == "completion" {
+                completionThreadId = object["thread_id"] as? String
+                break
+            }
+        }
+
+        guard let threadId = completionThreadId else {
+            return XCTFail("expected completion thread id")
+        }
+
+        var components = URLComponents(string: "http://127.0.0.1:\(running.port)/chatkit/threads/\(threadId)")!
+        components.queryItems = [URLQueryItem(name: "client_secret", value: session.client_secret)]
+        let (threadData, threadResponse) = try await URLSession.shared.data(from: components.url!)
+        XCTAssertEqual((threadResponse as? HTTPURLResponse)?.statusCode, 200)
+
+        let thread = try JSONDecoder().decode(ChatKitThread.self, from: threadData)
+        guard let assistantMessage = thread.messages.last else {
+            return XCTFail("expected assistant message")
+        }
+        let storedCalls = assistantMessage.tool_calls
+        XCTAssertEqual(storedCalls?.count, 1)
+        XCTAssertEqual(storedCalls?.first?.id, call.id)
+        XCTAssertEqual(storedCalls?.first?.name, call.name)
+        XCTAssertEqual(storedCalls?.first?.arguments, call.arguments)
+        XCTAssertEqual(storedCalls?.first?.result, call.result)
+    }
+
     func testOversizedAttachmentIsRejected() async throws {
         let running = await startGateway(maxAttachmentBytes: 1 * 1_024)
         defer { Task { await running.stop() } }

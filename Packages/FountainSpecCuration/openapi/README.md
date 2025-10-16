@@ -10,6 +10,7 @@ For a repository‑wide index of OpenAPI coverage and adoption status, see [../O
 ### Recent Updates
 
 - 2025-10-16 – Documented SSE incremental token framing for the ChatKit message stream (`v1/gateway.yml`).
+- 2025-10-16 – Added tool call streaming events to the ChatKit gateway spec (`v1/gateway.yml`).
 
 | Service | Version | Owner | Spec |
 | --- | --- | --- | --- |

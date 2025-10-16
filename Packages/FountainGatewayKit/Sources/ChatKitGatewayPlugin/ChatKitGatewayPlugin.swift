@@ -1272,20 +1272,24 @@ private func mergeMetadata(_ session: [String: String],
         var body = ""
 
         var eventEnvelopes = events ?? []
-        if eventEnvelopes.isEmpty {
-            eventEnvelopes.append(
-                ChatKitStreamEventEnvelope(
-                    id: UUID().uuidString.lowercased(),
-                    event: "delta",
-                    delta: .init(content: answer),
-                    answer: nil,
-                    done: nil,
-                    thread_id: nil,
-                    response_id: nil,
-                    created_at: nil,
-                    metadata: nil
-                )
+        let hasDelta = eventEnvelopes.contains { envelope in
+            guard envelope.event == "delta" else { return false }
+            guard let delta = envelope.delta else { return false }
+            return !delta.content.isEmpty
+        }
+        if !hasDelta && !answer.isEmpty {
+            let fallback = ChatKitStreamEventEnvelope(
+                id: UUID().uuidString.lowercased(),
+                event: "delta",
+                delta: .init(content: answer),
+                answer: nil,
+                done: nil,
+                thread_id: nil,
+                response_id: nil,
+                created_at: nil,
+                metadata: nil
             )
+            eventEnvelopes.insert(fallback, at: 0)
         }
 
         eventEnvelopes.append(

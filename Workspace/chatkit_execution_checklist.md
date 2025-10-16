@@ -48,9 +48,9 @@ This checklist translates the recent ChatKit commits and milestone roadmap into 
   - Command: `swift test --package-path Packages/FountainApps --filter ChatKitGatewayTests/testThreadPersistence`
 
 ### 6. Tool Call Surfacing
-- [ ] Map LLM tool/function calls to ChatKit tool events in `Packages/FountainApps/Sources/gateway-server/ToolCallBridge.swift`.
+- [x] Map LLM tool/function calls to ChatKit tool events in `Packages/FountainApps/Sources/gateway-server/ToolCallBridge.swift`.
   - Command: `swift build --target gateway-server`
-- [ ] Add tests simulating tool call responses verifying gateway output.
+- [x] Add tests simulating tool call responses verifying gateway output.
   - Command: `swift test --package-path Packages/FountainApps --filter ChatKitGatewayTests/testToolCallSurfacing`
 
 ## 📚 Documentation & Ops

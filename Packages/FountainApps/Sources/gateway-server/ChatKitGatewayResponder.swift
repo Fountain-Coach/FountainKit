@@ -84,6 +84,7 @@ struct ChatKitGatewayResponder: ChatResponder {
         var model: String?
         var usage: [String: Double]?
         var events: [ChatKitStreamEventEnvelope] = []
+        var collectedToolCalls: [ChatKitToolCall] = []
         
         for block in text.components(separatedBy: "\n\n") where !block.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             var eventName: String?
@@ -127,6 +128,9 @@ struct ChatKitGatewayResponder: ChatResponder {
                 if usage == nil, let rawUsage = object["usage"] {
                     usage = extractUsage(from: rawUsage)
                 }
+                if let calls = extractToolCalls(from: object) {
+                    collectedToolCalls.append(contentsOf: calls)
+                }
             }
         }
 
@@ -135,9 +139,13 @@ struct ChatKitGatewayResponder: ChatResponder {
             throw ChatKitGatewayError.invalidResponse("empty SSE answer")
         }
 
-        let uniqueEvents = events.deduplicating()
+        let toolCalls = collectedToolCalls.isEmpty ? nil : collectedToolCalls
+        var combinedEvents = events
+        if let toolCalls {
+            combinedEvents.append(contentsOf: ToolCallBridge.events(for: toolCalls))
+        }
+        let uniqueEvents = combinedEvents.deduplicating()
 
-        let toolCalls: [ChatKitToolCall]? = nil
         return ChatResponderResult(answer: answer,
                                    provider: provider,
                                    model: model,

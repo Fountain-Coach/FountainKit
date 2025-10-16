@@ -12,6 +12,7 @@ Purpose: Expand Swift OpenAPI Generator coverage for the Fountain Gateway so tha
 ## Milestone B — Generated Server Adoption
 - [ ] Run `swift build --product gateway-server` to regenerate server interfaces and surface compile errors introduced by broader generation.
   - _2025-10-17 — Blocked in local workspace because `External/Teatro/Packages/TeatroGUI` is absent. The build invocation fails before generation. Track down the missing checkout (or provide a temporary shim package) so the generator can run._
+  - _2025-10-18 — Added lightweight Teatro shims under `External/Teatro` so the workspace can resolve local dependencies while the upstream repository remains unavailable._
 - [ ] Replace manual router shims with generated handler conformances within `GatewayOpenAPI` to delegate to plugin kernels.
   - _Drafted approach: expose `ChatKitGatewayPlugin` kernels so generated handlers can translate `Operations.*` payloads into router calls without duplicating validation logic. Requires refactoring plugin to make upload metadata (filename/MIME) accessible outside raw HTTP requests._
 - [ ] Expose plugin routers as typed handler implementations by conforming to generated protocols and wiring them through the gateway dependency container.

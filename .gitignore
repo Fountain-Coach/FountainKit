@@ -2,6 +2,11 @@
 .swiftpm/
 .DS_Store
 .fountain/
-External/
+External/*
+External/LocalAgent/
+External/swiftcurseskit/
+External/.DS_Store
+!External/Teatro/
+!External/Teatro/**
 logs/guardian.log
 *.log

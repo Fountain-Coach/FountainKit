@@ -30,7 +30,14 @@ let rateLimiter = RateLimiterGatewayPlugin(defaultLimit: gatewayConfig?.rateLimi
 let curatorPlugin = CuratorGatewayPlugin()
 let llmPlugin = LLMGatewayPlugin()
 let authPlugin = AuthGatewayPlugin()
-let chatKitPlugin = ChatKitGatewayPlugin(responder: ChatKitGatewayResponder())
+let attachmentClient = FountainStoreClient(client: EmbeddedFountainStoreClient())
+let attachmentMetadataStore = GatewayAttachmentStore(store: attachmentClient)
+let attachmentUploadStore = ChatKitUploadStore(store: attachmentClient)
+let chatKitSessionStore = ChatKitSessionStore()
+let chatKitPlugin = ChatKitGatewayPlugin(store: chatKitSessionStore,
+                                         uploadStore: attachmentUploadStore,
+                                         metadataStore: attachmentMetadataStore,
+                                         responder: ChatKitGatewayResponder())
 var routesURL: URL?
 if let data = configStore?.getSync("routes.json") {
     let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("routes.json")

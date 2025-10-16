@@ -11,6 +11,7 @@ For a repository‑wide index of OpenAPI coverage and adoption status, see [../O
 
 - 2025-10-16 – Documented SSE incremental token framing for the ChatKit message stream (`v1/gateway.yml`).
 - 2025-10-16 – Added tool call streaming events to the ChatKit gateway spec (`v1/gateway.yml`).
+- 2025-10-16 – Aligned ChatKit session, thread, and attachment specs; added generator coverage for plugin routes (`v1/gateway.yml`, `v1/chatkit-gateway.yml`).
 
 | Service | Version | Owner | Spec |
 | --- | --- | --- | --- |
@@ -44,7 +45,7 @@ This section tracks ownership and adoption of Apple’s Swift OpenAPI Generator.
 
 | Spec | Owner target(s) | Server adoption | Client adoption |
 | --- | --- | --- | --- |
-| `v1/gateway.yml` | `FountainApps/gateway-server` | Generator enabled (scoped control plane) | N/A |
+| `v1/gateway.yml` | `FountainApps/gateway-server` | Generator enabled (control plane + ChatKit plugin) | N/A |
 | `v1/semantic-browser.yml` | `FountainServiceKit-SemanticBrowser/SemanticBrowserService` | Generator enabled | `FountainAPIClients/SemanticBrowserAPI` generator enabled |
 | `v1/persist.yml` | `FountainServiceKit-Persist/PersistService` | Generator enabled | `FountainAPIClients/PersistAPI` generator enabled |
 | `v1/planner.yml` | `FountainServiceKit-Planner/PlannerService` | Generator enabled | Pending |
@@ -66,7 +67,7 @@ This section tracks ownership and adoption of Apple’s Swift OpenAPI Generator.
 | Auth Gateway Plugin | Contexter alias Benedikt Eickhoff | ✅ | [v1/auth-gateway.yml](v1/auth-gateway.yml) |
 | Budget Breaker Gateway Plugin | Contexter alias Benedikt Eickhoff | ✅ | [v1/budget-breaker-gateway.yml](v1/budget-breaker-gateway.yml) |
 | Curator Gateway Plugin | Contexter alias Benedikt Eickhoff | ✅ | [v1/curator-gateway.yml](v1/curator-gateway.yml) |
-| ChatKit Gateway Plugin | Contexter alias Benedikt Eickhoff | ❌ | [v1/chatkit-gateway.yml](v1/chatkit-gateway.yml) |
+| ChatKit Gateway Plugin | Contexter alias Benedikt Eickhoff | ✅ | [v1/chatkit-gateway.yml](v1/chatkit-gateway.yml) |
 | Destructive Guardian Gateway Plugin | Contexter alias Benedikt Eickhoff | ✅ | [v1/destructive-guardian-gateway.yml](v1/destructive-guardian-gateway.yml) |
 | LLM Gateway Plugin | Contexter alias Benedikt Eickhoff | ✅ | [v1/llm-gateway.yml](v1/llm-gateway.yml) |
 | Payload Inspection Gateway Plugin | Contexter alias Benedikt Eickhoff | ✅ | [v1/payload-inspection-gateway.yml](v1/payload-inspection-gateway.yml) |

@@ -47,18 +47,20 @@ This section tracks ownership and adoption of Apple’s Swift OpenAPI Generator.
 | Spec | Owner target(s) | Server adoption | Client adoption |
 | --- | --- | --- | --- |
 | `v1/gateway.yml` | `FountainApps/gateway-server` | Generator enabled (control plane + ChatKit plugin) | `FountainAPIClients/GatewayAPI` generator enabled (CI smoke) |
+| `v1/chatkit-gateway.yml` | `FountainApps/gateway-server` (ChatKit plugin) | Generator enabled (plugin handlers) | N/A |
+| `v1/baseline-awareness.yml` | `FountainServiceKit-Awareness/AwarenessService` | Generator enabled | `FountainAPIClients/AwarenessAPI` generator enabled |
+| `v1/fk-ops.yml` | `FountainServiceKit-FKOps/FKOpsService` | Generator enabled | `FountainAPIClients/FKOpsAPI` generator enabled |
 | `v1/semantic-browser.yml` | `FountainServiceKit-SemanticBrowser/SemanticBrowserService` | Generator enabled | `FountainAPIClients/SemanticBrowserAPI` generator enabled |
 | `v1/persist.yml` | `FountainServiceKit-Persist/PersistService` | Generator enabled | `FountainAPIClients/PersistAPI` generator enabled |
-| `v1/planner.yml` | `FountainServiceKit-Planner/PlannerService` | Generator enabled | Pending |
-| `v1/function-caller.yml` | `FountainServiceKit-FunctionCaller/FunctionCallerService` | Pending | Pending |
-| `v1/bootstrap.yml` | `FountainServiceKit-Bootstrap/BootstrapService` | Pending | Pending |
-| `v1/tools-factory.yml` | `FountainServiceKit-ToolsFactory/ToolsFactoryService` | Pending | Pending |
-| `v1/tool-server.yml` | `FountainServiceKit-ToolServer` | Manual router, no generator | N/A |
-| `v1/dns.yml` | TBC | Pending | Pending |
-| `v1/llm-gateway.yml` | Gateway plugin (no standalone server) | N/A | N/A |
-| `v1/openapi-curator.yml` | `FountainTooling` | Pending | N/A |
-| `v1/chatkit-gateway.yml` | `FountainApps/gateway-server` (ChatKit plugin) | Generator enabled (plugin handlers) | N/A |
-| `v1/the-four-stars-speech-atlas.yml` | `FountainServiceKit-Persist` (ArcSpec surfaces) | Pending | Pending |
+| `v1/the-four-stars-speech-atlas.yml` | `FountainServiceKit-Persist/SpeechAtlasService` | Generator enabled | `FountainAPIClients/SpeechAtlasAPI` generator enabled |
+| `v1/planner.yml` | `FountainServiceKit-Planner/PlannerService` | Generator enabled | `FountainAPIClients/PlannerAPI` generator enabled |
+| `v1/function-caller.yml` | `FountainServiceKit-FunctionCaller/FunctionCallerService` | Generator enabled | `FountainAPIClients/FunctionCallerAPI` generator enabled |
+| `v1/bootstrap.yml` | `FountainServiceKit-Bootstrap/BootstrapService` | Generator enabled | `FountainAPIClients/BootstrapAPI` generator enabled |
+| `v1/tools-factory.yml` | `FountainServiceKit-ToolsFactory/ToolsFactoryService` | Generator enabled | `FountainAPIClients/ToolsFactoryAPI` generator enabled |
+| `v1/tool-server.yml` | `FountainServiceKit-ToolServer/ToolServerService` | Generator enabled | Pending (no dedicated client target) |
+| `v1/dns.yml` | (Gateway DNS management) | Not wired to a Swift target | `FountainAPIClients/DNSAPI` generator enabled |
+| `v1/llm-gateway.yml` | Gateway plugin (no standalone server) | Manual plugin, generator not configured | `FountainAPIClients/LLMGatewayAPI` generator enabled |
+| `v1/openapi-curator.yml` | `FountainTooling/openapi-curator-service` | Pending | Pending |
 
 
 ## Gateway Plugins

@@ -8,6 +8,7 @@ let package = Package(
     ],
     products: [
         .executable(name: "gateway-server", targets: ["gateway-server"]),
+        .executable(name: "gateway-ci-smoke", targets: ["gateway-ci-smoke"]),
         .executable(name: "tools-factory-server", targets: ["tools-factory-server"]),
         .executable(name: "tool-server", targets: ["tool-server"]),
         .executable(name: "planner-server", targets: ["planner-server"]),
@@ -82,6 +83,16 @@ let package = Package(
             plugins: [
                 .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
+        .executableTarget(
+            name: "gateway-ci-smoke",
+            dependencies: [
+                .product(name: "GatewayAPI", package: "FountainAPIClients"),
+                .product(name: "ApiClientsCore", package: "FountainAPIClients"),
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
+                .product(name: "Crypto", package: "swift-crypto")
             ]
         ),
         .executableTarget(

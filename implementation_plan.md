@@ -20,6 +20,7 @@ Status — Done
   - CI runs `Scripts/openapi-lint.sh` on Ubuntu and macOS runners before Swift builds/tests.
   - SwiftPM build plugin enforces presence of `openapi-generator-config.yaml` for generated targets.
   - Completed Linux `FoundationNetworking` audit for URLSession-based transports, CLIs, and tests.
+  - CI runs a workspace `swift build --explicit-target-dependency-import-check` on macOS and Linux, and `Scripts/ci-smoke.sh` now drives generated ChatKit flows via `gateway-ci-smoke`.
 
 Status — In Progress
 - Service migrations: Completed for Awareness, ToolsFactory, ToolServer (handlers + routing).
@@ -33,7 +34,7 @@ Next Steps (High Priority)
    - [x] Migrate remaining pending clients (`FunctionCallerAPI`, `BootstrapAPI`, `ToolsFactoryAPI`, `FKOpsAPI`, `AwarenessAPI`) to generated implementations and validate parity on Linux/macOS.
 3. **Runtime Compatibility Sweep**
    - [x] Audit `FountainCore` transports for FoundationNetworking availability on Linux and provide shims where required.
-   - [ ] Add integration smoke tests for a representative client/server pair running on both Darwin and Linux Swift toolchains.
+   - [ ] Add integration smoke tests for a representative client/server pair running on both Darwin and Linux Swift toolchains (macOS ChatKit smoke in place; Linux execution pending).
 4. **Legacy Decommissioning**
    - [ ] Retire `FountainCodex` once generated clients pass the cross-platform smoke tests.
 5. **Tool Server Hardening**

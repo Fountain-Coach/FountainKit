@@ -105,6 +105,39 @@ jobs:
               swift package --package-path Packages/FountainApps resolve
               swift test --package-path Packages/FountainApps --filter FountainDevScriptsTests/testDevUpStartsGatewayAndDevDownStopsIt'
 
+  workspace-build-linux:
+    name: swift build (workspace, Linux)
+    needs:
+      - lint-openapi-linux
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare SwiftPM cache directories
+        run: |
+          mkdir -p .build-linux .swiftpm-linux
+
+      - name: Restore SwiftPM cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build-linux
+            .swiftpm-linux
+          key: linux-workspace-build-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            linux-workspace-build-
+
+      - name: swift build (Linux)
+        run: |
+          docker run --rm \
+            -v "$PWD":/workspace \
+            -v "$PWD/.build-linux":/workspace/.build \
+            -v "$PWD/.swiftpm-linux":/workspace/.swiftpm \
+            -w /workspace \
+            swiftlang/swift:nightly-jammy \
+            bash -lc 'set -euo pipefail
+              swift build --explicit-target-dependency-import-check'
+
   swift-ci:
     name: ${{ matrix.title }}
     needs:

@@ -37,10 +37,14 @@ Purpose: Expand Swift OpenAPI Generator coverage for the Fountain Gateway so tha
   - _2025-10-19 — Added `Sources/GatewayAPI/README.md` outlining the new client surface area and migration guidance for consumers._
 
 ## Milestone D — CI & Tooling Updates
-- [ ] Ensure CI runs `swift build` at the workspace root after generator expansion to validate no new compile regressions.
-- [ ] Add smoke tests in `Scripts/ci-smoke.sh` for representative ChatKit/plugin flows using generated clients and server.
-- [ ] Update `OpenAPI-Generator-Coverage.md` and gateway coverage tables to reflect generator adoption once green.
-- [ ] Notify owning teams and update `implementation_plan.md` with completion status when milestones close.
+- [x] Ensure CI runs `swift build` at the workspace root after generator expansion to validate no new compile regressions.
+  - _2025-10-20 — Added `workspace-build-linux` to `ci.yml`, mirroring the existing macOS build and exercising the generator on Swift's Linux toolchain._
+- [x] Add smoke tests in `Scripts/ci-smoke.sh` for representative ChatKit/plugin flows using generated clients and server.
+  - _2025-10-20 — `gateway-ci-smoke` now drives session start/refresh, messaging, thread list/fetch, and deletion via the generated `GatewayAPI.Client`; `ci-smoke.sh` executes it against the running gateway._
+- [x] Update `OpenAPI-Generator-Coverage.md` and gateway coverage tables to reflect generator adoption once green.
+  - _2025-10-20 — Coverage docs highlight the new CI guardrail and smoke harness; ChatKit plugin rows mark generator adoption._
+- [x] Notify owning teams and update `implementation_plan.md` with completion status when milestones close.
+  - _2025-10-20 — Implementation plan acknowledges the new CI build + smoke coverage and tracks Linux execution follow-up._
 
 ## Milestone E — Post-Migration Hardening
 - [ ] Monitor runtime telemetry for increased latency or error rates due to generated transport changes; roll back if necessary.

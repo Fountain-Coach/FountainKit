@@ -5,8 +5,9 @@ import FountainRuntime
 public struct ChatKitGatewayPlugin: Sendable {
     public let router: Router
 
-    public init(store: ChatKitSessionStore = ChatKitSessionStore()) {
-        self.router = Router(handlers: Handlers(store: store))
+    public init(store: ChatKitSessionStore = ChatKitSessionStore(),
+                uploadStore: ChatKitUploadStore = ChatKitUploadStore()) {
+        self.router = Router(handlers: Handlers(store: store, uploadStore: uploadStore))
     }
 }
 
@@ -48,9 +49,11 @@ public struct Router: Sendable {
 
 public struct Handlers: Sendable {
     private let store: ChatKitSessionStore
+    private let uploadStore: ChatKitUploadStore
 
-    public init(store: ChatKitSessionStore) {
+    public init(store: ChatKitSessionStore, uploadStore: ChatKitUploadStore) {
         self.store = store
+        self.uploadStore = uploadStore
     }
 
     public func startSession(_ request: HTTPRequest) async -> HTTPResponse {
@@ -122,7 +125,49 @@ public struct Handlers: Sendable {
     }
 
     public func uploadAttachment(_ request: HTTPRequest) async -> HTTPResponse {
-        makeError(status: 501, code: "not_implemented", message: "attachment uploads not implemented")
+        guard let contentType = request.headers["Content-Type"],
+              contentType.starts(with: "multipart/form-data") else {
+            return makeError(status: 400, code: "invalid_request", message: "multipart/form-data required")
+        }
+
+        guard let boundary = parseBoundary(from: contentType) else {
+            return makeError(status: 400, code: "invalid_request", message: "multipart boundary missing")
+        }
+
+        guard let multipart = parseMultipart(body: request.body, boundary: boundary) else {
+            return makeError(status: 400, code: "invalid_request", message: "malformed multipart payload")
+        }
+
+        guard let secretPart = multipart.first(where: { $0.name == "client_secret" }),
+              let clientSecret = String(data: secretPart.data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !clientSecret.isEmpty else {
+            return makeError(status: 400, code: "invalid_request", message: "client_secret part missing")
+        }
+
+        guard let session = await store.session(for: clientSecret) else {
+            return makeError(status: 401, code: "invalid_secret", message: "client secret expired or unknown")
+        }
+
+        let threadId = multipart.first(where: { $0.name == "thread_id" })
+            .flatMap { String(data: $0.data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+        guard let filePart = multipart.first(where: { $0.name == "file" }) else {
+            return makeError(status: 400, code: "invalid_request", message: "file part missing")
+        }
+
+        let fileName = filePart.filename ?? "attachment"
+        let mimeType = filePart.contentType ?? "application/octet-stream"
+
+        let descriptor = await uploadStore.store(fileName: fileName,
+                                                 mimeType: mimeType,
+                                                 data: filePart.data,
+                                                 sessionId: session.id,
+                                                 threadId: threadId)
+
+        let response = ChatKitUploadResponse(attachment_id: descriptor.id,
+                                             upload_url: descriptor.url,
+                                             mime_type: descriptor.mimeType)
+        return encodeJSON(response, status: 201)
     }
 
     private func encodeJSON<T: Encodable>(_ value: T, status: Int) -> HTTPResponse {
@@ -204,6 +249,75 @@ public struct Handlers: Sendable {
             ],
             body: Data(body.utf8)
         )
+    }
+
+    private func parseBoundary(from contentType: String) -> String? {
+        contentType
+            .split(separator: ";")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first(where: { $0.starts(with: "boundary=") })?
+            .replacingOccurrences(of: "boundary=", with: "")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+    }
+
+    private func parseMultipart(body: Data, boundary: String) -> [MultipartPart]? {
+        guard var raw = String(data: body, encoding: .utf8) else { return nil }
+        raw = raw.replacingOccurrences(of: "\r\n", with: "\n")
+        let delimiter = "--" + boundary
+        var parts: [MultipartPart] = []
+        for segment in raw.components(separatedBy: delimiter) {
+            var section = segment.trimmingCharacters(in: .whitespacesAndNewlines)
+            if section == "--" || section.isEmpty { continue }
+            if section.hasSuffix("--") { section.removeLast(2) }
+            section = section.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !section.isEmpty else { continue }
+
+            let pieces = section.components(separatedBy: "\n\n")
+            guard pieces.count >= 2 else { return nil }
+            let headerLines = pieces[0].components(separatedBy: "\n")
+            let bodySection = pieces.dropFirst().joined(separator: "\n\n")
+
+            let headers = headerLines.reduce(into: [String: String]()) { dict, line in
+                let comps = line.split(separator: ":", maxSplits: 1)
+                guard comps.count == 2 else { return }
+                dict[String(comps[0]).lowercased()] = String(comps[1]).trimmingCharacters(in: .whitespaces)
+            }
+
+            guard let disposition = headers["content-disposition"],
+                  let attributes = parseContentDisposition(disposition),
+                  let name = attributes["name"] else { return nil }
+
+            let filename = attributes["filename"]
+            let contentType = headers["content-type"]
+            var dataString = bodySection
+            while dataString.hasSuffix("\n") { dataString.removeLast() }
+            let data = Data(dataString.utf8)
+            parts.append(MultipartPart(name: name, filename: filename, contentType: contentType, data: data))
+        }
+        return parts
+    }
+
+    private func parseContentDisposition(_ header: String) -> [String: String]? {
+        var result: [String: String] = [:]
+        for component in header.split(separator: ";") {
+            let trimmed = component.trimmingCharacters(in: .whitespaces)
+            if trimmed.contains("=") {
+                let parts = trimmed.split(separator: "=", maxSplits: 1)
+                guard parts.count == 2 else { continue }
+                let key = String(parts[0]).trimmingCharacters(in: .whitespaces)
+                var value = String(parts[1]).trimmingCharacters(in: .whitespaces)
+                value = value.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+                result[key] = value
+            }
+        }
+        return result.isEmpty ? nil : result
+    }
+
+    private struct MultipartPart {
+        let name: String
+        let filename: String?
+        let contentType: String?
+        let data: Data
     }
 }
 
@@ -368,6 +482,50 @@ struct ChatKitStreamEventEnvelope: Encodable {
 
 struct ChatKitStreamDelta: Encodable {
     let content: String
+}
+
+struct ChatKitUploadResponse: Encodable {
+    let attachment_id: String
+    let upload_url: String
+    let mime_type: String?
+}
+
+public actor ChatKitUploadStore {
+    public struct StoredAttachment: Sendable {
+        public let id: String
+        public let fileName: String
+        public let mimeType: String
+        public let data: Data
+        public let sessionId: String
+        public let threadId: String?
+    }
+
+    public struct Descriptor: Sendable {
+        public let id: String
+        public let url: String
+        public let mimeType: String?
+    }
+
+    private var attachments: [String: StoredAttachment] = [:]
+
+    public init() {}
+
+    public func store(fileName: String,
+                      mimeType: String?,
+                      data: Data,
+                      sessionId: String,
+                      threadId: String?) -> Descriptor {
+        let attachmentId = UUID().uuidString.lowercased()
+        let stored = StoredAttachment(id: attachmentId,
+                                      fileName: fileName,
+                                      mimeType: mimeType ?? "application/octet-stream",
+                                      data: data,
+                                      sessionId: sessionId,
+                                      threadId: threadId)
+        attachments[attachmentId] = stored
+        let url = "memory://chatkit-attachments/" + attachmentId
+        return Descriptor(id: attachmentId, url: url, mimeType: stored.mimeType)
+    }
 }
 
 // © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

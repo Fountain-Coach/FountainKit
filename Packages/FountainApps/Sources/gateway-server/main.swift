@@ -26,6 +26,7 @@ let gatewayConfig = try? loadGatewayConfig(store: configStore, environment: env)
 if gatewayConfig == nil {
     FileHandle.standardError.write(Data("[gateway] Warning: failed to load gateway config; using defaults for rate limiting.\n".utf8))
 }
+let chatKitConfig = loadChatKitConfig(environment: env)
 let rateLimiter = RateLimiterGatewayPlugin(defaultLimit: gatewayConfig?.rateLimitPerMinute ?? 60)
 let curatorPlugin = CuratorGatewayPlugin()
 let llmPlugin = LLMGatewayPlugin()
@@ -37,7 +38,9 @@ let chatKitSessionStore = ChatKitSessionStore()
 let chatKitPlugin = ChatKitGatewayPlugin(store: chatKitSessionStore,
                                          uploadStore: attachmentUploadStore,
                                          metadataStore: attachmentMetadataStore,
-                                         responder: ChatKitGatewayResponder())
+                                         responder: ChatKitGatewayResponder(),
+                                         maxAttachmentBytes: chatKitConfig.maxAttachmentBytes,
+                                         allowedAttachmentMIMEs: chatKitConfig.allowedMimeTypes)
 var routesURL: URL?
 if let data = configStore?.getSync("routes.json") {
     let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("routes.json")

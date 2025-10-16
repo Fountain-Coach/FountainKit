@@ -17,11 +17,11 @@ This checklist translates the recent ChatKit commits and milestone roadmap into 
   - Command: `swift test --package-path Packages/FountainApps --filter ChatKitGatewayTests/testStreamingBridge`
 
 ### 2. Attachment Retrieval Endpoint
-- [ ] Design `/chatkit/attachments/{id}` in the OpenAPI spec with signed download URL or direct payload.
+- [x] Design `/chatkit/attachments/{id}` in the OpenAPI spec with signed download URL or direct payload.
   - Command: `swift run fountain-openapi-curator --lint Packages/FountainApps/Sources/gateway-server/openapi/chatkit.yaml`
-- [ ] Persist attachment metadata (size, MIME, checksum) in FountainStore models within `Packages/FountainApps/Sources/gateway-server/AttachmentStore.swift`.
+- [x] Persist attachment metadata (size, MIME, checksum) in FountainStore models within `Packages/FountainApps/Sources/gateway-server/AttachmentStore.swift`.
   - Command: `swift build --target gateway-server`
-- [ ] Implement download handler and add tests covering metadata validation.
+- [x] Implement download handler and add tests covering metadata validation.
   - Command: `swift test --package-path Packages/FountainApps --filter ChatKitGatewayTests/testAttachmentDownload`
 
 ## 📅 2–5 days

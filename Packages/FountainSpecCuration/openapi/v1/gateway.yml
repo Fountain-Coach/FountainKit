@@ -239,6 +239,61 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /chatkit/attachments/{attachmentId}:
+    get:
+      summary: Download ChatKit attachment
+      description: Returns the raw bytes for a previously uploaded attachment after validating the session secret and metadata.
+      operationId: downloadChatKitAttachment
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: false
+      parameters:
+        - name: attachmentId
+          in: path
+          required: true
+          description: Unique identifier for the attachment to download.
+          schema:
+            type: string
+        - name: client_secret
+          in: query
+          required: true
+          description: Session secret obtained from `/chatkit/session` or `/chatkit/session/refresh`.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Attachment bytes
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Attachment does not belong to the provided session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Attachment not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Stored metadata failed validation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /routes:
     get:
       summary: List Configured Routes

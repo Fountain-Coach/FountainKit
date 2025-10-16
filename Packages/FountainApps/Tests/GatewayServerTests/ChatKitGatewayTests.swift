@@ -22,6 +22,7 @@ private struct StubResponder: ChatResponder {
 
 final class ChatKitGatewayTests: XCTestCase {
     private let responder = StubResponder()
+    private var metadataStore: GatewayAttachmentStore?
 
     private struct Session: Decodable {
         let client_secret: String
@@ -38,9 +39,12 @@ final class ChatKitGatewayTests: XCTestCase {
     func startGateway(responder overrideResponder: (any ChatResponder)? = nil) async -> ServerTestUtils.RunningServer {
         let sessionStore = ChatKitSessionStore()
         let uploadClient = FountainStoreClient(client: EmbeddedFountainStoreClient())
+        let metadataStore = GatewayAttachmentStore(store: uploadClient)
         let uploadStore = ChatKitUploadStore(store: uploadClient)
+        self.metadataStore = metadataStore
         let plugin = ChatKitGatewayPlugin(store: sessionStore,
                                           uploadStore: uploadStore,
+                                          metadataStore: metadataStore,
                                           responder: overrideResponder ?? responder)
         return await ServerTestUtils.startGateway(on: 18121, plugins: [plugin])
     }
@@ -308,6 +312,89 @@ final class ChatKitGatewayTests: XCTestCase {
         }
     }
 
+    func testAttachmentDownloadReturnsFile() async throws {
+        let running = await startGateway()
+        defer { Task { await running.stop() } }
+
+        let session = try await createSession(on: running.port)
+        let boundary = "Boundary-" + UUID().uuidString
+        let fileData = Data("Download text".utf8)
+        let multipart = makeMultipartBody(boundary: boundary, parts: [
+            (name: "client_secret", filename: nil, contentType: nil, data: Data(session.client_secret.utf8)),
+            (name: "file", filename: "download.txt", contentType: "text/plain", data: fileData)
+        ])
+
+        let uploadURL = URL(string: "http://127.0.0.1:\(running.port)/chatkit/upload")!
+        var uploadRequest = URLRequest(url: uploadURL)
+        uploadRequest.httpMethod = "POST"
+        uploadRequest.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        uploadRequest.httpBody = multipart
+
+        let (uploadData, uploadResponse) = try await URLSession.shared.data(for: uploadRequest)
+        XCTAssertEqual((uploadResponse as? HTTPURLResponse)?.statusCode, 201)
+        let decoded = try JSONDecoder().decode(UploadResponse.self, from: uploadData)
+
+        var components = URLComponents(string: "http://127.0.0.1:\(running.port)/chatkit/attachments/\(decoded.attachment_id)")!
+        components.queryItems = [URLQueryItem(name: "client_secret", value: session.client_secret)]
+        let downloadURL = components.url!
+
+        let (downloadData, downloadResponse) = try await URLSession.shared.data(from: downloadURL)
+        let httpResponse = downloadResponse as? HTTPURLResponse
+        XCTAssertEqual(httpResponse?.statusCode, 200)
+        XCTAssertEqual(downloadData, fileData)
+        XCTAssertEqual(httpResponse?.value(forHTTPHeaderField: "Content-Type"), "text/plain")
+        XCTAssertEqual(httpResponse?.value(forHTTPHeaderField: "Content-Disposition"), "attachment; filename=\"download.txt\"")
+        XCTAssertEqual(httpResponse?.value(forHTTPHeaderField: "ETag"), ChatKitUploadStore.checksum(for: fileData))
+    }
+
+    func testAttachmentDownloadDetectsMetadataMismatch() async throws {
+        let running = await startGateway()
+        defer { Task { await running.stop() } }
+
+        guard let metadataStore else {
+            return XCTFail("metadata store not initialised")
+        }
+
+        let session = try await createSession(on: running.port)
+        let boundary = "Boundary-" + UUID().uuidString
+        let fileData = Data("Mismatch".utf8)
+        let multipart = makeMultipartBody(boundary: boundary, parts: [
+            (name: "client_secret", filename: nil, contentType: nil, data: Data(session.client_secret.utf8)),
+            (name: "file", filename: "mismatch.txt", contentType: "text/plain", data: fileData)
+        ])
+
+        let uploadURL = URL(string: "http://127.0.0.1:\(running.port)/chatkit/upload")!
+        var uploadRequest = URLRequest(url: uploadURL)
+        uploadRequest.httpMethod = "POST"
+        uploadRequest.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        uploadRequest.httpBody = multipart
+
+        let (uploadData, uploadResponse) = try await URLSession.shared.data(for: uploadRequest)
+        XCTAssertEqual((uploadResponse as? HTTPURLResponse)?.statusCode, 201)
+        let decoded = try JSONDecoder().decode(UploadResponse.self, from: uploadData)
+
+        let existing = try await metadataStore.metadata(for: decoded.attachment_id)
+        XCTAssertNotNil(existing)
+        if var existing {
+            existing = ChatKitAttachmentMetadata(attachmentId: existing.attachmentId,
+                                                 sessionId: existing.sessionId,
+                                                 threadId: existing.threadId,
+                                                 fileName: existing.fileName,
+                                                 mimeType: existing.mimeType,
+                                                 sizeBytes: existing.sizeBytes + 1,
+                                                 checksum: existing.checksum,
+                                                 storedAt: existing.storedAt)
+            try await metadataStore.upsert(metadata: existing)
+        }
+
+        var components = URLComponents(string: "http://127.0.0.1:\(running.port)/chatkit/attachments/\(decoded.attachment_id)")!
+        components.queryItems = [URLQueryItem(name: "client_secret", value: session.client_secret)]
+        let downloadURL = components.url!
+
+        let (_, downloadResponse) = try await URLSession.shared.data(from: downloadURL)
+        XCTAssertEqual((downloadResponse as? HTTPURLResponse)?.statusCode, 409)
+    }
+
     func testGatewayOpenAPIDocumentIncludesChatKitPaths() throws {
         let testFile = URL(fileURLWithPath: #filePath)
         let testsFolder = testFile.deletingLastPathComponent() // ChatKitGatewayTests.swift directory
@@ -322,5 +409,6 @@ final class ChatKitGatewayTests: XCTestCase {
         XCTAssertTrue(contents.contains("/chatkit/session"))
         XCTAssertTrue(contents.contains("/chatkit/messages"))
         XCTAssertTrue(contents.contains("/chatkit/upload"))
+        XCTAssertTrue(contents.contains("/chatkit/attachments/{attachmentId}"))
     }
 }

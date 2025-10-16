@@ -133,6 +133,57 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
+  /chatkit/attachments/{attachmentId}:
+    get:
+      summary: Download attachment
+      description: >
+        Streams the attachment bytes after validating the requesting session and
+        verifying the stored metadata (size and checksum).
+      operationId: downloadChatKitAttachment
+      tags: [ChatKit Attachments]
+      parameters:
+        - name: attachmentId
+          in: path
+          required: true
+          description: Identifier returned by the upload endpoint.
+          schema:
+            type: string
+        - name: client_secret
+          in: query
+          required: true
+          description: Session secret issued by `/chatkit/session`.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Attachment bytes
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Attachment not associated with the supplied session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Attachment not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Metadata integrity check failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
 components:
   responses:
     BadRequest:

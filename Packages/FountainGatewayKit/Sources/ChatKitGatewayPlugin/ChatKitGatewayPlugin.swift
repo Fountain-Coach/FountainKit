@@ -2,6 +2,7 @@ import Foundation
 import FountainRuntime
 import LLMGatewayPlugin
 import FountainStoreClient
+import Crypto
 
 /// Plugin exposing gateway endpoints compatible with the ChatKit front-end.
 public struct ChatKitGatewayPlugin: Sendable {
@@ -9,10 +10,14 @@ public struct ChatKitGatewayPlugin: Sendable {
 
     public init(store: ChatKitSessionStore = ChatKitSessionStore(),
                 uploadStore: ChatKitUploadStore = ChatKitUploadStore(),
+                metadataStore: (any ChatKitAttachmentMetadataStore)? = nil,
                 responder: (any ChatResponder)? = nil) {
         let resolvedResponder: any ChatResponder = responder ?? LLMChatResponder()
+        let resolvedMetadataStore: any ChatKitAttachmentMetadataStore = metadataStore
+            ?? InMemoryAttachmentMetadataStore()
         self.router = Router(handlers: Handlers(store: store,
                                                 uploadStore: uploadStore,
+                                                metadataStore: resolvedMetadataStore,
                                                 responder: resolvedResponder))
     }
 }
@@ -45,6 +50,8 @@ public struct Router: Sendable {
             return await handlers.postMessage(request)
         case ("POST", ["chatkit", "upload"]):
             return await handlers.uploadAttachment(request)
+        case ("GET", ["chatkit", "attachments", let attachmentId]):
+            return await handlers.downloadAttachment(request, attachmentId: attachmentId)
         default:
             return nil
         }
@@ -79,6 +86,54 @@ public protocol ChatResponder: Sendable {
     func respond(session: ChatKitSessionStore.StoredSession,
                  request: ChatKitMessageRequest,
                  preferStreaming: Bool) async throws -> ChatResponderResult
+}
+
+/// Metadata describing a stored ChatKit attachment.
+public struct ChatKitAttachmentMetadata: Codable, Sendable {
+    public let attachmentId: String
+    public let sessionId: String
+    public let threadId: String?
+    public let fileName: String
+    public let mimeType: String
+    public let sizeBytes: Int
+    public let checksum: String
+    public let storedAt: String
+
+    public init(attachmentId: String,
+                sessionId: String,
+                threadId: String?,
+                fileName: String,
+                mimeType: String,
+                sizeBytes: Int,
+                checksum: String,
+                storedAt: String) {
+        self.attachmentId = attachmentId
+        self.sessionId = sessionId
+        self.threadId = threadId
+        self.fileName = fileName
+        self.mimeType = mimeType
+        self.sizeBytes = sizeBytes
+        self.checksum = checksum
+        self.storedAt = storedAt
+    }
+}
+
+/// Abstraction describing persistence for ChatKit attachment metadata.
+public protocol ChatKitAttachmentMetadataStore: Sendable {
+    func upsert(metadata: ChatKitAttachmentMetadata) async throws
+    func metadata(for attachmentId: String) async throws -> ChatKitAttachmentMetadata?
+}
+
+actor InMemoryAttachmentMetadataStore: ChatKitAttachmentMetadataStore {
+    private var storage: [String: ChatKitAttachmentMetadata] = [:]
+
+    func upsert(metadata: ChatKitAttachmentMetadata) {
+        storage[metadata.attachmentId] = metadata
+    }
+
+    func metadata(for attachmentId: String) -> ChatKitAttachmentMetadata? {
+        storage[attachmentId]
+    }
 }
 
 /// Default responder that forwards requests to the LLM Gateway plugin.
@@ -228,13 +283,16 @@ struct LLMChatResponder: ChatResponder {
 struct Handlers: Sendable {
     private let store: ChatKitSessionStore
     private let uploadStore: ChatKitUploadStore
+    private let metadataStore: any ChatKitAttachmentMetadataStore
     private let responder: any ChatResponder
 
     public init(store: ChatKitSessionStore,
                 uploadStore: ChatKitUploadStore,
+                metadataStore: any ChatKitAttachmentMetadataStore,
                 responder: any ChatResponder) {
         self.store = store
         self.uploadStore = uploadStore
+        self.metadataStore = metadataStore
         self.responder = responder
     }
 
@@ -362,10 +420,82 @@ struct Handlers: Sendable {
             return makeError(status: 500, code: "storage_error", message: error.localizedDescription)
         }
 
+        let metadata = ChatKitAttachmentMetadata(attachmentId: descriptor.id,
+                                                 sessionId: descriptor.sessionId,
+                                                 threadId: descriptor.threadId,
+                                                 fileName: descriptor.fileName,
+                                                 mimeType: descriptor.mimeType,
+                                                 sizeBytes: descriptor.sizeBytes,
+                                                 checksum: descriptor.checksum,
+                                                 storedAt: descriptor.storedAt)
+        do {
+            try await metadataStore.upsert(metadata: metadata)
+        } catch {
+            try? await uploadStore.delete(attachmentId: descriptor.id)
+            return makeError(status: 500, code: "storage_error", message: "failed to persist attachment metadata")
+        }
+
         let response = ChatKitUploadResponse(attachment_id: descriptor.id,
                                              upload_url: descriptor.url,
                                              mime_type: descriptor.mimeType)
         return encodeJSON(response, status: 201)
+    }
+
+    public func downloadAttachment(_ request: HTTPRequest, attachmentId: String) async -> HTTPResponse {
+        let query = parseQueryParameters(from: request.path)
+        guard let clientSecret = query["client_secret"], !clientSecret.isEmpty else {
+            return makeError(status: 400, code: "invalid_request", message: "client_secret query parameter required")
+        }
+
+        guard let session = await store.session(for: clientSecret) else {
+            return makeError(status: 401, code: "invalid_secret", message: "client secret expired or unknown")
+        }
+
+        let metadata: ChatKitAttachmentMetadata
+        do {
+            guard let loaded = try await metadataStore.metadata(for: attachmentId) else {
+                return makeError(status: 404, code: "not_found", message: "attachment not found")
+            }
+            metadata = loaded
+        } catch {
+            return makeError(status: 500, code: "storage_error", message: "failed to load attachment metadata")
+        }
+
+        guard metadata.sessionId == session.id else {
+            return makeError(status: 403, code: "forbidden", message: "attachment not associated with session")
+        }
+
+        let stored: ChatKitUploadStore.StoredAttachment
+        do {
+            guard let fetched = try await uploadStore.load(attachmentId: attachmentId) else {
+                return makeError(status: 404, code: "not_found", message: "attachment not found")
+            }
+            stored = fetched
+        } catch {
+            return makeError(status: 500, code: "storage_error", message: error.localizedDescription)
+        }
+
+        guard stored.descriptor.sizeBytes == stored.data.count,
+              stored.descriptor.sizeBytes == metadata.sizeBytes else {
+            return makeError(status: 409, code: "metadata_mismatch", message: "attachment size metadata mismatch")
+        }
+
+        let computedChecksum = ChatKitUploadStore.checksum(for: stored.data)
+        guard computedChecksum == metadata.checksum else {
+            return makeError(status: 409, code: "metadata_mismatch", message: "attachment checksum mismatch")
+        }
+
+        let resolvedMime = stored.descriptor.mimeType.isEmpty ? "application/octet-stream" : stored.descriptor.mimeType
+        let safeName = stored.descriptor.fileName.replacingOccurrences(of: "\"", with: "")
+        var headers: [String: String] = [
+            "Content-Type": resolvedMime,
+            "Content-Length": "\(stored.data.count)",
+            "Cache-Control": "no-store",
+            "Content-Disposition": "attachment; filename=\"\(safeName.isEmpty ? "attachment" : safeName)\"",
+            "ETag": computedChecksum
+        ]
+
+        return HTTPResponse(status: 200, headers: headers, body: stored.data)
     }
 
     private func encodeJSON<T: Encodable>(_ value: T, status: Int) -> HTTPResponse {
@@ -472,6 +602,23 @@ private func mergeMetadata(_ session: [String: String],
             ],
             body: Data(body.utf8)
         )
+    }
+
+    private func parseQueryParameters(from path: String) -> [String: String] {
+        guard let queryIndex = path.firstIndex(of: "?") else { return [:] }
+        let queryStart = path.index(after: queryIndex)
+        let query = path[queryStart...]
+        var parameters: [String: String] = [:]
+        for component in query.split(separator: "&", omittingEmptySubsequences: true) {
+            let pieces = component.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            let key = String(pieces[0])
+            guard !key.isEmpty else { continue }
+            let rawValue = pieces.count > 1 ? String(pieces[1]) : ""
+            let decodedKey = key.replacingOccurrences(of: "+", with: " ").removingPercentEncoding ?? key
+            let decodedValue = rawValue.replacingOccurrences(of: "+", with: " ").removingPercentEncoding ?? rawValue
+            parameters[decodedKey] = decodedValue
+        }
+        return parameters
     }
 
     private func parseBoundary(from contentType: String) -> String? {
@@ -629,7 +776,18 @@ public actor ChatKitUploadStore {
     struct Descriptor: Sendable {
         let id: String
         let url: String
-        let mimeType: String?
+        let fileName: String
+        let mimeType: String
+        let sizeBytes: Int
+        let checksum: String
+        let storedAt: String
+        let sessionId: String
+        let threadId: String?
+    }
+
+    struct StoredAttachment: Sendable {
+        let descriptor: Descriptor
+        let data: Data
     }
 
     private let store: FountainStoreClient
@@ -662,20 +820,57 @@ public actor ChatKitUploadStore {
         let attachmentId = UUID().uuidString.lowercased()
         let tsFormatter = ISO8601DateFormatter()
         tsFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let resolvedMime = mimeType ?? "application/octet-stream"
+        let checksum = Self.checksum(for: data)
         let record = AttachmentRecord(
             attachmentId: attachmentId,
             sessionId: sessionId,
             threadId: threadId,
             fileName: fileName,
-            mimeType: mimeType ?? "application/octet-stream",
+            mimeType: resolvedMime,
             sizeBytes: data.count,
+            checksum: checksum,
             storedAt: tsFormatter.string(from: Date()),
             dataBase64: data.base64EncodedString()
         )
         let payload = try JSONEncoder().encode(record)
         try await store.putDoc(corpusId: corpusId, collection: collection, id: attachmentId, body: payload)
-        let url = "fountain://" + corpusId + "/" + collection + "/" + attachmentId
-        return Descriptor(id: attachmentId, url: url, mimeType: record.mimeType)
+        let url = makeAttachmentURL(attachmentId)
+        return Descriptor(id: attachmentId,
+                          url: url,
+                          fileName: record.fileName,
+                          mimeType: record.mimeType,
+                          sizeBytes: record.sizeBytes,
+                          checksum: checksum,
+                          storedAt: record.storedAt,
+                          sessionId: record.sessionId,
+                          threadId: record.threadId)
+    }
+
+    func load(attachmentId: String) async throws -> StoredAttachment? {
+        try await ensureCorpus()
+        guard let payload = try await store.getDoc(corpusId: corpusId, collection: collection, id: attachmentId) else {
+            return nil
+        }
+        let record = try JSONDecoder().decode(AttachmentRecord.self, from: payload)
+        guard let data = Data(base64Encoded: record.dataBase64) else {
+            throw PersistenceError.invalidData
+        }
+        let descriptor = Descriptor(id: record.attachmentId,
+                                    url: makeAttachmentURL(record.attachmentId),
+                                    fileName: record.fileName,
+                                    mimeType: record.mimeType,
+                                    sizeBytes: record.sizeBytes,
+                                    checksum: record.checksum,
+                                    storedAt: record.storedAt,
+                                    sessionId: record.sessionId,
+                                    threadId: record.threadId)
+        return StoredAttachment(descriptor: descriptor, data: data)
+    }
+
+    func delete(attachmentId: String) async throws {
+        try await ensureCorpus()
+        try await store.deleteDoc(corpusId: corpusId, collection: collection, id: attachmentId)
     }
 
     private func ensureCorpus() async throws {
@@ -698,6 +893,15 @@ public actor ChatKitUploadStore {
         return FileManager.default.temporaryDirectory.appendingPathComponent("ChatKitUploads", isDirectory: true)
     }
 
+    static func checksum(for data: Data) -> String {
+        let digest = SHA256.hash(data: data)
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func makeAttachmentURL(_ attachmentId: String) -> String {
+        "fountain://" + corpusId + "/" + collection + "/" + attachmentId
+    }
+
     private struct AttachmentRecord: Codable {
         let attachmentId: String
         let sessionId: String
@@ -705,6 +909,7 @@ public actor ChatKitUploadStore {
         let fileName: String
         let mimeType: String
         let sizeBytes: Int
+        let checksum: String
         let storedAt: String
         let dataBase64: String
     }

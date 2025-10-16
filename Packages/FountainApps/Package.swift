@@ -265,7 +265,8 @@ let package = Package(
             dependencies: [
                 "gateway-server",
                 .product(name: "FountainRuntime", package: "FountainCore"),
-                .product(name: "ChatKitGatewayPlugin", package: "FountainGatewayKit")
+                .product(name: "ChatKitGatewayPlugin", package: "FountainGatewayKit"),
+                .product(name: "GatewayAPI", package: "FountainAPIClients")
             ]
         )
     ]

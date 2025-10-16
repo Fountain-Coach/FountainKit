@@ -3,7 +3,7 @@ import ChatKitGatewayPlugin
 import FountainStoreClient
 
 struct AttachmentCleanupJob: Sendable {
-    private let uploadStore: ChatKitUploadStore
+    private let uploadStore: any ChatKitUploadStoring
     private let metadataStore: any ChatKitAttachmentMetadataStore
     private let store: FountainStoreClient
     private let ttl: TimeInterval
@@ -13,7 +13,7 @@ struct AttachmentCleanupJob: Sendable {
     private let clock: @Sendable () -> Date
     private let decoder = JSONDecoder()
 
-    init(uploadStore: ChatKitUploadStore,
+    init(uploadStore: any ChatKitUploadStoring,
          metadataStore: any ChatKitAttachmentMetadataStore,
          store: FountainStoreClient,
          ttl: TimeInterval,

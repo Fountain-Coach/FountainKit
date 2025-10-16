@@ -10,7 +10,7 @@ public struct ChatKitGatewayPlugin: Sendable {
     private let handlers: Handlers
 
     public init(store: ChatKitSessionStore = ChatKitSessionStore(),
-                uploadStore: ChatKitUploadStore = ChatKitUploadStore(),
+                uploadStore: any ChatKitUploadStoring = ChatKitUploadStore(),
                 metadataStore: (any ChatKitAttachmentMetadataStore)? = nil,
                 threadStore: (any ChatKitThreadStore)? = nil,
                 responder: (any ChatResponder)? = nil,
@@ -701,7 +701,7 @@ struct LLMChatResponder: ChatResponder {
 
 struct Handlers: Sendable {
     private let store: ChatKitSessionStore
-    private let uploadStore: ChatKitUploadStore
+    private let uploadStore: any ChatKitUploadStoring
     private let metadataStore: any ChatKitAttachmentMetadataStore
     private let threadStore: any ChatKitThreadStore
     private let responder: any ChatResponder
@@ -719,7 +719,7 @@ struct Handlers: Sendable {
     }
 
     public init(store: ChatKitSessionStore,
-                uploadStore: ChatKitUploadStore,
+                uploadStore: any ChatKitUploadStoring,
                 metadataStore: any ChatKitAttachmentMetadataStore,
                 threadStore: any ChatKitThreadStore,
                 responder: any ChatResponder,
@@ -1297,7 +1297,16 @@ struct Handlers: Sendable {
     private func mapHandlerError(_ error: HandlerError) -> (status: Int, code: String, message: String) {
         switch error {
         case .badRequest(let code, let message):
-            return (400, code, message)
+            let status: Int
+            switch code {
+            case "attachment_too_large":
+                status = 413
+            case "unsupported_media_type":
+                status = 415
+            default:
+                status = 400
+            }
+            return (status, code, message)
         case .unauthorized(let code, let message):
             return (401, code, message)
         case .forbidden(let code, let message):
@@ -1604,22 +1613,57 @@ public actor ChatKitSessionStore {
 
 // MARK: - Upload Store
 
+public protocol ChatKitUploadStoring: Sendable {
+    func store(fileName: String,
+               mimeType: String?,
+               data: Data,
+               sessionId: String,
+               threadId: String?) async throws -> ChatKitUploadStore.Descriptor
+    func load(attachmentId: String) async throws -> ChatKitUploadStore.StoredAttachment?
+    func delete(attachmentId: String) async throws
+}
+
 public actor ChatKitUploadStore {
-    struct Descriptor: Sendable {
-        let id: String
-        let url: String
-        let fileName: String
-        let mimeType: String
-        let sizeBytes: Int
-        let checksum: String
-        let storedAt: String
-        let sessionId: String
-        let threadId: String?
+    public struct Descriptor: Sendable {
+        public let id: String
+        public let url: String
+        public let fileName: String
+        public let mimeType: String
+        public let sizeBytes: Int
+        public let checksum: String
+        public let storedAt: String
+        public let sessionId: String
+        public let threadId: String?
+
+        public init(id: String,
+                    url: String,
+                    fileName: String,
+                    mimeType: String,
+                    sizeBytes: Int,
+                    checksum: String,
+                    storedAt: String,
+                    sessionId: String,
+                    threadId: String?) {
+            self.id = id
+            self.url = url
+            self.fileName = fileName
+            self.mimeType = mimeType
+            self.sizeBytes = sizeBytes
+            self.checksum = checksum
+            self.storedAt = storedAt
+            self.sessionId = sessionId
+            self.threadId = threadId
+        }
     }
 
-    struct StoredAttachment: Sendable {
-        let descriptor: Descriptor
-        let data: Data
+    public struct StoredAttachment: Sendable {
+        public let descriptor: Descriptor
+        public let data: Data
+
+        public init(descriptor: Descriptor, data: Data) {
+            self.descriptor = descriptor
+            self.data = data
+        }
     }
 
     private let store: FountainStoreClient
@@ -1643,11 +1687,11 @@ public actor ChatKitUploadStore {
         self.collection = collection
     }
 
-    func store(fileName: String,
-               mimeType: String?,
-               data: Data,
-               sessionId: String,
-               threadId: String?) async throws -> Descriptor {
+    public func store(fileName: String,
+                      mimeType: String?,
+                      data: Data,
+                      sessionId: String,
+                      threadId: String?) async throws -> Descriptor {
         try await ensureCorpus()
         let attachmentId = UUID().uuidString.lowercased()
         let tsFormatter = ISO8601DateFormatter()
@@ -1679,7 +1723,7 @@ public actor ChatKitUploadStore {
                           threadId: record.threadId)
     }
 
-    func load(attachmentId: String) async throws -> StoredAttachment? {
+    public func load(attachmentId: String) async throws -> StoredAttachment? {
         try await ensureCorpus()
         guard let payload = try await store.getDoc(corpusId: corpusId, collection: collection, id: attachmentId) else {
             return nil
@@ -1746,6 +1790,8 @@ public actor ChatKitUploadStore {
         let dataBase64: String
     }
 }
+
+extension ChatKitUploadStore: ChatKitUploadStoring {}
 
 // MARK: - Models & Errors
 

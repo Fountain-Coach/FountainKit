@@ -44,8 +44,10 @@ let package = Package(
             dependencies: [
                 "ApiClientsCore",
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
-                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
+                .product(name: "AsyncHTTPClient", package: "async-http-client")
             ],
+            exclude: ["README.md"],
             plugins: [
                 .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")

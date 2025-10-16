@@ -79,7 +79,7 @@ enum ChatKitLogging {
         await emit(event)
     }
 
-    private static func emit(_ event: Event) async {
+    static func emit(_ event: Event) async {
         await sinkActor.emit(event)
     }
 
@@ -93,7 +93,7 @@ enum ChatKitLogging {
         }
     }
 
-    private static func timestamp() -> String {
+    static func timestamp() -> String {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter.string(from: Date())
@@ -231,7 +231,7 @@ private final class ChatKitLogBuffer: @unchecked Sendable {
 
     func sink() -> ChatKitLogging.Sink {
         { event in
-            queue.sync { storage.append(event) }
+            self.queue.sync { self.storage.append(event) }
         }
     }
 

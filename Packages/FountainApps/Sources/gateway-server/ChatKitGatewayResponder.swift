@@ -1,9 +1,11 @@
 import Foundation
+import FountainRuntime
 import ChatKitGatewayPlugin
 import LLMGatewayPlugin
+import struct LLMGatewayPlugin.Handlers
 
 struct ChatKitGatewayResponder: ChatResponder {
-    private let handlers: LLMGatewayPlugin.Handlers
+    private let handlers: Handlers
     private let defaultModel: String
 
     init(plugin: LLMGatewayPlugin = LLMGatewayPlugin(),

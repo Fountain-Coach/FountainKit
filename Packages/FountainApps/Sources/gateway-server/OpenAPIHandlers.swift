@@ -67,6 +67,42 @@ public struct GatewayOpenAPI: APIProtocol, @unchecked Sendable {
         return .undocumented(statusCode: resp.status, OpenAPIRuntime.UndocumentedPayload())
     }
 
+    public func startChatKitSession(_ input: Operations.startChatKitSession.Input) async throws -> Operations.startChatKitSession.Output {
+        .undocumented(statusCode: 501, OpenAPIRuntime.UndocumentedPayload())
+    }
+
+    public func refreshChatKitSession(_ input: Operations.refreshChatKitSession.Input) async throws -> Operations.refreshChatKitSession.Output {
+        .undocumented(statusCode: 501, OpenAPIRuntime.UndocumentedPayload())
+    }
+
+    public func postChatKitMessage(_ input: Operations.postChatKitMessage.Input) async throws -> Operations.postChatKitMessage.Output {
+        .undocumented(statusCode: 501, OpenAPIRuntime.UndocumentedPayload())
+    }
+
+    public func uploadChatKitAttachment(_ input: Operations.uploadChatKitAttachment.Input) async throws -> Operations.uploadChatKitAttachment.Output {
+        .undocumented(statusCode: 501, OpenAPIRuntime.UndocumentedPayload())
+    }
+
+    public func downloadChatKitAttachment(_ input: Operations.downloadChatKitAttachment.Input) async throws -> Operations.downloadChatKitAttachment.Output {
+        .undocumented(statusCode: 501, OpenAPIRuntime.UndocumentedPayload())
+    }
+
+    public func listChatKitThreads(_ input: Operations.listChatKitThreads.Input) async throws -> Operations.listChatKitThreads.Output {
+        .undocumented(statusCode: 501, OpenAPIRuntime.UndocumentedPayload())
+    }
+
+    public func createChatKitThread(_ input: Operations.createChatKitThread.Input) async throws -> Operations.createChatKitThread.Output {
+        .undocumented(statusCode: 501, OpenAPIRuntime.UndocumentedPayload())
+    }
+
+    public func getChatKitThread(_ input: Operations.getChatKitThread.Input) async throws -> Operations.getChatKitThread.Output {
+        .undocumented(statusCode: 501, OpenAPIRuntime.UndocumentedPayload())
+    }
+
+    public func deleteChatKitThread(_ input: Operations.deleteChatKitThread.Input) async throws -> Operations.deleteChatKitThread.Output {
+        .undocumented(statusCode: 501, OpenAPIRuntime.UndocumentedPayload())
+    }
+
     public func listRoutes(_ input: Operations.listRoutes.Input) async throws -> Operations.listRoutes.Output {
         let resp = await host.listRoutes()
         if resp.status == 200, let routes = try? JSONDecoder().decode([Components.Schemas.RouteInfo].self, from: resp.body) {

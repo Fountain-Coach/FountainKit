@@ -1,6 +1,7 @@
 import Foundation
 import FountainRuntime
 import LLMGatewayPlugin
+import FountainStoreClient
 
 /// Plugin exposing gateway endpoints compatible with the ChatKit front-end.
 public struct ChatKitGatewayPlugin: Sendable {
@@ -340,11 +341,16 @@ struct Handlers: Sendable {
         let fileName = filePart.filename ?? "attachment"
         let mimeType = filePart.contentType ?? "application/octet-stream"
 
-        let descriptor = await uploadStore.store(fileName: fileName,
-                                                 mimeType: mimeType,
-                                                 data: filePart.data,
-                                                 sessionId: session.id,
-                                                 threadId: threadId)
+        let descriptor: ChatKitUploadStore.Descriptor
+        do {
+            descriptor = try await uploadStore.store(fileName: fileName,
+                                                     mimeType: mimeType,
+                                                     data: filePart.data,
+                                                     sessionId: session.id,
+                                                     threadId: threadId)
+        } catch {
+            return makeError(status: 500, code: "storage_error", message: error.localizedDescription)
+        }
 
         let response = ChatKitUploadResponse(attachment_id: descriptor.id,
                                              upload_url: descriptor.url,
@@ -368,7 +374,7 @@ struct Handlers: Sendable {
         return encodeJSON(payload, status: status)
     }
 
-    private func mergeMetadata(_ session: [String: String],
+private func mergeMetadata(_ session: [String: String],
                                _ request: [String: String]?) -> [String: String]? {
         var combined = session
         if let request {
@@ -602,40 +608,87 @@ public actor ChatKitSessionStore {
 // MARK: - Upload Store
 
 public actor ChatKitUploadStore {
-    public struct StoredAttachment: Sendable {
-        public let id: String
-        public let fileName: String
-        public let mimeType: String
-        public let data: Data
-        public let sessionId: String
-        public let threadId: String?
+    struct Descriptor: Sendable {
+        let id: String
+        let url: String
+        let mimeType: String?
     }
 
-    public struct Descriptor: Sendable {
-        public let id: String
-        public let url: String
-        public let mimeType: String?
+    private let store: FountainStoreClient
+    private let corpusId: String
+    private let collection: String
+    private var ensuredCorpus = false
+
+    public init(store: FountainStoreClient? = nil,
+                rootDirectory: URL? = nil,
+                corpusId: String = "chatkit",
+                collection: String = "attachments") {
+        if let store {
+            self.store = store
+        } else if let root = rootDirectory ?? Self.defaultRootDirectory(),
+                  let disk = try? DiskFountainStoreClient(rootDirectory: root) {
+            self.store = FountainStoreClient(client: disk)
+        } else {
+            self.store = FountainStoreClient(client: EmbeddedFountainStoreClient())
+        }
+        self.corpusId = corpusId
+        self.collection = collection
     }
 
-    private var attachments: [String: StoredAttachment] = [:]
-
-    public init() {}
-
-    public func store(fileName: String,
-                      mimeType: String?,
-                      data: Data,
-                      sessionId: String,
-                      threadId: String?) -> Descriptor {
+    func store(fileName: String,
+               mimeType: String?,
+               data: Data,
+               sessionId: String,
+               threadId: String?) async throws -> Descriptor {
+        try await ensureCorpus()
         let attachmentId = UUID().uuidString.lowercased()
-        let stored = StoredAttachment(id: attachmentId,
-                                      fileName: fileName,
-                                      mimeType: mimeType ?? "application/octet-stream",
-                                      data: data,
-                                      sessionId: sessionId,
-                                      threadId: threadId)
-        attachments[attachmentId] = stored
-        let url = "memory://chatkit-attachments/" + attachmentId
-        return Descriptor(id: attachmentId, url: url, mimeType: stored.mimeType)
+        let tsFormatter = ISO8601DateFormatter()
+        tsFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let record = AttachmentRecord(
+            attachmentId: attachmentId,
+            sessionId: sessionId,
+            threadId: threadId,
+            fileName: fileName,
+            mimeType: mimeType ?? "application/octet-stream",
+            sizeBytes: data.count,
+            storedAt: tsFormatter.string(from: Date()),
+            dataBase64: data.base64EncodedString()
+        )
+        let payload = try JSONEncoder().encode(record)
+        try await store.putDoc(corpusId: corpusId, collection: collection, id: attachmentId, body: payload)
+        let url = "fountain://" + corpusId + "/" + collection + "/" + attachmentId
+        return Descriptor(id: attachmentId, url: url, mimeType: record.mimeType)
+    }
+
+    private func ensureCorpus() async throws {
+        if ensuredCorpus { return }
+        if try await store.getCorpus(corpusId) == nil {
+            _ = try await store.createCorpus(corpusId, metadata: ["purpose": "chatkit-uploads", "collection": collection])
+        }
+        ensuredCorpus = true
+    }
+
+    private static func defaultRootDirectory() -> URL? {
+        if let override = ProcessInfo.processInfo.environment["CHATKIT_UPLOAD_ROOT"], !override.isEmpty {
+            return URL(fileURLWithPath: override, isDirectory: true)
+        }
+#if os(macOS) || os(iOS)
+        if let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            return support.appendingPathComponent("FountainKit/ChatKitUploads", isDirectory: true)
+        }
+#endif
+        return FileManager.default.temporaryDirectory.appendingPathComponent("ChatKitUploads", isDirectory: true)
+    }
+
+    private struct AttachmentRecord: Codable {
+        let attachmentId: String
+        let sessionId: String
+        let threadId: String?
+        let fileName: String
+        let mimeType: String
+        let sizeBytes: Int
+        let storedAt: String
+        let dataBase64: String
     }
 }
 

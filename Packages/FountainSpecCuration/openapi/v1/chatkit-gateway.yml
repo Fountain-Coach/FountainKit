@@ -357,7 +357,7 @@ components:
         upload_url:
           type: string
           format: uri
-          description: Location from which the attachment can be fetched.
+          description: Location from which the attachment can be fetched (e.g. `fountain://chatkit/attachments/<id>`).
         mime_type:
           type: string
           description: MIME type detected for the attachment.

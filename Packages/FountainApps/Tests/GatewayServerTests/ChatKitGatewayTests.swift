@@ -3,6 +3,7 @@ import Foundation
 import FoundationNetworking
 #endif
 import XCTest
+import FountainStoreClient
 @testable import ChatKitGatewayPlugin
 @testable import gateway_server
 
@@ -34,8 +35,11 @@ final class ChatKitGatewayTests: XCTestCase {
     }
 
     func startGateway() async -> ServerTestUtils.RunningServer {
-        let plugin = ChatKitGatewayPlugin(store: ChatKitSessionStore(),
-                                          uploadStore: ChatKitUploadStore(),
+        let sessionStore = ChatKitSessionStore()
+        let uploadClient = FountainStoreClient(client: EmbeddedFountainStoreClient())
+        let uploadStore = ChatKitUploadStore(store: uploadClient)
+        let plugin = ChatKitGatewayPlugin(store: sessionStore,
+                                          uploadStore: uploadStore,
                                           responder: responder)
         return await ServerTestUtils.startGateway(on: 18121, plugins: [plugin])
     }
@@ -209,7 +213,7 @@ final class ChatKitGatewayTests: XCTestCase {
 
         let decoded = try JSONDecoder().decode(UploadResponse.self, from: data)
         XCTAssertFalse(decoded.attachment_id.isEmpty)
-        XCTAssertTrue(decoded.upload_url.starts(with: "memory://chatkit-attachments/"))
+        XCTAssertTrue(decoded.upload_url.starts(with: "fountain://chatkit/attachments/"))
         XCTAssertEqual(decoded.mime_type, "text/plain")
     }
 

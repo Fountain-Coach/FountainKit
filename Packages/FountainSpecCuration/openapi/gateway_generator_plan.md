@@ -17,9 +17,8 @@ Purpose: Expand Swift OpenAPI Generator coverage for the Fountain Gateway so tha
   - _2025-10-18 — Re-ran the build after addressing the ChatKit compile errors; `gateway-server` now builds cleanly with generated surfaces in place._
 - [x] Replace manual router shims with generated handler conformances within `GatewayOpenAPI` to delegate to plugin kernels.
   - _2025-10-18 — Generated ChatKit handlers now consume the plugin’s `ChatKitGeneratedHandlers` typed interface, routing session, messaging, thread, and attachment flows through shared kernels without manual HTTP shims._
-- [ ] Expose plugin routers as typed handler implementations by conforming to generated protocols and wiring them through the gateway dependency container.
-  - _Needs design once kernels are surfaced; consider adding a `GatewayPluginRegistry` API on `GatewayServer` so handlers can look up shared plugin state instead of rebuilding stores._
-  - _Pending — Access control cleanup above is prerequisite: handlers must depend only on generated request/response types rather than the plugin's internal helper structs._
+- [x] Expose plugin routers as typed handler implementations by conforming to generated protocols and wiring them through the gateway dependency container.
+  - _2025-10-18 — `ChatKitGatewayPlugin` now venders Sendable `ChatKitGeneratedHandlers`, and `GatewayServer` retains them for the OpenAPI layer; generated operations call the typed kernels directly instead of synthetic HTTP round-trips._
 - [ ] Remove redundant manual request decoding/encoding paths after generated handlers cover all operations; ensure legacy middleware (auth, rate limits) wraps new transports.
   - _Pending once generated handlers land. Confirm that middleware ordering survives (`prepare/respond`) once manual ChatKit router removal happens._
 - [ ] Expand `GatewayServerTests` to cover generated ChatKit/plugin operations, asserting serialization fidelity and middleware integration.

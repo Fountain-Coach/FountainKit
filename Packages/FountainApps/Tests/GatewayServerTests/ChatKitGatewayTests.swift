@@ -50,11 +50,13 @@ final class ChatKitGatewayTests: XCTestCase {
         let uploadClient = FountainStoreClient(client: EmbeddedFountainStoreClient())
         let metadataStore = GatewayAttachmentStore(store: uploadClient)
         let uploadStore = ChatKitUploadStore(store: uploadClient)
+        let threadStore = GatewayThreadStore(store: uploadClient)
         self.metadataStore = metadataStore
         self.attachmentClient = uploadClient
         let plugin = ChatKitGatewayPlugin(store: sessionStore,
                                           uploadStore: uploadStore,
                                           metadataStore: metadataStore,
+                                          threadStore: threadStore,
                                           responder: overrideResponder ?? responder,
                                           maxAttachmentBytes: maxAttachmentBytes,
                                           allowedAttachmentMIMEs: allowedMIMEs,
@@ -538,6 +540,102 @@ final class ChatKitGatewayTests: XCTestCase {
         XCTAssertNil(metadata)
     }
 
+    func testThreadPersistence() async throws {
+        struct ToolResponder: ChatResponder {
+            func respond(session: ChatKitSessionStore.StoredSession,
+                         request: ChatKitMessageRequest,
+                         preferStreaming: Bool) async throws -> ChatResponderResult {
+                let call = ChatKitToolCall(id: "call-1",
+                                           name: "lookup",
+                                           arguments: "{\"query\":\"status\"}",
+                                           status: "completed",
+                                           result: "ok")
+                return ChatResponderResult(answer: "Tool complete",
+                                           provider: "stub",
+                                           model: "stub-model",
+                                           usage: ["total_tokens": 5],
+                                           streamEvents: nil,
+                                           toolCalls: [call])
+            }
+        }
+
+        let running = await startGateway(responder: ToolResponder())
+        defer { Task { await running.stop() } }
+
+        let session = try await createSession(on: running.port)
+        let body: [String: Any] = [
+            "client_secret": session.client_secret,
+            "messages": [["role": "user", "content": "Trigger tool"]],
+            "stream": false,
+            "metadata": ["title": "Utilities"]
+        ]
+
+        let messageURL = URL(string: "http://127.0.0.1:\(running.port)/chatkit/messages")!
+        let (data, response) = try await ServerTestUtils.httpJSON("POST", messageURL, body: body)
+        XCTAssertEqual(response.statusCode, 200)
+
+        struct MessageResponse: Decodable {
+            let thread_id: String
+            let response_id: String
+        }
+
+        let messageResponse = try JSONDecoder().decode(MessageResponse.self, from: data)
+        XCTAssertFalse(messageResponse.thread_id.isEmpty)
+
+        let listURL = URL(string: "http://127.0.0.1:\(running.port)/chatkit/threads?client_secret=\(session.client_secret)")!
+        let (listData, listResp) = try await URLSession.shared.data(from: listURL)
+        XCTAssertEqual((listResp as? HTTPURLResponse)?.statusCode, 200)
+
+        struct ThreadList: Decodable {
+            struct Summary: Decodable {
+                let thread_id: String
+                let message_count: Int
+            }
+            let threads: [Summary]
+        }
+
+        let list = try JSONDecoder().decode(ThreadList.self, from: listData)
+        XCTAssertTrue(list.threads.contains(where: { $0.thread_id == messageResponse.thread_id && $0.message_count == 1 }))
+
+        let detailURL = URL(string: "http://127.0.0.1:\(running.port)/chatkit/threads/\(messageResponse.thread_id)?client_secret=\(session.client_secret)")!
+        let (detailData, detailResp) = try await URLSession.shared.data(from: detailURL)
+        XCTAssertEqual((detailResp as? HTTPURLResponse)?.statusCode, 200)
+
+        struct ThreadDetail: Decodable {
+            struct ToolCall: Decodable {
+                let id: String
+                let name: String
+                let arguments: String
+            }
+            struct Message: Decodable {
+                let content: String
+                let response_id: String
+                let tool_calls: [ToolCall]?
+            }
+            let thread_id: String
+            let messages: [Message]
+        }
+
+        let detail = try JSONDecoder().decode(ThreadDetail.self, from: detailData)
+        XCTAssertEqual(detail.thread_id, messageResponse.thread_id)
+        guard let assistantMessage = detail.messages.first else {
+            return XCTFail("missing persisted assistant message")
+        }
+        XCTAssertEqual(assistantMessage.content, "Tool complete")
+        XCTAssertEqual(assistantMessage.response_id, messageResponse.response_id)
+        XCTAssertEqual(assistantMessage.tool_calls?.first?.name, "lookup")
+
+        var deleteRequest = URLRequest(url: detailURL)
+        deleteRequest.httpMethod = "DELETE"
+        let (_, deleteResp) = try await URLSession.shared.data(for: deleteRequest)
+        XCTAssertEqual((deleteResp as? HTTPURLResponse)?.statusCode, 204)
+
+        let (afterData, afterResp) = try await URLSession.shared.data(from: listURL)
+        XCTAssertEqual((afterResp as? HTTPURLResponse)?.statusCode, 200)
+        let afterList = try JSONDecoder().decode(ThreadList.self, from: afterData)
+        XCTAssertFalse(afterList.threads.contains(where: { $0.thread_id == messageResponse.thread_id }))
+    }
+
     func testStructuredLogs() async throws {
         var uploadedId = ""
         let fileData = Data("LogBody".utf8)
@@ -611,5 +709,6 @@ final class ChatKitGatewayTests: XCTestCase {
         XCTAssertTrue(contents.contains("/chatkit/messages"))
         XCTAssertTrue(contents.contains("/chatkit/upload"))
         XCTAssertTrue(contents.contains("/chatkit/attachments/{attachmentId}"))
+        XCTAssertTrue(contents.contains("/chatkit/threads"))
     }
 }

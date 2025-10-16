@@ -11,6 +11,7 @@ public struct ChatKitGatewayPlugin: Sendable {
     public init(store: ChatKitSessionStore = ChatKitSessionStore(),
                 uploadStore: ChatKitUploadStore = ChatKitUploadStore(),
                 metadataStore: (any ChatKitAttachmentMetadataStore)? = nil,
+                threadStore: (any ChatKitThreadStore)? = nil,
                 responder: (any ChatResponder)? = nil,
                 maxAttachmentBytes: Int? = nil,
                 allowedAttachmentMIMEs: Set<String>? = nil,
@@ -18,6 +19,8 @@ public struct ChatKitGatewayPlugin: Sendable {
         let resolvedResponder: any ChatResponder = responder ?? LLMChatResponder()
         let resolvedMetadataStore: any ChatKitAttachmentMetadataStore = metadataStore
             ?? InMemoryAttachmentMetadataStore()
+        let resolvedThreadStore: any ChatKitThreadStore = threadStore
+            ?? InMemoryThreadStore()
         let policy = AttachmentValidationPolicy(
             maxAttachmentBytes: maxAttachmentBytes ?? AttachmentValidationPolicy.default.maxAttachmentBytes,
             allowedMimeTypes: allowedAttachmentMIMEs ?? AttachmentValidationPolicy.default.allowedMimeTypes
@@ -25,6 +28,7 @@ public struct ChatKitGatewayPlugin: Sendable {
         self.router = Router(handlers: Handlers(store: store,
                                                 uploadStore: uploadStore,
                                                 metadataStore: resolvedMetadataStore,
+                                                threadStore: resolvedThreadStore,
                                                 responder: resolvedResponder,
                                                 attachmentPolicy: policy,
                                                 logger: logger))
@@ -93,6 +97,14 @@ public struct Router: Sendable {
             return await handlers.uploadAttachment(request)
         case ("GET", ["chatkit", "attachments", let attachmentId]):
             return await handlers.downloadAttachment(request, attachmentId: attachmentId)
+        case ("POST", ["chatkit", "threads"]):
+            return await handlers.createThread(request)
+        case ("GET", ["chatkit", "threads"]):
+            return await handlers.listThreads(request)
+        case ("GET", ["chatkit", "threads", let threadId]):
+            return await handlers.getThread(request, threadId: threadId)
+        case ("DELETE", ["chatkit", "threads", let threadId]):
+            return await handlers.deleteThread(request, threadId: threadId)
         default:
             return nil
         }
@@ -108,17 +120,20 @@ public struct ChatResponderResult: Sendable {
     public let model: String?
     public let usage: [String: Double]?
     public let streamEvents: [ChatKitStreamEventEnvelope]?
+    public let toolCalls: [ChatKitToolCall]?
 
     public init(answer: String,
                 provider: String?,
                 model: String?,
                 usage: [String: Double]?,
-                streamEvents: [ChatKitStreamEventEnvelope]?) {
+                streamEvents: [ChatKitStreamEventEnvelope]?,
+                toolCalls: [ChatKitToolCall]? = nil) {
         self.answer = answer
         self.provider = provider
         self.model = model
         self.usage = usage
         self.streamEvents = streamEvents
+        self.toolCalls = toolCalls
     }
 }
 
@@ -207,6 +222,272 @@ actor InMemoryAttachmentMetadataStore: ChatKitAttachmentMetadataStore {
     }
 }
 
+public struct ChatKitToolCall: Codable, Sendable, Equatable {
+    public let id: String
+    public let name: String
+    public let arguments: String
+    public let status: String?
+    public let result: String?
+
+    public init(id: String,
+                name: String,
+                arguments: String,
+                status: String? = nil,
+                result: String? = nil) {
+        self.id = id
+        self.name = name
+        self.arguments = arguments
+        self.status = status
+        self.result = result
+    }
+}
+
+public struct ChatKitThreadMessage: Codable, Sendable, Equatable {
+    public let id: String
+    public let role: String
+    public let content: String
+    public let created_at: String
+    public let attachments: [ChatKitAttachment]?
+    public let tool_calls: [ChatKitToolCall]?
+    public let response_id: String?
+    public let usage: [String: Double]?
+
+    public init(id: String,
+                role: String,
+                content: String,
+                created_at: String,
+                attachments: [ChatKitAttachment]? = nil,
+                tool_calls: [ChatKitToolCall]? = nil,
+                response_id: String? = nil,
+                usage: [String: Double]? = nil) {
+        self.id = id
+        self.role = role
+        self.content = content
+        self.created_at = created_at
+        self.attachments = attachments
+        self.tool_calls = tool_calls
+        self.response_id = response_id
+        self.usage = usage
+    }
+}
+
+public struct ChatKitThreadSummary: Codable, Sendable, Equatable {
+    public let thread_id: String
+    public let session_id: String
+    public let title: String?
+    public let created_at: String
+    public let updated_at: String
+    public let message_count: Int
+
+    public init(thread_id: String,
+                session_id: String,
+                title: String?,
+                created_at: String,
+                updated_at: String,
+                message_count: Int) {
+        self.thread_id = thread_id
+        self.session_id = session_id
+        self.title = title
+        self.created_at = created_at
+        self.updated_at = updated_at
+        self.message_count = message_count
+    }
+}
+
+public struct ChatKitThread: Codable, Sendable, Equatable {
+    public let thread_id: String
+    public let session_id: String
+    public let title: String?
+    public let created_at: String
+    public let updated_at: String
+    public let metadata: [String: String]?
+    public let messages: [ChatKitThreadMessage]
+
+    public init(thread_id: String,
+                session_id: String,
+                title: String?,
+                created_at: String,
+                updated_at: String,
+                metadata: [String: String]?,
+                messages: [ChatKitThreadMessage]) {
+        self.thread_id = thread_id
+        self.session_id = session_id
+        self.title = title
+        self.created_at = created_at
+        self.updated_at = updated_at
+        self.metadata = metadata
+        self.messages = messages
+    }
+}
+
+public struct ChatKitThreadCreateRequest: Decodable {
+    let client_secret: String
+    let title: String?
+    let metadata: [String: String]?
+}
+
+struct ChatKitThreadListResponse: Encodable {
+    let threads: [ChatKitThreadSummary]
+}
+
+public protocol ChatKitThreadStore: Sendable {
+    func createThread(session: ChatKitSessionStore.StoredSession,
+                      title: String?,
+                      metadata: [String: String]?) async throws -> ChatKitThread
+    func ensureThread(session: ChatKitSessionStore.StoredSession,
+                      requestedThreadId: String?,
+                      metadata: [String: String]?) async throws -> ChatKitThread
+    func recordAssistantResponse(threadId: String,
+                                 session: ChatKitSessionStore.StoredSession,
+                                 responseId: String,
+                                 answer: String,
+                                 createdAt: String,
+                                 toolCalls: [ChatKitToolCall]?,
+                                 usage: [String: Double]?,
+                                 metadata: [String: String]?) async throws -> ChatKitThread
+    func thread(threadId: String, sessionId: String) async throws -> ChatKitThread?
+    func listThreads(sessionId: String) async throws -> [ChatKitThreadSummary]
+    func deleteThread(threadId: String, sessionId: String) async throws
+}
+
+actor InMemoryThreadStore: ChatKitThreadStore {
+    private struct ThreadRecord {
+        var threadId: String
+        var sessionId: String
+        var title: String?
+        var createdAt: String
+        var updatedAt: String
+        var metadata: [String: String]?
+        var messages: [ChatKitThreadMessage]
+
+        func model() -> ChatKitThread {
+            ChatKitThread(thread_id: threadId,
+                           session_id: sessionId,
+                           title: title,
+                           created_at: createdAt,
+                           updated_at: updatedAt,
+                           metadata: metadata,
+                           messages: messages)
+        }
+
+        func summary() -> ChatKitThreadSummary {
+            ChatKitThreadSummary(thread_id: threadId,
+                                 session_id: sessionId,
+                                 title: title,
+                                 created_at: createdAt,
+                                 updated_at: updatedAt,
+                                 message_count: messages.count)
+        }
+    }
+
+    private var storage: [String: ThreadRecord] = [:]
+
+    func createThread(session: ChatKitSessionStore.StoredSession,
+                      title: String?,
+                      metadata: [String: String]?) async throws -> ChatKitThread {
+        let record = makeThreadRecord(threadId: nil,
+                                      session: session,
+                                      title: title,
+                                      metadata: metadata)
+        storage[record.threadId] = record
+        return record.model()
+    }
+
+    func ensureThread(session: ChatKitSessionStore.StoredSession,
+                      requestedThreadId: String?,
+                      metadata: [String: String]?) async throws -> ChatKitThread {
+        if let requestedThreadId,
+           let existing = storage[requestedThreadId],
+           existing.sessionId == session.id {
+            return existing.model()
+        }
+        let record = makeThreadRecord(threadId: requestedThreadId,
+                                      session: session,
+                                      title: metadata?["title"],
+                                      metadata: metadata)
+        storage[record.threadId] = record
+        return record.model()
+    }
+
+    func recordAssistantResponse(threadId: String,
+                                 session: ChatKitSessionStore.StoredSession,
+                                 responseId: String,
+                                 answer: String,
+                                 createdAt: String,
+                                 toolCalls: [ChatKitToolCall]?,
+                                 usage: [String: Double]?,
+                                 metadata: [String: String]?) async throws -> ChatKitThread {
+        guard var record = storage[threadId], record.sessionId == session.id else {
+            throw ChatKitThreadStoreError.threadNotFound
+        }
+        let message = ChatKitThreadMessage(id: responseId,
+                                           role: "assistant",
+                                           content: answer,
+                                           created_at: createdAt,
+                                           attachments: nil,
+                                           tool_calls: toolCalls,
+                                           response_id: responseId,
+                                           usage: usage)
+        record.messages.append(message)
+        record.updatedAt = createdAt
+        if let metadata, !metadata.isEmpty {
+            var merged = record.metadata ?? [:]
+            for (key, value) in metadata { merged[key] = value }
+            record.metadata = merged
+        }
+        storage[threadId] = record
+        return record.model()
+    }
+
+    func thread(threadId: String, sessionId: String) async throws -> ChatKitThread? {
+        guard let record = storage[threadId], record.sessionId == sessionId else { return nil }
+        return record.model()
+    }
+
+    func listThreads(sessionId: String) async throws -> [ChatKitThreadSummary] {
+        storage.values
+            .filter { $0.sessionId == sessionId }
+            .sorted { $0.updatedAt > $1.updatedAt }
+            .map { $0.summary() }
+    }
+
+    func deleteThread(threadId: String, sessionId: String) async throws {
+        guard let record = storage[threadId], record.sessionId == sessionId else {
+            throw ChatKitThreadStoreError.threadNotFound
+        }
+        storage.removeValue(forKey: record.threadId)
+    }
+
+    private func makeThreadRecord(threadId: String?,
+                                  session: ChatKitSessionStore.StoredSession,
+                                  title: String?,
+                                  metadata: [String: String]?) -> ThreadRecord {
+        let id = threadId?.isEmpty == false ? threadId! : UUID().uuidString.lowercased()
+        let timestamp = isoTimestamp()
+        var meta = metadata ?? [:]
+        if let title, !title.isEmpty {
+            meta["title"] = title
+        }
+        return ThreadRecord(threadId: id,
+                            sessionId: session.id,
+                            title: meta["title"],
+                            createdAt: timestamp,
+                            updatedAt: timestamp,
+                            metadata: meta.isEmpty ? nil : meta,
+                            messages: [])
+    }
+
+    private func isoTimestamp(_ date: Date = Date()) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: date)
+    }
+}
+
+public enum ChatKitThreadStoreError: Error {
+    case threadNotFound
+}
+
 /// Default responder that forwards requests to the LLM Gateway plugin.
 struct LLMChatResponder: ChatResponder {
     private let call: @Sendable (HTTPRequest, ChatRequest) async throws -> HTTPResponse
@@ -271,11 +552,13 @@ struct LLMChatResponder: ChatResponder {
         let model = object["model"] as? String
         let usage = extractUsage(from: object["usage"])
 
+        let toolCalls = extractToolCalls(from: object)
         return ChatResponderResult(answer: answer,
                                    provider: provider,
                                    model: model,
                                    usage: usage,
-                                   streamEvents: nil)
+                                   streamEvents: nil,
+                                   toolCalls: toolCalls)
     }
 
     private func decodeSSEPayload(_ data: Data) throws -> ChatResponderResult {
@@ -314,11 +597,13 @@ struct LLMChatResponder: ChatResponder {
         guard !answer.isEmpty else {
             throw ChatKitGatewayError.invalidResponse("empty SSE answer")
         }
+        let toolCalls = extractToolCalls(from: object)
         return ChatResponderResult(answer: answer,
                                    provider: provider,
                                    model: model,
                                    usage: usage,
-                                   streamEvents: nil)
+                                   streamEvents: nil,
+                                   toolCalls: toolCalls)
     }
 
     private func extractAnswer(from object: [String: Any]) -> String? {
@@ -347,6 +632,50 @@ struct LLMChatResponder: ChatResponder {
         }
         return usage.isEmpty ? nil : usage
     }
+
+    private func extractToolCalls(from object: [String: Any]) -> [ChatKitToolCall]? {
+        if let calls = parseToolCalls(from: object["tool_calls"]) { return calls }
+        if let choices = object["choices"] as? [[String: Any]],
+           let first = choices.first,
+           let message = first["message"] as? [String: Any],
+           let calls = parseToolCalls(from: message["tool_calls"]) {
+            return calls
+        }
+        return nil
+    }
+
+    private func parseToolCalls(from raw: Any?) -> [ChatKitToolCall]? {
+        guard let array = raw as? [[String: Any]] else { return nil }
+        var calls: [ChatKitToolCall] = []
+        for entry in array {
+            guard let id = entry["id"] as? String else { continue }
+            let name: String?
+            let argumentsValue: Any?
+            if let function = entry["function"] as? [String: Any] {
+                name = function["name"] as? String
+                argumentsValue = function["arguments"]
+            } else {
+                name = entry["name"] as? String
+                argumentsValue = entry["arguments"]
+            }
+            guard let resolvedName = name else { continue }
+            guard let argumentsValue else { continue }
+            let arguments: String
+            if let str = argumentsValue as? String {
+                arguments = str
+            } else if let data = try? JSONSerialization.data(withJSONObject: argumentsValue,
+                                                              options: [.sortedKeys]),
+                      let str = String(data: data, encoding: .utf8) {
+                arguments = str
+            } else {
+                continue
+            }
+            let status = entry["status"] as? String
+            let result = entry["result"] as? String ?? entry["output"] as? String
+            calls.append(ChatKitToolCall(id: id, name: resolvedName, arguments: arguments, status: status, result: result))
+        }
+        return calls.isEmpty ? nil : calls
+    }
 }
 
 // MARK: - Gateway Handlers
@@ -355,6 +684,7 @@ struct Handlers: Sendable {
     private let store: ChatKitSessionStore
     private let uploadStore: ChatKitUploadStore
     private let metadataStore: any ChatKitAttachmentMetadataStore
+    private let threadStore: any ChatKitThreadStore
     private let responder: any ChatResponder
     private let attachmentPolicy: AttachmentValidationPolicy
     private let logger: (any ChatKitAttachmentLogger)?
@@ -362,12 +692,14 @@ struct Handlers: Sendable {
     public init(store: ChatKitSessionStore,
                 uploadStore: ChatKitUploadStore,
                 metadataStore: any ChatKitAttachmentMetadataStore,
+                threadStore: any ChatKitThreadStore,
                 responder: any ChatResponder,
                 attachmentPolicy: AttachmentValidationPolicy,
                 logger: (any ChatKitAttachmentLogger)? = nil) {
         self.store = store
         self.uploadStore = uploadStore
         self.metadataStore = metadataStore
+        self.threadStore = threadStore
         self.responder = responder
         self.attachmentPolicy = attachmentPolicy
         self.logger = logger
@@ -418,7 +750,17 @@ struct Handlers: Sendable {
 
         let preferStreaming = payload.stream ?? true
         let mergedMetadata = mergeMetadata(session.metadata, payload.metadata)
-        let threadId = payload.thread_id ?? session.id
+        let thread: ChatKitThread
+        do {
+            thread = try await threadStore.ensureThread(session: session,
+                                                        requestedThreadId: payload.thread_id,
+                                                        metadata: mergedMetadata)
+        } catch {
+            return makeError(status: 500,
+                             code: "storage_error",
+                             message: "failed to resolve thread")
+        }
+        let threadId = thread.thread_id
         let responseId = UUID().uuidString.lowercased()
         let createdAt = isoTimestamp()
 
@@ -426,6 +768,20 @@ struct Handlers: Sendable {
             let result = try await responder.respond(session: session,
                                                      request: payload,
                                                      preferStreaming: preferStreaming)
+            do {
+                _ = try await threadStore.recordAssistantResponse(threadId: threadId,
+                                                                   session: session,
+                                                                   responseId: responseId,
+                                                                   answer: result.answer,
+                                                                   createdAt: createdAt,
+                                                                   toolCalls: result.toolCalls,
+                                                                   usage: result.usage,
+                                                                   metadata: mergedMetadata)
+            } catch {
+                return makeError(status: 500,
+                                 code: "storage_error",
+                                 message: "failed to persist thread message")
+            }
             if preferStreaming {
                 return makeStreamResponse(events: result.streamEvents,
                                           answer: result.answer,
@@ -449,6 +805,78 @@ struct Handlers: Sendable {
             }
         } catch {
             return makeError(status: 502, code: "llm_error", message: error.localizedDescription)
+        }
+    }
+
+    public func createThread(_ request: HTTPRequest) async -> HTTPResponse {
+        guard let payload = try? JSONDecoder().decode(ChatKitThreadCreateRequest.self, from: request.body) else {
+            return makeError(status: 400, code: "invalid_request", message: "invalid thread payload")
+        }
+        guard let session = await store.session(for: payload.client_secret) else {
+            return makeError(status: 401, code: "invalid_secret", message: "client secret expired or unknown")
+        }
+
+        do {
+            let thread = try await threadStore.createThread(session: session,
+                                                            title: payload.title,
+                                                            metadata: payload.metadata)
+            return encodeJSON(thread, status: 201)
+        } catch {
+            return makeError(status: 500, code: "storage_error", message: "failed to create thread")
+        }
+    }
+
+    public func listThreads(_ request: HTTPRequest) async -> HTTPResponse {
+        let query = parseQueryParameters(from: request.path)
+        guard let clientSecret = query["client_secret"], !clientSecret.isEmpty else {
+            return makeError(status: 400, code: "invalid_request", message: "client_secret query parameter required")
+        }
+        guard let session = await store.session(for: clientSecret) else {
+            return makeError(status: 401, code: "invalid_secret", message: "client secret expired or unknown")
+        }
+
+        do {
+            let threads = try await threadStore.listThreads(sessionId: session.id)
+            let response = ChatKitThreadListResponse(threads: threads)
+            return encodeJSON(response, status: 200)
+        } catch {
+            return makeError(status: 500, code: "storage_error", message: "failed to load threads")
+        }
+    }
+
+    public func getThread(_ request: HTTPRequest, threadId: String) async -> HTTPResponse {
+        let query = parseQueryParameters(from: request.path)
+        guard let clientSecret = query["client_secret"], !clientSecret.isEmpty else {
+            return makeError(status: 400, code: "invalid_request", message: "client_secret query parameter required")
+        }
+        guard let session = await store.session(for: clientSecret) else {
+            return makeError(status: 401, code: "invalid_secret", message: "client secret expired or unknown")
+        }
+
+        do {
+            guard let thread = try await threadStore.thread(threadId: threadId, sessionId: session.id) else {
+                return makeError(status: 404, code: "not_found", message: "thread not found")
+            }
+            return encodeJSON(thread, status: 200)
+        } catch {
+            return makeError(status: 500, code: "storage_error", message: "failed to load thread")
+        }
+    }
+
+    public func deleteThread(_ request: HTTPRequest, threadId: String) async -> HTTPResponse {
+        let query = parseQueryParameters(from: request.path)
+        guard let clientSecret = query["client_secret"], !clientSecret.isEmpty else {
+            return makeError(status: 400, code: "invalid_request", message: "client_secret query parameter required")
+        }
+        guard let session = await store.session(for: clientSecret) else {
+            return makeError(status: 401, code: "invalid_secret", message: "client secret expired or unknown")
+        }
+
+        do {
+            try await threadStore.deleteThread(threadId: threadId, sessionId: session.id)
+            return HTTPResponse(status: 204, headers: ["Cache-Control": "no-store"], body: Data())
+        } catch {
+            return makeError(status: 500, code: "storage_error", message: "failed to delete thread")
         }
     }
 
@@ -1255,7 +1683,7 @@ struct ChatKitMessage: Decodable {
     let attachments: [ChatKitAttachment]?
 }
 
-struct ChatKitAttachment: Decodable {
+struct ChatKitAttachment: Codable, Sendable {
     let id: String
     let type: String
     let name: String?

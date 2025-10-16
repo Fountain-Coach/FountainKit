@@ -294,6 +294,127 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /chatkit/threads:
+    post:
+      summary: Create chat thread
+      description: Creates a new chat thread scoped to the authenticated session.
+      operationId: createChatKitThread
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatKitThreadCreateRequest'
+      responses:
+        '201':
+          description: Thread created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatKitThread'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    get:
+      summary: List chat threads
+      description: Lists threads associated with the provided session secret.
+      operationId: listChatKitThreads
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: false
+      parameters:
+        - name: client_secret
+          in: query
+          required: true
+          description: Session secret issued by `/chatkit/session`.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Thread list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatKitThreadListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /chatkit/threads/{threadId}:
+    get:
+      summary: Fetch chat thread
+      description: Returns stored assistant responses and tool calls for the requested thread.
+      operationId: getChatKitThread
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: false
+      parameters:
+        - name: threadId
+          in: path
+          required: true
+          description: Identifier of the thread to fetch.
+          schema:
+            type: string
+        - name: client_secret
+          in: query
+          required: true
+          description: Session secret issued by `/chatkit/session`.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Thread payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatKitThread'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Thread not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Delete chat thread
+      description: Removes the thread and any persisted assistant responses.
+      operationId: deleteChatKitThread
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: false
+      parameters:
+        - name: threadId
+          in: path
+          required: true
+          description: Identifier of the thread to delete.
+          schema:
+            type: string
+        - name: client_secret
+          in: query
+          required: true
+          description: Session secret issued by `/chatkit/session`.
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Thread deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Thread not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /routes:
     get:
       summary: List Configured Routes
@@ -623,6 +744,252 @@ components:
           format: uri
           description: Location from which the attachment can be fetched (e.g. `fountain://chatkit/attachments/<id>`).
         mime_type:
+          type: string
+    ChatKitThreadCreateRequest:
+      type: object
+      required:
+        - client_secret
+      properties:
+        client_secret:
+          type: string
+        title:
+          type: string
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+    ChatKitThreadListResponse:
+      type: object
+      required:
+        - threads
+      properties:
+        threads:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatKitThreadSummary'
+    ChatKitThreadSummary:
+      type: object
+      required:
+        - thread_id
+        - session_id
+        - created_at
+        - updated_at
+        - message_count
+      properties:
+        thread_id:
+          type: string
+        session_id:
+          type: string
+        title:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        message_count:
+          type: integer
+          minimum: 0
+    ChatKitThread:
+      type: object
+      required:
+        - thread_id
+        - session_id
+        - created_at
+        - updated_at
+        - messages
+      properties:
+        thread_id:
+          type: string
+        session_id:
+          type: string
+        title:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatKitThreadMessage'
+    ChatKitThreadMessage:
+      type: object
+      required:
+        - id
+        - role
+        - content
+        - created_at
+      properties:
+        id:
+          type: string
+        role:
+          type: string
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatKitAttachment'
+        tool_calls:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatKitToolCall'
+        response_id:
+          type: string
+        usage:
+          type: object
+          additionalProperties:
+            type: number
+    ChatKitToolCall:
+      type: object
+      required:
+        - id
+        - name
+        - arguments
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        arguments:
+          type: string
+        status:
+          type: string
+        result:
+          type: string
+    ChatKitThreadCreateRequest:
+      type: object
+      required:
+        - client_secret
+      properties:
+        client_secret:
+          type: string
+        title:
+          type: string
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+    ChatKitThreadListResponse:
+      type: object
+      required:
+        - threads
+      properties:
+        threads:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatKitThreadSummary'
+    ChatKitThreadSummary:
+      type: object
+      required:
+        - thread_id
+        - session_id
+        - created_at
+        - updated_at
+        - message_count
+      properties:
+        thread_id:
+          type: string
+        session_id:
+          type: string
+        title:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        message_count:
+          type: integer
+          minimum: 0
+    ChatKitThread:
+      type: object
+      required:
+        - thread_id
+        - session_id
+        - created_at
+        - updated_at
+        - messages
+      properties:
+        thread_id:
+          type: string
+        session_id:
+          type: string
+        title:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatKitThreadMessage'
+    ChatKitThreadMessage:
+      type: object
+      required:
+        - id
+        - role
+        - content
+        - created_at
+      properties:
+        id:
+          type: string
+        role:
+          type: string
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatKitAttachment'
+        tool_calls:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatKitToolCall'
+        response_id:
+          type: string
+        usage:
+          type: object
+          additionalProperties:
+            type: number
+    ChatKitToolCall:
+      type: object
+      required:
+        - id
+        - name
+        - arguments
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        arguments:
+          type: string
+        status:
+          type: string
+        result:
           type: string
     CredentialRequest:
       type: object

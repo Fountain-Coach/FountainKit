@@ -40,11 +40,11 @@ This checklist translates the recent ChatKit commits and milestone roadmap into 
 
 ## 🛠 1–2 weeks
 ### 5. Message & Thread Persistence
-- [ ] Introduce `/chatkit/threads` CRUD spec entries and regenerate clients/servers.
-  - Command: `swift run fountain-openapi-curator --lint Packages/FountainApps/Sources/gateway-server/openapi/chatkit.yaml`
-- [ ] Persist assistant responses & tool calls in FountainStore models under `Packages/FountainApps/Sources/gateway-server/ThreadStore.swift`.
+- [x] Introduce `/chatkit/threads` CRUD spec entries and regenerate clients/servers.
+  - Command: `swift run fountain-openapi-curator --lint Packages/FountainApps/Sources/gateway-server/openapi.yaml`
+- [x] Persist assistant responses & tool calls in FountainStore models under `Packages/FountainApps/Sources/gateway-server/ThreadStore.swift`.
   - Command: `swift build --target gateway-server`
-- [ ] Extend integration tests covering session replay scenarios.
+- [x] Extend integration tests covering session replay scenarios.
   - Command: `swift test --package-path Packages/FountainApps --filter ChatKitGatewayTests/testThreadPersistence`
 
 ### 6. Tool Call Surfacing

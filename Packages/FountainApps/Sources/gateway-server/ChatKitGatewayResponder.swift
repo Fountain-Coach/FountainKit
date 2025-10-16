@@ -65,11 +65,13 @@ struct ChatKitGatewayResponder: ChatResponder {
         let model = object["model"] as? String
         let usage = extractUsage(from: object["usage"])
 
+        let toolCalls = extractToolCalls(from: object)
         return ChatResponderResult(answer: answer,
                                    provider: provider,
                                    model: model,
                                    usage: usage,
-                                   streamEvents: nil)
+                                   streamEvents: nil,
+                                   toolCalls: toolCalls)
     }
 
     private func decodeSSEPayload(_ data: Data) throws -> ChatResponderResult {
@@ -82,7 +84,7 @@ struct ChatKitGatewayResponder: ChatResponder {
         var model: String?
         var usage: [String: Double]?
         var events: [ChatKitStreamEventEnvelope] = []
-
+        
         for block in text.components(separatedBy: "\n\n") where !block.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             var eventName: String?
             var eventId: String?
@@ -135,11 +137,13 @@ struct ChatKitGatewayResponder: ChatResponder {
 
         let uniqueEvents = events.deduplicating()
 
+        let toolCalls: [ChatKitToolCall]? = nil
         return ChatResponderResult(answer: answer,
                                    provider: provider,
                                    model: model,
                                    usage: usage,
-                                   streamEvents: uniqueEvents)
+                                   streamEvents: uniqueEvents,
+                                   toolCalls: toolCalls)
     }
 
     private func extractAnswer(from object: [String: Any]) -> String? {
@@ -165,6 +169,50 @@ struct ChatKitGatewayResponder: ChatResponder {
             }
         }
         return usage.isEmpty ? nil : usage
+    }
+
+    private func extractToolCalls(from object: [String: Any]) -> [ChatKitToolCall]? {
+        if let calls = parseToolCalls(from: object["tool_calls"]) { return calls }
+        if let choices = object["choices"] as? [[String: Any]],
+           let first = choices.first,
+           let message = first["message"] as? [String: Any],
+           let calls = parseToolCalls(from: message["tool_calls"]) {
+            return calls
+        }
+        return nil
+    }
+
+    private func parseToolCalls(from raw: Any?) -> [ChatKitToolCall]? {
+        guard let array = raw as? [[String: Any]] else { return nil }
+        var calls: [ChatKitToolCall] = []
+        for entry in array {
+            guard let id = entry["id"] as? String else { continue }
+            let name: String?
+            let argumentsValue: Any?
+            if let function = entry["function"] as? [String: Any] {
+                name = function["name"] as? String
+                argumentsValue = function["arguments"]
+            } else {
+                name = entry["name"] as? String
+                argumentsValue = entry["arguments"]
+            }
+            guard let resolvedName = name else { continue }
+            guard let argumentsValue else { continue }
+            let arguments: String
+            if let str = argumentsValue as? String {
+                arguments = str
+            } else if let data = try? JSONSerialization.data(withJSONObject: argumentsValue,
+                                                              options: [.sortedKeys]),
+                      let str = String(data: data, encoding: .utf8) {
+                arguments = str
+            } else {
+                continue
+            }
+            let status = entry["status"] as? String
+            let result = entry["result"] as? String ?? entry["output"] as? String
+            calls.append(ChatKitToolCall(id: id, name: resolvedName, arguments: arguments, status: status, result: result))
+        }
+        return calls.isEmpty ? nil : calls
     }
 }
 

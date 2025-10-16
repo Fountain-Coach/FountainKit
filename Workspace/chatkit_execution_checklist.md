@@ -26,10 +26,11 @@ This checklist translates the recent ChatKit commits and milestone roadmap into 
 
 ## 📅 2–5 days
 ### 3. Upload Validation
-- [ ] Add configuration knobs (`CHATKIT_ATTACHMENT_MAX_MB`, allowed MIME list) in `Packages/FountainApps/Sources/gateway-server/Configuration/ChatKitConfig.swift`.
+- [x] Add configuration knobs (`CHATKIT_ATTACHMENT_MAX_MB`, `CHATKIT_ATTACHMENT_ALLOWED_MIME_TYPES`) in `Packages/FountainApps/Sources/gateway-server/Configuration/ChatKitConfig.swift`.
   - Command: `swift build --target gateway-server`
-- [ ] Add negative tests for blocked uploads (`OversizedAttachmentTests`, `InvalidMimeAttachmentTests`).
-  - Command: `swift test --package-path Packages/FountainApps --filter ChatKitGatewayTests/testUploadValidation`
+- [x] Add negative tests for blocked uploads (`testOversizedAttachmentIsRejected`, `testInvalidMimeAttachmentIsRejected`).
+  - Command: `swift test --package-path Packages/FountainApps --filter ChatKitGatewayTests/testOversizedAttachmentIsRejected`
+  - Command: `swift test --package-path Packages/FountainApps --filter ChatKitGatewayTests/testInvalidMimeAttachmentIsRejected`
 
 ### 4. Corpus Management
 - [ ] Implement TTL cleanup worker or manual purge endpoint in `Packages/FountainApps/Sources/gateway-server/AttachmentCleanupJob.swift`.

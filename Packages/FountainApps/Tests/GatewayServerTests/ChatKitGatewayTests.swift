@@ -36,7 +36,14 @@ final class ChatKitGatewayTests: XCTestCase {
         let mime_type: String?
     }
 
-    func startGateway(responder overrideResponder: (any ChatResponder)? = nil) async -> ServerTestUtils.RunningServer {
+    private struct ErrorResponse: Decodable {
+        let error: String
+        let code: String
+    }
+
+    func startGateway(responder overrideResponder: (any ChatResponder)? = nil,
+                      maxAttachmentBytes: Int? = nil,
+                      allowedMIMEs: Set<String>? = nil) async -> ServerTestUtils.RunningServer {
         let sessionStore = ChatKitSessionStore()
         let uploadClient = FountainStoreClient(client: EmbeddedFountainStoreClient())
         let metadataStore = GatewayAttachmentStore(store: uploadClient)
@@ -45,7 +52,9 @@ final class ChatKitGatewayTests: XCTestCase {
         let plugin = ChatKitGatewayPlugin(store: sessionStore,
                                           uploadStore: uploadStore,
                                           metadataStore: metadataStore,
-                                          responder: overrideResponder ?? responder)
+                                          responder: overrideResponder ?? responder,
+                                          maxAttachmentBytes: maxAttachmentBytes,
+                                          allowedAttachmentMIMEs: allowedMIMEs)
         return await ServerTestUtils.startGateway(on: 18121, plugins: [plugin])
     }
 
@@ -393,6 +402,55 @@ final class ChatKitGatewayTests: XCTestCase {
 
         let (_, downloadResponse) = try await URLSession.shared.data(from: downloadURL)
         XCTAssertEqual((downloadResponse as? HTTPURLResponse)?.statusCode, 409)
+    }
+
+    func testOversizedAttachmentIsRejected() async throws {
+        let running = await startGateway(maxAttachmentBytes: 1 * 1_024)
+        defer { Task { await running.stop() } }
+
+        let session = try await createSession(on: running.port)
+        let boundary = "Boundary-" + UUID().uuidString
+        let largeData = Data(repeating: 0xAB, count: 2 * 1_024)
+        let multipart = makeMultipartBody(boundary: boundary, parts: [
+            (name: "client_secret", filename: nil, contentType: nil, data: Data(session.client_secret.utf8)),
+            (name: "file", filename: "large.bin", contentType: "application/octet-stream", data: largeData)
+        ])
+
+        let uploadURL = URL(string: "http://127.0.0.1:\(running.port)/chatkit/upload")!
+        var uploadRequest = URLRequest(url: uploadURL)
+        uploadRequest.httpMethod = "POST"
+        uploadRequest.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        uploadRequest.httpBody = multipart
+
+        let (data, response) = try await URLSession.shared.data(for: uploadRequest)
+        let status = (response as? HTTPURLResponse)?.statusCode
+        XCTAssertEqual(status, 413, String(data: data, encoding: .utf8) ?? "")
+        let decoded = try JSONDecoder().decode(ErrorResponse.self, from: data)
+        XCTAssertEqual(decoded.code, "attachment_too_large")
+    }
+
+    func testInvalidMimeAttachmentIsRejected() async throws {
+        let running = await startGateway(allowedMIMEs: ["image/png"])
+        defer { Task { await running.stop() } }
+
+        let session = try await createSession(on: running.port)
+        let boundary = "Boundary-" + UUID().uuidString
+        let multipart = makeMultipartBody(boundary: boundary, parts: [
+            (name: "client_secret", filename: nil, contentType: nil, data: Data(session.client_secret.utf8)),
+            (name: "file", filename: "note.txt", contentType: "text/plain", data: Data("Hello".utf8))
+        ])
+
+        let uploadURL = URL(string: "http://127.0.0.1:\(running.port)/chatkit/upload")!
+        var uploadRequest = URLRequest(url: uploadURL)
+        uploadRequest.httpMethod = "POST"
+        uploadRequest.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        uploadRequest.httpBody = multipart
+
+        let (data, response) = try await URLSession.shared.data(for: uploadRequest)
+        let status = (response as? HTTPURLResponse)?.statusCode
+        XCTAssertEqual(status, 415, String(data: data, encoding: .utf8) ?? "")
+        let decoded = try JSONDecoder().decode(ErrorResponse.self, from: data)
+        XCTAssertEqual(decoded.code, "unsupported_media_type")
     }
 
     func testGatewayOpenAPIDocumentIncludesChatKitPaths() throws {

@@ -11,14 +11,53 @@ public struct ChatKitGatewayPlugin: Sendable {
     public init(store: ChatKitSessionStore = ChatKitSessionStore(),
                 uploadStore: ChatKitUploadStore = ChatKitUploadStore(),
                 metadataStore: (any ChatKitAttachmentMetadataStore)? = nil,
-                responder: (any ChatResponder)? = nil) {
+                responder: (any ChatResponder)? = nil,
+                maxAttachmentBytes: Int? = nil,
+                allowedAttachmentMIMEs: Set<String>? = nil) {
         let resolvedResponder: any ChatResponder = responder ?? LLMChatResponder()
         let resolvedMetadataStore: any ChatKitAttachmentMetadataStore = metadataStore
             ?? InMemoryAttachmentMetadataStore()
+        let policy = AttachmentValidationPolicy(
+            maxAttachmentBytes: maxAttachmentBytes ?? AttachmentValidationPolicy.default.maxAttachmentBytes,
+            allowedMimeTypes: allowedAttachmentMIMEs ?? AttachmentValidationPolicy.default.allowedMimeTypes
+        )
         self.router = Router(handlers: Handlers(store: store,
                                                 uploadStore: uploadStore,
                                                 metadataStore: resolvedMetadataStore,
-                                                responder: resolvedResponder))
+                                                responder: resolvedResponder,
+                                                attachmentPolicy: policy))
+    }
+}
+
+struct AttachmentValidationPolicy: Sendable {
+    static let `default` = AttachmentValidationPolicy(
+        maxAttachmentBytes: 25 * 1_048_576,
+        allowedMimeTypes: [
+            "image/png",
+            "image/jpeg",
+            "image/webp",
+            "image/gif",
+            "application/pdf",
+            "text/plain",
+            "application/json",
+            "application/octet-stream"
+        ]
+    )
+
+    let maxAttachmentBytes: Int
+    let allowedMimeTypes: Set<String>
+
+    init(maxAttachmentBytes: Int, allowedMimeTypes: Set<String>) {
+        self.maxAttachmentBytes = max(0, maxAttachmentBytes)
+        self.allowedMimeTypes = allowedMimeTypes.reduce(into: Set<String>()) { result, mime in
+            let lowercased = mime.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !lowercased.isEmpty else { return }
+            result.insert(lowercased)
+        }
+    }
+
+    func isAllowed(mimeType: String) -> Bool {
+        allowedMimeTypes.contains(mimeType.lowercased())
     }
 }
 
@@ -285,15 +324,18 @@ struct Handlers: Sendable {
     private let uploadStore: ChatKitUploadStore
     private let metadataStore: any ChatKitAttachmentMetadataStore
     private let responder: any ChatResponder
+    private let attachmentPolicy: AttachmentValidationPolicy
 
     public init(store: ChatKitSessionStore,
                 uploadStore: ChatKitUploadStore,
                 metadataStore: any ChatKitAttachmentMetadataStore,
-                responder: any ChatResponder) {
+                responder: any ChatResponder,
+                attachmentPolicy: AttachmentValidationPolicy) {
         self.store = store
         self.uploadStore = uploadStore
         self.metadataStore = metadataStore
         self.responder = responder
+        self.attachmentPolicy = attachmentPolicy
     }
 
     public func startSession(_ request: HTTPRequest) async -> HTTPResponse {
@@ -407,12 +449,28 @@ struct Handlers: Sendable {
         }
 
         let fileName = filePart.filename ?? "attachment"
-        let mimeType = filePart.contentType ?? "application/octet-stream"
+        let providedMime = filePart.contentType?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedMime = providedMime?.lowercased() ?? "application/octet-stream"
+
+        if filePart.data.count > attachmentPolicy.maxAttachmentBytes {
+            let limitMB = Double(attachmentPolicy.maxAttachmentBytes) / 1_048_576.0
+            let formatted = limitMB >= 1 ? String(format: "%.1f", limitMB) : String(format: "%.0f", limitMB * 1024)
+            let unit = limitMB >= 1 ? "MB" : "KB"
+            return makeError(status: 413,
+                             code: "attachment_too_large",
+                             message: "attachments cannot exceed \(formatted) \(unit)")
+        }
+
+        guard attachmentPolicy.isAllowed(mimeType: normalizedMime) else {
+            return makeError(status: 415,
+                             code: "unsupported_media_type",
+                             message: "mime type \(normalizedMime) is not allowed")
+        }
 
         let descriptor: ChatKitUploadStore.Descriptor
         do {
             descriptor = try await uploadStore.store(fileName: fileName,
-                                                     mimeType: mimeType,
+                                                     mimeType: providedMime ?? normalizedMime,
                                                      data: filePart.data,
                                                      sessionId: session.id,
                                                      threadId: threadId)

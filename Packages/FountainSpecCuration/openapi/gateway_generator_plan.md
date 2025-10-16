@@ -15,9 +15,8 @@ Purpose: Expand Swift OpenAPI Generator coverage for the Fountain Gateway so tha
   - _2025-10-18 — Added lightweight Teatro shims under `External/Teatro` so the workspace can resolve local dependencies while the upstream repository remains unavailable._
   - _2025-10-18 — `swift build --product gateway-server` now runs the generator but fails on existing ChatKit compile errors: `ChatKitThreadMessage` lacks an `Equatable` implementation, `ChatKitGatewayPlugin` route switch still uses tuple pattern `let` bindings, and `extractToolCalls` references an `object` symbol that no longer exists. Address these before the next build attempt._
   - _2025-10-18 — Re-ran the build after addressing the ChatKit compile errors; `gateway-server` now builds cleanly with generated surfaces in place._
-- [ ] Replace manual router shims with generated handler conformances within `GatewayOpenAPI` to delegate to plugin kernels.
-  - _Drafted approach: expose `ChatKitGatewayPlugin` kernels so generated handlers can translate `Operations.*` payloads into router calls without duplicating validation logic. Requires refactoring plugin to make upload metadata (filename/MIME) accessible outside raw HTTP requests._
-  - _Pending — Generator failures show `ChatKitGatewayPlugin` still exports public APIs that rely on internal request/response helpers. Promote those helper types (or translate into generated models) before stitching handlers in._
+- [x] Replace manual router shims with generated handler conformances within `GatewayOpenAPI` to delegate to plugin kernels.
+  - _2025-10-18 — Generated ChatKit handlers now call into a `GatewayServer` dispatcher that reuses `ChatKitGatewayPlugin` kernels, covering session, messaging, thread, and attachment flows without the manual router preflight._
 - [ ] Expose plugin routers as typed handler implementations by conforming to generated protocols and wiring them through the gateway dependency container.
   - _Needs design once kernels are surfaced; consider adding a `GatewayPluginRegistry` API on `GatewayServer` so handlers can look up shared plugin state instead of rebuilding stores._
   - _Pending — Access control cleanup above is prerequisite: handlers must depend only on generated request/response types rather than the plugin's internal helper structs._

@@ -43,6 +43,9 @@ public final class GatewayServer {
     private let breaker: CircuitBreaker = CircuitBreaker()
     private var roleGuardReloader: RoleGuardConfigReloader?
     private let personaOrchestrator: GatewayPersonaOrchestrator?
+#if canImport(ChatKitGatewayPlugin)
+    private let chatKitPlugin: ChatKitGatewayPlugin?
+#endif
 
     private struct ZoneCreateRequest: Codable { let name: String }
     private struct ZonesResponse: Codable { let zones: [ZoneManager.Zone] }
@@ -97,6 +100,9 @@ public final class GatewayServer {
         self.zoneManager = zoneManager
         self.roleGuardStore = roleGuardStore
         self.personaOrchestrator = personaOrchestrator
+#if canImport(ChatKitGatewayPlugin)
+        self.chatKitPlugin = plugins.compactMap { $0 as? ChatKitGatewayPlugin }.first
+#endif
         self.group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         self.routes = [:]
         self.routesURL = routeStoreURL
@@ -142,10 +148,6 @@ public final class GatewayServer {
 
             // Allow plugins with routers to handle requests before builtin routes.
             for plugin in plugins {
-                if let chat = plugin as? ChatKitGatewayPlugin,
-                   let handled = try await chat.router.route(request) {
-                    return handled
-                }
                 if let llm = plugin as? LLMGatewayPlugin,
                    let handled = try await llm.router.route(request) {
                     return handled
@@ -254,6 +256,42 @@ public final class GatewayServer {
             }
         }
     }
+
+#if canImport(ChatKitGatewayPlugin)
+    @MainActor
+    func dispatchChatKitRequest(method: String,
+                                path: String,
+                                headers: [String: String] = [:],
+                                body: Data = Data()) async -> HTTPResponse {
+        guard let plugin = chatKitPlugin else {
+            let payload = ["error": "chatkit plugin unavailable"]
+            let data = (try? JSONSerialization.data(withJSONObject: payload)) ?? Data()
+            return HTTPResponse(status: 501, headers: ["Content-Type": "application/json"], body: data)
+        }
+        let request = HTTPRequest(method: method, path: path, headers: headers, body: body)
+        do {
+            if let response = try await plugin.router.route(request) {
+                return response
+            } else {
+                return HTTPResponse(status: 404)
+            }
+        } catch {
+            let payload = ["error": "chatkit routing failure"]
+            let data = (try? JSONSerialization.data(withJSONObject: payload)) ?? Data()
+            return HTTPResponse(status: 500, headers: ["Content-Type": "application/json"], body: data)
+        }
+    }
+#else
+    @MainActor
+    func dispatchChatKitRequest(method: String,
+                                path: String,
+                                headers: [String: String] = [:],
+                                body: Data = Data()) async -> HTTPResponse {
+        let payload = ["error": "chatkit plugin unavailable"]
+        let data = (try? JSONSerialization.data(withJSONObject: payload)) ?? Data()
+        return HTTPResponse(status: 501, headers: ["Content-Type": "application/json"], body: data)
+    }
+#endif
 
     /// Attempts to match the incoming request against configured routes and proxy it upstream.
     /// Performs a simple prefix match on the configured path and enforces allowed methods.

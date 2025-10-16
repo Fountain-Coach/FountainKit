@@ -7,6 +7,7 @@ The Gateway server is the control-plane entry point that authenticates requests,
 - Gateway surface: [`Packages/FountainSpecCuration/openapi/v1/gateway.yml`](../../../FountainSpecCuration/openapi/v1/gateway.yml)
 - Core plugins:
   - Auth gateway: [`Packages/FountainSpecCuration/openapi/v1/auth-gateway.yml`](../../../FountainSpecCuration/openapi/v1/auth-gateway.yml)
+  - ChatKit gateway: [`Packages/FountainSpecCuration/openapi/v1/chatkit-gateway.yml`](../../../FountainSpecCuration/openapi/v1/chatkit-gateway.yml)
   - Curator gateway: [`Packages/FountainSpecCuration/openapi/v1/curator-gateway.yml`](../../../FountainSpecCuration/openapi/v1/curator-gateway.yml)
   - LLM gateway: [`Packages/FountainSpecCuration/openapi/v1/llm-gateway.yml`](../../../FountainSpecCuration/openapi/v1/llm-gateway.yml)
   - Rate limiter gateway: [`Packages/FountainSpecCuration/openapi/v1/rate-limiter-gateway.yml`](../../../FountainSpecCuration/openapi/v1/rate-limiter-gateway.yml)
@@ -21,7 +22,7 @@ These specs describe every HTTP contract the server exposes or invokes, replacin
 ## Key responsibilities
 
 - Load persona orchestration, publishing frontend assets, and rate limiting configuration from the environment or configuration store.
-- Wire gateway plugins (auth, curation, LLM, policy enforcement) together into a single `GatewayServer` instance.
+- Wire gateway plugins (auth, ChatKit, curation, LLM, policy enforcement) together into a single `GatewayServer` instance.
 - Expose optional DNS emulation when launched with `--dns` for local testing.
 
 ## Related packages

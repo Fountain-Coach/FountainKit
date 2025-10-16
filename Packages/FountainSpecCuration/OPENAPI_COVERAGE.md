@@ -22,6 +22,7 @@ Notes
 | `v1/dns.yml` | `FountainCore/FountainRuntime` | Pending | Pending |
 | `v1/llm-gateway.yml` | Gateway plugin (no standalone server) | N/A | `FountainAPIClients/LLMGatewayAPI` generator enabled |
 | `v1/openapi-curator.yml` | `FountainTooling` | Pending | N/A |
+| `v1/chatkit-gateway.yml` | `FountainApps/gateway-server` (ChatKit plugin) | Manual router (plugin) | N/A |
 
 Status last updated: 2025‑10‑10 (fk ops + tool server audit)
 
@@ -36,4 +37,3 @@ Status last updated: 2025‑10‑10 (fk ops + tool server audit)
 3. **Curator + Spec Automation**
    - [ ] Hook this coverage table into CI so that pending entries fail the build if the owning target lacks generator metadata.
    - [ ] Emit a JSON snapshot of this coverage data for other toolchains to consume (ensures parity between macOS and Linux builds).
-

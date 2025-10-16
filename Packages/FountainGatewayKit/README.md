@@ -6,6 +6,9 @@ personas to vet incoming traffic before routing allowed requests to downstream
 services. Use this document as a quick refresher on how the gateway, plugins,
 and personas collaborate.
 
+Recently added:
+- `ChatKitGatewayPlugin` — exposes ChatKit session bootstrap and upload endpoints as described in [`openapi/v1/chatkit-gateway.yml`](../FountainSpecCuration/openapi/v1/chatkit-gateway.yml), enabling the gateway to hand out short-lived client secrets to web front-ends.
+
 ## Gateway, plugins, and personas — Explained
 
 > **Q:** I still struggle to understand how the gateway and personas actually
@@ -65,4 +68,3 @@ and personas collaborate.
 > decisions, and the orchestrator applies deterministic merge rules. It’s
 > orchestration of specialized checks, not an internal conversation among
 > personas.
-

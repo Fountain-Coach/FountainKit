@@ -539,7 +539,7 @@ private extension GatewayOpenAPI {
             var threadId: String?
             var fileData: Data?
             var fileName: String?
-            var mimeType = "application/octet-stream"
+            let mimeType = "application/octet-stream"
 
             for try await part in multipart {
                 switch part {

@@ -33,9 +33,9 @@ This checklist translates the recent ChatKit commits and milestone roadmap into 
   - Command: `swift test --package-path Packages/FountainApps --filter ChatKitGatewayTests/testInvalidMimeAttachmentIsRejected`
 
 ### 4. Corpus Management
-- [ ] Implement TTL cleanup worker or manual purge endpoint in `Packages/FountainApps/Sources/gateway-server/AttachmentCleanupJob.swift`.
+- [x] Implement TTL cleanup worker or manual purge endpoint in `Packages/FountainApps/Sources/gateway-server/AttachmentCleanupJob.swift`.
   - Command: `swift build --target gateway-server`
-- [ ] Emit structured logs for uploads/downloads in `Packages/FountainApps/Sources/gateway-server/Logging/ChatKitLogging.swift`.
+- [x] Emit structured logs for uploads/downloads in `Packages/FountainApps/Sources/gateway-server/Logging/ChatKitLogging.swift`.
   - Command: `swift test --package-path Packages/FountainApps --filter ChatKitGatewayTests/testStructuredLogs`
 
 ## 🛠 1–2 weeks

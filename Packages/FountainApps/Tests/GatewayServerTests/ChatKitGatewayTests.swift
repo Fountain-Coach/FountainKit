@@ -23,6 +23,7 @@ private struct StubResponder: ChatResponder {
 final class ChatKitGatewayTests: XCTestCase {
     private let responder = StubResponder()
     private var metadataStore: GatewayAttachmentStore?
+    private var attachmentClient: FountainStoreClient?
 
     private struct Session: Decodable {
         let client_secret: String
@@ -43,18 +44,21 @@ final class ChatKitGatewayTests: XCTestCase {
 
     func startGateway(responder overrideResponder: (any ChatResponder)? = nil,
                       maxAttachmentBytes: Int? = nil,
-                      allowedMIMEs: Set<String>? = nil) async -> ServerTestUtils.RunningServer {
+                      allowedMIMEs: Set<String>? = nil,
+                      logger: (any ChatKitAttachmentLogger)? = ChatKitLogging.makeLogger()) async -> ServerTestUtils.RunningServer {
         let sessionStore = ChatKitSessionStore()
         let uploadClient = FountainStoreClient(client: EmbeddedFountainStoreClient())
         let metadataStore = GatewayAttachmentStore(store: uploadClient)
         let uploadStore = ChatKitUploadStore(store: uploadClient)
         self.metadataStore = metadataStore
+        self.attachmentClient = uploadClient
         let plugin = ChatKitGatewayPlugin(store: sessionStore,
                                           uploadStore: uploadStore,
                                           metadataStore: metadataStore,
                                           responder: overrideResponder ?? responder,
                                           maxAttachmentBytes: maxAttachmentBytes,
-                                          allowedAttachmentMIMEs: allowedMIMEs)
+                                          allowedAttachmentMIMEs: allowedMIMEs,
+                                          logger: logger)
         return await ServerTestUtils.startGateway(on: 18121, plugins: [plugin])
     }
 
@@ -451,6 +455,145 @@ final class ChatKitGatewayTests: XCTestCase {
         XCTAssertEqual(status, 415, String(data: data, encoding: .utf8) ?? "")
         let decoded = try JSONDecoder().decode(ErrorResponse.self, from: data)
         XCTAssertEqual(decoded.code, "unsupported_media_type")
+    }
+
+    func testAttachmentCleanupRemovesExpiredFiles() async throws {
+        let running = await startGateway()
+        defer { Task { await running.stop() } }
+
+        guard let metadataStore, let attachmentClient else {
+            return XCTFail("stores not initialised")
+        }
+
+        let session = try await createSession(on: running.port)
+        let boundary = "Boundary-" + UUID().uuidString
+        let fileData = Data("Stale".utf8)
+        let multipart = makeMultipartBody(boundary: boundary, parts: [
+            (name: "client_secret", filename: nil, contentType: nil, data: Data(session.client_secret.utf8)),
+            (name: "file", filename: "stale.txt", contentType: "text/plain", data: fileData)
+        ])
+
+        let uploadURL = URL(string: "http://127.0.0.1:\(running.port)/chatkit/upload")!
+        var uploadRequest = URLRequest(url: uploadURL)
+        uploadRequest.httpMethod = "POST"
+        uploadRequest.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        uploadRequest.httpBody = multipart
+
+        let (uploadData, uploadResponse) = try await URLSession.shared.data(for: uploadRequest)
+        XCTAssertEqual((uploadResponse as? HTTPURLResponse)?.statusCode, 201)
+        let decoded = try JSONDecoder().decode(UploadResponse.self, from: uploadData)
+
+        struct AttachmentRecord: Codable {
+            var attachmentId: String
+            var sessionId: String
+            var threadId: String?
+            var fileName: String
+            var mimeType: String
+            var sizeBytes: Int
+            var checksum: String
+            var storedAt: String
+            var dataBase64: String
+        }
+
+        guard let storedDoc = try await attachmentClient.getDoc(corpusId: "chatkit",
+                                                                 collection: "attachments",
+                                                                 id: decoded.attachment_id) else {
+            return XCTFail("expected attachment to exist")
+        }
+
+        var record = try JSONDecoder().decode(AttachmentRecord.self, from: storedDoc)
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        record.storedAt = formatter.string(from: Date().addingTimeInterval(-4 * 3600))
+        let updatedDoc = try JSONEncoder().encode(record)
+        try await attachmentClient.putDoc(corpusId: "chatkit",
+                                          collection: "attachments",
+                                          id: decoded.attachment_id,
+                                          body: updatedDoc)
+
+        if var existing = try await metadataStore.metadata(for: decoded.attachment_id) {
+            existing = ChatKitAttachmentMetadata(attachmentId: existing.attachmentId,
+                                                 sessionId: existing.sessionId,
+                                                 threadId: existing.threadId,
+                                                 fileName: existing.fileName,
+                                                 mimeType: existing.mimeType,
+                                                 sizeBytes: existing.sizeBytes,
+                                                 checksum: existing.checksum,
+                                                 storedAt: record.storedAt)
+            try await metadataStore.upsert(metadata: existing)
+        }
+
+        let cleanupJob = AttachmentCleanupJob(uploadStore: ChatKitUploadStore(store: attachmentClient),
+                                              metadataStore: metadataStore,
+                                              store: attachmentClient,
+                                              ttl: 60,
+                                              batchSize: 10)
+        await cleanupJob.runOnce()
+
+        let remaining = try await attachmentClient.getDoc(corpusId: "chatkit",
+                                                          collection: "attachments",
+                                                          id: decoded.attachment_id)
+        XCTAssertNil(remaining)
+        let metadata = try await metadataStore.metadata(for: decoded.attachment_id)
+        XCTAssertNil(metadata)
+    }
+
+    func testStructuredLogs() async throws {
+        var uploadedId = ""
+        let fileData = Data("LogBody".utf8)
+        let (events, _) = try await ChatKitLogging.capture { [self] in
+            let running = await startGateway()
+            defer { Task { await running.stop() } }
+
+            let session = try await createSession(on: running.port)
+            let boundary = "Boundary-" + UUID().uuidString
+            let multipart = makeMultipartBody(boundary: boundary, parts: [
+                (name: "client_secret", filename: nil, contentType: nil, data: Data(session.client_secret.utf8)),
+                (name: "file", filename: "log.txt", contentType: "text/plain", data: fileData)
+            ])
+
+            let uploadURL = URL(string: "http://127.0.0.1:\(running.port)/chatkit/upload")!
+            var uploadRequest = URLRequest(url: uploadURL)
+            uploadRequest.httpMethod = "POST"
+            uploadRequest.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+            uploadRequest.httpBody = multipart
+
+            let (uploadData, uploadResponse) = try await URLSession.shared.data(for: uploadRequest)
+            XCTAssertEqual((uploadResponse as? HTTPURLResponse)?.statusCode, 201)
+            let decoded = try JSONDecoder().decode(UploadResponse.self, from: uploadData)
+            uploadedId = decoded.attachment_id
+
+            var components = URLComponents(string: "http://127.0.0.1:\(running.port)/chatkit/attachments/\(decoded.attachment_id)")!
+            components.queryItems = [URLQueryItem(name: "client_secret", value: session.client_secret)]
+            let downloadURL = components.url!
+            let (_, downloadResponse) = try await URLSession.shared.data(from: downloadURL)
+            XCTAssertEqual((downloadResponse as? HTTPURLResponse)?.statusCode, 200)
+
+            components.queryItems = [URLQueryItem(name: "client_secret", value: "invalid")]
+            let invalidURL = components.url!
+            let (_, invalidResponse) = try await URLSession.shared.data(from: invalidURL)
+            XCTAssertEqual((invalidResponse as? HTTPURLResponse)?.statusCode, 401)
+        }
+
+        guard let uploadEvent = events.first(where: { $0.kind == .attachmentUploadSucceeded }) else {
+            return XCTFail("missing upload success log")
+        }
+        XCTAssertEqual(uploadEvent.attachmentId, uploadedId)
+        XCTAssertEqual(uploadEvent.status, 201)
+        XCTAssertEqual(uploadEvent.level, "info")
+
+        guard let downloadEvent = events.first(where: { $0.kind == .attachmentDownloadSucceeded }) else {
+            return XCTFail("missing download success log")
+        }
+        XCTAssertEqual(downloadEvent.attachmentId, uploadedId)
+        XCTAssertEqual(downloadEvent.status, 200)
+        XCTAssertEqual(downloadEvent.bytes, fileData.count)
+
+        guard let failureEvent = events.first(where: { $0.kind == .attachmentDownloadFailed }) else {
+            return XCTFail("missing download failure log")
+        }
+        XCTAssertEqual(failureEvent.status, 401)
+        XCTAssertEqual(failureEvent.code, "invalid_secret")
     }
 
     func testGatewayOpenAPIDocumentIncludesChatKitPaths() throws {

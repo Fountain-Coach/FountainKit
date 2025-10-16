@@ -35,12 +35,22 @@ let attachmentClient = FountainStoreClient(client: EmbeddedFountainStoreClient()
 let attachmentMetadataStore = GatewayAttachmentStore(store: attachmentClient)
 let attachmentUploadStore = ChatKitUploadStore(store: attachmentClient)
 let chatKitSessionStore = ChatKitSessionStore()
+let chatKitLogger = ChatKitLogging.makeLogger()
 let chatKitPlugin = ChatKitGatewayPlugin(store: chatKitSessionStore,
                                          uploadStore: attachmentUploadStore,
                                          metadataStore: attachmentMetadataStore,
                                          responder: ChatKitGatewayResponder(),
                                          maxAttachmentBytes: chatKitConfig.maxAttachmentBytes,
-                                         allowedAttachmentMIMEs: chatKitConfig.allowedMimeTypes)
+                                         allowedAttachmentMIMEs: chatKitConfig.allowedMimeTypes,
+                                         logger: chatKitLogger)
+let cleanupJob = AttachmentCleanupJob(uploadStore: attachmentUploadStore,
+                                      metadataStore: attachmentMetadataStore,
+                                      store: attachmentClient,
+                                      ttl: chatKitConfig.attachmentTTL,
+                                      batchSize: chatKitConfig.cleanupBatchSize)
+if let cleanupTask = cleanupJob.scheduleRecurring(every: chatKitConfig.cleanupInterval) {
+    _ = cleanupTask
+}
 var routesURL: URL?
 if let data = configStore?.getSync("routes.json") {
     let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("routes.json")

@@ -95,16 +95,16 @@ public struct Router: Sendable {
             return await handlers.postMessage(request)
         case ("POST", ["chatkit", "upload"]):
             return await handlers.uploadAttachment(request)
-        case ("GET", ["chatkit", "attachments", let attachmentId]):
-            return await handlers.downloadAttachment(request, attachmentId: attachmentId)
+        case ("GET", let route) where route.count == 3 && route[1] == "attachments":
+            return await handlers.downloadAttachment(request, attachmentId: route[2])
         case ("POST", ["chatkit", "threads"]):
             return await handlers.createThread(request)
         case ("GET", ["chatkit", "threads"]):
             return await handlers.listThreads(request)
-        case ("GET", ["chatkit", "threads", let threadId]):
-            return await handlers.getThread(request, threadId: threadId)
-        case ("DELETE", ["chatkit", "threads", let threadId]):
-            return await handlers.deleteThread(request, threadId: threadId)
+        case ("GET", let route) where route.count == 3 && route[1] == "threads":
+            return await handlers.getThread(request, threadId: route[2])
+        case ("DELETE", let route) where route.count == 3 && route[1] == "threads":
+            return await handlers.deleteThread(request, threadId: route[2])
         default:
             return nil
         }
@@ -569,6 +569,7 @@ struct LLMChatResponder: ChatResponder {
         var provider: String?
         var model: String?
         var usage: [String: Double]?
+        var lastEventObject: [String: Any]?
 
         for block in text.components(separatedBy: "\n\n") {
             for line in block.split(whereSeparator: \.isNewline) {
@@ -579,6 +580,7 @@ struct LLMChatResponder: ChatResponder {
                       let object = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
                     continue
                 }
+                lastEventObject = object
                 if let delta = (object["delta"] as? [String: Any])?["content"] as? String {
                     answerFragments.append(delta)
                 }
@@ -597,7 +599,7 @@ struct LLMChatResponder: ChatResponder {
         guard !answer.isEmpty else {
             throw ChatKitGatewayError.invalidResponse("empty SSE answer")
         }
-        let toolCalls = extractToolCalls(from: object)
+        let toolCalls = lastEventObject.flatMap { extractToolCalls(from: $0) }
         return ChatResponderResult(answer: answer,
                                    provider: provider,
                                    model: model,
@@ -1591,7 +1593,7 @@ public actor ChatKitUploadStore {
         return StoredAttachment(descriptor: descriptor, data: data)
     }
 
-    func delete(attachmentId: String) async throws {
+    public func delete(attachmentId: String) async throws {
         try await ensureCorpus()
         try await store.deleteDoc(corpusId: corpusId, collection: collection, id: attachmentId)
     }
@@ -1671,28 +1673,55 @@ struct ChatKitErrorResponse: Encodable {
     let code: String
 }
 
-struct ChatKitMessageRequest: Decodable {
-    let client_secret: String
-    let thread_id: String?
-    let messages: [ChatKitMessage]
-    let stream: Bool?
-    let metadata: [String: String]?
+public struct ChatKitMessageRequest: Decodable, Sendable {
+    public let client_secret: String
+    public let thread_id: String?
+    public let messages: [ChatKitMessage]
+    public let stream: Bool?
+    public let metadata: [String: String]?
+
+    /// Accessor mirroring `client_secret` using Swift naming conventions.
+    public var clientSecret: String { client_secret }
+
+    /// Accessor mirroring `thread_id` using Swift naming conventions.
+    public var threadId: String? { thread_id }
 }
 
-struct ChatKitMessage: Decodable {
-    let id: String?
-    let role: String
-    let content: String
-    let created_at: String?
-    let attachments: [ChatKitAttachment]?
+public struct ChatKitMessage: Decodable, Sendable {
+    public let id: String?
+    public let role: String
+    public let content: String
+    public let created_at: String?
+    public let attachments: [ChatKitAttachment]?
+
+    /// Accessor mirroring `created_at` using Swift naming conventions.
+    public var createdAt: String? { created_at }
 }
 
-struct ChatKitAttachment: Codable, Sendable {
-    let id: String
-    let type: String
-    let name: String?
-    let mime_type: String?
-    let size_bytes: Int?
+public struct ChatKitAttachment: Codable, Sendable, Equatable {
+    public let id: String
+    public let type: String
+    public let name: String?
+    public let mime_type: String?
+    public let size_bytes: Int?
+
+    /// Accessor mirroring `mime_type` using Swift naming conventions.
+    public var mimeType: String? { mime_type }
+
+    /// Accessor mirroring `size_bytes` using Swift naming conventions.
+    public var sizeBytes: Int? { size_bytes }
+
+    public init(id: String,
+                type: String,
+                name: String? = nil,
+                mime_type: String? = nil,
+                size_bytes: Int? = nil) {
+        self.id = id
+        self.type = type
+        self.name = name
+        self.mime_type = mime_type
+        self.size_bytes = size_bytes
+    }
 }
 
 struct ChatKitMessageResponse: Encodable {
@@ -1752,11 +1781,12 @@ struct ChatKitUploadResponse: Encodable {
     let mime_type: String?
 }
 
-enum ChatKitGatewayError: Error, LocalizedError {
+/// Errors surfaced while proxying requests through the ChatKit gateway.
+public enum ChatKitGatewayError: Error, LocalizedError, Sendable {
     case llmFailure(status: Int)
     case invalidResponse(String)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .llmFailure(let status):
             return "LLM gateway failed with status \(status)"

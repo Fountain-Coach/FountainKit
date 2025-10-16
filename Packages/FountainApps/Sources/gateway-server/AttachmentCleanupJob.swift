@@ -10,7 +10,7 @@ struct AttachmentCleanupJob: Sendable {
     private let batchSize: Int
     private let corpusId: String
     private let collection: String
-    private let clock: () -> Date
+    private let clock: @Sendable () -> Date
     private let decoder = JSONDecoder()
 
     init(uploadStore: ChatKitUploadStore,
@@ -20,7 +20,7 @@ struct AttachmentCleanupJob: Sendable {
          batchSize: Int = 100,
          corpusId: String = "chatkit",
          collection: String = "attachments",
-         clock: @escaping () -> Date = Date.init) {
+         clock: @escaping @Sendable () -> Date = Date.init) {
         self.uploadStore = uploadStore
         self.metadataStore = metadataStore
         self.store = store
@@ -34,6 +34,8 @@ struct AttachmentCleanupJob: Sendable {
     func runOnce() async {
         guard ttl > 0 else { return }
         let threshold = clock().addingTimeInterval(-ttl)
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         var scanned = 0
         var deleted = 0
         var skipped = 0
@@ -58,7 +60,7 @@ struct AttachmentCleanupJob: Sendable {
                         continue
                     }
 
-                    guard let storedDate = Self.dateFormatter.date(from: record.storedAt) else {
+                    guard let storedDate = parser.date(from: record.storedAt) else {
                         skipped += 1
                         errors.append("invalid_timestamp: \(record.attachmentId)")
                         continue
@@ -111,11 +113,6 @@ struct AttachmentCleanupJob: Sendable {
         let storedAt: String
     }
 
-    private static let dateFormatter: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
 }
 
 // © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

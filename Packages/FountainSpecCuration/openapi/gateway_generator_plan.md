@@ -13,14 +13,13 @@ Purpose: Expand Swift OpenAPI Generator coverage for the Fountain Gateway so tha
 - [ ] Run `swift build --product gateway-server` to regenerate server interfaces and surface compile errors introduced by broader generation.
   - _2025-10-17 — Blocked in local workspace because `External/Teatro/Packages/TeatroGUI` is absent. The build invocation fails before generation. Track down the missing checkout (or provide a temporary shim package) so the generator can run._
   - _2025-10-18 — Added lightweight Teatro shims under `External/Teatro` so the workspace can resolve local dependencies while the upstream repository remains unavailable._
-  - _2025-10-19 — Build now proceeds through generator execution but fails when `ChatKitGatewayPlugin` exposes public APIs backed by internal helper types (e.g. `ChatKitAttachment`). Resolve access control and Equatable synthesis issues before retrying._
-  - _2025-10-20 — ChatKit payload models and upload store APIs are now exported, `gateway-server` builds end-to-end, and generated ChatKit handlers are temporarily stubbed with `501` responses pending router integration._
+  - _2025-10-18 — `swift build --product gateway-server` now runs the generator but fails on existing ChatKit compile errors: `ChatKitThreadMessage` lacks an `Equatable` implementation, `ChatKitGatewayPlugin` route switch still uses tuple pattern `let` bindings, and `extractToolCalls` references an `object` symbol that no longer exists. Address these before the next build attempt._
 - [ ] Replace manual router shims with generated handler conformances within `GatewayOpenAPI` to delegate to plugin kernels.
   - _Drafted approach: expose `ChatKitGatewayPlugin` kernels so generated handlers can translate `Operations.*` payloads into router calls without duplicating validation logic. Requires refactoring plugin to make upload metadata (filename/MIME) accessible outside raw HTTP requests._
-  - _2025-10-19 — Generator failures show `ChatKitGatewayPlugin` still exports public APIs that rely on internal request/response helpers. Promote those helper types (or translate into generated models) before stitching handlers in._
+  - _Pending — Generator failures show `ChatKitGatewayPlugin` still exports public APIs that rely on internal request/response helpers. Promote those helper types (or translate into generated models) before stitching handlers in._
 - [ ] Expose plugin routers as typed handler implementations by conforming to generated protocols and wiring them through the gateway dependency container.
   - _Needs design once kernels are surfaced; consider adding a `GatewayPluginRegistry` API on `GatewayServer` so handlers can look up shared plugin state instead of rebuilding stores._
-  - _2025-10-19 — Access control cleanup above is prerequisite: handlers must depend only on generated request/response types rather than the plugin's internal helper structs._
+  - _Pending — Access control cleanup above is prerequisite: handlers must depend only on generated request/response types rather than the plugin's internal helper structs._
 - [ ] Remove redundant manual request decoding/encoding paths after generated handlers cover all operations; ensure legacy middleware (auth, rate limits) wraps new transports.
   - _Pending once generated handlers land. Confirm that middleware ordering survives (`prepare/respond`) once manual ChatKit router removal happens._
 - [ ] Expand `GatewayServerTests` to cover generated ChatKit/plugin operations, asserting serialization fidelity and middleware integration.

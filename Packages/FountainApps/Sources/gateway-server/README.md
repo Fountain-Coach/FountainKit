@@ -25,6 +25,20 @@ These specs describe every HTTP contract the server exposes or invokes, replacin
 - Wire gateway plugins (auth, ChatKit, curation, LLM, policy enforcement) together into a single `GatewayServer` instance.
 - Expose optional DNS emulation when launched with `--dns` for local testing.
 
+## ChatKit workflows
+
+### Attachment lifecycle
+
+- Uploads are buffered through `ChatKitGatewayPlugin`, which persists binary blobs inside the `chatkit` corpus (`attachments` collection) managed by `ChatKitUploadStore` and parallel metadata records in `GatewayAttachmentStore` (`attachment-metadata` collection).
+- After each successful upload the gateway emits a structured JSON log via `ChatKitLogging` including request identifiers, checksum, MIME type, and byte size so that ingestion can be audited downstream.
+- Retention is enforced by `AttachmentCleanupJob`, which scans the corpus chronologically and prunes expired attachments based on the configured TTL, deleting both the blob and metadata entries when a record ages out.
+
+### LLM streaming bridge
+
+- `ChatKitGatewayResponder` proxies `/chatkit/messages` requests to the LLM gateway using `ChatRequest` payloads and prefers `text/event-stream` responses when the client asks for streaming.
+- The responder decodes incremental SSE frames, emitting `delta` events for partial tokens and forwarding final usage metadata and tool-call envelopes so ChatKit sessions receive the same timeline a direct LLM client would observe.
+- When a non-streaming response is returned, the responder falls back to the JSON contract, extracting the `answer`, provider/model hints, token usage, and any surfaced tool calls before replying to the ChatKit client.
+
 ## Related packages
 
 - `FountainGatewayKit`: shared gateway plugins, orchestrator, and utilities referenced by this executable.

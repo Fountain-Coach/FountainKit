@@ -54,11 +54,11 @@ This checklist translates the recent ChatKit commits and milestone roadmap into 
   - Command: `swift test --package-path Packages/FountainApps --filter ChatKitGatewayTests/testToolCallSurfacing`
 
 ## 📚 Documentation & Ops
-- [ ] Update `Packages/FountainApps/Sources/gateway-server/README.md` with attachment workflow & LLM streaming notes.
+- [x] Update `Packages/FountainApps/Sources/gateway-server/README.md` with attachment workflow & LLM streaming notes.
   - Command: `open Packages/FountainApps/Sources/gateway-server/README.md`
-- [ ] Document configuration knobs in `Docs/operations/chatkit_gateway.md`.
+- [x] Document configuration knobs in `Docs/operations/chatkit_gateway.md`.
   - Command: `open Docs/operations/chatkit_gateway.md`
-- [ ] Draft runbook for clearing attachment corpus and regenerating signed URLs in `Workspace/runbooks/chatkit_attachment_reset.md`.
+- [x] Draft runbook for clearing attachment corpus and regenerating signed URLs in `Workspace/runbooks/chatkit_attachment_reset.md`.
   - Command: `open Workspace/runbooks/chatkit_attachment_reset.md`
 
 ## 🔍 Validation

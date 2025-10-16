@@ -197,7 +197,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ChatKitMessageResponse'
         '202':
-          description: Streaming response
+          description: Streaming response delivering incremental assistant tokens via SSE frames.
           content:
             text/event-stream:
               schema:
@@ -495,22 +495,30 @@ components:
             type: string
     ChatKitStreamEvent:
       type: object
+      description: Server-sent event emitted while streaming ChatKit responses.
+      required:
+        - event
       properties:
         id:
           type: string
+          description: Stable identifier for the SSE frame. When omitted the client should not expect replay support.
         event:
           type: string
           enum:
             - delta
             - completion
             - error
+          description: Event type. `delta` frames deliver incremental tokens while `completion` marks the terminal payload.
         delta:
           type: object
           properties:
             content:
               type: string
+              description: Incremental assistant output token. Empty strings SHOULD be ignored.
+          description: Payload describing the incremental assistant update.
         answer:
           type: string
+          description: Final assistant message once streaming completes.
         done:
           type: boolean
         thread_id:
@@ -520,10 +528,22 @@ components:
         created_at:
           type: string
           format: date-time
+        provider:
+          type: string
+          description: Upstream LLM provider name associated with the response.
+        model:
+          type: string
+          description: Identifier of the model that produced the tokens.
+        usage:
+          type: object
+          additionalProperties:
+            type: number
+          description: Token accounting emitted by the upstream model when available.
         metadata:
           type: object
           additionalProperties:
             type: string
+          description: Additional metadata propagated from ChatKit session and request context.
         error:
           $ref: '#/components/schemas/ErrorResponse'
     ChatKitUploadRequest:

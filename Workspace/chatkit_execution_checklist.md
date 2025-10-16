@@ -9,11 +9,11 @@ This checklist translates the recent ChatKit commits and milestone roadmap into 
 
 ## 🚀 Next 0–2 days
 ### 1. LLM Streaming Bridge
-- [ ] Update `Packages/FountainApps/Sources/gateway-server/openapi/chatkit.yaml` with SSE streaming schema for incremental tokens.
+- [x] Update `Packages/FountainApps/Sources/gateway-server/openapi/chatkit.yaml` with SSE streaming schema for incremental tokens.
   - Command: `swift run fountain-openapi-curator --lint Packages/FountainApps/Sources/gateway-server/openapi/chatkit.yaml`
-- [ ] Implement streaming responder that forwards gateway SSE frames to ChatKit in `Packages/FountainApps/Sources/gateway-server/ChatKitGatewayResponder.swift`.
+- [x] Implement streaming responder that forwards gateway SSE frames to ChatKit in `Packages/FountainApps/Sources/gateway-server/ChatKitGatewayResponder.swift`.
   - Command: `swift build --target gateway-server`
-- [ ] Extend `ChatKitGatewayTests` with a fake streaming responder asserting incremental framing.
+- [x] Extend `ChatKitGatewayTests` with a fake streaming responder asserting incremental framing.
   - Command: `swift test --package-path Packages/FountainApps --filter ChatKitGatewayTests/testStreamingBridge`
 
 ### 2. Attachment Retrieval Endpoint

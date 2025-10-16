@@ -10,165 +10,19 @@ struct EngraverStudioView: View {
     @ObservedObject var viewModel: EngraverChatViewModel
     let systemPrompts: [String]
 
+    @Environment(\.openURL) private var openURL
     @State private var draftPrompt: String = ""
     @State private var selectedTurnID: UUID?
     @State private var showErrorAlert: Bool = false
     @State private var showDiagnostics: Bool = false
     @State private var promptEditorIsFocused: Bool = false
+    @State private var showSemanticBrowser: Bool = false
 
     var body: some View {
         HStack(spacing: 0) {
             sidebar
             Divider()
-            VStack(spacing: 12) {
-                StreamStatusView(
-                    connected: viewModel.state == .streaming,
-                    acks: viewModel.turns.count,
-                    nacks: viewModel.lastError == nil ? 0 : 1,
-                    rtt: 0,
-                    window: 0,
-                    loss: 0
-                )
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                Group {
-                    if viewModel.state == .streaming {
-                        TokenStreamView(tokens: viewModel.activeTokens, showBeatGrid: true)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color(NSColor.textBackgroundColor))
-                            .cornerRadius(6)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color.accentColor, lineWidth: 1)
-                            )
-                            .animation(.default, value: viewModel.activeTokens.count)
-                    } else if let selectedTurn = selectedTurn {
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Model: \(selectedTurn.model ?? viewModel.selectedModel)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Text(selectedTurn.answer)
-                                    .font(.body)
-                                    .monospaced()
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .padding()
-                        }
-                        .background(Color(NSColor.windowBackgroundColor))
-                        .cornerRadius(6)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                        )
-                    } else {
-                        ContentUnavailableView(
-                            "No Messages Yet",
-                            systemImage: "ellipsis.bubble",
-                            description: Text("Compose a prompt below to begin a new chat turn.")
-                        )
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                }
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(alignment: .firstTextBaseline, spacing: 12) {
-                        Text("Model")
-                            .font(.callout.weight(.semibold))
-                            .accessibilityHidden(true)
-                        Picker("", selection: $viewModel.selectedModel) {
-                            ForEach(viewModel.availableModels, id: \.self) { model in
-                                Text(model).tag(model)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(width: 220, alignment: .leading)
-                        .accessibilityLabel("Model")
-
-                        Spacer()
-
-                        HStack(spacing: 8) {
-                            Button {
-                                sendPrompt()
-                            } label: {
-                                Label("Engrave", systemImage: "paperplane.fill")
-                                    .frame(minWidth: 100)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.large)
-                            .keyboardShortcut(.return, modifiers: [.command])
-                            .disabled(draftPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.state == .streaming)
-
-                            Button("Cancel") {
-                                viewModel.cancelStreaming()
-                                promptEditorIsFocused = true
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(viewModel.state != .streaming)
-                        }
-                    }
-
-                    PromptTextEditor(
-                        text: $draftPrompt,
-                        isFirstResponder: $promptEditorIsFocused,
-                        isEditable: viewModel.state != .streaming,
-                        onSubmit: {
-                            sendPrompt()
-                        }
-                    )
-                    .frame(minHeight: 110, maxHeight: 180)
-                    .frame(maxWidth: .infinity)
-                    .layoutPriority(1)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color(NSColor.textBackgroundColor))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.gray.opacity(0.25), lineWidth: 1)
-                    )
-                    .overlay(alignment: .topLeading) {
-                        if draftPrompt.isEmpty {
-                            Text("Compose your prompt…")
-                                .font(.callout)
-                                .foregroundColor(Color.secondary.opacity(0.6))
-                                .padding(.all, 14)
-                                .allowsHitTesting(false)
-                        }
-                    }
-                    .onAppear {
-                        promptEditorIsFocused = true
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                if showDiagnostics {
-                    DiagnosticsPanel(messages: viewModel.diagnostics)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-            }
-            .padding()
-            .toolbar {
-                ToolbarItem(placement: .automatic) {
-                    Button {
-                        selectedTurnID = nil
-                    } label: {
-                        Label("Clear Selection", systemImage: "line.3.horizontal.decrease")
-                    }
-                }
-                ToolbarItem(placement: .automatic) {
-                    Button {
-                        withAnimation { showDiagnostics.toggle() }
-                    } label: {
-                        Label("Diagnostics", systemImage: showDiagnostics ? "eye.slash" : "eye")
-                    }
-                    .help("Toggle verbose diagnostics (requires ENGRAVER_DEBUG=1).")
-                    .disabled(viewModel.diagnostics.isEmpty)
-                }
-            }
+            mainPane
         }
         .onChange(of: viewModel.lastError) { _, newValue in
             showErrorAlert = newValue != nil
@@ -190,6 +44,178 @@ struct EngraverStudioView: View {
         )
         .frame(minWidth: 900, minHeight: 600)
         .background(WindowActivationView())
+        .sheet(isPresented: $showSemanticBrowser) {
+            SemanticBrowserSheet(viewModel: viewModel, openURL: { url in openURL(url) })
+                .frame(minWidth: 520, minHeight: 360)
+        }
+    }
+
+    private var mainPane: some View {
+        VStack(spacing: 12) {
+            StreamStatusView(
+                connected: viewModel.state == .streaming,
+                acks: viewModel.turns.count,
+                nacks: viewModel.lastError == nil ? 0 : 1,
+                rtt: 0,
+                window: 0,
+                loss: 0
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            mainTranscriptGroup
+
+            Divider()
+
+            composerPane
+
+            if showDiagnostics {
+                DiagnosticsPanel(messages: viewModel.diagnostics)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .padding()
+        .toolbar {
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    selectedTurnID = nil
+                } label: {
+                    Label("Clear Selection", systemImage: "line.3.horizontal.decrease")
+                }
+            }
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    withAnimation { showDiagnostics.toggle() }
+                } label: {
+                    Label("Diagnostics", systemImage: showDiagnostics ? "eye.slash" : "eye")
+                }
+                .help("Toggle verbose diagnostics (requires ENGRAVER_DEBUG=1).")
+                .disabled(viewModel.diagnostics.isEmpty)
+            }
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    withAnimation { showSemanticBrowser = true }
+                } label: {
+                    Label("Semantic Browser", systemImage: "globe")
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var mainTranscriptGroup: some View {
+        Group {
+            if viewModel.state == .streaming {
+                TokenStreamView(tokens: viewModel.activeTokens, showBeatGrid: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(NSColor.textBackgroundColor))
+                    .cornerRadius(6)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.accentColor, lineWidth: 1)
+                    )
+                    .animation(.default, value: viewModel.activeTokens.count)
+            } else if let selectedTurn = selectedTurn {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Model: \(selectedTurn.model ?? viewModel.selectedModel)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(selectedTurn.answer)
+                            .font(.body)
+                            .monospaced()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding()
+                }
+                .background(Color(NSColor.windowBackgroundColor))
+                .cornerRadius(6)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                )
+            } else {
+                ContentUnavailableView(
+                    "No Messages Yet",
+                    systemImage: "ellipsis.bubble",
+                    description: Text("Compose a prompt below to begin a new chat turn.")
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+
+    private var composerPane: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text("Model")
+                    .font(.callout.weight(.semibold))
+                    .accessibilityHidden(true)
+                Picker("", selection: $viewModel.selectedModel) {
+                    ForEach(viewModel.availableModels, id: \.self) { model in
+                        Text(model).tag(model)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(width: 220, alignment: .leading)
+                .accessibilityLabel("Model")
+
+                Spacer()
+
+                HStack(spacing: 8) {
+                    Button {
+                        sendPrompt()
+                    } label: {
+                        Label("Engrave", systemImage: "paperplane.fill")
+                            .frame(minWidth: 100)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .keyboardShortcut(.return, modifiers: [.command])
+                    .disabled(draftPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.state == .streaming)
+
+                    Button("Cancel") {
+                        viewModel.cancelStreaming()
+                        promptEditorIsFocused = true
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(viewModel.state != .streaming)
+                }
+            }
+
+            PromptTextEditor(
+                text: $draftPrompt,
+                isFirstResponder: $promptEditorIsFocused,
+                isEditable: viewModel.state != .streaming,
+                onSubmit: {
+                    sendPrompt()
+                }
+            )
+            .frame(minHeight: 110, maxHeight: 180)
+            .frame(maxWidth: .infinity)
+            .layoutPriority(1)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(NSColor.textBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.gray.opacity(0.25), lineWidth: 1)
+            )
+            .overlay(alignment: .topLeading) {
+                if draftPrompt.isEmpty {
+                    Text("Compose your prompt…")
+                        .font(.callout)
+                        .foregroundColor(Color.secondary.opacity(0.6))
+                        .padding(.all, 14)
+                        .allowsHitTesting(false)
+                }
+            }
+            .onAppear {
+                promptEditorIsFocused = true
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var sidebar: some View {
@@ -407,6 +433,205 @@ private struct DiagnosticsPanel: View {
             }
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+@available(macOS 13.0, *)
+private struct SemanticBrowserSheet: View {
+    @ObservedObject var viewModel: EngraverChatViewModel
+    let openURL: (URL) -> Void
+
+    private var runs: [SemanticSeedRun] { viewModel.seedRuns }
+    private var state: SeedOperationState { viewModel.seedingState }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("The Semantic Browser indexes configured sources (remote URLs or local files) and persists the parsed segments into FountainStore.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                if let endpoint = viewModel.seedingBrowserEndpoint {
+                    Label("Endpoint: \(endpoint.absoluteString)", systemImage: "globe")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+
+                statusRow(title: "Pipeline", state: state)
+
+                HStack(spacing: 12) {
+                    Button {
+                        viewModel.generateSeedManifests()
+                    } label: {
+                        Label(state.isRunning ? "Running…" : "Re-index Sources", systemImage: state.isRunning ? "hourglass" : "arrow.clockwise")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(state.isRunning)
+
+                    if let endpoint = viewModel.seedingBrowserEndpoint {
+                        Button {
+                            openURL(endpoint)
+                        } label: {
+                            Label("Open Semantic Browser", systemImage: "safari")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+
+                    Spacer()
+                }
+
+                Divider()
+
+                if runs.isEmpty {
+                    ContentUnavailableView(
+                        "No Runs Yet",
+                        systemImage: "tray",
+                        description: Text("Trigger a run to seed the configured sources.")
+                    )
+                    .frame(maxWidth: .infinity, alignment: .center)
+                } else {
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(runs) { run in
+                            SemanticRunRow(run: run)
+                                .padding()
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .fill(Color(NSColor.textBackgroundColor))
+                                )
+                        }
+                    }
+                }
+            }
+            .padding(24)
+        }
+    }
+
+    @ViewBuilder
+    private func statusRow(title: String, state: SeedOperationState) -> some View {
+        switch state {
+        case .idle:
+            Label("\(title): Idle", systemImage: "pause.circle")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case .running:
+            HStack(spacing: 8) {
+                ProgressView()
+                Text("\(title) in progress…")
+                    .font(.caption)
+            }
+        case .succeeded(let timestamp, let count):
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(title): Completed (\(count))")
+                    Text(timestamp, style: .relative)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            } icon: {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+            }
+            .font(.caption)
+        case .failed(let message, let timestamp):
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(title) failed")
+                    Text(message)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                    Text(timestamp, style: .relative)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            } icon: {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.orange)
+            }
+            .font(.caption)
+        }
+    }
+
+    private struct SemanticRunRow: View {
+        let run: SemanticSeedRun
+
+        private var labels: String { run.labels.joined(separator: ", ") }
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(run.sourceName)
+                        .font(.headline)
+                    Spacer()
+                    statusBadge
+                }
+                Text(run.sourceURL.absoluteString)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+
+                if !labels.isEmpty {
+                    Text("Labels: \(labels)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let metrics = run.metrics {
+                    HStack(spacing: 12) {
+                        metricTag("Pages", metrics.pagesUpserted)
+                        metricTag("Segments", metrics.segmentsUpserted)
+                        metricTag("Entities", metrics.entitiesUpserted)
+                        metricTag("Tables", metrics.tablesUpserted)
+                    }
+                }
+
+                if let message = run.message {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let finished = run.finishedAt {
+                    Text(finished, style: .relative)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+
+        @ViewBuilder
+        private var statusBadge: some View {
+            switch run.state {
+            case .idle:
+                Image(systemName: "pause.circle")
+                    .foregroundStyle(.secondary)
+            case .running:
+                ProgressView()
+                    .controlSize(.small)
+            case .succeeded:
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundStyle(.green)
+            case .failed:
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+            }
+        }
+
+        private func metricTag(_ label: String, _ value: Int) -> some View {
+            HStack(spacing: 4) {
+                Text(label)
+                    .font(.caption2.weight(.semibold))
+                Text("\(value)")
+                    .font(.caption2)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .fill(Color(NSColor.textBackgroundColor))
+            )
+        }
     }
 }
 

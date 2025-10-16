@@ -4,6 +4,9 @@ import FountainAIAdapters
 import FountainStoreClient
 import LLMGatewayAPI
 import ApiClientsCore
+import AwarenessAPI
+import BootstrapAPI
+import OpenAPIRuntime
 import os
 
 /// Current lifecycle state of the chat stream.
@@ -43,6 +46,138 @@ public struct EngraverChatTurn: Identifiable, Sendable {
         self.model = model
         self.tokens = tokens
         self.response = response
+    }
+}
+
+/// Summary information for persisted corpus sessions surfaced to UI consumers.
+public struct CorpusSessionOverview: Identifiable, Sendable {
+    public struct TurnPreview: Identifiable, Sendable {
+        public let id: UUID
+        public let createdAt: Date
+        public let promptPreview: String
+        public let answerPreview: String
+    }
+
+    public let id: UUID
+    public let title: String
+    public let corpusId: String
+    public let updatedAt: Date
+    public let turnCount: Int
+    public let lastPromptPreview: String
+    public let lastAnswerPreview: String
+    public let model: String?
+    public let isCurrentSession: Bool
+    public let turnPreviews: [TurnPreview]
+}
+
+/// Runtime state of the corpus bootstrap pipeline.
+public enum BootstrapState: Sendable, Equatable {
+    case idle
+    case bootstrapping
+    case succeeded(Date)
+    case failed(message: String, timestamp: Date)
+}
+
+/// Lifecycle status for awareness summary refreshes.
+public enum AwarenessStatus: Sendable, Equatable {
+    case idle(lastUpdated: Date?)
+    case refreshing(lastUpdated: Date?)
+    case failed(message: String, lastUpdated: Date?)
+
+    public var lastUpdated: Date? {
+        switch self {
+        case .idle(let date), .refreshing(let date), .failed(_, let date):
+            return date
+        }
+    }
+
+    public var isRefreshing: Bool {
+        if case .refreshing = self { return true }
+        return false
+    }
+}
+
+/// Timeline event captured by the Awareness analytics endpoints.
+public struct AwarenessEvent: Identifiable, Sendable {
+    public enum Kind: String, Sendable {
+        case baseline
+        case reflection
+        case drift
+        case patterns
+        case unknown
+    }
+
+    public let id: UUID
+    public let eventId: String
+    public let kind: Kind
+    public let timestamp: Date?
+    public let headline: String
+    public let details: String?
+
+    public init(
+        id: UUID = UUID(),
+        eventId: String,
+        kind: Kind,
+        timestamp: Date?,
+        headline: String,
+        details: String? = nil
+    ) {
+        self.id = id
+        self.eventId = eventId
+        self.kind = kind
+        self.timestamp = timestamp
+        self.headline = headline
+        self.details = details
+    }
+}
+
+/// High-level lifecycle state for seeding and ingestion operations.
+public enum SeedOperationState: Sendable, Equatable {
+    case idle
+    case running
+    case succeeded(Date, Int)
+    case failed(message: String, timestamp: Date)
+
+    public var isRunning: Bool {
+        if case .running = self { return true }
+        return false
+    }
+}
+
+public struct SemanticSeedRun: Identifiable, Sendable {
+    public let id: UUID
+    public let sourceName: String
+    public let sourceURL: URL
+    public let corpusId: String
+    public let labels: [String]
+    public var startedAt: Date
+    public var finishedAt: Date?
+    public var state: SeedOperationState
+    public var metrics: SemanticBrowserSeeder.Metrics?
+    public var message: String?
+
+    public init(
+        id: UUID = UUID(),
+        sourceName: String,
+        sourceURL: URL,
+        corpusId: String,
+        labels: [String],
+        startedAt: Date,
+        finishedAt: Date? = nil,
+        state: SeedOperationState = .running,
+        metrics: SemanticBrowserSeeder.Metrics? = nil,
+        message: String? = nil
+    ) {
+        self.id = id
+        self.sourceName = sourceName
+        self.sourceURL = sourceURL
+        self.corpusId = corpusId
+        self.labels = labels
+        self.startedAt = startedAt
+        self.finishedAt = finishedAt
+        self.state = state
+        self.metrics = metrics
+        self.message = message
     }
 }
 
@@ -101,23 +236,70 @@ public final class EngraverChatViewModel: ObservableObject {
     @Published public private(set) var sessionName: String? = nil
     @Published public private(set) var sessionStartedAt: Date
     @Published public private(set) var historicalContext: String? = nil
+    @Published public private(set) var corpusSessionOverviews: [CorpusSessionOverview] = []
+    @Published public private(set) var awarenessSummaryText: String? = nil
+    @Published public private(set) var awarenessHistorySummary: String? = nil
+    @Published public private(set) var awarenessEvents: [AwarenessEvent] = []
+    @Published public private(set) var awarenessEventsTotal: Int = 0
+    @Published public private(set) var awarenessSemanticArcJSON: String? = nil
+    @Published public private(set) var awarenessMetricsText: String? = nil
+    @Published public private(set) var bootstrapState: BootstrapState = .idle
+    @Published public private(set) var awarenessStatus: AwarenessStatus = .idle(lastUpdated: nil)
+    @Published public private(set) var seedingState: SeedOperationState = .idle
+    @Published public private(set) var persistenceResetState: SeedOperationState = .idle
+    @Published public private(set) var seedRuns: [SemanticSeedRun] = []
+    @Published public private(set) var environmentState: EnvironmentOverallState = .unavailable("Environment manager not configured")
+    @Published public private(set) var environmentServices: [EnvironmentServiceStatus] = []
+    @Published public private(set) var environmentLogs: [EnvironmentLogEntry] = []
     @Published public var selectedModel: String
 
     public let availableModels: [String]
+    public var corpusIdentifier: String { persistenceContext?.corpusId ?? initialCorpusId }
+    public var awarenessEndpoint: URL? { awarenessBaseURL }
+    public var bootstrapEndpoint: URL? { bootstrapBaseURL }
+    public var canPersist: Bool { persistenceContext != nil }
+    public var hasSeedingSupport: Bool { seedingConfiguration != nil }
+    public var seedingSources: [EngraverStudioConfiguration.SeedingConfiguration.Source] { seedingConfiguration?.sources ?? [] }
+    public var seedingBrowserEndpoint: URL? { seedingConfiguration?.browser.baseURL }
+    public var seedingBrowserMode: EngraverStudioConfiguration.SeedingConfiguration.Browser.Mode? { seedingConfiguration?.browser.mode }
+    public var seedingBrowserLabels: [String]? { seedingConfiguration?.browser.defaultLabels }
+    public var environmentConfigured: Bool { environmentManager != nil }
+    public var environmentIsRunning: Bool {
+        if case .running = environmentState {
+            return true
+        }
+        return false
+    }
+    public var environmentIsBusy: Bool {
+        switch environmentState {
+        case .starting, .checking, .stopping:
+            return true
+        default:
+            return false
+        }
+    }
 
     private let chatClient: GatewayChatStreaming
+    private let awarenessClient: AwarenessClient?
+    private let bootstrapClient: BootstrapClient?
+    private let seedingConfiguration: EngraverStudioConfiguration.SeedingConfiguration?
+    private let environmentManager: FountainEnvironmentManager?
+    private let bearerToken: String?
     private let persistenceContext: PersistenceContext?
     private var streamTask: Task<Void, Never>? = nil
+    private var seedingTask: Task<Void, Never>? = nil
     private let idGenerator: @Sendable () -> UUID
     private let dateProvider: @Sendable () -> Date
     private let debugEnabled: Bool
     private let logger: Logger
     private let awarenessBaseURL: URL?
     private let initialCorpusId: String
-    private var awarenessSummary: String? = nil
     private var persistedRecords: [EngraverChatRecord] = []
     private let bootstrapBaseURL: URL?
     private var didBootstrapCorpus: Bool = false
+    private var didAutoBootstrapAfterEnvironment: Bool = false
+    private var environmentCancellables: Set<AnyCancellable> = []
+    private let semanticSeeder: SemanticBrowserSeeder
     private static let sessionTitleFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMM d, HH:mm"
@@ -141,6 +323,10 @@ public final class EngraverChatViewModel: ObservableObject {
         debugEnabled: Bool = false,
         awarenessBaseURL: URL? = nil,
         bootstrapBaseURL: URL? = nil,
+        bearerToken: String? = nil,
+        seedingConfiguration: EngraverStudioConfiguration.SeedingConfiguration? = nil,
+        fountainRepoRoot: URL? = nil,
+        semanticSeeder: SemanticBrowserSeeder = SemanticBrowserSeeder(),
         idGenerator: @escaping @Sendable () -> UUID = { UUID() },
         dateProvider: @escaping @Sendable () -> Date = { Date() }
     ) {
@@ -159,24 +345,77 @@ public final class EngraverChatViewModel: ObservableObject {
         self.awarenessBaseURL = awarenessBaseURL
         self.initialCorpusId = corpusId
         self.bootstrapBaseURL = bootstrapBaseURL
+        self.bearerToken = bearerToken
+        self.seedingConfiguration = seedingConfiguration
+        self.semanticSeeder = semanticSeeder
+        let manager = FountainEnvironmentManager(fountainRepoRoot: fountainRepoRoot)
+        if manager.isConfigured {
+            self.environmentManager = manager
+        } else {
+            self.environmentManager = nil
+            self.environmentState = .unavailable("Environment manager not configured")
+        }
+
+        let defaultHeaders = Self.makeDefaultHeaders(bearerToken: bearerToken)
+        if let awarenessBaseURL {
+            self.awarenessClient = AwarenessClient(baseURL: awarenessBaseURL, defaultHeaders: defaultHeaders)
+        } else {
+            self.awarenessClient = nil
+        }
+
+        if let bootstrapBaseURL {
+            var bootstrapHeaders = defaultHeaders
+            if bootstrapHeaders["X-API-Key"] == nil, let token = bearerToken, !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                bootstrapHeaders["X-API-Key"] = token
+            }
+            self.bootstrapClient = BootstrapClient(baseURL: bootstrapBaseURL, defaultHeaders: bootstrapHeaders)
+        } else {
+            self.bootstrapClient = nil
+        }
+
+        if awarenessClient != nil {
+            if environmentManager == nil {
+                self.awarenessStatus = .refreshing(lastUpdated: nil)
+            } else {
+                self.awarenessStatus = .idle(lastUpdated: nil)
+            }
+        } else {
+            self.awarenessStatus = .idle(lastUpdated: nil)
+        }
+
+        if bootstrapClient != nil {
+            self.bootstrapState = environmentManager == nil ? .bootstrapping : .idle
+        } else {
+            self.bootstrapState = .idle
+        }
 
         let initialSessionId = idGenerator()
         self.sessionId = initialSessionId
         self.sessionStartedAt = dateProvider()
 
         emitDiagnostic("EngraverChatViewModel initialised • corpus=\(corpusId) collection=\(collection) debug=\(debugEnabled)")
+        if let seedingConfiguration {
+            let sourceNames = seedingConfiguration.sources.map(\.name).joined(separator: ", ")
+            emitDiagnostic("Semantic seeding enabled • sources=\(seedingConfiguration.sources.count) [\(sourceNames)] • browser=\(seedingConfiguration.browser.baseURL.absoluteString)")
+        } else {
+            emitDiagnostic("Seeding disabled • configuration unavailable.")
+        }
+
+        if let environmentManager {
+            configureEnvironmentManager(environmentManager)
+        }
 
         if persistenceContext != nil {
             Task { [weak self] in
                 await self?.hydrateFromPersistence()
             }
         }
-        if awarenessBaseURL != nil {
+        if awarenessClient != nil, environmentManager == nil {
             Task { [weak self] in
                 await self?.refreshAwarenessSummary()
             }
         }
-        if bootstrapBaseURL != nil {
+        if bootstrapClient != nil, environmentManager == nil {
             Task { [weak self] in
                 await self?.bootstrapCorpusIfNeeded()
             }
@@ -185,6 +424,7 @@ public final class EngraverChatViewModel: ObservableObject {
 
     deinit {
         streamTask?.cancel()
+        seedingTask?.cancel()
     }
 
     /// Starts a new conversation turn. If a stream is already active it gets cancelled.
@@ -335,7 +575,7 @@ public final class EngraverChatViewModel: ObservableObject {
         sessionId = idGenerator()
         sessionStartedAt = dateProvider()
         sessionName = (trimmed?.isEmpty ?? true) ? nil : trimmed
-        if persistedRecords.isEmpty && (awarenessSummary?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) {
+        if persistedRecords.isEmpty && (awarenessSummaryText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) {
             historicalContext = nil
         } else {
             updateHistoricalContext(excluding: sessionId)
@@ -344,6 +584,128 @@ public final class EngraverChatViewModel: ObservableObject {
         if let sessionName {
             emitDiagnostic("Session named \"\(sessionName)\"")
         }
+    }
+
+    public func refreshAwareness() {
+        guard awarenessBaseURL != nil else { return }
+        if environmentManager != nil && !environmentIsRunning {
+            let last = awarenessStatus.lastUpdated
+            awarenessStatus = .failed(message: "Environment not running", lastUpdated: last)
+            emitDiagnostic("Skipped awareness refresh: environment offline.")
+            return
+        }
+        let last = awarenessStatus.lastUpdated
+        awarenessStatus = .refreshing(lastUpdated: last)
+        Task { [weak self] in
+            await self?.refreshAwarenessSummary()
+        }
+    }
+
+    public func rerunBootstrap() {
+        guard bootstrapBaseURL != nil else { return }
+        if environmentManager != nil && !environmentIsRunning {
+            bootstrapState = .failed(message: "Environment not running", timestamp: dateProvider())
+            emitDiagnostic("Skipped bootstrap: environment offline.")
+            return
+        }
+        didBootstrapCorpus = false
+        bootstrapState = .bootstrapping
+        Task { [weak self] in
+            await self?.bootstrapCorpusIfNeeded()
+        }
+    }
+
+    public func generateSeedManifests() {
+        runSeedingPipeline()
+    }
+
+    public func generateAndUploadSeedManifests() {
+        runSeedingPipeline()
+    }
+
+    public func purgeLocalStore() {
+        guard let context = persistenceContext else {
+            let timestamp = dateProvider()
+            persistenceResetState = .failed(message: "Persistence is disabled for this workspace.", timestamp: timestamp)
+            return
+        }
+
+        if persistenceResetState.isRunning {
+            return
+        }
+
+        persistenceResetState = .running
+        emitDiagnostic("Purging FountainStore corpora for development reset.")
+
+        let store = context.store
+        Task(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            do {
+                let corpora = try await Self.collectAllCorpora(from: store)
+                for corpus in corpora {
+                    try await store.deleteCorpus(corpus)
+                }
+                persistedRecords = []
+                corpusSessionOverviews = []
+                historicalContext = nil
+                updateHistoricalContext(excluding: sessionId)
+                persistenceResetState = .succeeded(dateProvider(), corpora.count)
+                emitDiagnostic("FountainStore purge completed • corpora removed=\(corpora.count)")
+            } catch {
+                let message = describe(error: error)
+                persistenceResetState = .failed(message: message, timestamp: dateProvider())
+                emitDiagnostic("FountainStore purge failed: \(message)")
+            }
+        }
+    }
+
+    private static func collectAllCorpora(from store: FountainStoreClient, pageSize: Int = 200) async throws -> [String] {
+        var results: [String] = []
+        var offset = 0
+        while true {
+            let page = try await store.listCorpora(limit: pageSize, offset: offset)
+            results.append(contentsOf: page.corpora)
+            if results.count >= page.total || page.corpora.isEmpty {
+                break
+            }
+            offset += page.corpora.count
+        }
+        return results
+    }
+
+    public func startEnvironment(includeExtras: Bool) {
+        guard let environmentManager else { return }
+        Task {
+            await environmentManager.startEnvironment(includeExtras: includeExtras)
+        }
+    }
+
+    public func stopEnvironment(includeExtras: Bool, force: Bool) {
+        guard let environmentManager else { return }
+        Task {
+            await environmentManager.stopEnvironment(includeExtras: includeExtras, force: force)
+        }
+    }
+
+    public func refreshEnvironmentStatus() {
+        guard let environmentManager else { return }
+        Task {
+            await environmentManager.refreshStatus()
+        }
+    }
+
+    public func clearEnvironmentLogs() {
+        environmentManager?.clearLogs()
+    }
+
+    public func openPersistedSession(id: UUID) {
+        let records = persistedRecords.filter { sessionIdentifier(for: $0) == id }
+        guard !records.isEmpty else {
+            emitDiagnostic("Requested persisted session \(id.uuidString) missing from cache.")
+            return
+        }
+        applyPersistedSession(records: records, retainingAllRecords: persistedRecords)
+        emitDiagnostic("Loaded persisted session \(id.uuidString)")
     }
 
     private func makePromptMessages(
@@ -393,35 +755,48 @@ public final class EngraverChatViewModel: ObservableObject {
                 emitDiagnostic("No persisted sessions found to hydrate.")
                 return
             }
-            applyPersistedSession(records: records)
+            applyPersistedSession(records: records, retainingAllRecords: records)
             emitDiagnostic("Hydrated session from persistence • turns=\(turns.count) session=\(sessionName ?? "(untitled)")")
         } catch {
             emitDiagnostic("Hydration error: \(error)")
         }
     }
 
-    private func applyPersistedSession(records: [EngraverChatRecord]) {
-        let grouped = Dictionary(grouping: records) { record -> UUID in
-            if let id = record.sessionId {
-                return id
-            }
-            if let uuid = UUID(uuidString: record.recordId) {
-                return uuid
-            }
-            return sessionId
+    private func applyPersistedSession(records: [EngraverChatRecord], retainingAllRecords dataset: [EngraverChatRecord]? = nil) {
+        let mergedDataset: [EngraverChatRecord]
+        if let dataset {
+            mergedDataset = mergeRecords(records, into: dataset)
+        } else if persistedRecords.isEmpty {
+            mergedDataset = records
+        } else {
+            mergedDataset = mergeRecords(records, into: persistedRecords)
         }
-        guard let latest = grouped.values.max(by: { lhs, rhs in
-            let lhsDate = lhs.map { $0.createdAt }.max() ?? .distantPast
-            let rhsDate = rhs.map { $0.createdAt }.max() ?? .distantPast
+
+        let grouped = Dictionary(grouping: mergedDataset, by: sessionIdentifier(for:))
+        let requestedSessions = Set(records.map(sessionIdentifier(for:)))
+
+        let targetSessionId: UUID
+        let targetRecords: [EngraverChatRecord]
+        if requestedSessions.count == 1, let requested = requestedSessions.first, let bucket = grouped[requested] {
+            targetSessionId = requested
+            targetRecords = bucket.sorted { $0.createdAt < $1.createdAt }
+        } else if let latest = grouped.max(by: { lhs, rhs in
+            let lhsDate = lhs.value.map { $0.createdAt }.max() ?? .distantPast
+            let rhsDate = rhs.value.map { $0.createdAt }.max() ?? .distantPast
             return lhsDate < rhsDate
-        }) else { return }
+        }) {
+            targetSessionId = latest.key
+            targetRecords = latest.value.sorted { $0.createdAt < $1.createdAt }
+        } else {
+            return
+        }
 
-        let sorted = latest.sorted { $0.createdAt < $1.createdAt }
-        guard let first = sorted.first else { return }
+        persistedRecords = mergedDataset
 
-        let resolvedSessionId = first.sessionId ?? UUID(uuidString: first.recordId) ?? sessionId
-        sessionId = resolvedSessionId
+        guard let first = targetRecords.first else { return }
+
         let resolvedStart = first.sessionStartedAt ?? first.createdAt
+        sessionId = targetSessionId
         sessionStartedAt = resolvedStart
         if let name = first.sessionName, !name.isEmpty {
             sessionName = name
@@ -429,7 +804,7 @@ public final class EngraverChatViewModel: ObservableObject {
             sessionName = generateSessionName(from: first.prompt, startedAt: resolvedStart)
         }
 
-        turns = sorted.map { record in
+        turns = targetRecords.map { record in
             let response = GatewayChatResponse(
                 answer: record.answer,
                 provider: record.provider,
@@ -440,7 +815,7 @@ public final class EngraverChatViewModel: ObservableObject {
             )
             return EngraverChatTurn(
                 id: UUID(uuidString: record.recordId) ?? UUID(),
-                sessionId: resolvedSessionId,
+                sessionId: targetSessionId,
                 createdAt: record.createdAt,
                 prompt: record.prompt,
                 answer: record.answer,
@@ -450,8 +825,8 @@ public final class EngraverChatViewModel: ObservableObject {
                 response: response
             )
         }
-        persistedRecords = records
-        updateHistoricalContext(excluding: resolvedSessionId)
+
+        updateHistoricalContext(excluding: targetSessionId)
     }
 
     private func cachePersistedRecord(_ record: EngraverChatRecord) {
@@ -460,6 +835,92 @@ public final class EngraverChatViewModel: ObservableObject {
         } else {
             persistedRecords.append(record)
         }
+    }
+
+    private func handleEnvironmentStateChange(_ state: EnvironmentOverallState) {
+        let previous = environmentState
+        environmentState = state
+
+        switch state {
+        case .running:
+            if !didAutoBootstrapAfterEnvironment {
+                didAutoBootstrapAfterEnvironment = true
+                if bootstrapClient != nil {
+                    bootstrapState = .bootstrapping
+                }
+                if awarenessClient != nil {
+                    let last = awarenessStatus.lastUpdated
+                    awarenessStatus = .refreshing(lastUpdated: last)
+                }
+                Task {
+                    await bootstrapCorpusIfNeeded()
+                    await refreshAwarenessSummary()
+                }
+            }
+        case .failed(let message):
+            didAutoBootstrapAfterEnvironment = false
+            if awarenessClient != nil {
+                let last = awarenessStatus.lastUpdated
+                awarenessStatus = .failed(message: "Environment error: \(message)", lastUpdated: last)
+            }
+            if bootstrapClient != nil {
+                bootstrapState = .idle
+            }
+        case .idle, .unavailable:
+            if case .running = previous {
+                if awarenessClient != nil {
+                    let last = awarenessStatus.lastUpdated
+                    awarenessStatus = .failed(message: "Environment offline", lastUpdated: last)
+                }
+                if bootstrapClient != nil {
+                    bootstrapState = .idle
+                }
+            }
+            didAutoBootstrapAfterEnvironment = false
+        default:
+            break
+        }
+    }
+
+    private func configureEnvironmentManager(_ manager: FountainEnvironmentManager) {
+        environmentState = manager.overallState
+        environmentServices = manager.services
+        environmentLogs = manager.logs
+        manager.$overallState
+            .sink { [weak self] state in
+                self?.handleEnvironmentStateChange(state)
+            }
+            .store(in: &environmentCancellables)
+        manager.$services
+            .sink { [weak self] services in
+                self?.environmentServices = services
+            }
+            .store(in: &environmentCancellables)
+        manager.$logs
+            .sink { [weak self] entries in
+                self?.environmentLogs = entries
+            }
+            .store(in: &environmentCancellables)
+        handleEnvironmentStateChange(manager.overallState)
+        Task {
+            await manager.refreshStatus()
+        }
+    }
+
+    private func mergeRecords(_ newRecords: [EngraverChatRecord], into existing: [EngraverChatRecord]) -> [EngraverChatRecord] {
+        if existing.isEmpty { return newRecords }
+        var map = Dictionary(uniqueKeysWithValues: existing.map { ($0.recordId, $0) })
+        for record in newRecords {
+            map[record.recordId] = record
+        }
+        return Array(map.values)
+    }
+
+    private func sessionIdentifier(for record: EngraverChatRecord) -> UUID {
+        if let identifier = record.sessionId {
+            return identifier
+        }
+        return UUID(uuidString: record.recordId) ?? sessionId
     }
 
     private func generateSessionName(from prompt: String, startedAt: Date? = nil) -> String {
@@ -487,7 +948,7 @@ public final class EngraverChatViewModel: ObservableObject {
     private func updateHistoricalContext(excluding session: UUID) {
         var sections: [String] = []
 
-        if let awarenessSummary = awarenessSummary?.trimmingCharacters(in: .whitespacesAndNewlines), !awarenessSummary.isEmpty {
+        if let awarenessSummary = awarenessSummaryText?.trimmingCharacters(in: .whitespacesAndNewlines), !awarenessSummary.isEmpty {
             var awarenessBlock = "Baseline Awareness summary:\n\(awarenessSummary)"
             if let awarenessBaseURL {
                 awarenessBlock.append("\n(Service endpoint: \(awarenessBaseURL.absoluteString))")
@@ -495,7 +956,24 @@ public final class EngraverChatViewModel: ObservableObject {
             sections.append(awarenessBlock)
         }
 
-        let sessionSummaries = makeSessionSummaries(excluding: session)
+        if let history = awarenessHistorySummary?.trimmingCharacters(in: .whitespacesAndNewlines), !history.isEmpty {
+            sections.append("Awareness history overview:\n\(history)")
+        }
+
+        if awarenessEventsTotal > 0 {
+            sections.append("Awareness analytics captured \(awarenessEventsTotal) event\(awarenessEventsTotal == 1 ? "" : "s").")
+        }
+
+        let overviews = makeSessionOverviews(currentSession: session)
+        corpusSessionOverviews = overviews
+
+        let sessionSummaries = overviews
+            .filter { !$0.isCurrentSession }
+            .map { overview -> String in
+                let timestamp = Self.contextTimeFormatter.string(from: overview.updatedAt)
+                return "• \(overview.title) (last \(timestamp))\n  ├─ User: \(overview.lastPromptPreview)\n  └─ Assistant: \(overview.lastAnswerPreview)"
+            }
+
         if !sessionSummaries.isEmpty {
             sections.append("Recent Engraver sessions for this corpus:\n\n" + sessionSummaries.joined(separator: "\n"))
         }
@@ -503,110 +981,346 @@ public final class EngraverChatViewModel: ObservableObject {
         historicalContext = sections.isEmpty ? nil : sections.joined(separator: "\n\n")
     }
 
-    private func makeSessionSummaries(excluding session: UUID) -> [String] {
-        let grouped = Dictionary(grouping: persistedRecords) { record -> UUID in
-            if let identifier = record.sessionId {
-                return identifier
+    private func makeSessionOverviews(currentSession: UUID) -> [CorpusSessionOverview] {
+        guard !persistedRecords.isEmpty else { return [] }
+
+        let grouped = Dictionary(grouping: persistedRecords, by: sessionIdentifier(for:))
+        var overviews: [CorpusSessionOverview] = []
+
+        for (sessionId, records) in grouped {
+            let sorted = records.sorted { $0.createdAt < $1.createdAt }
+            guard let last = sorted.last else { continue }
+            let first = sorted.first
+            let trimmedName = first?.sessionName?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let title = (trimmedName?.isEmpty == false ? trimmedName : nil) ?? "Session \(sessionId.uuidString.prefix(8))"
+            let previews = sorted.suffix(3).map { record -> CorpusSessionOverview.TurnPreview in
+                CorpusSessionOverview.TurnPreview(
+                    id: UUID(uuidString: record.recordId) ?? UUID(),
+                    createdAt: record.createdAt,
+                    promptPreview: truncateForContext(record.prompt),
+                    answerPreview: truncateForContext(record.answer)
+                )
             }
-            return UUID(uuidString: record.recordId) ?? session
+
+            let overview = CorpusSessionOverview(
+                id: sessionId,
+                title: title,
+                corpusId: first?.corpusId ?? initialCorpusId,
+                updatedAt: last.createdAt,
+                turnCount: sorted.count,
+                lastPromptPreview: truncateForContext(last.prompt),
+                lastAnswerPreview: truncateForContext(last.answer),
+                model: last.model,
+                isCurrentSession: sessionId == currentSession,
+                turnPreviews: previews
+            )
+            overviews.append(overview)
         }
 
-        return grouped
-            .filter { $0.key != session }
-            .sorted { lhs, rhs in
-                let lhsUpdated = lhs.value.map { $0.createdAt }.max() ?? .distantPast
-                let rhsUpdated = rhs.value.map { $0.createdAt }.max() ?? .distantPast
-                return lhsUpdated > rhsUpdated
-            }
-            .prefix(3)
-            .map { entry -> String in
-                let records = entry.value.sorted { $0.createdAt < $1.createdAt }
-                let trimmedName = records.first?.sessionName?.trimmingCharacters(in: .whitespacesAndNewlines)
-                let displayName = (trimmedName?.isEmpty == false ? trimmedName : nil) ?? "Session \(entry.key.uuidString.prefix(8))"
-                let updatedAt = records.last?.createdAt ?? .distantPast
-                let timestamp = Self.contextTimeFormatter.string(from: updatedAt)
-                let lastPrompt = truncateForContext(records.last?.prompt ?? "")
-                let lastAnswer = truncateForContext(records.last?.answer ?? "")
-                return "• \(displayName) (last \(timestamp))\n  ├─ User: \(lastPrompt)\n  └─ Assistant: \(lastAnswer)"
-            }
+        return overviews.sorted { $0.updatedAt > $1.updatedAt }
     }
 
     private func refreshAwarenessSummary() async {
-        guard let awarenessBaseURL else { return }
-        let corpus = persistenceContext?.corpusId ?? initialCorpusId
-        let summaryURL = awarenessBaseURL
-            .appendingPathComponent("corpus", isDirectory: false)
-            .appendingPathComponent("summary", isDirectory: false)
-            .appendingPathComponent(corpus, isDirectory: false)
-        var request = URLRequest(url: summaryURL)
-        request.httpMethod = "GET"
+        guard let awarenessClient else {
+            let last = awarenessStatus.lastUpdated
+            awarenessStatus = .failed(message: "Awareness client unavailable", lastUpdated: last)
+            return
+        }
+        let corpus = corpusIdentifier
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse else {
-                throw NSError(domain: "EngraverChat", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid awareness response"])
+            async let summaryResponse = awarenessClient.summarizeHistory(corpusID: corpus)
+            async let historyResponse = awarenessClient.listHistory(corpusID: corpus)
+            async let analyticsResponse = awarenessClient.historyAnalytics(corpusID: corpus)
+            async let semanticArcResponse = try? awarenessClient.semanticArc(corpusID: corpus)
+            async let metricsResponse = try? awarenessClient.metrics()
+
+            let summary = try await summaryResponse
+            let history = try await historyResponse
+            let analyticsObject = try await analyticsResponse
+            let semanticArc = await semanticArcResponse
+            let metrics = await metricsResponse
+
+            let analyticsResult = Self.parseAwarenessEvents(from: analyticsObject)
+            let semanticArcJSON = semanticArc.flatMap { prettyJSONString(from: $0) }
+            let normalizedMetrics = metrics.map(Self.normalizeMetrics)
+            let now = dateProvider()
+
+            await MainActor.run {
+                let trimmedSummary = summary.summary.trimmingCharacters(in: .whitespacesAndNewlines)
+                awarenessSummaryText = trimmedSummary.isEmpty ? nil : trimmedSummary
+
+                let trimmedHistory = history.summary.trimmingCharacters(in: .whitespacesAndNewlines)
+                awarenessHistorySummary = trimmedHistory.isEmpty ? nil : trimmedHistory
+
+                awarenessEvents = analyticsResult.events
+                awarenessEventsTotal = analyticsResult.total
+                awarenessSemanticArcJSON = semanticArcJSON
+                awarenessMetricsText = normalizedMetrics
+                awarenessStatus = .idle(lastUpdated: now)
+                updateHistoricalContext(excluding: sessionId)
             }
-            if http.statusCode == 200 {
-                let decoded = try JSONDecoder().decode(AwarenessSummaryResponse.self, from: data)
-                let trimmed = decoded.summary.trimmingCharacters(in: .whitespacesAndNewlines)
-                awarenessSummary = trimmed.isEmpty ? nil : trimmed
-            } else if http.statusCode == 404 {
-                awarenessSummary = nil
-            } else {
-                throw NSError(domain: "EngraverChat", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Awareness summary status \(http.statusCode)"])
-            }
-            updateHistoricalContext(excluding: sessionId)
         } catch {
             emitDiagnostic("Awareness summary error: \(error)")
+            let last = awarenessStatus.lastUpdated
+            await MainActor.run {
+                awarenessStatus = .failed(message: String(describing: error), lastUpdated: last)
+            }
         }
     }
 
-private struct AwarenessSummaryResponse: Decodable {
-    let summary: String
-}
-
 private func bootstrapCorpusIfNeeded() async {
-    guard !didBootstrapCorpus, let bootstrapBaseURL else { return }
-    let corpus = persistenceContext?.corpusId ?? initialCorpusId
-    let url = bootstrapBaseURL
-        .appendingPathComponent("bootstrap", isDirectory: false)
-        .appendingPathComponent("corpus", isDirectory: false)
-        .appendingPathComponent("init", isDirectory: false)
-    var request = URLRequest(url: url)
-    request.httpMethod = "POST"
-    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    request.httpBody = try? JSONEncoder().encode(BootstrapInitRequest(corpusId: corpus))
+    guard let bootstrapClient else {
+        return
+    }
+    if didBootstrapCorpus {
+        let timestamp = dateProvider()
+        bootstrapState = .succeeded(timestamp)
+        return
+    }
+    bootstrapState = .bootstrapping
+    let corpus = corpusIdentifier
     do {
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw NSError(domain: "EngraverChat", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid bootstrap response"])
+        let response = try await bootstrapClient.initializeCorpus(BootstrapAPI.Components.Schemas.InitIn(corpusId: corpus))
+        emitDiagnostic("Bootstrap initialized corpus: \(response.message)")
+        didBootstrapCorpus = true
+        let timestamp = dateProvider()
+        bootstrapState = .succeeded(timestamp)
+        await MainActor.run {
+            awarenessStatus = .refreshing(lastUpdated: awarenessStatus.lastUpdated)
         }
-        switch http.statusCode {
-        case 200:
-            if let message = try? JSONDecoder().decode(BootstrapInitResponse.self, from: data).message {
-                emitDiagnostic("Bootstrap initialized corpus: \(message)")
-            } else {
-                emitDiagnostic("Bootstrap initialized corpus (no message)")
-            }
+        await refreshAwarenessSummary()
+    } catch let error as BootstrapClient.BootstrapClientError {
+        switch error {
+        case .unexpectedStatus(let code) where code == 409:
+            emitDiagnostic("Bootstrap corpus already initialized (409).")
             didBootstrapCorpus = true
-        case 409, 422:
-            emitDiagnostic("Bootstrap corpus already initialized or validation warning (status \(http.statusCode)).")
-            didBootstrapCorpus = true
+            let timestamp = dateProvider()
+            bootstrapState = .succeeded(timestamp)
+        case .validationError(let validation):
+            emitDiagnostic("Bootstrap validation error: \(validation)")
+            let timestamp = dateProvider()
+            bootstrapState = .failed(message: "Validation error: \(validation)", timestamp: timestamp)
         default:
-            let body = String(data: data, encoding: .utf8) ?? "<binary>"
-            throw NSError(domain: "EngraverChat", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Bootstrap status \(http.statusCode): \(body)"])
+            emitDiagnostic("Bootstrap error: \(error)")
+            let timestamp = dateProvider()
+            bootstrapState = .failed(message: String(describing: error), timestamp: timestamp)
         }
     } catch {
         emitDiagnostic("Bootstrap error: \(error)")
+        let timestamp = dateProvider()
+        bootstrapState = .failed(message: String(describing: error), timestamp: timestamp)
     }
 }
 
-private struct BootstrapInitRequest: Encodable {
-    let corpusId: String
-}
+    private func runSeedingPipeline() {
+        guard let configuration = seedingConfiguration else {
+            let timestamp = dateProvider()
+            seedingState = .failed(message: "Seeding is not configured for this workspace.", timestamp: timestamp)
+            return
+        }
 
-private struct BootstrapInitResponse: Decodable {
-    let message: String?
-}
+        let sources = configuration.sources
+        if sources.isEmpty {
+            let timestamp = dateProvider()
+            seedingState = .failed(message: "No semantic sources configured.", timestamp: timestamp)
+            return
+        }
+
+        seedingTask?.cancel()
+        seedingState = .running
+
+        let seeder = semanticSeeder
+        let browser = configuration.browser
+
+        let initialRuns = sources.map { source -> SemanticSeedRun in
+            SemanticSeedRun(
+                sourceName: source.name,
+                sourceURL: source.url,
+                corpusId: source.corpusId,
+                labels: source.labels,
+                startedAt: dateProvider(),
+                finishedAt: nil,
+                state: .running,
+                metrics: nil,
+                message: nil
+            )
+        }
+        seedRuns = initialRuns
+        emitDiagnostic("Semantic seeding pipeline started • sources=\(sources.count)")
+
+        seedingTask = Task(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            var totalSegments = 0
+            var completed = 0
+
+            for (index, source) in sources.enumerated() {
+                await MainActor.run {
+                    var run = self.seedRuns[index]
+                    run.startedAt = self.dateProvider()
+                    run.finishedAt = nil
+                    run.metrics = nil
+                    run.message = nil
+                    run.state = .running
+                    self.seedRuns[index] = run
+                }
+
+                do {
+                    let metrics = try await seeder.run(
+                        source: source,
+                        browser: browser,
+                        emitDiagnostic: { message in
+                            Task { @MainActor in
+                                self.emitDiagnostic(message)
+                            }
+                        }
+                    )
+                    totalSegments += metrics.segmentsUpserted
+                    completed += 1
+                    await MainActor.run {
+                        let finished = self.dateProvider()
+                        var run = self.seedRuns[index]
+                        run.finishedAt = finished
+                        run.metrics = metrics
+                        run.state = .succeeded(finished, metrics.segmentsUpserted)
+                        run.message = nil
+                        self.seedRuns[index] = run
+                    }
+                } catch is CancellationError {
+                    await MainActor.run {
+                        let finished = self.dateProvider()
+                        var run = self.seedRuns[index]
+                        run.finishedAt = finished
+                        run.state = .idle
+                        run.message = "Cancelled"
+                        self.seedRuns[index] = run
+                        self.seedingState = .idle
+                    }
+                    return
+                } catch {
+                    let message = self.describe(error: error)
+                    await MainActor.run {
+                        let finished = self.dateProvider()
+                        var run = self.seedRuns[index]
+                        run.finishedAt = finished
+                        run.state = .failed(message: message, timestamp: finished)
+                        run.message = message
+                        self.seedRuns[index] = run
+                    }
+                }
+            }
+
+            await MainActor.run {
+                let finished = self.dateProvider()
+                if completed == sources.count {
+                    self.seedingState = .succeeded(finished, totalSegments)
+                    self.emitDiagnostic("Semantic seeding completed • sources=\(sources.count) segments=\(totalSegments)")
+                } else if completed == 0 {
+                    self.seedingState = .failed(message: "Semantic seeding failed for all sources.", timestamp: finished)
+                } else {
+                    let failures = sources.count - completed
+                    self.seedingState = .failed(message: "Semantic seeding completed with \(failures) failure\(failures == 1 ? "" : "s").", timestamp: finished)
+                }
+            }
+        }
+    }
+
+    static func parseAwarenessEvents(from object: OpenAPIObjectContainer) -> (total: Int, events: [AwarenessEvent]) {
+        let encoder = JSONEncoder()
+        guard let data = try? encoder.encode(object) else { return (0, []) }
+        guard let decoded = try? JSONDecoder().decode(AwarenessAnalyticsSnapshot.self, from: data) else {
+            return (0, [])
+        }
+        let events = decoded.events?.map { event -> AwarenessEvent in
+            let kind = AwarenessEvent.Kind(rawValue: event.type ?? "") ?? .unknown
+            let eventId = event.id ?? UUID().uuidString
+            let timestamp = event.ts.map { Date(timeIntervalSince1970: $0) }
+            let headline: String
+            switch kind {
+            case .baseline:
+                if let length = event.content_len {
+                    headline = "Baseline \(eventId) (\(length) chars)"
+                } else {
+                    headline = "Baseline \(eventId)"
+                }
+            case .reflection:
+                headline = "Reflection \(eventId)"
+            case .drift:
+                if let length = event.content_len {
+                    headline = "Drift analysis \(eventId) (\(length) chars)"
+                } else {
+                    headline = "Drift analysis \(eventId)"
+                }
+            case .patterns:
+                if let length = event.content_len {
+                    headline = "Patterns \(eventId) (\(length) chars)"
+                } else {
+                    headline = "Patterns \(eventId)"
+                }
+            case .unknown:
+                headline = eventId
+            }
+            let details: String?
+            if let question = event.question, !question.isEmpty {
+                details = question
+            } else if let length = event.content_len {
+                details = "\(length) characters"
+            } else {
+                details = nil
+            }
+            return AwarenessEvent(
+                eventId: eventId,
+                kind: kind,
+                timestamp: timestamp,
+                headline: headline,
+                details: details
+            )
+        } ?? []
+        let total = decoded.total ?? events.count
+        let sorted = events.sorted { lhs, rhs in
+            switch (lhs.timestamp, rhs.timestamp) {
+            case let (l?, r?): return l > r
+            case (nil, _?): return false
+            case (_?, nil): return true
+            default: return lhs.headline < rhs.headline
+            }
+        }
+        return (total, sorted)
+    }
+
+    private func prettyJSONString<T: Encodable>(from value: T) -> String? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(value) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    static func normalizeMetrics(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let maxCharacters = 5_000
+        guard trimmed.count > maxCharacters else { return trimmed }
+        let prefix = trimmed.prefix(maxCharacters)
+        return String(prefix) + "\n…metrics truncated…"
+    }
+
+    private static func makeDefaultHeaders(bearerToken: String?) -> [String: String] {
+        guard let token = bearerToken?.trimmingCharacters(in: .whitespacesAndNewlines), !token.isEmpty else {
+            return [:]
+        }
+        return ["Authorization": "Bearer \(token)"]
+    }
+
+    struct AwarenessAnalyticsSnapshot: Codable {
+        struct Event: Codable {
+            let type: String?
+            let id: String?
+            let ts: Double?
+            let content_len: Int?
+            let question: String?
+        }
+
+        let total: Int?
+        let events: [Event]?
+    }
 
     private func truncateForContext(_ text: String, limit: Int = 160) -> String {
         let singleLine = text.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)

@@ -24,7 +24,7 @@ public struct BootstrapClient: Sendable {
     }
 
     /// Alias for the JSON payload returned by `POST /bootstrap/baseline`.
-    public typealias BaselineResponse = Operations.bootstrapAddBaseline.Output.Ok.Body.jsonPayload
+    public typealias BaselineResponse = OpenAPIValueContainer
 
     private let client: Client
 
@@ -65,15 +65,11 @@ public struct BootstrapClient: Sendable {
         let output = try await client.bootstrapInitializeCorpus(.init(body: .json(request)))
         switch output {
         case .ok(let ok):
-            guard case let .json(body) = ok.body else {
-                throw BootstrapClientError.missingResponseBody(operation: "bootstrapInitializeCorpus")
-            }
-            return body
-        case .unprocessableEntity(let entity):
-            if case let .json(error) = entity.body {
-                throw BootstrapClientError.validationError(error)
-            }
-            throw BootstrapClientError.missingResponseBody(operation: "bootstrapInitializeCorpus")
+            return try ok.body.json
+        case .unprocessableContent:
+            throw BootstrapClientError.unexpectedStatus(code: 422)
+        case .badRequest:
+            throw BootstrapClientError.unexpectedStatus(code: 400)
         case .undocumented(let status, _):
             throw BootstrapClientError.unexpectedStatus(code: status)
         }
@@ -86,15 +82,11 @@ public struct BootstrapClient: Sendable {
         let output = try await client.seedRoles(.init(body: .json(request)))
         switch output {
         case .ok(let ok):
-            guard case let .json(body) = ok.body else {
-                throw BootstrapClientError.missingResponseBody(operation: "seedRoles")
-            }
-            return body
-        case .unprocessableEntity(let entity):
-            if case let .json(error) = entity.body {
-                throw BootstrapClientError.validationError(error)
-            }
-            throw BootstrapClientError.missingResponseBody(operation: "seedRoles")
+            return try ok.body.json
+        case .unprocessableContent:
+            throw BootstrapClientError.unexpectedStatus(code: 422)
+        case .badRequest:
+            throw BootstrapClientError.unexpectedStatus(code: 400)
         case .undocumented(let status, _):
             throw BootstrapClientError.unexpectedStatus(code: status)
         }
@@ -107,15 +99,11 @@ public struct BootstrapClient: Sendable {
         let output = try await client.bootstrapSeedRoles(.init(body: .json(request)))
         switch output {
         case .ok(let ok):
-            guard case let .json(body) = ok.body else {
-                throw BootstrapClientError.missingResponseBody(operation: "bootstrapSeedRoles")
-            }
-            return body
-        case .unprocessableEntity(let entity):
-            if case let .json(error) = entity.body {
-                throw BootstrapClientError.validationError(error)
-            }
-            throw BootstrapClientError.missingResponseBody(operation: "bootstrapSeedRoles")
+            return try ok.body.json
+        case .unprocessableContent:
+            throw BootstrapClientError.unexpectedStatus(code: 422)
+        case .badRequest:
+            throw BootstrapClientError.unexpectedStatus(code: 400)
         case .undocumented(let status, _):
             throw BootstrapClientError.unexpectedStatus(code: status)
         }
@@ -128,15 +116,11 @@ public struct BootstrapClient: Sendable {
         let output = try await client.bootstrapAddBaseline(.init(body: .json(request)))
         switch output {
         case .ok(let ok):
-            guard case let .json(body) = ok.body else {
-                throw BootstrapClientError.missingResponseBody(operation: "bootstrapAddBaseline")
-            }
-            return body
-        case .unprocessableEntity(let entity):
-            if case let .json(error) = entity.body {
-                throw BootstrapClientError.validationError(error)
-            }
-            throw BootstrapClientError.missingResponseBody(operation: "bootstrapAddBaseline")
+            return try ok.body.json
+        case .unprocessableContent:
+            throw BootstrapClientError.unexpectedStatus(code: 422)
+        case .badRequest:
+            throw BootstrapClientError.unexpectedStatus(code: 400)
         case .undocumented(let status, _):
             throw BootstrapClientError.unexpectedStatus(code: status)
         }
@@ -155,6 +139,8 @@ public struct BootstrapClient: Sendable {
                 throw BootstrapClientError.invalidPlainTextEncoding(operation: "metrics")
             }
             return text
+        case .badRequest:
+            throw BootstrapClientError.unexpectedStatus(code: 400)
         case .undocumented(let status, _):
             throw BootstrapClientError.unexpectedStatus(code: status)
         }

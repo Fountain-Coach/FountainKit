@@ -156,7 +156,10 @@ actor ChatSession {
                 defaultModel: configuration.defaultModel,
                 debugEnabled: configuration.debugEnabled,
                 awarenessBaseURL: configuration.awarenessBaseURL,
-                bootstrapBaseURL: configuration.bootstrapBaseURL
+                bootstrapBaseURL: configuration.bootstrapBaseURL,
+                bearerToken: configuration.bearerToken,
+                seedingConfiguration: configuration.seedingConfiguration,
+                fountainRepoRoot: configuration.fountainRepoRoot
             )
         }
     }

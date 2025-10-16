@@ -21,16 +21,6 @@ public struct HTMLParser: Sendable {
         var blocks: [BlockSpan] = []
         var nextHeading = 0, nextPara = 0, nextCode = 0, nextTable = 0
 
-        func normalize(_ s: String) -> String {
-            var t = s
-            t = t.replacingOccurrences(of: "&nbsp;", with: " ")
-            t = t.replacingOccurrences(of: "&amp;", with: "&")
-            t = t.replacingOccurrences(of: "&lt;", with: "<")
-            t = t.replacingOccurrences(of: "&gt;", with: ">")
-            t = t.replacingOccurrences(of: "\r|\n|\t", with: " ", options: .regularExpression)
-            return t.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-        }
-
         while i < stripped.endIndex {
             if stripped[i] == "<" {
                 if let gt = stripped[i...].firstIndex(of: ">") {
@@ -38,7 +28,7 @@ public struct HTMLParser: Sendable {
                     if let m = raw.firstMatch(of: /^h([1-6])\b/), let lvl = Int(String(m.1)) {
                         if let endTag = findClosingTag(in: stripped, from: gt, tag: "h\(lvl)") {
                             let inner = String(stripped[stripped.index(after: gt)..<endTag])
-                            let text = normalize(inner.removingHTMLTags()).trimmingCharacters(in: .whitespaces)
+                            let text = normalizeSpaces(inner.removingHTMLTags()).trimmingCharacters(in: .whitespaces)
                             let start = out.count
                             if !text.isEmpty { out += (start == 0 ? "" : " ") + text }
                             let end = out.count
@@ -50,7 +40,7 @@ public struct HTMLParser: Sendable {
                     } else if raw.hasPrefix("p") {
                         if let endTag = findClosingTag(in: stripped, from: gt, tag: "p") {
                             let inner = String(stripped[stripped.index(after: gt)..<endTag])
-                            let text = normalize(inner.removingHTMLTags()).trimmingCharacters(in: .whitespaces)
+                            let text = normalizeSpaces(inner.removingHTMLTags()).trimmingCharacters(in: .whitespaces)
                             let start = out.count
                             if !text.isEmpty { out += (start == 0 ? "" : " ") + text }
                             let end = out.count
@@ -63,7 +53,7 @@ public struct HTMLParser: Sendable {
                         let tag = raw.hasPrefix("pre") ? "pre" : "code"
                         if let endTag = findClosingTag(in: stripped, from: gt, tag: tag) {
                             let inner = String(stripped[stripped.index(after: gt)..<endTag])
-                            let text = normalize(inner.removingHTMLTags()).trimmingCharacters(in: .whitespaces)
+                            let text = normalizeSpaces(inner.removingHTMLTags()).trimmingCharacters(in: .whitespaces)
                             let start = out.count
                             if !text.isEmpty { out += (start == 0 ? "" : " ") + text }
                             let end = out.count
@@ -89,7 +79,7 @@ public struct HTMLParser: Sendable {
                             }
                             let table = SemanticMemoryService.FullAnalysis.Table(caption: caption, columns: columns, rows: rows)
                             let flat = (columns ?? []).joined(separator: " ") + " " + rows.prefix(3).flatMap { $0 }.joined(separator: " ")
-                            let text = normalize(flat).trimmingCharacters(in: .whitespaces)
+                            let text = normalizeSpaces(flat).trimmingCharacters(in: .whitespaces)
                             let start = out.count
                             if !text.isEmpty { out += (start == 0 ? "" : " ") + text }
                             let end = out.count
@@ -106,11 +96,13 @@ public struct HTMLParser: Sendable {
             } else {
                 let nextLt = stripped[i...].firstIndex(of: "<") ?? stripped.endIndex
                 let chunk = String(stripped[i..<nextLt])
-                let n = chunk.replacingOccurrences(of: "\r|\n|\t", with: " ", options: .regularExpression)
-                let nt = n.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression).trimmingCharacters(in: .whitespaces)
+                let nt = normalizeSpaces(chunk).trimmingCharacters(in: .whitespaces)
                 if !nt.isEmpty { out += (out.isEmpty ? "" : " ") + nt }
                 i = nextLt
             }
+        }
+        if blocks.isEmpty {
+            return buildPlainTextBlocks(from: stripped)
         }
         return (out.trimmingCharacters(in: .whitespaces), blocks)
     }
@@ -161,6 +153,91 @@ public struct HTMLParser: Sendable {
         var s = html.replacingOccurrences(of: "<script[\\s\\S]*?</script>", with: "", options: .regularExpression)
         s = s.replacingOccurrences(of: "<style[\\s\\S]*?</style>", with: "", options: .regularExpression)
         return s
+    }
+
+    private func normalizeSpaces(_ s: String) -> String {
+        var t = s
+        t = t.replacingOccurrences(of: "&nbsp;", with: " ")
+        t = t.replacingOccurrences(of: "&amp;", with: "&")
+        t = t.replacingOccurrences(of: "&lt;", with: "<")
+        t = t.replacingOccurrences(of: "&gt;", with: ">")
+        t = t.replacingOccurrences(of: "\r|\n|\t", with: " ", options: .regularExpression)
+        return t.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+    }
+
+    private func looksLikeSpeakerLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, trimmed.count <= 120 else { return false }
+        guard trimmed.rangeOfCharacter(from: CharacterSet.letters) != nil else { return false }
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,'’-:()\"/")
+        return trimmed == trimmed.uppercased() && trimmed.unicodeScalars.allSatisfy { allowed.contains($0) }
+    }
+
+    private func buildPlainTextBlocks(from raw: String) -> (String, [BlockSpan]) {
+        let collapsed = raw.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+        let lines = collapsed.components(separatedBy: "\n")
+        var collectedText = ""
+        var blocks: [BlockSpan] = []
+        var paragraphCounter = 0
+        var speechCounter = 0
+        var currentLines: [String] = []
+        var currentSpeaker: String? = nil
+
+        func addBlock(text: String, identifier: String) {
+            let cleaned = normalizeSpaces(text).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !cleaned.isEmpty else { return }
+            let start = collectedText.count
+            if start > 0 { collectedText.append(" ") }
+            collectedText.append(cleaned)
+            let end = collectedText.count
+            blocks.append(BlockSpan(id: identifier, kind: "paragraph", level: nil, text: cleaned, start: start, end: end, table: nil))
+        }
+
+        func flushCurrent() {
+            defer {
+                currentLines.removeAll(keepingCapacity: true)
+                currentSpeaker = nil
+            }
+            if currentLines.isEmpty {
+                if let speaker = currentSpeaker {
+                    addBlock(text: speaker, identifier: "speaker\(speechCounter)")
+                    speechCounter += 1
+                }
+                return
+            }
+            let body = currentLines.map { normalizeSpaces($0) }.joined(separator: " ")
+            if let speaker = currentSpeaker {
+                addBlock(text: "\(speaker): \(body)", identifier: "speech\(speechCounter)")
+                speechCounter += 1
+            } else {
+                addBlock(text: body, identifier: "pPlain\(paragraphCounter)")
+                paragraphCounter += 1
+            }
+        }
+
+        for rawLine in lines {
+            let trimmed = rawLine.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty {
+                flushCurrent()
+                continue
+            }
+            if looksLikeSpeakerLine(trimmed) {
+                flushCurrent()
+                currentSpeaker = trimmed
+            } else {
+                currentLines.append(trimmed)
+            }
+        }
+        flushCurrent()
+
+        if blocks.isEmpty {
+            let text = normalizeSpaces(raw).trimmingCharacters(in: .whitespacesAndNewlines)
+            if text.isEmpty {
+                return ("", [])
+            }
+            return (text, [BlockSpan(id: "p0", kind: "paragraph", level: nil, text: text, start: 0, end: text.count, table: nil)])
+        }
+        return (collectedText, blocks)
     }
 
     private func findClosingTag(in s: String, from: String.Index, tag: String) -> String.Index? {

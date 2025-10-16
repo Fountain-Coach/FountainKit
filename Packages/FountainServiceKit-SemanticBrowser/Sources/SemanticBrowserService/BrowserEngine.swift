@@ -32,18 +32,28 @@ public struct URLFetchBrowserEngine: BrowserEngine {
     public func snapshot(for url: String, wait: APIModels.WaitPolicy?, capture: CaptureOptions?) async throws -> SnapshotResult {
         guard let u = URL(string: url) else { throw BrowserError.invalidURL }
         let start = Date()
-        let (data, resp) = try await URLSession.shared.data(from: u)
+        let data: Data
+        let finalURL: String
+        var pageStatus: Int? = nil
+        var contentType: String? = nil
+        if u.isFileURL {
+            data = try Data(contentsOf: u)
+            finalURL = u.path
+            contentType = "text/plain"
+        } else {
+            let (fetchedData, resp) = try await URLSession.shared.data(from: u)
+            data = fetchedData
+            finalURL = resp.url?.absoluteString ?? url
+            if let http = resp as? HTTPURLResponse {
+                pageStatus = http.statusCode
+                contentType = http.allHeaderFields["Content-Type"] as? String
+            }
+        }
         let elapsed = Int(Date().timeIntervalSince(start) * 1000.0)
         let html = String(data: data, encoding: .utf8) ?? ""
         let text = html.removingHTMLTags()
-        let final = (resp.url?.absoluteString) ?? url
-        var contentType: String? = nil
-        if let http = resp as? HTTPURLResponse {
-            contentType = http.allHeaderFields["Content-Type"] as? String
-        }
         if let ct = contentType, let semi = ct.firstIndex(of: ";") { contentType = String(ct[..<semi]) }
-        let status = (resp as? HTTPURLResponse)?.statusCode
-        return SnapshotResult(html: html, text: text, finalURL: final, loadMs: elapsed, network: nil, pageStatus: status, pageContentType: contentType, adminNetwork: nil)
+        return SnapshotResult(html: html, text: text, finalURL: finalURL, loadMs: elapsed, network: nil, pageStatus: pageStatus, pageContentType: contentType, adminNetwork: nil)
     }
 }
 

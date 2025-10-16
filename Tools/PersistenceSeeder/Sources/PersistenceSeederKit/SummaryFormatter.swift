@@ -1,16 +1,16 @@
 import Foundation
 
-struct ManifestSummaryFormatter {
+public struct ManifestSummaryFormatter {
     private let snippetLimit: Int
 
-    init(snippetLimit: Int = 120) {
+    public init(snippetLimit: Int = 120) {
         self.snippetLimit = snippetLimit
     }
 
-    func format(result: SeedResult) -> String {
+    public func format(result: SeedResult, header: String = "Seed Summary") -> String {
         let manifest = result.manifest
         var lines: [String] = []
-        lines.append("===== Seed Summary =====")
+        lines.append("===== \(header) =====")
         lines.append("Corpus: \(manifest.corpusId) (source: \(manifest.sourceRepo))")
         lines.append("Generated At: \(iso8601String(from: manifest.generatedAt))")
         lines.append("Documents: \(manifest.documents.count)")

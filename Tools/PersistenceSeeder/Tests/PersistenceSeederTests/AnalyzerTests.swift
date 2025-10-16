@@ -1,5 +1,5 @@
 import XCTest
-@testable import PersistenceSeeder
+@testable import PersistenceSeederKit
 
 final class AnalyzerTests: XCTestCase {
     func testAnalyzeProducesProfile() throws {

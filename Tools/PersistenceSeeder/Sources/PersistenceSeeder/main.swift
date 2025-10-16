@@ -1,4 +1,5 @@
 import Foundation
+import PersistenceSeederKit
 
 @main
 struct PersistenceSeederCLI {
@@ -13,6 +14,10 @@ struct PersistenceSeederCLI {
         var persistAPIKey: String?
         var persistSecretRef: (service: String, account: String)?
         var uploadLimit: Int?
+        var splitByPlay = false
+        var corpusPrefixOverride: String?
+        var corpusIdExplicit = false
+        var playFilter: String?
 
         var idx = 1
         let args = CommandLine.arguments
@@ -32,6 +37,7 @@ struct PersistenceSeederCLI {
             case "--corpus":
                 guard idx + 1 < args.count else { throw CLIError.invalidArguments("--corpus requires a value") }
                 corpusId = args[idx + 1]
+                corpusIdExplicit = true
                 idx += 2
             case "--source":
                 guard idx + 1 < args.count else { throw CLIError.invalidArguments("--source requires a value") }
@@ -66,6 +72,17 @@ struct PersistenceSeederCLI {
                 }
                 uploadLimit = parsed
                 idx += 2
+            case "--split-by-play":
+                splitByPlay = true
+                idx += 1
+            case "--corpus-prefix":
+                guard idx + 1 < args.count else { throw CLIError.invalidArguments("--corpus-prefix requires a value") }
+                corpusPrefixOverride = args[idx + 1]
+                idx += 2
+            case "--play":
+                guard idx + 1 < args.count else { throw CLIError.invalidArguments("--play requires a value") }
+                playFilter = args[idx + 1]
+                idx += 2
             case "-h", "--help":
                 printUsage()
                 return
@@ -77,6 +94,10 @@ struct PersistenceSeederCLI {
         guard let repoPath else {
             printUsage()
             return
+        }
+
+        if splitByPlay && corpusIdExplicit && corpusPrefixOverride == nil {
+            throw CLIError.invalidArguments("--corpus cannot be combined with --split-by-play; use --corpus-prefix to set a prefix")
         }
 
         let printer = JSONPrinter()
@@ -92,29 +113,85 @@ struct PersistenceSeederCLI {
         } else {
             let seeder = PersistenceSeeder()
             do {
-                let result = try seeder.seed(repoPath: repoPath, corpusId: corpusId, sourceRepo: sourceRepo, output: URL(fileURLWithPath: outputDir, isDirectory: true))
-                if summaryOnly {
-                    let formatter = ManifestSummaryFormatter()
-                    print(formatter.format(result: result))
-                } else {
-                    try printer.print(result.manifest)
-                }
-                if let persistURLString,
-                   let baseURL = URL(string: persistURLString) {
-                    if let secretRef = persistSecretRef, persistAPIKey == nil {
-                        do {
-                            persistAPIKey = try SecretLoader.load(service: secretRef.service, account: secretRef.account)
-                        } catch {
-                            fputs("ERROR: failed to load persist secret (\(error))\n", stderr)
-                            exit(1)
+                if splitByPlay {
+                    let prefix = corpusPrefixOverride ?? corpusId
+                    let results = try seeder.seedPlays(
+                        repoPath: repoPath,
+                        corpusPrefix: prefix,
+                        sourceRepo: sourceRepo,
+                        output: URL(fileURLWithPath: outputDir, isDirectory: true),
+                        playFilter: playFilter
+                    )
+                    if summaryOnly {
+                        let formatter = ManifestSummaryFormatter()
+                        for play in results {
+                            print(formatter.format(result: play.result, header: "\(play.title) [\(play.slug)]"))
+                        }
+                    } else {
+                        let manifests = results.map { $0.result.manifest }
+                        try printer.print(manifests)
+                    }
+                    if let persistURLString,
+                       let baseURL = URL(string: persistURLString) {
+                        if let secretRef = persistSecretRef, persistAPIKey == nil {
+                            do {
+                                persistAPIKey = try SecretLoader.load(service: secretRef.service, account: secretRef.account)
+                            } catch {
+                                fputs("ERROR: failed to load persist secret (\(error))\n", stderr)
+                                exit(1)
+                            }
+                        }
+                        let uploader = PersistUploader(baseURL: baseURL, apiKey: persistAPIKey)
+                        for play in results {
+                            do {
+                                try await uploader.apply(
+                                    manifest: play.result.manifest,
+                                    speeches: play.result.speeches,
+                                    uploadLimit: uploadLimit,
+                                    hostOverride: play.slug
+                                )
+                            } catch {
+                                fputs("UPLOAD ERROR [\(play.slug)]: \(error)\n", stderr)
+                                exit(1)
+                            }
                         }
                     }
-                    let uploader = PersistUploader(baseURL: baseURL, apiKey: persistAPIKey)
-                    do {
-                        try await uploader.apply(manifest: result.manifest, speeches: result.speeches, uploadLimit: uploadLimit)
-                    } catch {
-                        fputs("UPLOAD ERROR: \(error)\n", stderr)
-                        exit(1)
+                } else {
+                    let result = try seeder.seed(
+                        repoPath: repoPath,
+                        corpusId: corpusId,
+                        sourceRepo: sourceRepo,
+                        output: URL(fileURLWithPath: outputDir, isDirectory: true),
+                        playFilter: playFilter
+                    )
+                    if summaryOnly {
+                        let formatter = ManifestSummaryFormatter()
+                        print(formatter.format(result: result))
+                    } else {
+                        try printer.print(result.manifest)
+                    }
+                    if let persistURLString,
+                       let baseURL = URL(string: persistURLString) {
+                        if let secretRef = persistSecretRef, persistAPIKey == nil {
+                            do {
+                                persistAPIKey = try SecretLoader.load(service: secretRef.service, account: secretRef.account)
+                            } catch {
+                                fputs("ERROR: failed to load persist secret (\(error))\n", stderr)
+                                exit(1)
+                            }
+                        }
+                        let uploader = PersistUploader(baseURL: baseURL, apiKey: persistAPIKey)
+                        do {
+                            try await uploader.apply(
+                                manifest: result.manifest,
+                                speeches: result.speeches,
+                                uploadLimit: uploadLimit,
+                                hostOverride: corpusId
+                            )
+                        } catch {
+                            fputs("UPLOAD ERROR: \(error)\n", stderr)
+                            exit(1)
+                        }
                     }
                 }
             } catch {
@@ -142,6 +219,9 @@ struct PersistenceSeederCLI {
           --persist-api-key <key>          Optional API key attached as X-API-Key for PersistService.
           --persist-api-key-secret <ref>   Fetch API key from the local secret store; format service:account.
           --upload-limit <n>               Limit the number of derived speeches uploaded when --persist-url is set.
+          --split-by-play                 Split the repository into one corpus per play.
+          --corpus-prefix <prefix>        Custom prefix used when --split-by-play is enabled (default uses --corpus value).
+          --play <title-or-slug>          Restrict seeding to a specific Shakespeare play.
         """)
     }
 

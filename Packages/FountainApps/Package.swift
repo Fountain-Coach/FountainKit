@@ -41,6 +41,7 @@ let package = Package(
         .package(path: "../FountainServiceKit-ToolServer"),
         .package(path: "../FountainServiceKit-FKOps"),
         .package(path: "../FountainTooling"),
+        .package(path: "../../Tools/PersistenceSeeder"),
         .package(path: "../../External/Teatro/Packages/TeatroGUI"),
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
@@ -211,6 +212,8 @@ let package = Package(
                 .product(name: "FountainRuntime", package: "FountainCore"),
                 .product(name: "FountainAIAdapters", package: "FountainGatewayKit"),
                 .product(name: "LLMGatewayAPI", package: "FountainAPIClients"),
+                .product(name: "AwarenessAPI", package: "FountainAPIClients"),
+                .product(name: "BootstrapAPI", package: "FountainAPIClients"),
                 .product(name: "ApiClientsCore", package: "FountainAPIClients"),
                 .product(name: "SecretStore", package: "swift-secretstore")
             ],

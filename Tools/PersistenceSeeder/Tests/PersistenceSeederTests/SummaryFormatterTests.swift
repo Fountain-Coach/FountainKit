@@ -1,5 +1,5 @@
 import XCTest
-@testable import PersistenceSeeder
+@testable import PersistenceSeederKit
 
 final class SummaryFormatterTests: XCTestCase {
     func testSummaryIncludesCountsAndSample() {
@@ -27,7 +27,7 @@ final class SummaryFormatterTests: XCTestCase {
             audio: audio
         )
         let speeches = [
-            TheFourStarsParser.Speech(
+            FountainPlayParser.Speech(
                 act: "I",
                 scene: "I",
                 location: "Orchard",

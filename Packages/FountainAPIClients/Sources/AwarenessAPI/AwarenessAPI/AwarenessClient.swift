@@ -22,13 +22,13 @@ public struct AwarenessClient: Sendable {
     }
 
     /// Alias for the JSON payload returned by the health endpoint.
-    public typealias HealthPayload = Operations.health_health_get.Output.Ok.Body.jsonPayload
+    public typealias HealthPayload = OpenAPIObjectContainer
     /// Alias for responses returning generic JSON objects.
-    public typealias GenericPayload = OpenAPIValueContainer
+    public typealias GenericPayload = OpenAPIObjectContainer
     /// Alias for the payload returned by `/corpus/history` analytics endpoint.
-    public typealias HistoryAnalyticsPayload = Operations.listHistoryAnalytics.Output.Ok.Body.jsonPayload
+    public typealias HistoryAnalyticsPayload = OpenAPIObjectContainer
     /// Alias for the payload returned by `/corpus/semantic-arc`.
-    public typealias SemanticArcPayload = Operations.readSemanticArc.Output.Ok.Body.jsonPayload
+    public typealias SemanticArcPayload = OpenAPIObjectContainer
 
     private let client: Client
 
@@ -67,10 +67,9 @@ public struct AwarenessClient: Sendable {
         let output = try await client.health_health_get(.init())
         switch output {
         case .ok(let ok):
-            guard case let .json(body) = ok.body else {
-                throw AwarenessClientError.missingResponseBody(operation: "health_health_get")
-            }
-            return body
+            return try ok.body.json
+        case .badRequest:
+            throw AwarenessClientError.unexpectedStatus(code: 400)
         case .undocumented(let status, _):
             throw AwarenessClientError.unexpectedStatus(code: status)
         }
@@ -83,10 +82,9 @@ public struct AwarenessClient: Sendable {
         let output = try await client.initializeCorpus(.init(body: .json(request)))
         switch output {
         case .ok(let ok):
-            guard case let .json(body) = ok.body else {
-                throw AwarenessClientError.missingResponseBody(operation: "initializeCorpus")
-            }
-            return body
+            return try ok.body.json
+        case .unprocessableContent:
+            throw AwarenessClientError.unexpectedStatus(code: 422)
         case .undocumented(let status, _):
             throw AwarenessClientError.unexpectedStatus(code: status)
         }
@@ -99,10 +97,9 @@ public struct AwarenessClient: Sendable {
         let output = try await client.addBaseline(.init(body: .json(request)))
         switch output {
         case .ok(let ok):
-            guard case let .json(body) = ok.body else {
-                throw AwarenessClientError.missingResponseBody(operation: "addBaseline")
-            }
-            return body
+            return try ok.body.json
+        case .unprocessableContent:
+            throw AwarenessClientError.unexpectedStatus(code: 422)
         case .undocumented(let status, _):
             throw AwarenessClientError.unexpectedStatus(code: status)
         }
@@ -115,10 +112,9 @@ public struct AwarenessClient: Sendable {
         let output = try await client.addDrift(.init(body: .json(request)))
         switch output {
         case .ok(let ok):
-            guard case let .json(body) = ok.body else {
-                throw AwarenessClientError.missingResponseBody(operation: "addDrift")
-            }
-            return body
+            return try ok.body.json
+        case .unprocessableContent:
+            throw AwarenessClientError.unexpectedStatus(code: 422)
         case .undocumented(let status, _):
             throw AwarenessClientError.unexpectedStatus(code: status)
         }
@@ -131,10 +127,9 @@ public struct AwarenessClient: Sendable {
         let output = try await client.addPatterns(.init(body: .json(request)))
         switch output {
         case .ok(let ok):
-            guard case let .json(body) = ok.body else {
-                throw AwarenessClientError.missingResponseBody(operation: "addPatterns")
-            }
-            return body
+            return try ok.body.json
+        case .unprocessableContent:
+            throw AwarenessClientError.unexpectedStatus(code: 422)
         case .undocumented(let status, _):
             throw AwarenessClientError.unexpectedStatus(code: status)
         }
@@ -147,10 +142,9 @@ public struct AwarenessClient: Sendable {
         let output = try await client.addReflection(.init(body: .json(request)))
         switch output {
         case .ok(let ok):
-            guard case let .json(body) = ok.body else {
-                throw AwarenessClientError.missingResponseBody(operation: "addReflection")
-            }
-            return body
+            return try ok.body.json
+        case .unprocessableContent:
+            throw AwarenessClientError.unexpectedStatus(code: 422)
         case .undocumented(let status, _):
             throw AwarenessClientError.unexpectedStatus(code: status)
         }
@@ -161,10 +155,9 @@ public struct AwarenessClient: Sendable {
         let output = try await client.listReflections(.init(path: .init(corpus_id: corpusID)))
         switch output {
         case .ok(let ok):
-            guard case let .json(body) = ok.body else {
-                throw AwarenessClientError.missingResponseBody(operation: "listReflections")
-            }
-            return body
+            return try ok.body.json
+        case .unprocessableContent:
+            throw AwarenessClientError.unexpectedStatus(code: 422)
         case .undocumented(let status, _):
             throw AwarenessClientError.unexpectedStatus(code: status)
         }
@@ -175,10 +168,9 @@ public struct AwarenessClient: Sendable {
         let output = try await client.listHistory(.init(path: .init(corpus_id: corpusID)))
         switch output {
         case .ok(let ok):
-            guard case let .json(body) = ok.body else {
-                throw AwarenessClientError.missingResponseBody(operation: "listHistory")
-            }
-            return body
+            return try ok.body.json
+        case .unprocessableContent:
+            throw AwarenessClientError.unexpectedStatus(code: 422)
         case .undocumented(let status, _):
             throw AwarenessClientError.unexpectedStatus(code: status)
         }
@@ -189,10 +181,9 @@ public struct AwarenessClient: Sendable {
         let output = try await client.summarizeHistory(.init(path: .init(corpus_id: corpusID)))
         switch output {
         case .ok(let ok):
-            guard case let .json(body) = ok.body else {
-                throw AwarenessClientError.missingResponseBody(operation: "summarizeHistory")
-            }
-            return body
+            return try ok.body.json
+        case .unprocessableContent:
+            throw AwarenessClientError.unexpectedStatus(code: 422)
         case .undocumented(let status, _):
             throw AwarenessClientError.unexpectedStatus(code: status)
         }
@@ -204,10 +195,9 @@ public struct AwarenessClient: Sendable {
         let output = try await client.listHistoryAnalytics(.init(query: query))
         switch output {
         case .ok(let ok):
-            guard case let .json(body) = ok.body else {
-                throw AwarenessClientError.missingResponseBody(operation: "listHistoryAnalytics")
-            }
-            return body
+            return try ok.body.json
+        case .unprocessableContent:
+            throw AwarenessClientError.unexpectedStatus(code: 422)
         case .undocumented(let status, _):
             throw AwarenessClientError.unexpectedStatus(code: status)
         }
@@ -219,10 +209,9 @@ public struct AwarenessClient: Sendable {
         let output = try await client.readSemanticArc(.init(query: query))
         switch output {
         case .ok(let ok):
-            guard case let .json(body) = ok.body else {
-                throw AwarenessClientError.missingResponseBody(operation: "readSemanticArc")
-            }
-            return body
+            return try ok.body.json
+        case .unprocessableContent:
+            throw AwarenessClientError.unexpectedStatus(code: 422)
         case .undocumented(let status, _):
             throw AwarenessClientError.unexpectedStatus(code: status)
         }
@@ -241,6 +230,8 @@ public struct AwarenessClient: Sendable {
                 throw AwarenessClientError.invalidPlainTextEncoding(operation: "metrics")
             }
             return text
+        case .badRequest:
+            throw AwarenessClientError.unexpectedStatus(code: 400)
         case .undocumented(let status, _):
             throw AwarenessClientError.unexpectedStatus(code: status)
         }

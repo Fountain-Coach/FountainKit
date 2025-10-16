@@ -1,25 +1,41 @@
 import Foundation
 import Yams
 
-struct RepositoryProfile: Codable, Equatable {
-    struct Entry: Codable, Equatable {
-        let path: String
-        let kind: String
-        let extensionName: String
-        let frontMatterKeys: [String]
+public struct RepositoryProfile: Codable, Equatable, Sendable {
+    public struct Entry: Codable, Equatable, Sendable {
+        public let path: String
+        public let kind: String
+        public let extensionName: String
+        public let frontMatterKeys: [String]
+
+        public init(path: String, kind: String, extensionName: String, frontMatterKeys: [String]) {
+            self.path = path
+            self.kind = kind
+            self.extensionName = extensionName
+            self.frontMatterKeys = frontMatterKeys
+        }
     }
 
-    let totalFiles: Int
-    let extensions: [String: Int]
-    let directories: [String: Int]
-    let samples: [Entry]
+    public let totalFiles: Int
+    public let extensions: [String: Int]
+    public let directories: [String: Int]
+    public let samples: [Entry]
+
+    public init(totalFiles: Int, extensions: [String: Int], directories: [String: Int], samples: [Entry]) {
+        self.totalFiles = totalFiles
+        self.extensions = extensions
+        self.directories = directories
+        self.samples = samples
+    }
 }
 
-struct RepositoryAnalyzer {
-    let fileManager = FileManager.default
-    let parser = MarkdownParser()
+public struct RepositoryAnalyzer {
+    private let fileManager = FileManager.default
+    private let parser = MarkdownParser()
 
-    func analyze(repoPath: String, maxSamples: Int = 10) throws -> RepositoryProfile {
+    public init() {}
+
+    public func analyze(repoPath: String, maxSamples: Int = 10) throws -> RepositoryProfile {
         let root = URL(fileURLWithPath: repoPath, isDirectory: true)
         guard fileManager.fileExists(atPath: root.path, isDirectory: nil) else {
             throw SeederError.repoNotFound(repoPath)

@@ -1,9 +1,9 @@
 import Foundation
 
-struct JSONPrinter {
+public struct JSONPrinter {
     private let encoder: JSONEncoder
 
-    init(pretty: Bool = true) {
+    public init(pretty: Bool = true) {
         encoder = JSONEncoder()
         if pretty {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -11,7 +11,7 @@ struct JSONPrinter {
         encoder.dateEncodingStrategy = .iso8601
     }
 
-    func print<T: Encodable>(_ value: T) throws {
+    public func print<T: Encodable>(_ value: T) throws {
         let data = try encoder.encode(value)
         if let string = String(data: data, encoding: .utf8) {
             Swift.print(string)

@@ -106,7 +106,8 @@ let package = Package(
         .target(
             name: "ChatKitGatewayPlugin",
             dependencies: [
-                .product(name: "FountainRuntime", package: "FountainCore")
+                .product(name: "FountainRuntime", package: "FountainCore"),
+                "LLMGatewayPlugin"
             ]
         ),
         .target(

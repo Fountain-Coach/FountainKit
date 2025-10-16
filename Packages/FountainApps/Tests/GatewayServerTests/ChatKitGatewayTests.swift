@@ -3,11 +3,24 @@ import Foundation
 import FoundationNetworking
 #endif
 import XCTest
-import ChatKitGatewayPlugin
-
+@testable import ChatKitGatewayPlugin
 @testable import gateway_server
 
+private struct StubResponder: ChatResponder {
+    func respond(session: ChatKitSessionStore.StoredSession,
+                 request: ChatKitMessageRequest,
+                 preferStreaming: Bool) async throws -> ChatResponderResult {
+        let answer = request.messages.last(where: { $0.role.lowercased() == "user" })?.content ?? ""
+        return ChatResponderResult(answer: answer,
+                                   provider: "stub",
+                                   model: "stub-model",
+                                   usage: ["prompt_tokens": 1])
+    }
+}
+
 final class ChatKitGatewayTests: XCTestCase {
+    private let responder = StubResponder()
+
     private struct Session: Decodable {
         let client_secret: String
         let session_id: String
@@ -21,7 +34,10 @@ final class ChatKitGatewayTests: XCTestCase {
     }
 
     func startGateway() async -> ServerTestUtils.RunningServer {
-        await ServerTestUtils.startGateway(on: 18121, plugins: [ChatKitGatewayPlugin()])
+        let plugin = ChatKitGatewayPlugin(store: ChatKitSessionStore(),
+                                          uploadStore: ChatKitUploadStore(),
+                                          responder: responder)
+        return await ServerTestUtils.startGateway(on: 18121, plugins: [plugin])
     }
 
     private func createSession(on port: Int) async throws -> Session {

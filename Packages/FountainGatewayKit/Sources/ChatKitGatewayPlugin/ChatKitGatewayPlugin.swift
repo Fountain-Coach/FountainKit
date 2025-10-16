@@ -1,5 +1,6 @@
 import Foundation
 import FountainRuntime
+import LLMGatewayPlugin
 
 /// Plugin exposing gateway endpoints compatible with the ChatKit front-end.
 public struct ChatKitGatewayPlugin: Sendable {
@@ -7,7 +8,17 @@ public struct ChatKitGatewayPlugin: Sendable {
 
     public init(store: ChatKitSessionStore = ChatKitSessionStore(),
                 uploadStore: ChatKitUploadStore = ChatKitUploadStore()) {
-        self.router = Router(handlers: Handlers(store: store, uploadStore: uploadStore))
+        self.router = Router(handlers: Handlers(store: store,
+                                                uploadStore: uploadStore,
+                                                responder: LLMChatResponder()))
+    }
+
+    init(store: ChatKitSessionStore,
+         uploadStore: ChatKitUploadStore,
+         responder: any ChatResponder) {
+        self.router = Router(handlers: Handlers(store: store,
+                                                uploadStore: uploadStore,
+                                                responder: responder))
     }
 }
 
@@ -16,7 +27,7 @@ public struct ChatKitGatewayPlugin: Sendable {
 public struct Router: Sendable {
     let handlers: Handlers
 
-    public init(handlers: Handlers) {
+    init(handlers: Handlers) {
         self.handlers = handlers
     }
 
@@ -45,15 +56,176 @@ public struct Router: Sendable {
     }
 }
 
-// MARK: - Handlers
+// MARK: - Responder Abstractions
 
-public struct Handlers: Sendable {
+/// Normalised result returned by a chat responder.
+struct ChatResponderResult: Sendable {
+    public let answer: String
+    public let provider: String?
+    public let model: String?
+    public let usage: [String: Double]?
+}
+
+/// Strategy interface used to fulfil ChatKit message requests.
+protocol ChatResponder: Sendable {
+    func respond(session: ChatKitSessionStore.StoredSession,
+                 request: ChatKitMessageRequest,
+                 preferStreaming: Bool) async throws -> ChatResponderResult
+}
+
+/// Default responder that forwards requests to the LLM Gateway plugin.
+struct LLMChatResponder: ChatResponder {
+    private let call: @Sendable (HTTPRequest, ChatRequest) async throws -> HTTPResponse
+    private let defaultModel: String
+
+    init(plugin: LLMGatewayPlugin = LLMGatewayPlugin(),
+         defaultModel: String? = nil) {
+        let handlers = plugin.router.handlers
+        self.call = { request, body in
+            try await handlers.chatWithObjective(request, body: body)
+        }
+        self.defaultModel = defaultModel
+            ?? ProcessInfo.processInfo.environment["CHATKIT_DEFAULT_MODEL"]
+            ?? "gpt-4o-mini"
+    }
+
+    func respond(session: ChatKitSessionStore.StoredSession,
+                 request: ChatKitMessageRequest,
+                 preferStreaming: Bool) async throws -> ChatResponderResult {
+        let modelHint = request.metadata?["model"] ?? session.metadata["model"]
+        let model = (modelHint?.isEmpty == false) ? modelHint! : defaultModel
+
+        let llmMessages = request.messages.map { MessageObject(role: $0.role, content: $0.content) }
+        let chatRequest = ChatRequest(model: model, messages: llmMessages)
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let body = try encoder.encode(chatRequest)
+        let httpRequest = HTTPRequest(
+            method: "POST",
+            path: "/chat",
+            headers: ["Content-Type": "application/json"],
+            body: body
+        )
+
+        let response = try await call(httpRequest, chatRequest)
+        guard (200...299).contains(response.status) else {
+            throw ChatKitGatewayError.llmFailure(status: response.status)
+        }
+
+        return try decodeLLMResponse(response.body, contentType: response.headers["Content-Type"])
+    }
+
+    private func decodeLLMResponse(_ data: Data, contentType: String?) throws -> ChatResponderResult {
+        if let contentType, contentType.contains("text/event-stream") {
+            return try decodeSSEPayload(data)
+        }
+        return try decodeJSONPayload(data)
+    }
+
+    private func decodeJSONPayload(_ data: Data) throws -> ChatResponderResult {
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw ChatKitGatewayError.invalidResponse("non JSON body")
+        }
+
+        let answer = extractAnswer(from: object)
+        guard let answer else {
+            throw ChatKitGatewayError.invalidResponse("missing answer")
+        }
+
+        let provider = object["provider"] as? String
+        let model = object["model"] as? String
+        let usage = extractUsage(from: object["usage"])
+
+        return ChatResponderResult(answer: answer,
+                                   provider: provider,
+                                   model: model,
+                                   usage: usage)
+    }
+
+    private func decodeSSEPayload(_ data: Data) throws -> ChatResponderResult {
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw ChatKitGatewayError.invalidResponse("invalid SSE payload")
+        }
+        var answerFragments: [String] = []
+        var provider: String?
+        var model: String?
+        var usage: [String: Double]?
+
+        for block in text.components(separatedBy: "\n\n") {
+            for line in block.split(whereSeparator: \.isNewline) {
+                guard line.starts(with: "data:") else { continue }
+                let payload = line.dropFirst("data:".count).trimmingCharacters(in: .whitespaces)
+                if payload == "[DONE]" { continue }
+                guard let jsonData = payload.data(using: .utf8),
+                      let object = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
+                    continue
+                }
+                if let delta = (object["delta"] as? [String: Any])?["content"] as? String {
+                    answerFragments.append(delta)
+                }
+                if let finalAnswer = object["answer"] as? String {
+                    answerFragments.append(finalAnswer)
+                }
+                if provider == nil { provider = object["provider"] as? String }
+                if model == nil { model = object["model"] as? String }
+                if usage == nil, let rawUsage = object["usage"] {
+                    usage = extractUsage(from: rawUsage)
+                }
+            }
+        }
+
+        let answer = answerFragments.joined()
+        guard !answer.isEmpty else {
+            throw ChatKitGatewayError.invalidResponse("empty SSE answer")
+        }
+        return ChatResponderResult(answer: answer,
+                                   provider: provider,
+                                   model: model,
+                                   usage: usage)
+    }
+
+    private func extractAnswer(from object: [String: Any]) -> String? {
+        if let answer = object["answer"] as? String, !answer.isEmpty {
+            return answer
+        }
+        if let choices = object["choices"] as? [[String: Any]],
+           let first = choices.first,
+           let message = first["message"] as? [String: Any] {
+            if let content = message["content"] as? String, !content.isEmpty {
+                return content
+            }
+        }
+        return nil
+    }
+
+    private func extractUsage(from raw: Any?) -> [String: Double]? {
+        guard let dict = raw as? [String: Any] else { return nil }
+        var usage: [String: Double] = [:]
+        for (key, value) in dict {
+            if let number = value as? NSNumber {
+                usage[key] = number.doubleValue
+            } else if let str = value as? String, let dbl = Double(str) {
+                usage[key] = dbl
+            }
+        }
+        return usage.isEmpty ? nil : usage
+    }
+}
+
+// MARK: - Gateway Handlers
+
+struct Handlers: Sendable {
     private let store: ChatKitSessionStore
     private let uploadStore: ChatKitUploadStore
+    private let responder: any ChatResponder
 
-    public init(store: ChatKitSessionStore, uploadStore: ChatKitUploadStore) {
+    public init(store: ChatKitSessionStore,
+                uploadStore: ChatKitUploadStore,
+                responder: any ChatResponder) {
         self.store = store
         self.uploadStore = uploadStore
+        self.responder = responder
     }
 
     public func startSession(_ request: HTTPRequest) async -> HTTPResponse {
@@ -99,28 +271,38 @@ public struct Handlers: Sendable {
             return makeError(status: 401, code: "invalid_secret", message: "client secret expired or unknown")
         }
 
+        let preferStreaming = payload.stream ?? true
+        let mergedMetadata = mergeMetadata(session.metadata, payload.metadata)
         let threadId = payload.thread_id ?? session.id
         let responseId = UUID().uuidString.lowercased()
         let createdAt = isoTimestamp()
-        let answer = deriveAnswer(from: payload.messages)
-        let metadata = session.metadata.isEmpty ? nil : session.metadata
 
-        if payload.stream ?? true {
-            return makeStreamResponse(answer: answer,
-                                      threadId: threadId,
-                                      responseId: responseId,
-                                      createdAt: createdAt,
-                                      metadata: metadata)
-        } else {
-            let response = ChatKitMessageResponse(answer: answer,
-                                                  thread_id: threadId,
-                                                  response_id: responseId,
-                                                  created_at: createdAt,
-                                                  provider: "fountainkit",
-                                                  model: "echo",
-                                                  usage: nil,
-                                                  metadata: metadata)
-            return encodeJSON(response, status: 200)
+        do {
+            let result = try await responder.respond(session: session,
+                                                     request: payload,
+                                                     preferStreaming: preferStreaming)
+            if preferStreaming {
+                return makeStreamResponse(answer: result.answer,
+                                          provider: result.provider,
+                                          model: result.model,
+                                          usage: result.usage,
+                                          threadId: threadId,
+                                          responseId: responseId,
+                                          createdAt: createdAt,
+                                          metadata: mergedMetadata)
+            } else {
+                let response = ChatKitMessageResponse(answer: result.answer,
+                                                      thread_id: threadId,
+                                                      response_id: responseId,
+                                                      created_at: createdAt,
+                                                      provider: result.provider,
+                                                      model: result.model,
+                                                      usage: result.usage,
+                                                      metadata: mergedMetadata)
+                return encodeJSON(response, status: 200)
+            }
+        } catch {
+            return makeError(status: 502, code: "llm_error", message: error.localizedDescription)
         }
     }
 
@@ -186,8 +368,13 @@ public struct Handlers: Sendable {
         return encodeJSON(payload, status: status)
     }
 
-    private func deriveAnswer(from messages: [ChatKitMessage]) -> String {
-        messages.last(where: { $0.role.lowercased() == "user" })?.content ?? ""
+    private func mergeMetadata(_ session: [String: String],
+                               _ request: [String: String]?) -> [String: String]? {
+        var combined = session
+        if let request {
+            for (key, value) in request { combined[key] = value }
+        }
+        return combined.isEmpty ? nil : combined
     }
 
     private func isoTimestamp(_ date: Date = Date()) -> String {
@@ -197,12 +384,22 @@ public struct Handlers: Sendable {
     }
 
     private func makeStreamResponse(answer: String,
+                                    provider: String?,
+                                    model: String?,
+                                    usage: [String: Double]?,
                                     threadId: String,
                                     responseId: String,
                                     createdAt: String,
                                     metadata: [String: String]?) -> HTTPResponse {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
+        var metadataBlock = metadata ?? [:]
+        if let provider { metadataBlock["provider"] = provider }
+        if let model { metadataBlock["model"] = model }
+        if let usage {
+            for (key, value) in usage {
+                metadataBlock["usage.\(key)"] = String(value)
+            }
+        }
+        let envelopeMetadata = metadataBlock.isEmpty ? nil : metadataBlock
 
         let deltaEvent = ChatKitStreamEventEnvelope(
             id: UUID().uuidString.lowercased(),
@@ -225,9 +422,11 @@ public struct Handlers: Sendable {
             thread_id: threadId,
             response_id: responseId,
             created_at: createdAt,
-            metadata: metadata
+            metadata: envelopeMetadata
         )
 
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
         let events = [deltaEvent, completionEvent]
         var body = ""
         for event in events {
@@ -268,8 +467,10 @@ public struct Handlers: Sendable {
         for segment in raw.components(separatedBy: delimiter) {
             var section = segment.trimmingCharacters(in: .whitespacesAndNewlines)
             if section == "--" || section.isEmpty { continue }
-            if section.hasSuffix("--") { section.removeLast(2) }
-            section = section.trimmingCharacters(in: .whitespacesAndNewlines)
+            if section.hasSuffix("--") {
+                section.removeLast(2)
+                section = section.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
             guard !section.isEmpty else { continue }
 
             let pieces = section.components(separatedBy: "\n\n")
@@ -301,14 +502,12 @@ public struct Handlers: Sendable {
         var result: [String: String] = [:]
         for component in header.split(separator: ";") {
             let trimmed = component.trimmingCharacters(in: .whitespaces)
-            if trimmed.contains("=") {
-                let parts = trimmed.split(separator: "=", maxSplits: 1)
-                guard parts.count == 2 else { continue }
-                let key = String(parts[0]).trimmingCharacters(in: .whitespaces)
-                var value = String(parts[1]).trimmingCharacters(in: .whitespaces)
-                value = value.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
-                result[key] = value
-            }
+            let parts = trimmed.split(separator: "=", maxSplits: 1)
+            guard parts.count == 2 else { continue }
+            let key = String(parts[0]).trimmingCharacters(in: .whitespaces)
+            var value = String(parts[1]).trimmingCharacters(in: .whitespaces)
+            value = value.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+            result[key] = value
         }
         return result.isEmpty ? nil : result
     }
@@ -400,7 +599,47 @@ public actor ChatKitSessionStore {
     }
 }
 
-// MARK: - Models
+// MARK: - Upload Store
+
+public actor ChatKitUploadStore {
+    public struct StoredAttachment: Sendable {
+        public let id: String
+        public let fileName: String
+        public let mimeType: String
+        public let data: Data
+        public let sessionId: String
+        public let threadId: String?
+    }
+
+    public struct Descriptor: Sendable {
+        public let id: String
+        public let url: String
+        public let mimeType: String?
+    }
+
+    private var attachments: [String: StoredAttachment] = [:]
+
+    public init() {}
+
+    public func store(fileName: String,
+                      mimeType: String?,
+                      data: Data,
+                      sessionId: String,
+                      threadId: String?) -> Descriptor {
+        let attachmentId = UUID().uuidString.lowercased()
+        let stored = StoredAttachment(id: attachmentId,
+                                      fileName: fileName,
+                                      mimeType: mimeType ?? "application/octet-stream",
+                                      data: data,
+                                      sessionId: sessionId,
+                                      threadId: threadId)
+        attachments[attachmentId] = stored
+        let url = "memory://chatkit-attachments/" + attachmentId
+        return Descriptor(id: attachmentId, url: url, mimeType: stored.mimeType)
+    }
+}
+
+// MARK: - Models & Errors
 
 struct ChatKitSessionRequest: Decodable {
     let persona: String?
@@ -490,41 +729,17 @@ struct ChatKitUploadResponse: Encodable {
     let mime_type: String?
 }
 
-public actor ChatKitUploadStore {
-    public struct StoredAttachment: Sendable {
-        public let id: String
-        public let fileName: String
-        public let mimeType: String
-        public let data: Data
-        public let sessionId: String
-        public let threadId: String?
-    }
+enum ChatKitGatewayError: Error, LocalizedError {
+    case llmFailure(status: Int)
+    case invalidResponse(String)
 
-    public struct Descriptor: Sendable {
-        public let id: String
-        public let url: String
-        public let mimeType: String?
-    }
-
-    private var attachments: [String: StoredAttachment] = [:]
-
-    public init() {}
-
-    public func store(fileName: String,
-                      mimeType: String?,
-                      data: Data,
-                      sessionId: String,
-                      threadId: String?) -> Descriptor {
-        let attachmentId = UUID().uuidString.lowercased()
-        let stored = StoredAttachment(id: attachmentId,
-                                      fileName: fileName,
-                                      mimeType: mimeType ?? "application/octet-stream",
-                                      data: data,
-                                      sessionId: sessionId,
-                                      threadId: threadId)
-        attachments[attachmentId] = stored
-        let url = "memory://chatkit-attachments/" + attachmentId
-        return Descriptor(id: attachmentId, url: url, mimeType: stored.mimeType)
+    var errorDescription: String? {
+        switch self {
+        case .llmFailure(let status):
+            return "LLM gateway failed with status \(status)"
+        case .invalidResponse(let reason):
+            return "Invalid LLM response: \(reason)"
+        }
     }
 }
 

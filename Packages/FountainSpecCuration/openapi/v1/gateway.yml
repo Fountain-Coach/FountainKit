@@ -513,6 +513,17 @@ components:
           type: string
         done:
           type: boolean
+        thread_id:
+          type: string
+        response_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
         error:
           $ref: '#/components/schemas/ErrorResponse'
     ChatKitUploadRequest:

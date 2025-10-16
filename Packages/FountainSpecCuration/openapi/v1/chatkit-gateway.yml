@@ -316,6 +316,21 @@ components:
         done:
           type: boolean
           description: True when the stream has finished sending content.
+        thread_id:
+          type: string
+          description: Thread identifier associated with the streamed response.
+        response_id:
+          type: string
+          description: Unique identifier for the streamed response envelope.
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp emitted alongside the completion event.
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: Metadata surface returned with the completion event.
         error:
           $ref: '#/components/schemas/ErrorResponse'
     ChatKitUploadRequest:

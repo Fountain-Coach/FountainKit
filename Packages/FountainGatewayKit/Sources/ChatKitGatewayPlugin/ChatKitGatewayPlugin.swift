@@ -89,8 +89,36 @@ public struct Handlers: Sendable {
     }
 
     public func postMessage(_ request: HTTPRequest) async -> HTTPResponse {
-        // Streaming pipeline not yet implemented.
-        makeError(status: 501, code: "not_implemented", message: "chat message handling not implemented")
+        guard let payload = try? JSONDecoder().decode(ChatKitMessageRequest.self, from: request.body) else {
+            return makeError(status: 400, code: "invalid_request", message: "invalid message payload")
+        }
+        guard let session = await store.session(for: payload.client_secret) else {
+            return makeError(status: 401, code: "invalid_secret", message: "client secret expired or unknown")
+        }
+
+        let threadId = payload.thread_id ?? session.id
+        let responseId = UUID().uuidString.lowercased()
+        let createdAt = isoTimestamp()
+        let answer = deriveAnswer(from: payload.messages)
+        let metadata = session.metadata.isEmpty ? nil : session.metadata
+
+        if payload.stream ?? true {
+            return makeStreamResponse(answer: answer,
+                                      threadId: threadId,
+                                      responseId: responseId,
+                                      createdAt: createdAt,
+                                      metadata: metadata)
+        } else {
+            let response = ChatKitMessageResponse(answer: answer,
+                                                  thread_id: threadId,
+                                                  response_id: responseId,
+                                                  created_at: createdAt,
+                                                  provider: "fountainkit",
+                                                  model: "echo",
+                                                  usage: nil,
+                                                  metadata: metadata)
+            return encodeJSON(response, status: 200)
+        }
     }
 
     public func uploadAttachment(_ request: HTTPRequest) async -> HTTPResponse {
@@ -111,6 +139,71 @@ public struct Handlers: Sendable {
     private func makeError(status: Int, code: String, message: String) -> HTTPResponse {
         let payload = ChatKitErrorResponse(error: message, code: code)
         return encodeJSON(payload, status: status)
+    }
+
+    private func deriveAnswer(from messages: [ChatKitMessage]) -> String {
+        messages.last(where: { $0.role.lowercased() == "user" })?.content ?? ""
+    }
+
+    private func isoTimestamp(_ date: Date = Date()) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: date)
+    }
+
+    private func makeStreamResponse(answer: String,
+                                    threadId: String,
+                                    responseId: String,
+                                    createdAt: String,
+                                    metadata: [String: String]?) -> HTTPResponse {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+
+        let deltaEvent = ChatKitStreamEventEnvelope(
+            id: UUID().uuidString.lowercased(),
+            event: "delta",
+            delta: .init(content: answer),
+            answer: nil,
+            done: nil,
+            thread_id: nil,
+            response_id: nil,
+            created_at: nil,
+            metadata: nil
+        )
+
+        let completionEvent = ChatKitStreamEventEnvelope(
+            id: UUID().uuidString.lowercased(),
+            event: "completion",
+            delta: nil,
+            answer: answer,
+            done: true,
+            thread_id: threadId,
+            response_id: responseId,
+            created_at: createdAt,
+            metadata: metadata
+        )
+
+        let events = [deltaEvent, completionEvent]
+        var body = ""
+        for event in events {
+            guard let data = try? encoder.encode(event),
+                  let json = String(data: data, encoding: .utf8) else { continue }
+            if let id = event.id {
+                body += "id: \(id)\n"
+            }
+            body += "event: \(event.event)\n"
+            body += "data: \(json)\n\n"
+        }
+
+        return HTTPResponse(
+            status: 202,
+            headers: [
+                "Content-Type": "text/event-stream",
+                "Cache-Control": "no-store",
+                "Connection": "keep-alive"
+            ],
+            body: Data(body.utf8)
+        )
     }
 }
 
@@ -172,6 +265,18 @@ public actor ChatKitSessionStore {
         return refreshed
     }
 
+    public func session(for secret: String) -> StoredSession? {
+        guard let sessionId = secrets[secret], let stored = sessions[sessionId] else {
+            return nil
+        }
+        guard stored.expiresAt >= clock() else {
+            sessions.removeValue(forKey: sessionId)
+            secrets.removeValue(forKey: secret)
+            return nil
+        }
+        return stored
+    }
+
     private func issueSecret() -> String {
         var bytes = [UInt8](repeating: 0, count: 24)
         for index in bytes.indices {
@@ -212,6 +317,57 @@ struct ChatKitSessionResponse: Encodable {
 struct ChatKitErrorResponse: Encodable {
     let error: String
     let code: String
+}
+
+struct ChatKitMessageRequest: Decodable {
+    let client_secret: String
+    let thread_id: String?
+    let messages: [ChatKitMessage]
+    let stream: Bool?
+    let metadata: [String: String]?
+}
+
+struct ChatKitMessage: Decodable {
+    let id: String?
+    let role: String
+    let content: String
+    let created_at: String?
+    let attachments: [ChatKitAttachment]?
+}
+
+struct ChatKitAttachment: Decodable {
+    let id: String
+    let type: String
+    let name: String?
+    let mime_type: String?
+    let size_bytes: Int?
+}
+
+struct ChatKitMessageResponse: Encodable {
+    let answer: String
+    let thread_id: String
+    let response_id: String
+    let created_at: String
+    let provider: String?
+    let model: String?
+    let usage: [String: Double]?
+    let metadata: [String: String]?
+}
+
+struct ChatKitStreamEventEnvelope: Encodable {
+    let id: String?
+    let event: String
+    let delta: ChatKitStreamDelta?
+    let answer: String?
+    let done: Bool?
+    let thread_id: String?
+    let response_id: String?
+    let created_at: String?
+    let metadata: [String: String]?
+}
+
+struct ChatKitStreamDelta: Encodable {
+    let content: String
 }
 
 // © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

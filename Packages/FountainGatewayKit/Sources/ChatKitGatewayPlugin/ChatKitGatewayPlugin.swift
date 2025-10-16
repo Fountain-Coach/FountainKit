@@ -13,7 +13,8 @@ public struct ChatKitGatewayPlugin: Sendable {
                 metadataStore: (any ChatKitAttachmentMetadataStore)? = nil,
                 responder: (any ChatResponder)? = nil,
                 maxAttachmentBytes: Int? = nil,
-                allowedAttachmentMIMEs: Set<String>? = nil) {
+                allowedAttachmentMIMEs: Set<String>? = nil,
+                logger: (any ChatKitAttachmentLogger)? = nil) {
         let resolvedResponder: any ChatResponder = responder ?? LLMChatResponder()
         let resolvedMetadataStore: any ChatKitAttachmentMetadataStore = metadataStore
             ?? InMemoryAttachmentMetadataStore()
@@ -25,7 +26,8 @@ public struct ChatKitGatewayPlugin: Sendable {
                                                 uploadStore: uploadStore,
                                                 metadataStore: resolvedMetadataStore,
                                                 responder: resolvedResponder,
-                                                attachmentPolicy: policy))
+                                                attachmentPolicy: policy,
+                                                logger: logger))
     }
 }
 
@@ -161,6 +163,32 @@ public struct ChatKitAttachmentMetadata: Codable, Sendable {
 public protocol ChatKitAttachmentMetadataStore: Sendable {
     func upsert(metadata: ChatKitAttachmentMetadata) async throws
     func metadata(for attachmentId: String) async throws -> ChatKitAttachmentMetadata?
+    func delete(attachmentId: String) async throws
+}
+
+public protocol ChatKitAttachmentLogger: Sendable {
+    func attachmentUploadSucceeded(requestId: String,
+                                   metadata: ChatKitAttachmentMetadata) async
+    func attachmentUploadFailed(requestId: String,
+                                sessionId: String?,
+                                threadId: String?,
+                                attachmentId: String?,
+                                fileName: String?,
+                                mimeType: String?,
+                                sizeBytes: Int?,
+                                status: Int,
+                                code: String,
+                                message: String) async
+    func attachmentDownloadSucceeded(requestId: String,
+                                     attachmentId: String,
+                                     sessionId: String,
+                                     bytes: Int) async
+    func attachmentDownloadFailed(requestId: String,
+                                  attachmentId: String?,
+                                  sessionId: String?,
+                                  status: Int,
+                                  code: String,
+                                  message: String) async
 }
 
 actor InMemoryAttachmentMetadataStore: ChatKitAttachmentMetadataStore {
@@ -172,6 +200,10 @@ actor InMemoryAttachmentMetadataStore: ChatKitAttachmentMetadataStore {
 
     func metadata(for attachmentId: String) -> ChatKitAttachmentMetadata? {
         storage[attachmentId]
+    }
+
+    func delete(attachmentId: String) {
+        storage.removeValue(forKey: attachmentId)
     }
 }
 
@@ -325,17 +357,20 @@ struct Handlers: Sendable {
     private let metadataStore: any ChatKitAttachmentMetadataStore
     private let responder: any ChatResponder
     private let attachmentPolicy: AttachmentValidationPolicy
+    private let logger: (any ChatKitAttachmentLogger)?
 
     public init(store: ChatKitSessionStore,
                 uploadStore: ChatKitUploadStore,
                 metadataStore: any ChatKitAttachmentMetadataStore,
                 responder: any ChatResponder,
-                attachmentPolicy: AttachmentValidationPolicy) {
+                attachmentPolicy: AttachmentValidationPolicy,
+                logger: (any ChatKitAttachmentLogger)? = nil) {
         self.store = store
         self.uploadStore = uploadStore
         self.metadataStore = metadataStore
         self.responder = responder
         self.attachmentPolicy = attachmentPolicy
+        self.logger = logger
     }
 
     public func startSession(_ request: HTTPRequest) async -> HTTPResponse {
@@ -418,65 +453,158 @@ struct Handlers: Sendable {
     }
 
     public func uploadAttachment(_ request: HTTPRequest) async -> HTTPResponse {
+        let requestId = UUID().uuidString.lowercased()
+        var sessionId: String?
+        var threadId: String?
+        var fileName: String?
+        var mimeType: String?
+        var sizeBytes: Int?
+        var attachmentId: String?
+
         guard let contentType = request.headers["Content-Type"],
               contentType.starts(with: "multipart/form-data") else {
-            return makeError(status: 400, code: "invalid_request", message: "multipart/form-data required")
+            return await uploadFailure(requestId: requestId,
+                                       sessionId: sessionId,
+                                       threadId: threadId,
+                                       attachmentId: attachmentId,
+                                       fileName: fileName,
+                                       mimeType: mimeType,
+                                       sizeBytes: sizeBytes,
+                                       status: 400,
+                                       code: "invalid_request",
+                                       message: "multipart/form-data required")
         }
 
         guard let boundary = parseBoundary(from: contentType) else {
-            return makeError(status: 400, code: "invalid_request", message: "multipart boundary missing")
+            return await uploadFailure(requestId: requestId,
+                                       sessionId: sessionId,
+                                       threadId: threadId,
+                                       attachmentId: attachmentId,
+                                       fileName: fileName,
+                                       mimeType: mimeType,
+                                       sizeBytes: sizeBytes,
+                                       status: 400,
+                                       code: "invalid_request",
+                                       message: "multipart boundary missing")
         }
 
         guard let multipart = parseMultipart(body: request.body, boundary: boundary) else {
-            return makeError(status: 400, code: "invalid_request", message: "malformed multipart payload")
+            return await uploadFailure(requestId: requestId,
+                                       sessionId: sessionId,
+                                       threadId: threadId,
+                                       attachmentId: attachmentId,
+                                       fileName: fileName,
+                                       mimeType: mimeType,
+                                       sizeBytes: sizeBytes,
+                                       status: 400,
+                                       code: "invalid_request",
+                                       message: "malformed multipart payload")
         }
 
         guard let secretPart = multipart.first(where: { $0.name == "client_secret" }),
               let clientSecret = String(data: secretPart.data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
               !clientSecret.isEmpty else {
-            return makeError(status: 400, code: "invalid_request", message: "client_secret part missing")
+            return await uploadFailure(requestId: requestId,
+                                       sessionId: sessionId,
+                                       threadId: threadId,
+                                       attachmentId: attachmentId,
+                                       fileName: fileName,
+                                       mimeType: mimeType,
+                                       sizeBytes: sizeBytes,
+                                       status: 400,
+                                       code: "invalid_request",
+                                       message: "client_secret part missing")
         }
 
         guard let session = await store.session(for: clientSecret) else {
-            return makeError(status: 401, code: "invalid_secret", message: "client secret expired or unknown")
+            return await uploadFailure(requestId: requestId,
+                                       sessionId: sessionId,
+                                       threadId: threadId,
+                                       attachmentId: attachmentId,
+                                       fileName: fileName,
+                                       mimeType: mimeType,
+                                       sizeBytes: sizeBytes,
+                                       status: 401,
+                                       code: "invalid_secret",
+                                       message: "client secret expired or unknown")
         }
 
-        let threadId = multipart.first(where: { $0.name == "thread_id" })
+        sessionId = session.id
+        threadId = multipart.first(where: { $0.name == "thread_id" })
             .flatMap { String(data: $0.data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) }
 
         guard let filePart = multipart.first(where: { $0.name == "file" }) else {
-            return makeError(status: 400, code: "invalid_request", message: "file part missing")
+            return await uploadFailure(requestId: requestId,
+                                       sessionId: sessionId,
+                                       threadId: threadId,
+                                       attachmentId: attachmentId,
+                                       fileName: fileName,
+                                       mimeType: mimeType,
+                                       sizeBytes: sizeBytes,
+                                       status: 400,
+                                       code: "invalid_request",
+                                       message: "file part missing")
         }
 
-        let fileName = filePart.filename ?? "attachment"
+        fileName = filePart.filename ?? "attachment"
         let providedMime = filePart.contentType?.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedMime = providedMime?.lowercased() ?? "application/octet-stream"
+        mimeType = normalizedMime
+        sizeBytes = filePart.data.count
 
         if filePart.data.count > attachmentPolicy.maxAttachmentBytes {
             let limitMB = Double(attachmentPolicy.maxAttachmentBytes) / 1_048_576.0
             let formatted = limitMB >= 1 ? String(format: "%.1f", limitMB) : String(format: "%.0f", limitMB * 1024)
             let unit = limitMB >= 1 ? "MB" : "KB"
-            return makeError(status: 413,
-                             code: "attachment_too_large",
-                             message: "attachments cannot exceed \(formatted) \(unit)")
+            return await uploadFailure(requestId: requestId,
+                                       sessionId: sessionId,
+                                       threadId: threadId,
+                                       attachmentId: attachmentId,
+                                       fileName: fileName,
+                                       mimeType: mimeType,
+                                       sizeBytes: sizeBytes,
+                                       status: 413,
+                                       code: "attachment_too_large",
+                                       message: "attachments cannot exceed \(formatted) \(unit)")
         }
 
         guard attachmentPolicy.isAllowed(mimeType: normalizedMime) else {
-            return makeError(status: 415,
-                             code: "unsupported_media_type",
-                             message: "mime type \(normalizedMime) is not allowed")
+            return await uploadFailure(requestId: requestId,
+                                       sessionId: sessionId,
+                                       threadId: threadId,
+                                       attachmentId: attachmentId,
+                                       fileName: fileName,
+                                       mimeType: mimeType,
+                                       sizeBytes: sizeBytes,
+                                       status: 415,
+                                       code: "unsupported_media_type",
+                                       message: "mime type \(normalizedMime) is not allowed")
         }
 
         let descriptor: ChatKitUploadStore.Descriptor
         do {
-            descriptor = try await uploadStore.store(fileName: fileName,
+            descriptor = try await uploadStore.store(fileName: fileName ?? "attachment",
                                                      mimeType: providedMime ?? normalizedMime,
                                                      data: filePart.data,
                                                      sessionId: session.id,
                                                      threadId: threadId)
         } catch {
-            return makeError(status: 500, code: "storage_error", message: error.localizedDescription)
+            return await uploadFailure(requestId: requestId,
+                                       sessionId: sessionId,
+                                       threadId: threadId,
+                                       attachmentId: attachmentId,
+                                       fileName: fileName,
+                                       mimeType: mimeType,
+                                       sizeBytes: sizeBytes,
+                                       status: 500,
+                                       code: "storage_error",
+                                       message: error.localizedDescription)
         }
+
+        attachmentId = descriptor.id
+        fileName = descriptor.fileName
+        mimeType = descriptor.mimeType
+        sizeBytes = descriptor.sizeBytes
 
         let metadata = ChatKitAttachmentMetadata(attachmentId: descriptor.id,
                                                  sessionId: descriptor.sessionId,
@@ -490,8 +618,19 @@ struct Handlers: Sendable {
             try await metadataStore.upsert(metadata: metadata)
         } catch {
             try? await uploadStore.delete(attachmentId: descriptor.id)
-            return makeError(status: 500, code: "storage_error", message: "failed to persist attachment metadata")
+            return await uploadFailure(requestId: requestId,
+                                       sessionId: sessionId,
+                                       threadId: threadId,
+                                       attachmentId: attachmentId,
+                                       fileName: fileName,
+                                       mimeType: mimeType,
+                                       sizeBytes: sizeBytes,
+                                       status: 500,
+                                       code: "storage_error",
+                                       message: "failed to persist attachment metadata")
         }
+
+        await logger?.attachmentUploadSucceeded(requestId: requestId, metadata: metadata)
 
         let response = ChatKitUploadResponse(attachment_id: descriptor.id,
                                              upload_url: descriptor.url,
@@ -500,60 +639,154 @@ struct Handlers: Sendable {
     }
 
     public func downloadAttachment(_ request: HTTPRequest, attachmentId: String) async -> HTTPResponse {
+        let requestId = UUID().uuidString.lowercased()
+        var sessionId: String?
+
         let query = parseQueryParameters(from: request.path)
         guard let clientSecret = query["client_secret"], !clientSecret.isEmpty else {
-            return makeError(status: 400, code: "invalid_request", message: "client_secret query parameter required")
+            return await downloadFailure(requestId: requestId,
+                                         attachmentId: attachmentId,
+                                         sessionId: sessionId,
+                                         status: 400,
+                                         code: "invalid_request",
+                                         message: "client_secret query parameter required")
         }
 
         guard let session = await store.session(for: clientSecret) else {
-            return makeError(status: 401, code: "invalid_secret", message: "client secret expired or unknown")
+            return await downloadFailure(requestId: requestId,
+                                         attachmentId: attachmentId,
+                                         sessionId: sessionId,
+                                         status: 401,
+                                         code: "invalid_secret",
+                                         message: "client secret expired or unknown")
         }
+
+        sessionId = session.id
 
         let metadata: ChatKitAttachmentMetadata
         do {
             guard let loaded = try await metadataStore.metadata(for: attachmentId) else {
-                return makeError(status: 404, code: "not_found", message: "attachment not found")
+                return await downloadFailure(requestId: requestId,
+                                             attachmentId: attachmentId,
+                                             sessionId: sessionId,
+                                             status: 404,
+                                             code: "not_found",
+                                             message: "attachment not found")
             }
             metadata = loaded
         } catch {
-            return makeError(status: 500, code: "storage_error", message: "failed to load attachment metadata")
+            return await downloadFailure(requestId: requestId,
+                                         attachmentId: attachmentId,
+                                         sessionId: sessionId,
+                                         status: 500,
+                                         code: "storage_error",
+                                         message: "failed to load attachment metadata")
         }
 
         guard metadata.sessionId == session.id else {
-            return makeError(status: 403, code: "forbidden", message: "attachment not associated with session")
+            return await downloadFailure(requestId: requestId,
+                                         attachmentId: attachmentId,
+                                         sessionId: sessionId,
+                                         status: 403,
+                                         code: "forbidden",
+                                         message: "attachment not associated with session")
         }
 
         let stored: ChatKitUploadStore.StoredAttachment
         do {
             guard let fetched = try await uploadStore.load(attachmentId: attachmentId) else {
-                return makeError(status: 404, code: "not_found", message: "attachment not found")
+                return await downloadFailure(requestId: requestId,
+                                             attachmentId: attachmentId,
+                                             sessionId: sessionId,
+                                             status: 404,
+                                             code: "not_found",
+                                             message: "attachment not found")
             }
             stored = fetched
         } catch {
-            return makeError(status: 500, code: "storage_error", message: error.localizedDescription)
+            return await downloadFailure(requestId: requestId,
+                                         attachmentId: attachmentId,
+                                         sessionId: sessionId,
+                                         status: 500,
+                                         code: "storage_error",
+                                         message: error.localizedDescription)
         }
 
         guard stored.descriptor.sizeBytes == stored.data.count,
               stored.descriptor.sizeBytes == metadata.sizeBytes else {
-            return makeError(status: 409, code: "metadata_mismatch", message: "attachment size metadata mismatch")
+            return await downloadFailure(requestId: requestId,
+                                         attachmentId: attachmentId,
+                                         sessionId: sessionId,
+                                         status: 409,
+                                         code: "metadata_mismatch",
+                                         message: "attachment size metadata mismatch")
         }
 
         let computedChecksum = ChatKitUploadStore.checksum(for: stored.data)
         guard computedChecksum == metadata.checksum else {
-            return makeError(status: 409, code: "metadata_mismatch", message: "attachment checksum mismatch")
+            return await downloadFailure(requestId: requestId,
+                                         attachmentId: attachmentId,
+                                         sessionId: sessionId,
+                                         status: 409,
+                                         code: "metadata_mismatch",
+                                         message: "attachment checksum mismatch")
         }
 
         let resolvedMime = stored.descriptor.mimeType.isEmpty ? "application/octet-stream" : stored.descriptor.mimeType
         let safeName = stored.descriptor.fileName.replacingOccurrences(of: "\"", with: "")
-        var headers: [String: String] = [
+        let body = stored.data
+        let headers: [String: String] = [
             "Content-Type": resolvedMime,
-            "Content-Length": "\(stored.data.count)",
+            "Content-Length": "\(body.count)",
             "Cache-Control": "no-store",
             "Content-Disposition": "attachment; filename=\"\(safeName.isEmpty ? "attachment" : safeName)\"",
             "ETag": computedChecksum
         ]
 
-        return HTTPResponse(status: 200, headers: headers, body: stored.data)
+        await logger?.attachmentDownloadSucceeded(requestId: requestId,
+                                                  attachmentId: attachmentId,
+                                                  sessionId: session.id,
+                                                  bytes: body.count)
+
+        return HTTPResponse(status: 200, headers: headers, body: body)
+    }
+
+    private func uploadFailure(requestId: String,
+                               sessionId: String?,
+                               threadId: String?,
+                               attachmentId: String?,
+                               fileName: String?,
+                               mimeType: String?,
+                               sizeBytes: Int?,
+                               status: Int,
+                               code: String,
+                               message: String) async -> HTTPResponse {
+        await logger?.attachmentUploadFailed(requestId: requestId,
+                                             sessionId: sessionId,
+                                             threadId: threadId,
+                                             attachmentId: attachmentId,
+                                             fileName: fileName,
+                                             mimeType: mimeType,
+                                             sizeBytes: sizeBytes,
+                                             status: status,
+                                             code: code,
+                                             message: message)
+        return makeError(status: status, code: code, message: message)
+    }
+
+    private func downloadFailure(requestId: String,
+                                 attachmentId: String?,
+                                 sessionId: String?,
+                                 status: Int,
+                                 code: String,
+                                 message: String) async -> HTTPResponse {
+        await logger?.attachmentDownloadFailed(requestId: requestId,
+                                               attachmentId: attachmentId,
+                                               sessionId: sessionId,
+                                               status: status,
+                                               code: code,
+                                               message: message)
+        return makeError(status: status, code: code, message: message)
     }
 
     private func encodeJSON<T: Encodable>(_ value: T, status: Int) -> HTTPResponse {

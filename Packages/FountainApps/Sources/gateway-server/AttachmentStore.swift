@@ -33,6 +33,11 @@ public actor GatewayAttachmentStore: ChatKitAttachmentMetadataStore {
         return record.metadata
     }
 
+    public func delete(attachmentId: String) async throws {
+        try await ensureCorpus()
+        try await store.deleteDoc(corpusId: corpusId, collection: collection, id: attachmentId)
+    }
+
     private func ensureCorpus() async throws {
         if ensuredCorpus { return }
         if try await store.getCorpus(corpusId) == nil {

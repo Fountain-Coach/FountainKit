@@ -43,13 +43,19 @@ async function createSession(config) {
 }
 
 const DEFAULT_CDN = 'https://cdn.openai.com/chatkit/v1/chatkit.umd.js';
+const DEFAULT_VENDOR = '/Public/vendor/chatkit/chatkit.umd.js';
+const DEFAULT_VENDOR_FALLBACK = '/Public/vendor/chatkit/chatkit.dev.js';
 
 async function ensureChatKitLoaded(config) {
   if (typeof window.ChatKit?.mount === 'function') return;
-  const url = (config && config.cdnUrl) || DEFAULT_CDN;
+  // Prefer vendored bundle when present
+  const vendorUrl = (config && config.localUrl) || DEFAULT_VENDOR;
+  const vendorFallbackUrl = DEFAULT_VENDOR_FALLBACK;
+  const cdnUrl = (config && config.cdnUrl) || DEFAULT_CDN;
 
   // Try to find an existing CDN tag first
   let script = document.querySelector('script[data-chatkit-cdn]')
+           || document.querySelector('script[src*="vendor/chatkit/"]')
            || document.querySelector('script[src*="cdn.openai.com/chatkit/"]');
 
   const waitForLoad = (el) => new Promise((resolve, reject) => {
@@ -66,24 +72,37 @@ async function ensureChatKitLoaded(config) {
   });
 
   if (!script) {
+    // Attempt vendored bundle first
     script = document.createElement('script');
-    script.src = url;
+    script.src = vendorUrl;
     script.defer = true;
-    script.crossOrigin = 'anonymous';
-    script.setAttribute('data-chatkit-cdn', '1');
+    script.setAttribute('data-chatkit-cdn', 'vendor');
     document.head.appendChild(script);
-  }
-
-  try {
-    await waitForLoad(script);
-  } catch (e) {
-    // Try local dev stub as a fallback
-    window.dispatchEvent(new CustomEvent('chatkit:loader:fallback', { detail: { reason: (e && e.message) || 'cdn_error' } }));
-    script = document.createElement('script');
-    script.src = (config && config.localUrl) || '/Public/vendor/chatkit/chatkit.dev.js';
-    script.defer = true;
-    script.setAttribute('data-chatkit-cdn', 'dev-stub');
-    document.head.appendChild(script);
+    try {
+      await waitForLoad(script);
+    } catch (vendorErr) {
+      // Try CDN as secondary option
+      window.dispatchEvent(new CustomEvent('chatkit:loader:fallback', { detail: { reason: 'vendor_error', message: String(vendorErr?.message || vendorErr) } }));
+      script = document.createElement('script');
+      script.src = cdnUrl;
+      script.defer = true;
+      script.crossOrigin = 'anonymous';
+      script.setAttribute('data-chatkit-cdn', 'cdn');
+      document.head.appendChild(script);
+      try {
+        await waitForLoad(script);
+      } catch (cdnErr) {
+        // Final fallback to dev stub
+        window.dispatchEvent(new CustomEvent('chatkit:loader:fallback', { detail: { reason: 'cdn_error', message: String(cdnErr?.message || cdnErr) } }));
+        script = document.createElement('script');
+        script.src = vendorFallbackUrl;
+        script.defer = true;
+        script.setAttribute('data-chatkit-cdn', 'dev-stub');
+        document.head.appendChild(script);
+        await waitForLoad(script);
+      }
+    }
+  } else {
     await waitForLoad(script);
   }
 

@@ -360,8 +360,20 @@ public final class EngraverChatViewModel: ObservableObject {
         if let token = bearerToken, !token.isEmpty { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         do {
             let (data, _) = try await URLSession.shared.data(for: req)
-            let raw = try JSONDecoder().decode([GatewayRequestEvent].self, from: data)
-            await MainActor.run { self.trafficEvents = raw }
+            if data.isEmpty {
+                await MainActor.run { self.trafficEvents = [] }
+                return
+            }
+            do {
+                let raw = try JSONDecoder().decode([GatewayRequestEvent].self, from: data)
+                await MainActor.run { self.trafficEvents = raw }
+            } catch {
+                if let s = String(data: data, encoding: .utf8), s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    await MainActor.run { self.trafficEvents = [] }
+                } else {
+                    emitDiagnostic("Traffic decode error: \(error)")
+                }
+            }
         } catch {
             emitDiagnostic("Traffic fetch error: \(error)")
         }

@@ -3,6 +3,7 @@ import SwiftUI
 import AppKit
 import EngraverStudio
 import EngraverChatCore
+import Darwin
 
 @main
 @available(macOS 13.0, *)
@@ -29,6 +30,8 @@ struct EngraverStudioStandaloneApp: App {
                 env["FOUNTAINKIT_ROOT"] = inferred.path
             }
         }
+        // Propagate env overrides to child processes (EnvironmentManager uses ProcessInfo.environment)
+        for (k, v) in env { setenv(k, v, 1) }
         configuration = EngraverStudioConfiguration(environment: env)
     }
 

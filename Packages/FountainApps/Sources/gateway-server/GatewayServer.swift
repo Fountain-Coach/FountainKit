@@ -143,6 +143,10 @@ public final class GatewayServer {
                 let data = (try? JSONEncoder().encode(items)) ?? Data("[]".utf8)
                 return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: data)
             }
+            if req.method == "POST" && req.path.split(separator: "?", maxSplits: 1).first == "/admin/routes/reload" {
+                self.reloadRoutes()
+                return HTTPResponse(status: 204)
+            }
             var request = req
             do {
                 for plugin in plugins {

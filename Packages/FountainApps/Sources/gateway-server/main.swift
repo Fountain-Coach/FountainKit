@@ -87,15 +87,25 @@ plugins.append(contentsOf: [
     authPlugin as any GatewayPlugin,
     curatorPlugin as any GatewayPlugin,
     chatKitPlugin as any GatewayPlugin,
-    llmPlugin as any GatewayPlugin,
-    rateLimiter as any GatewayPlugin,
+    llmPlugin as any GatewayPlugin
+])
+if let rl = rateLimiter { plugins.append(rl as any GatewayPlugin) }
+plugins.append(contentsOf: [
     LoggingPlugin() as any GatewayPlugin,
     PublishingFrontendPlugin(rootPath: publishingConfig?.rootPath ?? "./Public") as any GatewayPlugin
 ])
-let orchestrator = GatewayPersonaOrchestrator(personas: [
-    SecuritySentinelPersona(),
-    DestructiveGuardianPersona()
-])
+let enableSentinel = {
+    let v = env["GATEWAY_ENABLE_SENTINEL"]?.lowercased()
+    return !(v == "0" || v == "false")
+}()
+let enableGuardian = {
+    let v = env["GATEWAY_ENABLE_GUARDIAN"]?.lowercased()
+    return !(v == "0" || v == "false")
+}()
+var personas: [any GatewayPersona] = []
+if enableSentinel { personas.append(SecuritySentinelPersona()) }
+if enableGuardian { personas.append(DestructiveGuardianPersona()) }
+let orchestrator = GatewayPersonaOrchestrator(personas: personas)
 
 let server = GatewayServer(plugins: plugins, zoneManager: nil, routeStoreURL: routesURL, certificatePath: nil, rateLimiter: rateLimiter, roleGuardStore: roleGuardStore, personaOrchestrator: orchestrator)
 Task { @MainActor in

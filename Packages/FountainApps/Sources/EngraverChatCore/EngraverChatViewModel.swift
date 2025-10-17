@@ -400,6 +400,21 @@ public final class EngraverChatViewModel: ObservableObject {
         guard restart, let environmentManager else { return }
         await environmentManager.stopEnvironment(includeExtras: true, force: true)
         await environmentManager.startEnvironment(includeExtras: true)
+        // Poll until running to avoid premature requests
+        for _ in 0..<30 {
+            await environmentManager.refreshStatus()
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            if case .running = environmentState { break }
+        }
+    }
+
+    // Admin actions
+    public func reloadGatewayRoutes() async {
+        var url = gatewayBaseURL
+        url.append(path: "/admin/routes/reload")
+        var req = URLRequest(url: url); req.httpMethod = "POST"
+        if let token = bearerToken, !token.isEmpty { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        do { _ = try await URLSession.shared.data(for: req); emitDiagnostic("Gateway routes reloaded.") } catch { emitDiagnostic("Routes reload error: \(error)") }
     }
 
     // MARK: - Gateway settings (rate limiter)

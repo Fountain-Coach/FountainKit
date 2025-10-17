@@ -834,7 +834,49 @@ private struct BootSidePane: View {
                             Task { await viewModel.applyGatewaySettings(restart: true) }
                         } label: { Label("Apply & Restart", systemImage: "arrow.clockwise") }
                         .buttonStyle(.borderedProminent)
+                        Spacer()
+                        Button {
+                            Task { await viewModel.reloadGatewayRoutes() }
+                        } label: { Label("Reload Routes", systemImage: "arrow.triangle.2.circlepath") }
+                        .buttonStyle(.borderless)
                     }
+                }
+            }
+            GroupBox(label: Text("Auth Settings")) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("JWKS URL (optional)").font(.caption)
+                    TextField("https://…/jwks.json", text: Binding(
+                        get: { ProcessInfo.processInfo.environment["GATEWAY_JWKS_URL"] ?? "" },
+                        set: { setenv("GATEWAY_JWKS_URL", $0, 1) }
+                    ))
+                    .textFieldStyle(.roundedBorder)
+                    HStack(spacing: 8) {
+                        Button {
+                            // Clear JWKS to use HMAC validator
+                            unsetenv("GATEWAY_JWKS_URL")
+                        } label: { Label("Use HMAC", systemImage: "key") }
+                        .buttonStyle(.bordered)
+                        Button {
+                            Task { await viewModel.applyGatewaySettings(restart: true) }
+                        } label: { Label("Apply & Restart", systemImage: "arrow.clockwise") }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
+            }
+            GroupBox(label: Text("Personas")) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Security Sentinel", isOn: Binding(
+                        get: { !(ProcessInfo.processInfo.environment["GATEWAY_ENABLE_SENTINEL"]?.lowercased() == "0" || ProcessInfo.processInfo.environment["GATEWAY_ENABLE_SENTINEL"]?.lowercased() == "false") },
+                        set: { setenv("GATEWAY_ENABLE_SENTINEL", $0 ? "1" : "0", 1) }
+                    ))
+                    Toggle("Destructive Guardian", isOn: Binding(
+                        get: { !(ProcessInfo.processInfo.environment["GATEWAY_ENABLE_GUARDIAN"]?.lowercased() == "0" || ProcessInfo.processInfo.environment["GATEWAY_ENABLE_GUARDIAN"]?.lowercased() == "false") },
+                        set: { setenv("GATEWAY_ENABLE_GUARDIAN", $0 ? "1" : "0", 1) }
+                    ))
+                    Button {
+                        Task { await viewModel.applyGatewaySettings(restart: true) }
+                    } label: { Label("Apply & Restart", systemImage: "arrow.clockwise") }
+                    .buttonStyle(.bordered)
                 }
             }
         }

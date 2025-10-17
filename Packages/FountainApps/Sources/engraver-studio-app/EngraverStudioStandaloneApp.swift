@@ -14,6 +14,8 @@ struct EngraverStudioStandaloneApp: App {
         var env = ProcessInfo.processInfo.environment
         if CommandLine.arguments.contains("--debug") {
             env["ENGRAVER_DEBUG"] = "1"
+            if env["GATEWAY_DISABLE_RATELIMIT"] == nil { env["GATEWAY_DISABLE_RATELIMIT"] = "1" }
+            if env["GATEWAY_RATE_LIMIT_PER_MINUTE"] == nil { env["GATEWAY_RATE_LIMIT_PER_MINUTE"] = "1000" }
         }
         // Resolve secrets via SecretStoreHelper (Keychain on macOS; libsecret on Linux)
         if env["GATEWAY_BEARER"] == nil,

@@ -322,7 +322,7 @@ public final class EngraverChatViewModel: ObservableObject {
         public let path: String
         public let status: Int
         public let durationMs: Int
-        public let timestamp: Date
+        public let timestamp: String
         public let client: String?
     }
     @Published public private(set) var trafficEvents: [GatewayRequestEvent] = []
@@ -335,8 +335,7 @@ public final class EngraverChatViewModel: ObservableObject {
         if let token = bearerToken, !token.isEmpty { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         do {
             let (data, _) = try await URLSession.shared.data(for: req)
-            let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
-            let raw = try dec.decode([GatewayRequestEvent].self, from: data)
+            let raw = try JSONDecoder().decode([GatewayRequestEvent].self, from: data)
             await MainActor.run { self.trafficEvents = raw }
         } catch {
             emitDiagnostic("Traffic fetch error: \(error)")

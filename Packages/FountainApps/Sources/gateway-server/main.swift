@@ -27,7 +27,11 @@ if gatewayConfig == nil {
     FileHandle.standardError.write(Data("[gateway] Warning: failed to load gateway config; using defaults for rate limiting.\n".utf8))
 }
 let chatKitConfig = loadChatKitConfig(environment: env)
-let rateLimiter = RateLimiterGatewayPlugin(defaultLimit: gatewayConfig?.rateLimitPerMinute ?? 60)
+let rateLimiter: RateLimiterGatewayPlugin? = {
+    let disabled = env["GATEWAY_DISABLE_RATELIMIT"]?.lowercased()
+    if disabled == "1" || disabled == "true" { return nil }
+    return RateLimiterGatewayPlugin(defaultLimit: gatewayConfig?.rateLimitPerMinute ?? 60)
+}()
 let curatorPlugin = CuratorGatewayPlugin()
 let llmPlugin = LLMGatewayPlugin()
 let authPlugin = AuthGatewayPlugin()

@@ -16,6 +16,10 @@ public struct GatewayConfig: Codable {
 /// Falls back to `Configuration/gateway.yml` when FountainStore is unavailable.
 public func loadGatewayConfig(store: ConfigurationStore? = nil,
                               environment: [String: String] = ProcessInfo.processInfo.environment) throws -> GatewayConfig {
+    // Highest priority: environment override for fast local control
+    if let raw = environment["GATEWAY_RATE_LIMIT_PER_MINUTE"], let val = Int(raw) {
+        return GatewayConfig(rateLimitPerMinute: val)
+    }
     let svc = store ?? ConfigurationStore.fromEnvironment(environment)
     if let data = svc?.getSync("gateway.yml"), let text = String(data: data, encoding: .utf8) {
         return try decodeGatewayConfig(from: text)

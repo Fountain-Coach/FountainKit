@@ -280,6 +280,7 @@ public final class EngraverChatViewModel: ObservableObject {
     }
 
     private let chatClient: GatewayChatStreaming
+    private let gatewayBaseURL: URL
     private let awarenessClient: AwarenessClient?
     private let bootstrapClient: BootstrapClient?
     private let seedingConfiguration: EngraverStudioConfiguration.SeedingConfiguration?
@@ -314,6 +315,32 @@ public final class EngraverChatViewModel: ObservableObject {
         return formatter
     }()
 
+    // MARK: - Gateway traffic control pane
+    public struct GatewayRequestEvent: Identifiable, Codable, Sendable {
+        public let id = UUID()
+        public let method: String
+        public let path: String
+        public let status: Int
+        public let durationMs: Int
+        public let timestamp: Date
+        public let client: String?
+    }
+    @Published public private(set) var trafficEvents: [GatewayRequestEvent] = []
+    public func refreshGatewayTraffic() async {
+        var url = gatewayBaseURL
+        url.append(path: "/admin/recent")
+        var req = URLRequest(url: url)
+        if let token = bearerToken, !token.isEmpty { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        do {
+            let (data, _) = try await URLSession.shared.data(for: req)
+            let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
+            let raw = try dec.decode([GatewayRequestEvent].self, from: data)
+            await MainActor.run { self.trafficEvents = raw }
+        } catch {
+            emitDiagnostic("Traffic fetch error: \(error)")
+        }
+    }
+
     public init(
         chatClient: GatewayChatStreaming,
         persistenceStore: FountainStoreClient? = nil,
@@ -329,9 +356,11 @@ public final class EngraverChatViewModel: ObservableObject {
         fountainRepoRoot: URL? = nil,
         semanticSeeder: SemanticBrowserSeeder = SemanticBrowserSeeder(),
         idGenerator: @escaping @Sendable () -> UUID = { UUID() },
-        dateProvider: @escaping @Sendable () -> Date = { Date() }
+        dateProvider: @escaping @Sendable () -> Date = { Date() },
+        gatewayBaseURL: URL
     ) {
         self.chatClient = chatClient
+        self.gatewayBaseURL = gatewayBaseURL
         if let persistenceStore {
             self.persistenceContext = PersistenceContext(store: persistenceStore, corpusId: corpusId, collection: collection)
         } else {

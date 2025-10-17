@@ -845,7 +845,7 @@ private struct RightPane: View {
             Picker("", selection: Binding(get: { tab }, set: { tab = $0 })) {
                 Text("Boot Trail").tag(Tab.logs)
                 Text("Diagnostics").tag(Tab.diagnostics)
-            }
+                }
             .pickerStyle(.segmented)
 
             if tab == .logs {
@@ -859,12 +859,37 @@ private struct RightPane: View {
                             .frame(minHeight: 260)
                     }
                 }
-            } else {
+            } else if tab == .diagnostics {
                 DiagnosticsPanel(messages: viewModel.diagnostics)
+            }
+            GroupBox(label: HStack { Text("Gateway Traffic"); Spacer(); Button { Task { await viewModel.refreshGatewayTraffic() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }.buttonStyle(.borderless) }) {
+                if viewModel.trafficEvents.isEmpty {
+                    Text("No recent traffic. Press Refresh.").foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    ScrollView { LazyVStack(alignment: .leading, spacing: 6) {
+                        ForEach(viewModel.trafficEvents) { ev in
+                            HStack(spacing: 8) {
+                                statusDot(ev.status)
+                                Text("\(ev.method)").font(.caption.weight(.semibold))
+                                Text(ev.path).font(.caption).lineLimit(1)
+                                Spacer()
+                                Text("\(ev.status)").font(.caption2)
+                                Text("\(ev.durationMs)ms").font(.caption2).foregroundStyle(.secondary)
+                            }
+                        }
+                    } }
+                    .textSelection(.enabled)
+                    .frame(minHeight: 160)
+                }
             }
             Spacer()
         }
         .padding(12)
+    }
+
+    private func statusDot(_ status: Int) -> some View {
+        let color: Color = (200...299).contains(status) ? .green : (status == 429 ? .orange : .red)
+        return Circle().fill(color).frame(width: 6, height: 6)
     }
 }
 

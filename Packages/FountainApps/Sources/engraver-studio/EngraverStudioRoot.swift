@@ -29,7 +29,8 @@ public struct EngraverStudioRoot: View {
                 bootstrapBaseURL: configuration.bootstrapBaseURL,
                 bearerToken: configuration.bearerToken,
                 seedingConfiguration: configuration.seedingConfiguration,
-                fountainRepoRoot: configuration.fountainRepoRoot
+                fountainRepoRoot: configuration.fountainRepoRoot,
+                gatewayBaseURL: configuration.gatewayBaseURL
             )
         )
     }

@@ -1,6 +1,6 @@
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'AgentService' complete! (0.20s)
+Build of product 'AgentService' complete! (0.18s)
 e' complete! (0.40s)
 ntCore CoreMLBackend.swift
 [5/9] Emitting module AgentService

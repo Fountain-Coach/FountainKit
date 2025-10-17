@@ -14,7 +14,7 @@ struct LocalAgentConfig: Codable {
     static let `default` = LocalAgentConfig(
         repo_url: "https://github.com/Fountain-Coach/LocalAgent",
         rel_dir: "External/LocalAgent",
-        backend: "coreml",
+        backend: "llama",
         host: "127.0.0.1",
         port: 8080
     )
@@ -122,12 +122,19 @@ struct LocalAgentManager {
             obj["backend"] = config.backend
             obj["host"] = config.host
             obj["port"] = config.port
-            // Ensure modelPath is set for Core ML backend
+            // Ensure modelPath is set for the selected backend
             if (config.backend.lowercased() == "coreml") {
-                let defaultCoreML = "AgentService/Models/coreml-model.mlmodelc"
+                let defaultCoreMLMLModel = "AgentService/Models/coreml-model.mlmodel"
                 let current = (obj["modelPath"] as? String) ?? ""
-                if current.isEmpty || current.hasSuffix(".gguf") || current.hasSuffix(".bin") {
-                    obj["modelPath"] = defaultCoreML
+                if current.isEmpty || current.hasSuffix(".gguf") || current.hasSuffix(".bin") || current.hasSuffix(".mlmodelc") {
+                    obj["modelPath"] = defaultCoreMLMLModel
+                }
+            } else if (config.backend.lowercased() == "llama") {
+                // Default Hermes 2 Pro Mistral 7B Q4_K_M path
+                let defaultGGUF = "AgentService/Models/Hermes-2-Pro-Mistral-7B.Q4_K_M.gguf"
+                let current = (obj["modelPath"] as? String) ?? ""
+                if current.isEmpty || (!current.hasSuffix(".gguf") && !current.hasSuffix(".bin")) {
+                    obj["modelPath"] = defaultGGUF
                 }
             }
             let out = try JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted])

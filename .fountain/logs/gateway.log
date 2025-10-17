@@ -2254,3 +2254,345 @@ ics
 [curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bfd530 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 1ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <4C0C8B38-5FDB-4356-9C0B-3A72FB42A761>.<257>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
     "LocalDataTask <4C0C8B38-5FDB-4356-9C0B-3A72FB42A761>.<257>"
 ), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bc50b0 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 1ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <26F55BB1-B273-493A-9C13-096493CD40B5>.<258>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <26F55BB1-B273-493A-9C13-096493CD40B5>.<258>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bc9320 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 2ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <B4701A19-77B1-4B03-8FF8-5B789F46E198>.<259>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <B4701A19-77B1-4B03-8FF8-5B789F46E198>.<259>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bc9080 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 2ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <C86638BB-EFF9-454A-8D83-140F157DDAEC>.<260>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <C86638BB-EFF9-454A-8D83-140F157DDAEC>.<260>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+ GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-17T11:59:13.280Z","ttlSeconds":86400}
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-17T12:14:28.281Z","ttlSeconds":86400}
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metric[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bc47e0 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 1ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <C05B1B4F-3F0B-498B-96F3-DBEA6397C518>.<261>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <C05B1B4F-3F0B-498B-96F3-DBEA6397C518>.<261>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bc55f0 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 1ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <9BCE3FE7-C94A-46B1-AFCE-F30AF1B369C9>.<262>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <9BCE3FE7-C94A-46B1-AFCE-F30AF1B369C9>.<262>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bcd4a0 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 1ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <C25D7523-52FB-44C8-B8DC-34FEB9A940A3>.<263>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <C25D7523-52FB-44C8-B8DC-34FEB9A940A3>.<263>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bcda10 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 1ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <74ECBE31-F8D7-4138-AEA4-7448203A7C96>.<264>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <74ECBE31-F8D7-4138-AEA4-7448203A7C96>.<264>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bc0210 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 1ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <84B70853-9BC4-43DB-A91F-42099F0B5D70>.<265>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <84B70853-9BC4-43DB-A91F-42099F0B5D70>.<265>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bc52f0 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 1ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <558FA040-DC81-4BBF-B58A-0DACAF30E182>.<266>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <558FA040-DC81-4BBF-B58A-0DACAF30E182>.<266>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bf9320 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 2ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <F4BA090C-DD66-40B5-B081-D057616FDAD7>.<267>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <F4BA090C-DD66-40B5-B081-D057616FDAD7>.<267>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bcc390 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 1ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <9BD1681D-1191-4255-8503-DB9436E0BE5C>.<268>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <9BD1681D-1191-4255-8503-DB9436E0BE5C>.<268>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bc8000 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 1ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <8CFD7B31-2514-4E4C-9E19-0DF2CBE6611F>.<269>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <8CFD7B31-2514-4E4C-9E19-0DF2CBE6611F>.<269>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bc85d0 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 2ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <8F064760-7B3C-45C8-B037-E813962E5736>.<270>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <8F064760-7B3C-45C8-B037-E813962E5736>.<270>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bfcdb0 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 1ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <849CD04E-DB11-41C0-9E2C-F395643ADDE2>.<271>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <849CD04E-DB11-41C0-9E2C-F395643ADDE2>.<271>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bc43f0 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 1ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <7314A914-1591-482C-81AB-064E2EE02161>.<272>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <7314A914-1591-482C-81AB-064E2EE02161>.<272>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bfc000 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 1ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <F19D8817-59AD-4A3F-A17E-6EDF2D06D9AE>.<273>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <F19D8817-59AD-4A3F-A17E-6EDF2D06D9AE>.<273>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bc4f00 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 2ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <E0A78769-573D-4674-B963-21DE4FA2F2AA>.<274>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <E0A78769-573D-4674-B963-21DE4FA2F2AA>.<274>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bc05a0 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 1ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <13CB10E9-F1BD-4AAC-9A9E-B48E2B7D879E>.<275>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <13CB10E9-F1BD-4AAC-9A9E-B48E2B7D879E>.<275>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bccc30 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 1ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <52A15456-3932-432B-B38C-6763D59DC2A9>.<276>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <52A15456-3932-432B-B38C-6763D59DC2A9>.<276>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bc5020 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 1ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <846B4D62-9E03-4D50-836B-ECF1ABDA9CE5>.<277>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <846B4D62-9E03-4D50-836B-ECF1ABDA9CE5>.<277>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bcc240 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 2ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <7B5A8B7B-D90E-476B-8647-E98C7CF10441>.<278>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <7B5A8B7B-D90E-476B-8647-E98C7CF10441>.<278>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bcc4e0 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 1ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <63928A3A-7876-4955-8A09-619AEC13094D>.<279>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <63928A3A-7876-4955-8A09-619AEC13094D>.<279>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bc48d0 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 2ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <57115AA4-C2E6-401B-BF02-64D75FCCF93E>.<280>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <57115AA4-C2E6-401B-BF02-64D75FCCF93E>.<280>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bc8060 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 2ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <0027D273-F005-44C6-BB15-7D2839D752F1>.<281>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <0027D273-F005-44C6-BB15-7D2839D752F1>.<281>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bc8240 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 2ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <566ADB92-12A0-4352-9A6A-D705EE78EE3E>.<282>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <566ADB92-12A0-4352-9A6A-D705EE78EE3E>.<282>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bc10e0 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 1ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <A4C59E4C-14DD-417A-988E-BB80C9F4EAA5>.<283>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <A4C59E4C-14DD-417A-988E-BB80C9F4EAA5>.<283>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bc4b10 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 2ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <F859E629-8B17-4CEB-B427-3C68618BBA1E>.<284>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <F859E629-8B17-4CEB-B427-3C68618BBA1E>.<284>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bc8f60 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 1ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <AF529D98-96F8-4A3C-B7F2-0AD0C1A5B2E0>.<285>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <AF529D98-96F8-4A3C-B7F2-0AD0C1A5B2E0>.<285>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bc0cf0 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 2ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <510E1D44-6E4D-4139-96A1-4D4D6A1382E7>.<286>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <510E1D44-6E4D-4139-96A1-4D4D6A1382E7>.<286>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1004 "Could not connect to the server." UserInfo={_kCFStreamErrorCodeKey=65, NSUnderlyingError=0x600000bc1950 {Error Domain=kCFErrorDomainCFNetwork Code=-1004 "(null)" UserInfo={_kCFStreamErrorDomainKey=1, _kCFStreamErrorCodeKey=65, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 1ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <11411D89-3CD1-4AAA-BCF1-C461906931B4>.<287>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <11411D89-3CD1-4AAA-BCF1-C461906931B4>.<287>"
+), NSLocalizedDescription=Could not connect to the server., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=1})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bcc360 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 2ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <408D3BA7-F721-4314-8875-B48108484F26>.<288>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <408D3BA7-F721-4314-8875-B48108484F26>.<288>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bc52f0 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 1ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <E2F37DEC-5D2C-4D93-9607-E2049D175529>.<289>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <E2F37DEC-5D2C-4D93-9607-E2049D175529>.<289>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bc1830 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 2ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <955451EA-2D1A-4492-B8F7-BC8968DA9AF3>.<290>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <955451EA-2D1A-4492-B8F7-BC8968DA9AF3>.<290>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600000bc0570 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 2ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <500D8182-0AC0-4A75-BEB8-C1960D7BEC8B>.<291>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <500D8182-0AC0-4A75-BEB8-C1960D7BEC8B>.<291>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})

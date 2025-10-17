@@ -70,9 +70,10 @@ for i in {1..30}; do
 done
 
 cd "$DEV_DIR"
+echo "[dev] Starting Vite on :$DEV_PORT (gateway http://127.0.0.1:${GATEWAY_PORT})..."
 if command -v pnpm >/dev/null 2>&1; then
   pnpm install
-  GATEWAY_URL="http://127.0.0.1:${GATEWAY_PORT}" pnpm dev --port "$DEV_PORT"
+  GATEWAY_URL="http://127.0.0.1:${GATEWAY_PORT}" pnpm vite --port "$DEV_PORT"
 else
   npm install
   GATEWAY_URL="http://127.0.0.1:${GATEWAY_PORT}" npx vite --port "$DEV_PORT"

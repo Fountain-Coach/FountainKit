@@ -3,6 +3,7 @@ import OpenAPIRuntime
 import OpenAPIURLSession
 import ApiClientsCore
 import SemanticBrowserAPI
+import FountainAIKit
 
 public struct SemanticBrowserSeeder {
     public struct Metrics: Sendable {
@@ -51,8 +52,8 @@ public struct SemanticBrowserSeeder {
     }
 
     public func run(
-        source: EngraverStudioConfiguration.SeedingConfiguration.Source,
-        browser: EngraverStudioConfiguration.SeedingConfiguration.Browser,
+        source: SeedingConfiguration.Source,
+        browser: SeedingConfiguration.Browser,
         emitDiagnostic: @Sendable (String) -> Void
     ) async throws -> Metrics {
         // Compose default headers (API key if present)

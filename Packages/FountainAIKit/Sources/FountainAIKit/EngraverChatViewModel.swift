@@ -259,9 +259,9 @@ public final class EngraverChatViewModel: ObservableObject {
     public var bootstrapEndpoint: URL? { bootstrapBaseURL }
     public var canPersist: Bool { persistenceContext != nil }
     public var hasSeedingSupport: Bool { seedingConfiguration != nil }
-    public var seedingSources: [EngraverStudioConfiguration.SeedingConfiguration.Source] { seedingConfiguration?.sources ?? [] }
+    public var seedingSources: [SeedingConfiguration.Source] { seedingConfiguration?.sources ?? [] }
     public var seedingBrowserEndpoint: URL? { seedingConfiguration?.browser.baseURL }
-    public var seedingBrowserMode: EngraverStudioConfiguration.SeedingConfiguration.Browser.Mode? { seedingConfiguration?.browser.mode }
+    public var seedingBrowserMode: SeedingConfiguration.Browser.Mode? { seedingConfiguration?.browser.mode }
     public var seedingBrowserLabels: [String]? { seedingConfiguration?.browser.defaultLabels }
     public var environmentConfigured: Bool { environmentManager != nil }
     public var environmentIsRunning: Bool {
@@ -284,7 +284,7 @@ public final class EngraverChatViewModel: ObservableObject {
     private let gatewayBaseURL: URL
     private let awarenessClient: AwarenessClient?
     private let bootstrapClient: BootstrapClient?
-    private let seedingConfiguration: EngraverStudioConfiguration.SeedingConfiguration?
+    private let seedingConfiguration: SeedingConfiguration?
     private let environmentManager: FountainEnvironmentManager?
     private let bearerToken: String?
     private let persistenceContext: PersistenceContext?
@@ -441,7 +441,7 @@ public final class EngraverChatViewModel: ObservableObject {
         awarenessBaseURL: URL? = nil,
         bootstrapBaseURL: URL? = nil,
         bearerToken: String? = nil,
-        seedingConfiguration: EngraverStudioConfiguration.SeedingConfiguration? = nil,
+        seedingConfiguration: SeedingConfiguration? = nil,
         fountainRepoRoot: URL? = nil,
         semanticSeeder: SemanticBrowserSeeder = SemanticBrowserSeeder(),
         idGenerator: @escaping @Sendable () -> UUID = { UUID() },

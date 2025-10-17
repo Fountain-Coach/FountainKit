@@ -170,10 +170,29 @@ actor ChatSession {
                 awarenessBaseURL: configuration.awarenessBaseURL,
                 bootstrapBaseURL: configuration.bootstrapBaseURL,
                 bearerToken: configuration.bearerToken,
-                seedingConfiguration: configuration.seedingConfiguration,
+                seedingConfiguration: Self.mapSeeding(configuration.seedingConfiguration),
                 fountainRepoRoot: configuration.fountainRepoRoot
             )
         }
+    }
+
+    private static func mapSeeding(_ cfg: EngraverStudioConfiguration.SeedingConfiguration?) -> SeedingConfiguration? {
+        guard let cfg else { return nil }
+        let sources = cfg.sources.map { s in
+            SeedingConfiguration.Source(name: s.name, url: s.url, corpusId: s.corpusId, labels: s.labels)
+        }
+        let browser = SeedingConfiguration.Browser(
+            baseURL: cfg.browser.baseURL,
+            apiKey: cfg.browser.apiKey,
+            mode: SeedingConfiguration.Browser.Mode(rawValue: cfg.browser.mode.rawValue) ?? .standard,
+            defaultLabels: cfg.browser.defaultLabels,
+            pagesCollection: cfg.browser.pagesCollection,
+            segmentsCollection: cfg.browser.segmentsCollection,
+            entitiesCollection: cfg.browser.entitiesCollection,
+            tablesCollection: cfg.browser.tablesCollection,
+            storeOverride: cfg.browser.storeOverride.map { .init(url: $0.url, apiKey: $0.apiKey, timeoutMs: $0.timeoutMs) }
+        )
+        return SeedingConfiguration(sources: sources, browser: browser)
     }
 
     func submit(prompt: String) async {

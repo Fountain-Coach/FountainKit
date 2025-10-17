@@ -842,11 +842,19 @@ private struct RightPane: View {
     private var tab: Tab { get { Tab(rawValue: rightTabRaw) ?? .logs } nonmutating set { rightTabRaw = newValue.rawValue } }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Picker("", selection: Binding(get: { tab }, set: { tab = $0 })) {
+            HStack {
+                Picker("", selection: Binding(get: { tab }, set: { tab = $0 })) {
                 Text("Boot Trail").tag(Tab.logs)
                 Text("Diagnostics").tag(Tab.diagnostics)
                 }
-            .pickerStyle(.segmented)
+                .pickerStyle(.segmented)
+                Spacer()
+                Toggle(isOn: Binding(get: { viewModel.trafficAutoRefresh }, set: { viewModel.setTrafficAutoRefresh($0) })) {
+                    Label("Auto", systemImage: "arrow.triangle.2.circlepath").labelStyle(.iconOnly)
+                }
+                .toggleStyle(.button)
+                .help("Auto-refresh gateway traffic")
+            }
 
             if tab == .logs {
                 GroupBox(label: Text("Boot Trail")) {

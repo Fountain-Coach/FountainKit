@@ -326,6 +326,8 @@ public final class EngraverChatViewModel: ObservableObject {
         public let client: String?
     }
     @Published public private(set) var trafficEvents: [GatewayRequestEvent] = []
+    @Published public var trafficAutoRefresh: Bool = false
+    private var trafficTask: Task<Void, Never>? = nil
     public func refreshGatewayTraffic() async {
         var url = gatewayBaseURL
         url.append(path: "/admin/recent")
@@ -338,6 +340,18 @@ public final class EngraverChatViewModel: ObservableObject {
             await MainActor.run { self.trafficEvents = raw }
         } catch {
             emitDiagnostic("Traffic fetch error: \(error)")
+        }
+    }
+
+    public func setTrafficAutoRefresh(_ enabled: Bool) {
+        trafficAutoRefresh = enabled
+        trafficTask?.cancel(); trafficTask = nil
+        guard enabled else { return }
+        trafficTask = Task { [weak self] in
+            while !(Task.isCancelled) {
+                await self?.refreshGatewayTraffic()
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+            }
         }
     }
 

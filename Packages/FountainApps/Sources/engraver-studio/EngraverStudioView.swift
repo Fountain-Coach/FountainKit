@@ -11,23 +11,43 @@ struct EngraverStudioView: View {
     let systemPrompts: [String]
 
     @Environment(\.openURL) private var openURL
+    @AppStorage("EngraverStudio.SelectedTab") private var selectedTabRaw: String = "boot"
     @State private var draftPrompt: String = ""
     @State private var selectedTurnID: UUID?
     @State private var showErrorAlert: Bool = false
     @State private var showDiagnostics: Bool = false
     @State private var promptEditorIsFocused: Bool = false
     @State private var showSemanticBrowser: Bool = false
-    @State private var showBootIntro: Bool = true
+
+    private enum Tab: String { case boot, studio }
+    private var tab: Tab {
+        get { Tab(rawValue: selectedTabRaw) ?? .boot }
+        nonmutating set { selectedTabRaw = newValue.rawValue }
+    }
+    private var tabBinding: Binding<Tab> { .init(get: { tab }, set: { tab = $0 }) }
 
     var body: some View {
-        Group {
-            if showBootPane {
-                BootTrailPane(viewModel: viewModel, onProceed: { showBootIntro = false })
-            } else {
-                HStack(spacing: 0) {
-                    sidebar
-                    Divider()
-                    mainPane
+        VStack(spacing: 8) {
+            HStack {
+                Picker("", selection: tabBinding) {
+                    Text("Boot").tag(Tab.boot)
+                    Text("Studio").tag(Tab.studio)
+                }
+                .pickerStyle(.segmented)
+                Spacer()
+            }
+
+            Divider()
+
+            Group {
+                if tab == .boot {
+                    BootTrailPane(viewModel: viewModel, onProceed: { tab = .studio })
+                } else {
+                    HStack(spacing: 0) {
+                        sidebar
+                        Divider()
+                        mainPane
+                    }
                 }
             }
         }
@@ -57,14 +77,7 @@ struct EngraverStudioView: View {
         }
     }
 
-    private var showBootPane: Bool {
-        #if os(macOS)
-        if showBootIntro { return true }
-        return viewModel.environmentConfigured && !viewModel.environmentIsRunning
-        #else
-        return showBootIntro
-        #endif
-    }
+    // no-op placeholder retained for future logic
 
     private var mainPane: some View {
         VStack(spacing: 12) {

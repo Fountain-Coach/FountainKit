@@ -10,7 +10,9 @@ struct EmbeddedWebView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
-        config.preferences.javaScriptEnabled = true
+        if #available(macOS 11.0, *) {
+            config.defaultWebpagePreferences.allowsContentJavaScript = true
+        }
         let web = WKWebView(frame: .zero, configuration: config)
         web.navigationDelegate = context.coordinator
         web.allowsBackForwardNavigationGestures = true
@@ -30,4 +32,3 @@ struct EmbeddedWebView: NSViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate {}
 }
 #endif
-

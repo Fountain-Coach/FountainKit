@@ -545,6 +545,21 @@ private struct BootTrailPane: View {
             // Ensure we probe status when entering the boot pane
             viewModel.refreshEnvironmentStatus()
         }
+        .sheet(item: $webPreviewURL.asIdentifiable()) { url in
+            VStack(spacing: 0) {
+                HStack {
+                    Text(url.absoluteString).font(.caption).textSelection(.enabled)
+                    Spacer()
+                    Button { openURL(url) } label: { Label("Open in Browser", systemImage: "safari") }
+                        .buttonStyle(.borderless)
+                }
+                .padding(8)
+                Divider()
+                EmbeddedWebView(url: url)
+                    .frame(minWidth: 720, minHeight: 480)
+            }
+            .frame(minWidth: 720, minHeight: 520)
+        }
     }
 
     private var statusBadge: some View {
@@ -691,21 +706,6 @@ private struct BootTrailPane: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-    }
-    .sheet(item: $webPreviewURL.asIdentifiable()) { url in
-        VStack(spacing: 0) {
-            HStack {
-                Text(url.absoluteString).font(.caption).textSelection(.enabled)
-                Spacer()
-                Button { openURL(url) } label: { Label("Open in Browser", systemImage: "safari") }
-                    .buttonStyle(.borderless)
-            }
-            .padding(8)
-            Divider()
-            EmbeddedWebView(url: url)
-                .frame(minWidth: 720, minHeight: 480)
-        }
-        .frame(minWidth: 720, minHeight: 520)
     }
 }
 

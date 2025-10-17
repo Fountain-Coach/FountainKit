@@ -19,10 +19,16 @@ struct EngraverStudioView: View {
     @State private var showSemanticBrowser: Bool = false
 
     var body: some View {
-        HStack(spacing: 0) {
-            sidebar
-            Divider()
-            mainPane
+        Group {
+            if showBootPane {
+                BootTrailPane(viewModel: viewModel)
+            } else {
+                HStack(spacing: 0) {
+                    sidebar
+                    Divider()
+                    mainPane
+                }
+            }
         }
         .onChange(of: viewModel.lastError) { _, newValue in
             showErrorAlert = newValue != nil
@@ -48,6 +54,14 @@ struct EngraverStudioView: View {
             SemanticBrowserSheet(viewModel: viewModel, openURL: { url in openURL(url) })
                 .frame(minWidth: 520, minHeight: 360)
         }
+    }
+
+    private var showBootPane: Bool {
+        #if os(macOS)
+        return viewModel.environmentConfigured && !viewModel.environmentIsRunning
+        #else
+        return false
+        #endif
     }
 
     private var mainPane: some View {
@@ -455,6 +469,166 @@ private struct DiagnosticsPanel: View {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(text, forType: .string)
+    }
+}
+
+@available(macOS 13.0, *)
+private struct BootTrailPane: View {
+    @ObservedObject var viewModel: EngraverChatViewModel
+
+    private var stateText: String {
+        switch viewModel.environmentState {
+        case .unavailable(let reason): return "Unavailable — \(reason)"
+        case .idle: return "Idle"
+        case .checking: return "Checking…"
+        case .starting: return "Starting…"
+        case .stopping: return "Stopping…"
+        case .running: return "Running"
+        case .failed(let reason): return "Failed — \(reason)"
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("Engraver Studio — Boot Sequence")
+                    .font(.title2.weight(.semibold))
+                Spacer()
+                statusBadge
+            }
+
+            Text("Starting local services for the FULL RANGE experience. This may take a moment on first launch.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            controlRow
+
+            Divider()
+
+            HStack(alignment: .top, spacing: 16) {
+                servicesPanel
+                logsPanel
+            }
+
+            if viewModel.environmentIsRunning {
+                Text("All core services are up. You can start engraving.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(24)
+        .frame(minWidth: 900, minHeight: 600, alignment: .topLeading)
+    }
+
+    private var statusBadge: some View {
+        Group {
+            switch viewModel.environmentState {
+            case .running:
+                Label("\(stateText)", systemImage: "checkmark.seal.fill").foregroundStyle(.green)
+            case .starting, .checking:
+                HStack(spacing: 8) { ProgressView(); Text(stateText).font(.caption) }
+            case .failed:
+                Label("\(stateText)", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+            case .stopping:
+                HStack(spacing: 8) { ProgressView(); Text(stateText).font(.caption) }
+            case .idle:
+                Label("Idle", systemImage: "pause.circle").foregroundStyle(.secondary)
+            case .unavailable:
+                Label("Unavailable", systemImage: "questionmark.circle").foregroundStyle(.secondary)
+            }
+        }
+        .font(.caption)
+    }
+
+    private var controlRow: some View {
+        HStack(spacing: 12) {
+            Button {
+                viewModel.startEnvironment(includeExtras: true)
+            } label: {
+                Label("Start FULL RANGE", systemImage: "play.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(viewModel.environmentIsBusy || viewModel.environmentIsRunning)
+
+            Button {
+                viewModel.stopEnvironment(includeExtras: true, force: false)
+            } label: {
+                Label("Stop", systemImage: "stop.fill")
+            }
+            .buttonStyle(.bordered)
+            .disabled(viewModel.environmentIsBusy || !viewModel.environmentIsRunning)
+
+            Button {
+                viewModel.refreshEnvironmentStatus()
+            } label: {
+                Label("Refresh", systemImage: "arrow.clockwise")
+            }
+            .buttonStyle(.borderless)
+
+            Spacer()
+        }
+    }
+
+    private var servicesPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Services")
+                .font(.headline)
+            if viewModel.environmentServices.isEmpty {
+                Text("Probing…").foregroundStyle(.secondary)
+            } else {
+                ForEach(viewModel.environmentServices) { svc in
+                    HStack(spacing: 8) {
+                        stateDot(svc.state)
+                        Text(svc.name).font(.callout)
+                        Spacer()
+                        Text(":\(svc.port)").font(.caption).foregroundStyle(.secondary)
+                        if let pid = svc.pid { Text("PID \(pid)").font(.caption).foregroundStyle(.secondary) }
+                    }
+                }
+            }
+        }
+        .frame(width: 320, alignment: .topLeading)
+    }
+
+    private func stateDot(_ s: EnvironmentServiceState) -> some View {
+        let color: Color = (s == .up) ? .green : (s == .down ? .red : .gray)
+        return Circle().fill(color).frame(width: 9, height: 9)
+    }
+
+    private var logsPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Boot Trail")
+                    .font(.headline)
+                Spacer()
+                Button {
+                    let text = viewModel.environmentLogs.map(\.line).joined(separator: "\n")
+                    let pb = NSPasteboard.general
+                    pb.clearContents()
+                    pb.setString(text, forType: .string)
+                } label: {
+                    Label("Copy", systemImage: "doc.on.doc")
+                }
+                .buttonStyle(.borderless)
+                .help("Copy all boot logs")
+            }
+            if viewModel.environmentLogs.isEmpty {
+                Text("Waiting for logs…").foregroundStyle(.secondary)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 6) {
+                        ForEach(viewModel.environmentLogs) { entry in
+                            Text("[\(entry.timestamp.ISO8601Format())] \(entry.line)")
+                                .font(.system(size: 11, design: .monospaced))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+                .textSelection(.enabled)
+                .frame(minHeight: 240)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 }
 

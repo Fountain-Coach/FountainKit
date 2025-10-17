@@ -518,6 +518,10 @@ private struct BootTrailPane: View {
         }
         .padding(24)
         .frame(minWidth: 900, minHeight: 600, alignment: .topLeading)
+        .task {
+            // Ensure we probe status when entering the boot pane
+            viewModel.refreshEnvironmentStatus()
+        }
     }
 
     private var statusBadge: some View {
@@ -557,6 +561,14 @@ private struct BootTrailPane: View {
             }
             .buttonStyle(.bordered)
             .disabled(viewModel.environmentIsBusy || !viewModel.environmentIsRunning)
+
+            Button(role: .destructive) {
+                viewModel.stopEnvironment(includeExtras: true, force: true)
+            } label: {
+                Label("Force Clean", systemImage: "trash")
+            }
+            .buttonStyle(.bordered)
+            .help("Kill stray processes and release ports")
 
             Button {
                 viewModel.refreshEnvironmentStatus()

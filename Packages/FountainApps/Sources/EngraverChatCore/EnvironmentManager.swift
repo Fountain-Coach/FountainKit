@@ -157,9 +157,20 @@ public final class FountainEnvironmentManager: ObservableObject {
                 arguments.insert("--all", at: 0)
             }
             try await runStreaming(script: script, arguments: arguments)
-            overallState = .running
+            // dev-up succeeded; probe final status
             await refreshStatus()
+            if case .running = overallState {
+                // ok
+            } else {
+                overallState = .running
+            }
         } catch {
+            // Some dev-up implementations return non-zero when services already up.
+            // Probe status; if core services are up, treat as success.
+            await refreshStatus()
+            if case .running = overallState {
+                return
+            }
             overallState = .failed(error.localizedDescription)
         }
     }

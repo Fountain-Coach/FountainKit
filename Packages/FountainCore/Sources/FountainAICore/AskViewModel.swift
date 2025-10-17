@@ -1,11 +1,6 @@
 import Foundation
-
-public struct ChatMessage: Sendable, Equatable {
-    public enum Role: String, Sendable { case system, user }
-    public var role: Role
-    public var content: String
-    public init(role: Role, content: String) { self.role = role; self.content = content }
-}
+// Core chat message lives in ChatContracts; keep a typealias for compatibility here.
+public typealias ChatMessage = CoreChatMessage
 
 public protocol LLMService: Sendable {
     func chat(model: String, messages: [ChatMessage]) async throws -> String

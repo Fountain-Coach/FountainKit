@@ -230,6 +230,7 @@ let package = Package(
         .target(
             name: "EngraverChatCore",
             dependencies: [
+                .product(name: "FountainAICore", package: "FountainCore"),
                 .product(name: "FountainStoreClient", package: "FountainCore"),
                 .product(name: "FountainRuntime", package: "FountainCore"),
                 .product(name: "FountainAIAdapters", package: "FountainGatewayKit"),

@@ -1,275 +1,621 @@
+[0/1] Planning build
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'AgentService' complete! (0.18s)
-e' complete! (0.40s)
-ntCore CoreMLBackend.swift
-[5/9] Emitting module AgentService
-[6/9] Compiling AgentService main.swift
-[6/9] Write Objects.LinkFileList
-[7/9] Linking AgentService
-[8/9] Applying AgentService
-Build of product 'AgentService' complete! (1.65s)
-d of product 'AgentService' complete! (2.86s)
-ft-system.git from cache (0.97s)
-Fetched https://github.com/apple/swift-nio.git from cache (1.24s)
-Computing version for https://github.com/apple/swift-nio.git
-Computed https://github.com/apple/swift-nio.git at 2.86.2 (1.78s)
-Computed https://github.com/apple/swift-nio.git at 2.86.2 (0.00s)
-Computing version for https://github.com/apple/swift-system.git
-Computed https://github.com/apple/swift-system.git at 1.6.3 (0.44s)
-Computing version for https://github.com/apple/swift-collections.git
-Computed https://github.com/apple/swift-collections.git at 1.2.1 (0.45s)
-Computing version for https://github.com/apple/swift-atomics.git
-Computed https://github.com/apple/swift-atomics.git at 1.3.0 (0.37s)
-Creating working copy for https://github.com/apple/swift-nio.git
-Working copy of https://github.com/apple/swift-nio.git resolved at 2.86.2
-Creating working copy for https://github.com/apple/swift-system.git
-Working copy of https://github.com/apple/swift-system.git resolved at 1.6.3
-Creating working copy for https://github.com/apple/swift-atomics.git
-Working copy of https://github.com/apple/swift-atomics.git resolved at 1.3.0
-Creating working copy for https://github.com/apple/swift-collections.git
-Working copy of https://github.com/apple/swift-collections.git resolved at 1.2.1
-Building for debugging...
-[0/32] Compiling CNIOWindows WSAStartup.c
-[0/32] Copying PrivacyInfo.xcprivacy
-[0/32] Write sources
-[4/32] Write swift-version--58304C5D6DBC2206.txt
-[5/32] Write sources
-[6/32] Compiling _AtomicsShims.c
-[7/32] Compiling CNIOLLHTTP c_nio_http.c
-[7/32] Write sources
-[15/49] Compiling CNIOLLHTTP c_nio_api.c
-[16/52] Compiling CNIOWindows shim.c
-[17/52] Compiling CNIOWASI CNIOWASI.c
-[18/52] Compiling CNIOPosix event_loop_id.c
-[19/52] Compiling CNIOLinux shim.c
-[20/52] Compiling CNIOLinux liburing_shims.c
-[21/52] Write sources
-[23/70] Compiling CNIOLLHTTP c_nio_llhttp.c
-[24/70] Write AgentService-entitlement.plist
-[25/70] Write sources
-[26/70] Compiling CNIODarwin shim.c
-[28/70] Compiling Atomics ManagedAtomicLazyReference.swift
-[29/70] Compiling Atomics IntegerConformances.swift
-[30/70] Compiling Atomics UnsafeAtomicLazyReference.swift
-[31/70] Compiling Atomics ManagedAtomic.swift
-[32/70] Compiling InternalCollectionsUtilities UnsafeBufferPointer+Extras.swift
-[33/71] Compiling _NIOBase64 Base64.swift
-[34/71] Emitting module _NIOBase64
-[35/71] Compiling InternalCollectionsUtilities UnsafeMutableBufferPointer+Extras.swift
-[36/71] Compiling Atomics AtomicStorage.swift
-[37/71] Compiling Atomics AtomicValue.swift
-[38/73] Compiling _NIODataStructures _TinyArray.swift
-[39/73] Emitting module InternalCollectionsUtilities
-[40/73] Compiling Atomics OptionalRawRepresentable.swift
-[41/73] Compiling Atomics RawRepresentable.swift
-[42/73] Compiling Atomics IntegerOperations.swift
-[43/73] Compiling Atomics Unmanaged extensions.swift
-[44/73] Compiling Atomics PointerConformances.swift
-[45/73] Compiling Atomics Primitives.native.swift
-[46/73] Compiling Atomics AtomicBool.swift
-[47/73] Compiling Atomics AtomicMemoryOrderings.swift
-[48/73] Compiling Atomics DoubleWord.swift
-[49/73] Compiling Atomics UnsafeAtomic.swift
-[54/73] Compiling Atomics AtomicInteger.swift
-[55/73] Compiling Atomics AtomicOptionalWrappable.swift
-[56/73] Compiling Atomics AtomicReference.swift
-[57/88] Compiling _NIODataStructures PriorityQueue.swift
-[58/88] Compiling _NIODataStructures Heap.swift
-[59/88] Emitting module _NIODataStructures
-[60/88] Compiling DequeModule Deque+Collection.swift
-[61/88] Compiling DequeModule Deque+CustomReflectable.swift
-[62/88] Emitting module Atomics
-[63/88] Compiling DequeModule Deque+Extras.swift
-[64/88] Compiling DequeModule Deque+Hashable.swift
-[65/88] Compiling DequeModule _DequeBuffer.swift
-[66/88] Compiling DequeModule Deque+Descriptions.swift
-[67/88] Compiling DequeModule Deque._UnsafeHandle.swift
-[68/88] Compiling DequeModule Deque.swift
-[69/88] Compiling DequeModule Deque+Testing.swift
-[70/88] Compiling DequeModule Deque._Storage.swift
-[74/88] Compiling DequeModule _DequeBufferHeader.swift
-[77/88] Compiling DequeModule Deque+Codable.swift
-[81/88] Compiling DequeModule Deque+Equatable.swift
-[82/88] Compiling DequeModule Deque+ExpressibleByArrayLiteral.swift
-[83/88] Emitting module DequeModule
-[83/90] Compiling c-nioatomics.c
-[85/90] Compiling DequeModule _DequeSlot.swift
-[86/90] Compiling DequeModule _UnsafeWrappedBuffer.swift
-[86/90] Compiling c-atomics.c
-[88/96] Compiling NIOConcurrencyHelpers lock.swift
-[89/96] Compiling NIOConcurrencyHelpers NIOLockedValueBox.swift
-[90/96] Compiling NIOConcurrencyHelpers NIOLock.swift
-[91/96] Emitting module NIOConcurrencyHelpers
-[92/96] Compiling NIOConcurrencyHelpers NIOAtomic.swift
-[93/96] Compiling NIOConcurrencyHelpers atomics.swift
-[94/157] Compiling NIOCore NIOAny.swift
-[95/157] Compiling NIOCore NIOCloseOnErrorHandler.swift
-[96/157] Compiling NIOCore NIOCoreSendableMetatype.swift
-[97/157] Compiling NIOCore NIOLoopBound.swift
-[98/157] Compiling NIOCore NIOPooledRecvBufferAllocator.swift
-[99/157] Compiling NIOCore NIOScheduledCallback.swift
-[100/157] Compiling NIOCore NIOSendable.swift
-[101/157] Compiling NIOCore RecvByteBufferAllocator.swift
-[102/165] Compiling NIOCore IOData.swift
-[103/165] Compiling NIOCore IPProtocol.swift
-[104/165] Compiling NIOCore IntegerBitPacking.swift
-[105/165] Compiling NIOCore IntegerTypes.swift
-[106/165] Compiling NIOCore Interfaces.swift
-[107/165] Compiling NIOCore Linux.swift
-[108/165] Compiling NIOCore MarkedCircularBuffer.swift
-[109/165] Compiling NIOCore MulticastChannel.swift
-[110/165] Compiling NIOCore EventLoopFuture+Deprecated.swift
-[111/165] Compiling NIOCore EventLoopFuture+WithEventLoop.swift
-[112/165] Compiling NIOCore EventLoopFuture.swift
-[113/165] Compiling NIOCore FileDescriptor.swift
-[114/165] Compiling NIOCore FileHandle.swift
-[115/165] Compiling NIOCore FileRegion.swift
-[116/165] Compiling NIOCore GlobalSingletons.swift
-[117/165] Compiling NIOCore IO.swift
-[118/165] Compiling NIOCore SingleStepByteToMessageDecoder.swift
-[119/165] Compiling NIOCore SocketAddresses.swift
-[120/165] Compiling NIOCore SocketOptionProvider.swift
-[121/165] Compiling NIOCore SystemCallHelpers.swift
-[122/165] Compiling NIOCore TimeAmount+Duration.swift
-[123/165] Compiling NIOCore TypeAssistedChannelHandler.swift
-[124/165] Compiling NIOCore UniversalBootstrapSupport.swift
-[125/165] Compiling NIOCore Utilities.swift
-[126/165] Compiling NIOCore AddressedEnvelope.swift
-[127/165] Compiling NIOCore AsyncAwaitSupport.swift
-[128/165] Compiling NIOCore AsyncChannel.swift
-[129/165] Compiling NIOCore AsyncChannelHandler.swift
-[130/165] Compiling NIOCore AsyncChannelInboundStream.swift
-[131/165] Compiling NIOCore AsyncChannelOutboundWriter.swift
-[132/165] Compiling NIOCore NIOAsyncSequenceProducer.swift
-[133/165] Compiling NIOCore NIOAsyncSequenceProducerStrategies.swift
-[134/165] Compiling NIOCore NIOAsyncWriter.swift
-[135/165] Compiling NIOCore CircularBuffer.swift
-[136/165] Compiling NIOCore Codec.swift
-[137/165] Compiling NIOCore ConvenienceOptionSupport.swift
-[138/165] Compiling NIOCore DeadChannel.swift
-[139/165] Compiling NIOCore DispatchQueue+WithFuture.swift
-[140/165] Compiling NIOCore EventLoop+Deprecated.swift
-[141/165] Compiling NIOCore EventLoop+SerialExecutor.swift
-[142/165] Compiling NIOCore EventLoop.swift
-[143/165] Compiling NIOCore EventLoopFuture+AssumeIsolated.swift
-[144/165] Compiling NIOCore NIOThrowingAsyncSequenceProducer.swift
-[145/165] Compiling NIOCore BSDSocketAPI.swift
-[146/165] Compiling NIOCore ByteBuffer-aux.swift
-[147/165] Compiling NIOCore ByteBuffer-binaryEncodedLengthPrefix.swift
-[148/165] Compiling NIOCore ByteBuffer-conversions.swift
-[149/165] Compiling NIOCore ByteBuffer-core.swift
-[150/165] Compiling NIOCore ByteBuffer-hex.swift
-[151/165] Compiling NIOCore ByteBuffer-int.swift
-[152/165] Compiling NIOCore ByteBuffer-lengthPrefix.swift
-[153/165] Emitting module NIOCore
-[154/165] Compiling NIOCore ByteBuffer-multi-int.swift
-[155/165] Compiling NIOCore ByteBuffer-quicBinaryEncodingStrategy.swift
-[156/165] Compiling NIOCore ByteBuffer-views.swift
-[157/165] Compiling NIOCore Channel.swift
-[158/165] Compiling NIOCore ChannelHandler.swift
-[159/165] Compiling NIOCore ChannelHandlers.swift
-[160/165] Compiling NIOCore ChannelInvoker.swift
-[161/165] Compiling NIOCore ChannelOption.swift
-[162/165] Compiling NIOCore ChannelPipeline.swift
-[163/219] Compiling NIOEmbedded AsyncTestingEventLoop.swift
-[164/219] Compiling NIOEmbedded AsyncTestingChannel.swift
-[165/219] Compiling NIOEmbedded Embedded.swift
-[166/219] Emitting module NIOEmbedded
-[167/219] Emitting module NIOPosix
-[168/226] Compiling NIOPosix Pool.swift
-[169/226] Compiling NIOPosix PosixSingletons+ConcurrencyTakeOver.swift
-[170/226] Compiling NIOPosix PosixSingletons.swift
-[171/226] Compiling NIOPosix RawSocketBootstrap.swift
-[172/226] Compiling NIOPosix Resolver.swift
-[173/226] Compiling NIOPosix Selectable.swift
-[174/226] Compiling NIOPosix SelectableChannel.swift
-[175/226] Compiling NIOPosix SelectableEventLoop.swift
-[176/226] Compiling NIOPosix SelectorEpoll.swift
-[177/226] Compiling NIOPosix SelectorGeneric.swift
-[178/226] Compiling NIOPosix SelectorKqueue.swift
-[179/226] Compiling NIOPosix SelectorUring.swift
-[180/226] Compiling NIOPosix SelectorWSAPoll.swift
-[181/226] Compiling NIOPosix ServerSocket.swift
-[182/226] Compiling NIOPosix IO.swift
-[183/226] Compiling NIOPosix IntegerBitPacking.swift
-[184/226] Compiling NIOPosix IntegerTypes.swift
-[185/226] Compiling NIOPosix Linux.swift
-[186/226] Compiling NIOPosix LinuxCPUSet.swift
-[187/226] Compiling NIOPosix LinuxUring.swift
-[188/226] Compiling NIOPosix MultiThreadedEventLoopGroup.swift
-[189/226] Compiling NIOPosix BSDSocketAPICommon.swift
-[190/226] Compiling NIOPosix BSDSocketAPIPosix.swift
-[191/226] Compiling NIOPosix BSDSocketAPIWindows.swift
-[192/226] Compiling NIOPosix BaseSocket.swift
-[193/226] Compiling NIOPosix BaseSocketChannel+SocketOptionProvider.swift
-[194/226] Compiling NIOPosix BaseSocketChannel.swift
-[195/226] Compiling NIOPosix BaseStreamSocketChannel.swift
-[196/226] Compiling NIOPosix NIOPosixSendableMetatype.swift
-[197/226] Compiling NIOPosix NIOThreadPool.swift
-[198/226] Compiling NIOPosix NonBlockingFileIO.swift
-[199/226] Compiling NIOPosix PendingDatagramWritesManager.swift
-[200/226] Compiling NIOPosix PendingWritesManager.swift
-[201/226] Compiling NIOPosix PipeChannel.swift
-[202/226] Compiling NIOPosix PipePair.swift
-[203/226] Compiling NIOPosix Socket.swift
-[204/226] Compiling NIOPosix SocketChannel.swift
-[205/226] Compiling NIOPosix SocketProtocols.swift
-[206/226] Compiling NIOPosix StructuredConcurrencyHelpers.swift
-[207/226] Compiling NIOPosix System.swift
-[208/226] Compiling NIOPosix Thread.swift
-[209/226] Compiling NIOPosix ThreadPosix.swift
-[210/226] Compiling NIOPosix Bootstrap.swift
-[211/226] Compiling NIOPosix ControlMessage.swift
-[212/226] Compiling NIOPosix DatagramVectorReadManager.swift
-[213/226] Compiling NIOPosix Errors+Any.swift
-[214/226] Compiling NIOPosix FileDescriptor.swift
-[215/226] Compiling NIOPosix GetaddrinfoResolver.swift
-[216/226] Compiling NIOPosix HappyEyeballs.swift
-[217/226] Compiling NIOPosix ThreadWindows.swift
-[218/226] Compiling NIOPosix UnsafeTransfer.swift
-[219/226] Compiling NIOPosix Utilities.swift
-[220/226] Compiling NIOPosix VsockAddress.swift
-[221/226] Compiling NIOPosix VsockChannelEvents.swift
-[222/226] Compiling NIOPosix Windows.swift
-[223/226] Compiling NIOPosix resource_bundle_accessor.swift
-[224/228] Emitting module NIO
-[225/228] Compiling NIO Exports.swift
-[226/244] Compiling NIOHTTP1 NIOTypedHTTPClientUpgradeHandler.swift
-[227/244] Compiling NIOHTTP1 NIOTypedHTTPClientUpgraderStateMachine.swift
-[228/246] Compiling NIOHTTP1 NIOHTTPClientUpgradeHandler.swift
-[229/246] Compiling NIOHTTP1 NIOHTTPObjectAggregator.swift
-[230/246] Compiling NIOHTTP1 HTTPTypedPipelineSetup.swift
-[231/246] Compiling NIOHTTP1 HTTPTypes.swift
-[232/246] Compiling NIOHTTP1 HTTPPipelineSetup.swift
-[233/246] Compiling NIOHTTP1 HTTPServerPipelineHandler.swift
-[234/246] Compiling NIOHTTP1 NIOTypedHTTPServerUpgradeHandler.swift
-[235/246] Compiling NIOHTTP1 NIOTypedHTTPServerUpgraderStateMachine.swift
-[236/246] Compiling NIOHTTP1 HTTPServerProtocolErrorHandler.swift
-[237/246] Compiling NIOHTTP1 HTTPServerUpgradeHandler.swift
-[238/246] Compiling NIOHTTP1 HTTPHeaderValidator.swift
-[239/246] Compiling NIOHTTP1 HTTPHeaders+Validation.swift
-[240/246] Emitting module NIOHTTP1
-[241/246] Compiling NIOHTTP1 ByteCollectionUtils.swift
-[242/246] Compiling NIOHTTP1 HTTPDecoder.swift
-[243/246] Compiling NIOHTTP1 HTTPEncoder.swift
-[244/258] Compiling AgentCore Router.swift
-[245/258] Compiling AgentCore AgentConfig.swift
-[246/258] Compiling AgentCore HTTPModels.swift
-[247/258] Compiling AgentCore Sampling.swift
-[248/259] Compiling AgentCore ModelBackend.swift
-[249/259] Compiling AgentCore HTTPKernel.swift
-[250/259] Compiling AgentCore NIOHTTPServer.swift
-[251/259] Compiling AgentCore Tokenization.swift
-[252/259] Compiling AgentCore HTTPRequest.swift
-[253/259] Compiling AgentCore HTTPResponse.swift
-[254/259] Emitting module AgentCore
-[255/259] Compiling AgentCore CoreMLBackend.swift
-[256/259] Compiling AgentCore LlamaCppBackend.swift
-[257/261] Compiling AgentService main.swift
-[258/261] Emitting module AgentService
-[258/261] Write Objects.LinkFileList
-[259/261] Linking AgentService
-[260/261] Applying AgentService
-Build of product 'AgentService' complete! (13.90s)
-[AgentService] listening on 127.0.0.1:8080 using backend=mock
+Build of product 'AgentService' complete! (0.41s)
+ggml_metal_library_init: using embedded metal library
+ggml_metal_library_init: loaded in 0.019 sec
+ggml_metal_device_init: GPU name:   Apple M2
+ggml_metal_device_init: GPU family: MTLGPUFamilyApple8  (1008)
+ggml_metal_device_init: GPU family: MTLGPUFamilyCommon3 (3003)
+ggml_metal_device_init: GPU family: MTLGPUFamilyMetal3  (5001)
+ggml_metal_device_init: simdgroup reduction   = true
+ggml_metal_device_init: simdgroup matrix mul. = true
+ggml_metal_device_init: has unified memory    = true
+ggml_metal_device_init: has bfloat            = true
+ggml_metal_device_init: use residency sets    = true
+ggml_metal_device_init: use shared buffers    = true
+ggml_metal_device_init: recommendedMaxWorkingSetSize  =  5726.63 MB
+llama_model_load_from_file_impl: using device Metal (Apple M2) (unknown id) - 5460 MiB free
+llama_model_loader: loaded meta data with 22 key-value pairs and 291 tensors from AgentService/Models/Hermes-2-Pro-Mistral-7B.Q4_K_M.gguf (version GGUF V3 (latest))
+llama_model_loader: Dumping metadata keys/values. Note: KV overrides do not apply in this output.
+llama_model_loader: - kv   0:                       general.architecture str              = llama
+llama_model_loader: - kv   1:                               general.name str              = jeffq
+llama_model_loader: - kv   2:                       llama.context_length u32              = 32768
+llama_model_loader: - kv   3:                     llama.embedding_length u32              = 4096
+llama_model_loader: - kv   4:                          llama.block_count u32              = 32
+llama_model_loader: - kv   5:                  llama.feed_forward_length u32              = 14336
+llama_model_loader: - kv   6:                 llama.rope.dimension_count u32              = 128
+llama_model_loader: - kv   7:                 llama.attention.head_count u32              = 32
+llama_model_loader: - kv   8:              llama.attention.head_count_kv u32              = 8
+llama_model_loader: - kv   9:     llama.attention.layer_norm_rms_epsilon f32              = 0.000010
+llama_model_loader: - kv  10:                       llama.rope.freq_base f32              = 10000.000000
+llama_model_loader: - kv  11:                          general.file_type u32              = 15
+llama_model_loader: - kv  12:                       tokenizer.ggml.model str              = llama
+llama_model_loader: - kv  13:                      tokenizer.ggml.tokens arr[str,32032]   = ["<unk>", "<s>", "</s>", "<0x00>", "<...
+llama_model_loader: - kv  14:                      tokenizer.ggml.scores arr[f32,32032]   = [0.000000, 0.000000, 0.000000, 0.0000...
+llama_model_loader: - kv  15:                  tokenizer.ggml.token_type arr[i32,32032]   = [2, 3, 3, 6, 6, 6, 6, 6, 6, 6, 6, 6, ...
+llama_model_loader: - kv  16:                tokenizer.ggml.bos_token_id u32              = 1
+llama_model_loader: - kv  17:                tokenizer.ggml.eos_token_id u32              = 32000
+llama_model_loader: - kv  18:               tokenizer.ggml.add_bos_token bool             = true
+llama_model_loader: - kv  19:               tokenizer.ggml.add_eos_token bool             = false
+llama_model_loader: - kv  20:                    tokenizer.chat_template str              = {% for message in messages %}{{'<|im_...
+llama_model_loader: - kv  21:               general.quantization_version u32              = 2
+llama_model_loader: - type  f32:   65 tensors
+llama_model_loader: - type q4_K:  193 tensors
+llama_model_loader: - type q6_K:   33 tensors
+print_info: file format = GGUF V3 (latest)
+print_info: file type   = Q4_K - Medium
+print_info: file size   = 4.07 GiB (4.83 BPW) 
+init_tokenizer: initializing tokenizer for type 1
+load: control-looking token:  32000 '<|im_end|>' was not control-type; this is probably a bug in the model. its type will be overridden
+load: control token:      2 '</s>' is not marked as EOG
+load: control token:      1 '<s>' is not marked as EOG
+load: printing all EOG tokens:
+load:   - 32000 ('<|im_end|>')
+load: special tokens cache size = 35
+load: token to piece cache size = 0.1641 MB
+print_info: arch             = llama
+print_info: vocab_only       = 0
+print_info: n_ctx_train      = 32768
+print_info: n_embd           = 4096
+print_info: n_layer          = 32
+print_info: n_head           = 32
+print_info: n_head_kv        = 8
+print_info: n_rot            = 128
+print_info: n_swa            = 0
+print_info: is_swa_any       = 0
+print_info: n_embd_head_k    = 128
+print_info: n_embd_head_v    = 128
+print_info: n_gqa            = 4
+print_info: n_embd_k_gqa     = 1024
+print_info: n_embd_v_gqa     = 1024
+print_info: f_norm_eps       = 0.0e+00
+print_info: f_norm_rms_eps   = 1.0e-05
+print_info: f_clamp_kqv      = 0.0e+00
+print_info: f_max_alibi_bias = 0.0e+00
+print_info: f_logit_scale    = 0.0e+00
+print_info: f_attn_scale     = 0.0e+00
+print_info: n_ff             = 14336
+print_info: n_expert         = 0
+print_info: n_expert_used    = 0
+print_info: causal attn      = 1
+print_info: pooling type     = 0
+print_info: rope type        = 0
+print_info: rope scaling     = linear
+print_info: freq_base_train  = 10000.0
+print_info: freq_scale_train = 1
+print_info: n_ctx_orig_yarn  = 32768
+print_info: rope_finetuned   = unknown
+print_info: model type       = 7B
+print_info: model params     = 7.24 B
+print_info: general.name     = jeffq
+print_info: vocab type       = SPM
+print_info: n_vocab          = 32032
+print_info: n_merges         = 0
+print_info: BOS token        = 1 '<s>'
+print_info: EOS token        = 32000 '<|im_end|>'
+print_info: EOT token        = 32000 '<|im_end|>'
+print_info: UNK token        = 0 '<unk>'
+print_info: LF token         = 13 '<0x0A>'
+print_info: EOG token        = 32000 '<|im_end|>'
+print_info: max token length = 48
+load_tensors: loading model tensors, this can take a while... (mmap = true)
+load_tensors: layer   0 assigned to device Metal, is_swa = 0
+load_tensors: layer   1 assigned to device Metal, is_swa = 0
+load_tensors: layer   2 assigned to device Metal, is_swa = 0
+load_tensors: layer   3 assigned to device Metal, is_swa = 0
+load_tensors: layer   4 assigned to device Metal, is_swa = 0
+load_tensors: layer   5 assigned to device Metal, is_swa = 0
+load_tensors: layer   6 assigned to device Metal, is_swa = 0
+load_tensors: layer   7 assigned to device Metal, is_swa = 0
+load_tensors: layer   8 assigned to device Metal, is_swa = 0
+load_tensors: layer   9 assigned to device Metal, is_swa = 0
+load_tensors: layer  10 assigned to device Metal, is_swa = 0
+load_tensors: layer  11 assigned to device Metal, is_swa = 0
+load_tensors: layer  12 assigned to device Metal, is_swa = 0
+load_tensors: layer  13 assigned to device Metal, is_swa = 0
+load_tensors: layer  14 assigned to device Metal, is_swa = 0
+load_tensors: layer  15 assigned to device Metal, is_swa = 0
+load_tensors: layer  16 assigned to device Metal, is_swa = 0
+load_tensors: layer  17 assigned to device Metal, is_swa = 0
+load_tensors: layer  18 assigned to device Metal, is_swa = 0
+load_tensors: layer  19 assigned to device Metal, is_swa = 0
+load_tensors: layer  20 assigned to device Metal, is_swa = 0
+load_tensors: layer  21 assigned to device Metal, is_swa = 0
+load_tensors: layer  22 assigned to device Metal, is_swa = 0
+load_tensors: layer  23 assigned to device Metal, is_swa = 0
+load_tensors: layer  24 assigned to device Metal, is_swa = 0
+load_tensors: layer  25 assigned to device Metal, is_swa = 0
+load_tensors: layer  26 assigned to device Metal, is_swa = 0
+load_tensors: layer  27 assigned to device Metal, is_swa = 0
+load_tensors: layer  28 assigned to device Metal, is_swa = 0
+load_tensors: layer  29 assigned to device Metal, is_swa = 0
+load_tensors: layer  30 assigned to device Metal, is_swa = 0
+load_tensors: layer  31 assigned to device Metal, is_swa = 0
+load_tensors: layer  32 assigned to device CPU, is_swa = 0
+create_tensor: loading tensor token_embd.weight
+create_tensor: loading tensor output_norm.weight
+create_tensor: loading tensor output.weight
+create_tensor: loading tensor blk.0.attn_norm.weight
+create_tensor: loading tensor blk.0.attn_q.weight
+create_tensor: loading tensor blk.0.attn_k.weight
+create_tensor: loading tensor blk.0.attn_v.weight
+create_tensor: loading tensor blk.0.attn_output.weight
+create_tensor: loading tensor blk.0.ffn_norm.weight
+create_tensor: loading tensor blk.0.ffn_gate.weight
+create_tensor: loading tensor blk.0.ffn_down.weight
+create_tensor: loading tensor blk.0.ffn_up.weight
+create_tensor: loading tensor blk.1.attn_norm.weight
+create_tensor: loading tensor blk.1.attn_q.weight
+create_tensor: loading tensor blk.1.attn_k.weight
+create_tensor: loading tensor blk.1.attn_v.weight
+create_tensor: loading tensor blk.1.attn_output.weight
+create_tensor: loading tensor blk.1.ffn_norm.weight
+create_tensor: loading tensor blk.1.ffn_gate.weight
+create_tensor: loading tensor blk.1.ffn_down.weight
+create_tensor: loading tensor blk.1.ffn_up.weight
+create_tensor: loading tensor blk.2.attn_norm.weight
+create_tensor: loading tensor blk.2.attn_q.weight
+create_tensor: loading tensor blk.2.attn_k.weight
+create_tensor: loading tensor blk.2.attn_v.weight
+create_tensor: loading tensor blk.2.attn_output.weight
+create_tensor: loading tensor blk.2.ffn_norm.weight
+create_tensor: loading tensor blk.2.ffn_gate.weight
+create_tensor: loading tensor blk.2.ffn_down.weight
+create_tensor: loading tensor blk.2.ffn_up.weight
+create_tensor: loading tensor blk.3.attn_norm.weight
+create_tensor: loading tensor blk.3.attn_q.weight
+create_tensor: loading tensor blk.3.attn_k.weight
+create_tensor: loading tensor blk.3.attn_v.weight
+create_tensor: loading tensor blk.3.attn_output.weight
+create_tensor: loading tensor blk.3.ffn_norm.weight
+create_tensor: loading tensor blk.3.ffn_gate.weight
+create_tensor: loading tensor blk.3.ffn_down.weight
+create_tensor: loading tensor blk.3.ffn_up.weight
+create_tensor: loading tensor blk.4.attn_norm.weight
+create_tensor: loading tensor blk.4.attn_q.weight
+create_tensor: loading tensor blk.4.attn_k.weight
+create_tensor: loading tensor blk.4.attn_v.weight
+create_tensor: loading tensor blk.4.attn_output.weight
+create_tensor: loading tensor blk.4.ffn_norm.weight
+create_tensor: loading tensor blk.4.ffn_gate.weight
+create_tensor: loading tensor blk.4.ffn_down.weight
+create_tensor: loading tensor blk.4.ffn_up.weight
+create_tensor: loading tensor blk.5.attn_norm.weight
+create_tensor: loading tensor blk.5.attn_q.weight
+create_tensor: loading tensor blk.5.attn_k.weight
+create_tensor: loading tensor blk.5.attn_v.weight
+create_tensor: loading tensor blk.5.attn_output.weight
+create_tensor: loading tensor blk.5.ffn_norm.weight
+create_tensor: loading tensor blk.5.ffn_gate.weight
+create_tensor: loading tensor blk.5.ffn_down.weight
+create_tensor: loading tensor blk.5.ffn_up.weight
+create_tensor: loading tensor blk.6.attn_norm.weight
+create_tensor: loading tensor blk.6.attn_q.weight
+create_tensor: loading tensor blk.6.attn_k.weight
+create_tensor: loading tensor blk.6.attn_v.weight
+create_tensor: loading tensor blk.6.attn_output.weight
+create_tensor: loading tensor blk.6.ffn_norm.weight
+create_tensor: loading tensor blk.6.ffn_gate.weight
+create_tensor: loading tensor blk.6.ffn_down.weight
+create_tensor: loading tensor blk.6.ffn_up.weight
+create_tensor: loading tensor blk.7.attn_norm.weight
+create_tensor: loading tensor blk.7.attn_q.weight
+create_tensor: loading tensor blk.7.attn_k.weight
+create_tensor: loading tensor blk.7.attn_v.weight
+create_tensor: loading tensor blk.7.attn_output.weight
+create_tensor: loading tensor blk.7.ffn_norm.weight
+create_tensor: loading tensor blk.7.ffn_gate.weight
+create_tensor: loading tensor blk.7.ffn_down.weight
+create_tensor: loading tensor blk.7.ffn_up.weight
+create_tensor: loading tensor blk.8.attn_norm.weight
+create_tensor: loading tensor blk.8.attn_q.weight
+create_tensor: loading tensor blk.8.attn_k.weight
+create_tensor: loading tensor blk.8.attn_v.weight
+create_tensor: loading tensor blk.8.attn_output.weight
+create_tensor: loading tensor blk.8.ffn_norm.weight
+create_tensor: loading tensor blk.8.ffn_gate.weight
+create_tensor: loading tensor blk.8.ffn_down.weight
+create_tensor: loading tensor blk.8.ffn_up.weight
+create_tensor: loading tensor blk.9.attn_norm.weight
+create_tensor: loading tensor blk.9.attn_q.weight
+create_tensor: loading tensor blk.9.attn_k.weight
+create_tensor: loading tensor blk.9.attn_v.weight
+create_tensor: loading tensor blk.9.attn_output.weight
+create_tensor: loading tensor blk.9.ffn_norm.weight
+create_tensor: loading tensor blk.9.ffn_gate.weight
+create_tensor: loading tensor blk.9.ffn_down.weight
+create_tensor: loading tensor blk.9.ffn_up.weight
+create_tensor: loading tensor blk.10.attn_norm.weight
+create_tensor: loading tensor blk.10.attn_q.weight
+create_tensor: loading tensor blk.10.attn_k.weight
+create_tensor: loading tensor blk.10.attn_v.weight
+create_tensor: loading tensor blk.10.attn_output.weight
+create_tensor: loading tensor blk.10.ffn_norm.weight
+create_tensor: loading tensor blk.10.ffn_gate.weight
+create_tensor: loading tensor blk.10.ffn_down.weight
+create_tensor: loading tensor blk.10.ffn_up.weight
+create_tensor: loading tensor blk.11.attn_norm.weight
+create_tensor: loading tensor blk.11.attn_q.weight
+create_tensor: loading tensor blk.11.attn_k.weight
+create_tensor: loading tensor blk.11.attn_v.weight
+create_tensor: loading tensor blk.11.attn_output.weight
+create_tensor: loading tensor blk.11.ffn_norm.weight
+create_tensor: loading tensor blk.11.ffn_gate.weight
+create_tensor: loading tensor blk.11.ffn_down.weight
+create_tensor: loading tensor blk.11.ffn_up.weight
+create_tensor: loading tensor blk.12.attn_norm.weight
+create_tensor: loading tensor blk.12.attn_q.weight
+create_tensor: loading tensor blk.12.attn_k.weight
+create_tensor: loading tensor blk.12.attn_v.weight
+create_tensor: loading tensor blk.12.attn_output.weight
+create_tensor: loading tensor blk.12.ffn_norm.weight
+create_tensor: loading tensor blk.12.ffn_gate.weight
+create_tensor: loading tensor blk.12.ffn_down.weight
+create_tensor: loading tensor blk.12.ffn_up.weight
+create_tensor: loading tensor blk.13.attn_norm.weight
+create_tensor: loading tensor blk.13.attn_q.weight
+create_tensor: loading tensor blk.13.attn_k.weight
+create_tensor: loading tensor blk.13.attn_v.weight
+create_tensor: loading tensor blk.13.attn_output.weight
+create_tensor: loading tensor blk.13.ffn_norm.weight
+create_tensor: loading tensor blk.13.ffn_gate.weight
+create_tensor: loading tensor blk.13.ffn_down.weight
+create_tensor: loading tensor blk.13.ffn_up.weight
+create_tensor: loading tensor blk.14.attn_norm.weight
+create_tensor: loading tensor blk.14.attn_q.weight
+create_tensor: loading tensor blk.14.attn_k.weight
+create_tensor: loading tensor blk.14.attn_v.weight
+create_tensor: loading tensor blk.14.attn_output.weight
+create_tensor: loading tensor blk.14.ffn_norm.weight
+create_tensor: loading tensor blk.14.ffn_gate.weight
+create_tensor: loading tensor blk.14.ffn_down.weight
+create_tensor: loading tensor blk.14.ffn_up.weight
+create_tensor: loading tensor blk.15.attn_norm.weight
+create_tensor: loading tensor blk.15.attn_q.weight
+create_tensor: loading tensor blk.15.attn_k.weight
+create_tensor: loading tensor blk.15.attn_v.weight
+create_tensor: loading tensor blk.15.attn_output.weight
+create_tensor: loading tensor blk.15.ffn_norm.weight
+create_tensor: loading tensor blk.15.ffn_gate.weight
+create_tensor: loading tensor blk.15.ffn_down.weight
+create_tensor: loading tensor blk.15.ffn_up.weight
+create_tensor: loading tensor blk.16.attn_norm.weight
+create_tensor: loading tensor blk.16.attn_q.weight
+create_tensor: loading tensor blk.16.attn_k.weight
+create_tensor: loading tensor blk.16.attn_v.weight
+create_tensor: loading tensor blk.16.attn_output.weight
+create_tensor: loading tensor blk.16.ffn_norm.weight
+create_tensor: loading tensor blk.16.ffn_gate.weight
+create_tensor: loading tensor blk.16.ffn_down.weight
+create_tensor: loading tensor blk.16.ffn_up.weight
+create_tensor: loading tensor blk.17.attn_norm.weight
+create_tensor: loading tensor blk.17.attn_q.weight
+create_tensor: loading tensor blk.17.attn_k.weight
+create_tensor: loading tensor blk.17.attn_v.weight
+create_tensor: loading tensor blk.17.attn_output.weight
+create_tensor: loading tensor blk.17.ffn_norm.weight
+create_tensor: loading tensor blk.17.ffn_gate.weight
+create_tensor: loading tensor blk.17.ffn_down.weight
+create_tensor: loading tensor blk.17.ffn_up.weight
+create_tensor: loading tensor blk.18.attn_norm.weight
+create_tensor: loading tensor blk.18.attn_q.weight
+create_tensor: loading tensor blk.18.attn_k.weight
+create_tensor: loading tensor blk.18.attn_v.weight
+create_tensor: loading tensor blk.18.attn_output.weight
+create_tensor: loading tensor blk.18.ffn_norm.weight
+create_tensor: loading tensor blk.18.ffn_gate.weight
+create_tensor: loading tensor blk.18.ffn_down.weight
+create_tensor: loading tensor blk.18.ffn_up.weight
+create_tensor: loading tensor blk.19.attn_norm.weight
+create_tensor: loading tensor blk.19.attn_q.weight
+create_tensor: loading tensor blk.19.attn_k.weight
+create_tensor: loading tensor blk.19.attn_v.weight
+create_tensor: loading tensor blk.19.attn_output.weight
+create_tensor: loading tensor blk.19.ffn_norm.weight
+create_tensor: loading tensor blk.19.ffn_gate.weight
+create_tensor: loading tensor blk.19.ffn_down.weight
+create_tensor: loading tensor blk.19.ffn_up.weight
+create_tensor: loading tensor blk.20.attn_norm.weight
+create_tensor: loading tensor blk.20.attn_q.weight
+create_tensor: loading tensor blk.20.attn_k.weight
+create_tensor: loading tensor blk.20.attn_v.weight
+create_tensor: loading tensor blk.20.attn_output.weight
+create_tensor: loading tensor blk.20.ffn_norm.weight
+create_tensor: loading tensor blk.20.ffn_gate.weight
+create_tensor: loading tensor blk.20.ffn_down.weight
+create_tensor: loading tensor blk.20.ffn_up.weight
+create_tensor: loading tensor blk.21.attn_norm.weight
+create_tensor: loading tensor blk.21.attn_q.weight
+create_tensor: loading tensor blk.21.attn_k.weight
+create_tensor: loading tensor blk.21.attn_v.weight
+create_tensor: loading tensor blk.21.attn_output.weight
+create_tensor: loading tensor blk.21.ffn_norm.weight
+create_tensor: loading tensor blk.21.ffn_gate.weight
+create_tensor: loading tensor blk.21.ffn_down.weight
+create_tensor: loading tensor blk.21.ffn_up.weight
+create_tensor: loading tensor blk.22.attn_norm.weight
+create_tensor: loading tensor blk.22.attn_q.weight
+create_tensor: loading tensor blk.22.attn_k.weight
+create_tensor: loading tensor blk.22.attn_v.weight
+create_tensor: loading tensor blk.22.attn_output.weight
+create_tensor: loading tensor blk.22.ffn_norm.weight
+create_tensor: loading tensor blk.22.ffn_gate.weight
+create_tensor: loading tensor blk.22.ffn_down.weight
+create_tensor: loading tensor blk.22.ffn_up.weight
+create_tensor: loading tensor blk.23.attn_norm.weight
+create_tensor: loading tensor blk.23.attn_q.weight
+create_tensor: loading tensor blk.23.attn_k.weight
+create_tensor: loading tensor blk.23.attn_v.weight
+create_tensor: loading tensor blk.23.attn_output.weight
+create_tensor: loading tensor blk.23.ffn_norm.weight
+create_tensor: loading tensor blk.23.ffn_gate.weight
+create_tensor: loading tensor blk.23.ffn_down.weight
+create_tensor: loading tensor blk.23.ffn_up.weight
+create_tensor: loading tensor blk.24.attn_norm.weight
+create_tensor: loading tensor blk.24.attn_q.weight
+create_tensor: loading tensor blk.24.attn_k.weight
+create_tensor: loading tensor blk.24.attn_v.weight
+create_tensor: loading tensor blk.24.attn_output.weight
+create_tensor: loading tensor blk.24.ffn_norm.weight
+create_tensor: loading tensor blk.24.ffn_gate.weight
+create_tensor: loading tensor blk.24.ffn_down.weight
+create_tensor: loading tensor blk.24.ffn_up.weight
+create_tensor: loading tensor blk.25.attn_norm.weight
+create_tensor: loading tensor blk.25.attn_q.weight
+create_tensor: loading tensor blk.25.attn_k.weight
+create_tensor: loading tensor blk.25.attn_v.weight
+create_tensor: loading tensor blk.25.attn_output.weight
+create_tensor: loading tensor blk.25.ffn_norm.weight
+create_tensor: loading tensor blk.25.ffn_gate.weight
+create_tensor: loading tensor blk.25.ffn_down.weight
+create_tensor: loading tensor blk.25.ffn_up.weight
+create_tensor: loading tensor blk.26.attn_norm.weight
+create_tensor: loading tensor blk.26.attn_q.weight
+create_tensor: loading tensor blk.26.attn_k.weight
+create_tensor: loading tensor blk.26.attn_v.weight
+create_tensor: loading tensor blk.26.attn_output.weight
+create_tensor: loading tensor blk.26.ffn_norm.weight
+create_tensor: loading tensor blk.26.ffn_gate.weight
+create_tensor: loading tensor blk.26.ffn_down.weight
+create_tensor: loading tensor blk.26.ffn_up.weight
+create_tensor: loading tensor blk.27.attn_norm.weight
+create_tensor: loading tensor blk.27.attn_q.weight
+create_tensor: loading tensor blk.27.attn_k.weight
+create_tensor: loading tensor blk.27.attn_v.weight
+create_tensor: loading tensor blk.27.attn_output.weight
+create_tensor: loading tensor blk.27.ffn_norm.weight
+create_tensor: loading tensor blk.27.ffn_gate.weight
+create_tensor: loading tensor blk.27.ffn_down.weight
+create_tensor: loading tensor blk.27.ffn_up.weight
+create_tensor: loading tensor blk.28.attn_norm.weight
+create_tensor: loading tensor blk.28.attn_q.weight
+create_tensor: loading tensor blk.28.attn_k.weight
+create_tensor: loading tensor blk.28.attn_v.weight
+create_tensor: loading tensor blk.28.attn_output.weight
+create_tensor: loading tensor blk.28.ffn_norm.weight
+create_tensor: loading tensor blk.28.ffn_gate.weight
+create_tensor: loading tensor blk.28.ffn_down.weight
+create_tensor: loading tensor blk.28.ffn_up.weight
+create_tensor: loading tensor blk.29.attn_norm.weight
+create_tensor: loading tensor blk.29.attn_q.weight
+create_tensor: loading tensor blk.29.attn_k.weight
+create_tensor: loading tensor blk.29.attn_v.weight
+create_tensor: loading tensor blk.29.attn_output.weight
+create_tensor: loading tensor blk.29.ffn_norm.weight
+create_tensor: loading tensor blk.29.ffn_gate.weight
+create_tensor: loading tensor blk.29.ffn_down.weight
+create_tensor: loading tensor blk.29.ffn_up.weight
+create_tensor: loading tensor blk.30.attn_norm.weight
+create_tensor: loading tensor blk.30.attn_q.weight
+create_tensor: loading tensor blk.30.attn_k.weight
+create_tensor: loading tensor blk.30.attn_v.weight
+create_tensor: loading tensor blk.30.attn_output.weight
+create_tensor: loading tensor blk.30.ffn_norm.weight
+create_tensor: loading tensor blk.30.ffn_gate.weight
+create_tensor: loading tensor blk.30.ffn_down.weight
+create_tensor: loading tensor blk.30.ffn_up.weight
+create_tensor: loading tensor blk.31.attn_norm.weight
+create_tensor: loading tensor blk.31.attn_q.weight
+create_tensor: loading tensor blk.31.attn_k.weight
+create_tensor: loading tensor blk.31.attn_v.weight
+create_tensor: loading tensor blk.31.attn_output.weight
+create_tensor: loading tensor blk.31.ffn_norm.weight
+create_tensor: loading tensor blk.31.ffn_gate.weight
+create_tensor: loading tensor blk.31.ffn_down.weight
+create_tensor: loading tensor blk.31.ffn_up.weight
+load_tensors: tensor 'token_embd.weight' (q4_K) (and 2 others) cannot be used with preferred buffer type CPU_REPACK, using CPU instead
+ggml_metal_log_allocated_size: allocated buffer, size =  4095.16 MiB, ( 4095.53 /  5461.34)
+load_tensors: offloading 32 repeating layers to GPU
+load_tensors: offloaded 32/33 layers to GPU
+load_tensors: Metal_Mapped model buffer size =  4095.14 MiB
+load_tensors:   CPU_Mapped model buffer size =  4165.54 MiB
+................................................................................................
+llama_context: constructing llama_context
+llama_context: n_seq_max     = 1
+llama_context: n_ctx         = 4096
+llama_context: n_ctx_per_seq = 4096
+llama_context: n_batch       = 2048
+llama_context: n_ubatch      = 512
+llama_context: causal_attn   = 1
+llama_context: flash_attn    = auto
+llama_context: kv_unified    = false
+llama_context: freq_base     = 10000.0
+llama_context: freq_scale    = 1
+llama_context: n_ctx_per_seq (4096) < n_ctx_train (32768) -- the full capacity of the model will not be utilized
+ggml_metal_init: allocating
+ggml_metal_init: found device: Apple M2
+ggml_metal_init: picking default device: Apple M2
+ggml_metal_init: use bfloat         = true
+ggml_metal_init: use fusion         = true
+ggml_metal_init: use concurrency    = true
+ggml_metal_init: use graph optimize = true
+set_abort_callback: call
+llama_context:        CPU  output buffer size =     0.12 MiB
+create_memory: n_ctx = 4096 (padded)
+llama_kv_cache: layer   0: dev = Metal
+llama_kv_cache: layer   1: dev = Metal
+llama_kv_cache: layer   2: dev = Metal
+llama_kv_cache: layer   3: dev = Metal
+llama_kv_cache: layer   4: dev = Metal
+llama_kv_cache: layer   5: dev = Metal
+llama_kv_cache: layer   6: dev = Metal
+llama_kv_cache: layer   7: dev = Metal
+llama_kv_cache: layer   8: dev = Metal
+llama_kv_cache: layer   9: dev = Metal
+llama_kv_cache: layer  10: dev = Metal
+llama_kv_cache: layer  11: dev = Metal
+llama_kv_cache: layer  12: dev = Metal
+llama_kv_cache: layer  13: dev = Metal
+llama_kv_cache: layer  14: dev = Metal
+llama_kv_cache: layer  15: dev = Metal
+llama_kv_cache: layer  16: dev = Metal
+llama_kv_cache: layer  17: dev = Metal
+llama_kv_cache: layer  18: dev = Metal
+llama_kv_cache: layer  19: dev = Metal
+llama_kv_cache: layer  20: dev = Metal
+llama_kv_cache: layer  21: dev = Metal
+llama_kv_cache: layer  22: dev = Metal
+llama_kv_cache: layer  23: dev = Metal
+llama_kv_cache: layer  24: dev = Metal
+llama_kv_cache: layer  25: dev = Metal
+llama_kv_cache: layer  26: dev = Metal
+llama_kv_cache: layer  27: dev = Metal
+llama_kv_cache: layer  28: dev = Metal
+llama_kv_cache: layer  29: dev = Metal
+llama_kv_cache: layer  30: dev = Metal
+llama_kv_cache: layer  31: dev = Metal
+llama_kv_cache:      Metal KV buffer size =   512.00 MiB
+llama_kv_cache: size =  512.00 MiB (  4096 cells,  32 layers,  1/1 seqs), K (f16):  256.00 MiB, V (f16):  256.00 MiB
+llama_context: enumerating backends
+llama_context: backend_ptrs.size() = 3
+llama_context: max_nodes = 2328
+llama_context: reserving full memory module
+llama_context: worst-case: n_tokens = 512, n_seqs = 1, n_outputs = 1
+graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1
+llama_context: Flash Attention was auto, set to enabled
+graph_reserve: reserving a graph for ubatch with n_tokens =  512, n_seqs =  1, n_outputs =  512
+graph_reserve: reserving a graph for ubatch with n_tokens =    1, n_seqs =  1, n_outputs =    1
+graph_reserve: reserving a graph for ubatch with n_tokens =  512, n_seqs =  1, n_outputs =  512
+llama_context:      Metal compute buffer size =   112.01 MiB
+llama_context:        CPU compute buffer size =    70.56 MiB
+llama_context: graph nodes  = 999
+llama_context: graph splits = 4 (with bs=512), 3 (with bs=1)
+set_n_threads: n_threads = 7, n_threads_batch = 7
+decode: n_tokens == 0
+llama_decode: failed to decode, ret = -1
+set_n_threads: n_threads = 7, n_threads_batch = 7
+ggml_metal_library_compile_pipeline: compiling pipeline: base = 'kernel_rms_norm_mul_f32', name = 'kernel_rms_norm_mul_f32'
+ggml_metal_library_compile_pipeline: loaded kernel_rms_norm_mul_f32                       0x13860a160 | th_max = 1024 | th_width =   32
+ggml_metal_library_compile_pipeline: compiling pipeline: base = 'kernel_mul_mv_q4_K_f32', name = 'kernel_mul_mv_q4_K_f32_nsg=2'
+ggml_metal_library_compile_pipeline: loaded kernel_mul_mv_q4_K_f32_nsg=2                  0x13860b680 | th_max =  768 | th_width =   32
+ggml_metal_library_compile_pipeline: compiling pipeline: base = 'kernel_mul_mv_q6_K_f32', name = 'kernel_mul_mv_q6_K_f32_nsg=2'
+ggml_metal_library_compile_pipeline: loaded kernel_mul_mv_q6_K_f32_nsg=2                  0x13860bc30 | th_max = 1024 | th_width =   32
+ggml_metal_library_compile_pipeline: compiling pipeline: base = 'kernel_rope_norm_f32', name = 'kernel_rope_norm_f32'
+ggml_metal_library_compile_pipeline: loaded kernel_rope_norm_f32                          0x13860ad50 | th_max = 1024 | th_width =   32
+ggml_metal_library_compile_pipeline: compiling pipeline: base = 'kernel_set_rows_f16_i64', name = 'kernel_set_rows_f16_i64'
+ggml_metal_library_compile_pipeline: loaded kernel_set_rows_f16_i64                       0x13860c040 | th_max = 1024 | th_width =   32
+ggml_metal_library_compile_pipeline: compiling pipeline: base = 'kernel_cpy_f32_f16', name = 'kernel_cpy_f32_f16'
+ggml_metal_library_compile_pipeline: loaded kernel_cpy_f32_f16                            0x13860ca10 | th_max = 1024 | th_width =   32
+ggml_metal_library_compile_pipeline: compiling pipeline: base = 'kernel_flash_attn_ext_vec_f16_dk128_dv128', name = 'kernel_flash_attn_ext_vec_f16_dk128_dv128_mask=1_sink=0_bias=0_softcap=0_ns10=1024_ns20=1024_nsg=1_nwg=32'
+ggml_metal_library_compile_pipeline: loaded kernel_flash_attn_ext_vec_f16_dk128_dv128_mask=1_sink=0_bias=0_softcap=0_ns10=1024_ns20=1024_nsg=1_nwg=32      0x13860d310 | th_max =  448 | th_width =   32
+ggml_metal_library_compile_pipeline: compiling pipeline: base = 'kernel_flash_attn_ext_vec_reduce', name = 'kernel_flash_attn_ext_vec_reduce_dv=128_nwg=32'
+ggml_metal_library_compile_pipeline: loaded kernel_flash_attn_ext_vec_reduce_dv=128_nwg=32      0x13860d7a0 | th_max = 1024 | th_width =   32
+ggml_metal_library_compile_pipeline: compiling pipeline: base = 'kernel_add_row_c4_fuse_1', name = 'kernel_add_row_c4_fuse_1'
+ggml_metal_library_compile_pipeline: loaded kernel_add_row_c4_fuse_1                      0x13860dd20 | th_max = 1024 | th_width =   32
+ggml_metal_library_compile_pipeline: compiling pipeline: base = 'kernel_swiglu_f32', name = 'kernel_swiglu_f32'
+ggml_metal_library_compile_pipeline: loaded kernel_swiglu_f32                             0x13860df80 | th_max = 1024 | th_width =   32
+ggml_metal_library_compile_pipeline: compiling pipeline: base = 'kernel_rms_norm_f32', name = 'kernel_rms_norm_f32'
+ggml_metal_library_compile_pipeline: loaded kernel_rms_norm_f32                           0x13860e890 | th_max = 1024 | th_width =   32
+ggml_metal_library_compile_pipeline: compiling pipeline: base = 'kernel_mul_row_c4_fuse_1', name = 'kernel_mul_row_c4_fuse_1'
+ggml_metal_library_compile_pipeline: loaded kernel_mul_row_c4_fuse_1                      0x138610360 | th_max = 1024 | th_width =   32
+ggml_metal_library_compile_pipeline: compiling pipeline: base = 'kernel_get_rows_f32', name = 'kernel_get_rows_f32'
+ggml_metal_library_compile_pipeline: loaded kernel_get_rows_f32                           0x13980ad50 | th_max = 1024 | th_width =   32
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+line: base = 'kernel_swiglu_f32', name = 'kernel_swiglu_f32'
+ggml_metal_library_compile_pipeline: loaded kernel_swiglu_f32                             0x13d009d80 | th_max = 1024 | th_width =   32
+ggml_metal_library_compile_pipeline: compiling pipeline: base = 'kernel_rms_norm_f32', name = 'kernel_rms_norm_f32'
+ggml_metal_library_compile_pipeline: loaded kernel_rms_norm_f32                           0x13d00a660 | th_max = 1024 | th_width =   32
+ggml_metal_library_compile_pipeline: compiling pipeline: base = 'kernel_mul_row_c4_fuse_1', name = 'kernel_mul_row_c4_fuse_1'
+ggml_metal_library_compile_pipeline: loaded kernel_mul_row_c4_fuse_1                      0x13d00c2e0 | th_max = 1024 | th_width =   32
+ggml_metal_library_compile_pipeline: compiling pipeline: base = 'kernel_get_rows_f32', name = 'kernel_get_rows_f32'
+ggml_metal_library_compile_pipeline: loaded kernel_get_rows_f32                           0x13bf09fc0 | th_max = 1024 | th_width =   32
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+reads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 4, n_threads_batch = 4
+set_n_threads: n_threads = 7, n_threads_batch = 7
+decode: n_tokens == 0
+llama_decode: failed to decode, ret = -1
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7
+set_n_threads: n_threads = 7, n_threads_batch = 7

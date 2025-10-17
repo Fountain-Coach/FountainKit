@@ -182,7 +182,8 @@ public struct EngraverStudioConfiguration: Sendable {
         self.bypassGateway = (self.provider != "gateway") || (bypass == "1" || bypass == "true" || bypass == "yes")
         self.openAIAPIKey = env["OPENAI_API_KEY"]
         let localURL = env["ENGRAVER_LOCAL_LLM_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.localEndpoint = URL(string: localURL ?? "http://127.0.0.1:11434/v1/chat/completions")!
+        // Default to LocalAgent (Hermes via llama.cpp): http://127.0.0.1:8080/chat
+        self.localEndpoint = URL(string: localURL ?? "http://127.0.0.1:8080/chat")!
     }
 
     public func tokenProvider() -> GatewayChatClient.TokenProvider {

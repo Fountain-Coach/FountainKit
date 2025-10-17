@@ -15,8 +15,7 @@ DEST="$MODELS_DIR/$MODEL_NAME"
 echo "[fetch-hermes] Downloading $MODEL_NAME → $DEST"
 echo "[fetch-hermes] From: $URL"
 
-curl -L --retry 4 --retry-delay 2 -C - -o "$DEST" "$URL"
+curl -L --retry 4 --retry-delay 2 -C - -# -o "$DEST" "$URL"
 
 echo "[fetch-hermes] Done: $DEST"
 echo "[fetch-hermes] Set AgentService/agent-config.json modelPath to: AgentService/Models/$MODEL_NAME"
-

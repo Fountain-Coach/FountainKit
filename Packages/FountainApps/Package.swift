@@ -25,6 +25,7 @@ let package = Package(
         .executable(name: "engraver-studio-app", targets: ["engraver-studio-app"]),
         .executable(name: "engraver-chat-tui", targets: ["engraver-chat-tui"]),
         .executable(name: "llm-doctor", targets: ["llm-doctor"]),
+        .executable(name: "engraver-direct", targets: ["engraver-direct"]),
         .library(name: "EngraverChatCore", targets: ["EngraverChatCore"]),
         .library(name: "EngraverStudio", targets: ["EngraverStudio"]),
         .executable(name: "fk", targets: ["fk"])
@@ -88,6 +89,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "llm-doctor",
+            dependencies: []
+        ),
+        .executableTarget(
+            name: "engraver-direct",
             dependencies: []
         ),
         .executableTarget(

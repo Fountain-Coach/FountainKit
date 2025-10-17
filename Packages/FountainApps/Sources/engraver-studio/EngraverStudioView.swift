@@ -17,6 +17,8 @@ struct EngraverStudioView: View {
     @State private var showDiagnostics: Bool = false
     @State private var promptEditorIsFocused: Bool = false
     @State private var showSemanticBrowser: Bool = false
+    @AppStorage("EngraverStudio.ShowLeftPane") private var showLeftPane: Bool = true
+    @AppStorage("EngraverStudio.ShowRightPane") private var showRightPane: Bool = true
 
 
     var body: some View {
@@ -807,7 +809,7 @@ private struct BootSidePane: View {
         case .checking: return "Environment — Checking…"
         case .stopping: return "Environment — Stopping…"
         case .idle: return "Environment — Idle"
-        case .failed(let msg): return "Environment — Failed"
+        case .failed(_): return "Environment — Failed"
         case .unavailable: return "Environment — Unavailable"
         }
     }
@@ -846,9 +848,6 @@ private struct RightPane: View {
         .padding(12)
     }
 }
-
-    @AppStorage("EngraverStudio.ShowLeftPane") private var showLeftPane: Bool = true
-    @AppStorage("EngraverStudio.ShowRightPane") private var showRightPane: Bool = true
 
     private struct IdentifiableURL: Identifiable { let url: URL; var id: String { url.absoluteString } }
 

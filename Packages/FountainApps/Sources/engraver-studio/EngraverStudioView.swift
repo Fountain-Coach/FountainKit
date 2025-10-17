@@ -21,13 +21,25 @@ struct EngraverStudioView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            BootSidePane(viewModel: viewModel)
-                .frame(width: 340)
-            Divider()
-            mainPane
-            Divider()
-            RightPane(viewModel: viewModel)
-                .frame(width: 380)
+            if showLeftPane {
+                BootSidePane(viewModel: viewModel)
+                    .frame(width: 340)
+                Divider()
+            }
+
+            VStack(spacing: 0) {
+                TopBar(viewModel: viewModel,
+                       showLeft: $showLeftPane,
+                       showRight: $showRightPane)
+                Divider()
+                mainPane
+            }
+
+            if showRightPane {
+                Divider()
+                RightPane(viewModel: viewModel)
+                    .frame(width: 380)
+            }
         }
         .onChange(of: viewModel.lastError) { _, newValue in
             showErrorAlert = newValue != nil
@@ -706,8 +718,15 @@ private struct BootSidePane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Environment")
-                .font(.headline)
+            HStack(spacing: 8) {
+                statusDot(viewModel.environmentState)
+                Text(headerText)
+                    .font(.headline)
+                Spacer()
+                if viewModel.environmentIsRunning {
+                    Label("ALL GREEN", systemImage: "checkmark.seal.fill").foregroundStyle(.green).font(.caption)
+                }
+            }
             controlRow
             Divider()
             servicesPanel
@@ -767,31 +786,71 @@ private struct BootSidePane: View {
         let color: Color = (s == .up) ? .green : (s == .down ? .red : .gray)
         return Circle().fill(color).frame(width: 8, height: 8)
     }
+
+    private func statusDot(_ s: EnvironmentOverallState) -> some View {
+        let color: Color
+        switch s {
+        case .running: color = .green
+        case .starting, .checking: color = .yellow
+        case .failed: color = .orange
+        case .stopping: color = .gray
+        case .idle: color = .gray
+        case .unavailable: color = .red
+        }
+        return Circle().fill(color).frame(width: 10, height: 10)
+    }
+
+    private var headerText: String {
+        switch viewModel.environmentState {
+        case .running: return "Environment — Running"
+        case .starting: return "Environment — Starting…"
+        case .checking: return "Environment — Checking…"
+        case .stopping: return "Environment — Stopping…"
+        case .idle: return "Environment — Idle"
+        case .failed(let msg): return "Environment — Failed"
+        case .unavailable: return "Environment — Unavailable"
+        }
+    }
 }
 
 @available(macOS 13.0, *)
 private struct RightPane: View {
     @ObservedObject var viewModel: EngraverChatViewModel
+    @AppStorage("EngraverStudio.RightPaneTab") private var rightTabRaw: String = "logs"
+    private enum Tab: String { case logs, diagnostics }
+    private var tab: Tab { get { Tab(rawValue: rightTabRaw) ?? .logs } nonmutating set { rightTabRaw = newValue.rawValue } }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            GroupBox(label: Text("Boot Trail")) {
-                if viewModel.environmentLogs.isEmpty {
-                    Text("Waiting for logs…").foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    ScrollView { LazyVStack(alignment: .leading, spacing: 6) { ForEach(viewModel.environmentLogs) { entry in Text("[\(entry.timestamp.ISO8601Format())] \(entry.line)").font(.system(size: 11, design: .monospaced)).frame(maxWidth: .infinity, alignment: .leading) } } }
-                        .textSelection(.enabled)
-                        .frame(minHeight: 260)
-                }
+            Picker("", selection: Binding(get: { tab }, set: { tab = $0 })) {
+                Text("Boot Trail").tag(Tab.logs)
+                Text("Diagnostics").tag(Tab.diagnostics)
             }
-            DiagnosticsPanel(messages: viewModel.diagnostics)
+            .pickerStyle(.segmented)
+
+            if tab == .logs {
+                GroupBox(label: Text("Boot Trail")) {
+                    if viewModel.environmentLogs.isEmpty {
+                        Text("Waiting for logs…").foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        ScrollView { LazyVStack(alignment: .leading, spacing: 6) { ForEach(viewModel.environmentLogs) { entry in Text("[\(entry.timestamp.ISO8601Format())] \(entry.line)").font(.system(size: 11, design: .monospaced)).frame(maxWidth: .infinity, alignment: .leading) } } }
+                            .textSelection(.enabled)
+                            .frame(minHeight: 260)
+                    }
+                }
+            } else {
+                DiagnosticsPanel(messages: viewModel.diagnostics)
+            }
             Spacer()
         }
         .padding(12)
     }
 }
 
-private struct IdentifiableURL: Identifiable { let url: URL; var id: String { url.absoluteString } }
+    @AppStorage("EngraverStudio.ShowLeftPane") private var showLeftPane: Bool = true
+    @AppStorage("EngraverStudio.ShowRightPane") private var showRightPane: Bool = true
+
+    private struct IdentifiableURL: Identifiable { let url: URL; var id: String { url.absoluteString } }
 
 @available(macOS 13.0, *)
 private struct CopyButton: View {
@@ -808,6 +867,31 @@ private struct CopyButton: View {
             if copied { Label("Copied", systemImage: "checkmark") }
             else { Label("Copy", systemImage: "doc.on.doc") }
         }
+    }
+}
+
+@available(macOS 13.0, *)
+private struct TopBar: View {
+    @ObservedObject var viewModel: EngraverChatViewModel
+    @Binding var showLeft: Bool
+    @Binding var showRight: Bool
+    var body: some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 6) {
+                Circle().fill(viewModel.environmentIsRunning ? Color.green : Color.orange)
+                    .frame(width: 8, height: 8)
+                Text(viewModel.environmentIsRunning ? "ALL GREEN" : "Starting…")
+                    .font(.caption.weight(.semibold))
+            }
+            Spacer()
+            Toggle(isOn: $showLeft) { Image(systemName: "sidebar.left") }
+                .toggleStyle(.button)
+                .help(showLeft ? "Hide environment" : "Show environment")
+            Toggle(isOn: $showRight) { Image(systemName: "sidebar.right") }
+                .toggleStyle(.button)
+                .help(showRight ? "Hide diagnostics" : "Show diagnostics")
+        }
+        .padding(8)
     }
 }
 

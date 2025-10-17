@@ -56,6 +56,29 @@ async function healthCheck(baseURL) {
   }
 }
 
+let reconnectTimer = null;
+let backoffMs = 2000;
+const backoffMaxMs = 30000;
+
+function scheduleReconnect(why) {
+  if (reconnectTimer) return; // already scheduled
+  const delay = backoffMs;
+  backoffMs = Math.min(backoffMaxMs, Math.floor(backoffMs * 1.8));
+  logLine("reconnect_scheduled", { delay, reason: why });
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connect(gatewayInput.value, personaInput.value);
+  }, delay);
+}
+
+function resetBackoff() {
+  backoffMs = 2000;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+}
+
 async function connect(baseURL, persona) {
   const trimmedBase = baseURL.trim().replace(/\/$/, "");
   const trimmedPersona = persona.trim() || "demo";
@@ -77,10 +100,12 @@ async function connect(baseURL, persona) {
     await bootstrapChatKit(window.chatkitConfig);
     setStatus(`Connected to ${trimmedBase} as persona "${trimmedPersona}".`);
     logLine("mounted", { base: trimmedBase, persona: trimmedPersona });
+    resetBackoff();
   } catch (error) {
     console.error("[ChatKit demo] bootstrap failed", error);
     setStatus(error.message ?? "Failed to bootstrap ChatKit.", "error");
     logLine("error", { message: error?.message || String(error) });
+    scheduleReconnect("bootstrap_error");
   }
 }
 
@@ -127,9 +152,18 @@ window.addEventListener("chatkit:bootstrap:session", (e) => {
 window.addEventListener("chatkit:bootstrap:mounted", (e) => {
   const d = e.detail || {};
   logLine("mounted_event", { sessionId: d.sessionId });
+  resetBackoff();
 });
 
 window.addEventListener("chatkit:bootstrap:error", (e) => {
   const d = e.detail || {};
   logLine("bootstrap_error", d);
+  scheduleReconnect("bootstrap_event_error");
+});
+
+// Try to reconnect when the tab becomes visible again (e.g., after restart)
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    scheduleReconnect("tab_visible");
+  }
 });

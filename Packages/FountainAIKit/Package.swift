@@ -10,7 +10,6 @@ let package = Package(
     dependencies: [
         .package(path: "../FountainCore"),
         .package(path: "../FountainAPIClients"),
-        .package(path: "../FountainDevHarness"),
         .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0"),
         .package(url: "https://github.com/apple/swift-openapi-urlsession.git", from: "1.2.0")
     ],
@@ -24,7 +23,6 @@ let package = Package(
                 .product(name: "BootstrapAPI", package: "FountainAPIClients"),
                 .product(name: "SemanticBrowserAPI", package: "FountainAPIClients"),
                 .product(name: "ApiClientsCore", package: "FountainAPIClients"),
-                .product(name: "FountainDevHarness", package: "FountainDevHarness"),
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
             ]

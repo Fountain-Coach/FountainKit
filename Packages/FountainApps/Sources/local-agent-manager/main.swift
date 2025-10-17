@@ -14,7 +14,7 @@ struct LocalAgentConfig: Codable {
     static let `default` = LocalAgentConfig(
         repo_url: "https://github.com/Fountain-Coach/LocalAgent",
         rel_dir: "External/LocalAgent",
-        backend: "mock",
+        backend: "coreml",
         host: "127.0.0.1",
         port: 8080
     )
@@ -122,6 +122,14 @@ struct LocalAgentManager {
             obj["backend"] = config.backend
             obj["host"] = config.host
             obj["port"] = config.port
+            // Ensure modelPath is set for Core ML backend
+            if (config.backend.lowercased() == "coreml") {
+                let defaultCoreML = "AgentService/Models/coreml-model.mlmodelc"
+                let current = (obj["modelPath"] as? String) ?? ""
+                if current.isEmpty || current.hasSuffix(".gguf") || current.hasSuffix(".bin") {
+                    obj["modelPath"] = defaultCoreML
+                }
+            }
             let out = try JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted])
             try out.write(to: configFile)
         }
@@ -147,6 +155,10 @@ struct LocalAgentManager {
         task.currentDirectoryURL = dir
         task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         task.arguments = ["swift", "run", "--package-path", "AgentService", "AgentService"]
+        // Ensure AgentService sees the config file under AgentService/
+        var env = ProcessInfo.processInfo.environment
+        env["AGENT_CONFIG"] = dir.appendingPathComponent("AgentService/agent-config.json").path
+        task.environment = env
         let fh = try FileHandle(forWritingTo: logURL)
         task.standardOutput = fh
         task.standardError = fh

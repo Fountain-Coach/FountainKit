@@ -1,16 +1,15 @@
-[0/1] Planning build
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'AgentService' complete! (0.43s)
-e
-[4/6] Compiling AgentCore NIOHTTPServer.swift
-[4/8] Write sources
-[6/10] Compiling AgentService main.swift
-[7/10] Emitting module AgentService
-[7/10] Write Objects.LinkFileList
-[8/10] Linking AgentService
-[9/10] Applying AgentService
-Build of product 'AgentService' complete! (2.86s)
+Build of product 'AgentService' complete! (0.20s)
+e' complete! (0.40s)
+ntCore CoreMLBackend.swift
+[5/9] Emitting module AgentService
+[6/9] Compiling AgentService main.swift
+[6/9] Write Objects.LinkFileList
+[7/9] Linking AgentService
+[8/9] Applying AgentService
+Build of product 'AgentService' complete! (1.65s)
+d of product 'AgentService' complete! (2.86s)
 ft-system.git from cache (0.97s)
 Fetched https://github.com/apple/swift-nio.git from cache (1.24s)
 Computing version for https://github.com/apple/swift-nio.git

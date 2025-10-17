@@ -3,7 +3,6 @@ import SwiftUI
 import AppKit
 import EngraverStudio
 import EngraverChatCore
-import Security
 
 @main
 @available(macOS 13.0, *)
@@ -16,10 +15,9 @@ struct EngraverStudioStandaloneApp: App {
         if CommandLine.arguments.contains("--debug") {
             env["ENGRAVER_DEBUG"] = "1"
         }
-        // Allow folks to store secrets in the default macOS Keychain via `security add-generic-password`
-        // without exposing them in plain text environment variables.
+        // Resolve secrets via SecretStoreHelper (Keychain on macOS; libsecret on Linux)
         if env["GATEWAY_BEARER"] == nil,
-           let token = try? KeychainLookup.service("FountainAI", account: "GATEWAY_BEARER") {
+           let token = SecretStoreHelper.read(service: "FountainAI", account: "GATEWAY_BEARER") {
             env["GATEWAY_BEARER"] = token
         }
         configuration = EngraverStudioConfiguration(environment: env)
@@ -42,27 +40,6 @@ struct EngraverStudioStandaloneApp: App {
         func applicationDidBecomeActive(_ notification: Notification) {
             NSApp.activate(ignoringOtherApps: true)
         }
-    }
-}
-
-// MARK: - Lightweight Keychain helper
-
-enum KeychainLookup {
-    struct LookupError: Error {}
-
-    static func service(_ service: String, account: String) throws -> String {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true
-        ]
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        guard status == errSecSuccess, let data = item as? Data, let value = String(data: data, encoding: .utf8) else {
-            throw LookupError()
-        }
-        return value
     }
 }
 

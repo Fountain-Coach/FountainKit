@@ -552,6 +552,20 @@ public final class EngraverChatViewModel: ObservableObject {
         preferStreaming: Bool = true,
         corpusOverride: String? = nil
     ) {
+        sendInternal(prompt: rawPrompt,
+                     systemPrompts: systemPrompts,
+                     preferStreaming: preferStreaming,
+                     corpusOverride: corpusOverride,
+                     allowRemediation: true)
+    }
+
+    private func sendInternal(
+        prompt rawPrompt: String,
+        systemPrompts: [String],
+        preferStreaming: Bool,
+        corpusOverride: String?,
+        allowRemediation: Bool
+    ) {
         let prompt = rawPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty else { return }
 
@@ -661,6 +675,16 @@ public final class EngraverChatViewModel: ObservableObject {
                 }
                 emitDiagnostic("Stream cancelled.")
             } catch {
+                // Attempt one-shot auto remediation for common issues
+                if allowRemediation, await self.tryAutoRemediateAndRetry(
+                    error: error,
+                    rawPrompt: rawPrompt,
+                    systemPrompts: systemPrompts,
+                    preferStreaming: preferStreaming,
+                    corpusOverride: corpusOverride
+                ) {
+                    return
+                }
                 let description = userFacingError(from: error)
                 await MainActor.run {
                     self.activeTokens.removeAll()
@@ -670,6 +694,54 @@ public final class EngraverChatViewModel: ObservableObject {
                 emitDiagnostic("Stream error: \(description)")
             }
         }
+    }
+
+    private func isCannotConnect(_ error: Error) -> Bool {
+        let ns = error as NSError
+        if ns.domain == NSURLErrorDomain && ns.code == -1004 { return true }
+        return false
+    }
+
+    private func tryAutoRemediateAndRetry(
+        error: Error,
+        rawPrompt: String,
+        systemPrompts: [String],
+        preferStreaming: Bool,
+        corpusOverride: String?
+    ) async -> Bool {
+        // Case 1: 429 — disable limiter and retry once (non-streaming to simplify)
+        if let gw = error as? GatewayChatError {
+            if case .serverError(let status, _) = gw, status == 429 {
+                emitDiagnostic("Auto-remediation: disabling rate limiter and restarting gateway due to 429…")
+                self.gatewayRateLimiterEnabled = false
+                await applyGatewaySettings(restart: true)
+                await MainActor.run {
+                    self.sendInternal(prompt: rawPrompt,
+                                      systemPrompts: systemPrompts,
+                                      preferStreaming: false,
+                                      corpusOverride: corpusOverride,
+                                      allowRemediation: false)
+                }
+                return true
+            }
+        }
+        // Case 2: gateway unreachable — ensure environment running and retry once
+        if isCannotConnect(error) {
+            emitDiagnostic("Auto-remediation: ensuring gateway is running after connection failure…")
+            if let environmentManager {
+                await environmentManager.startEnvironment(includeExtras: true)
+                for _ in 0..<20 { await environmentManager.refreshStatus(); try? await Task.sleep(nanoseconds: 300_000_000); if case .running = environmentState { break } }
+            }
+            await MainActor.run {
+                self.sendInternal(prompt: rawPrompt,
+                                  systemPrompts: systemPrompts,
+                                  preferStreaming: false,
+                                  corpusOverride: corpusOverride,
+                                  allowRemediation: false)
+            }
+            return true
+        }
+        return false
     }
 
     /// Cancels the currently active stream (if any) and resets the status to idle.

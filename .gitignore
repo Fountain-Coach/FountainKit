@@ -2,6 +2,7 @@
 Workspace/chatkit-dev/node_modules/
 Workspace/chatkit-dev/dist/
 Workspace/chatkit-dev/.vite/
+Workspace/chatkit-dev/package-lock.json
 
 # Demo logs
 Workspace/demos/chatkit-web/.demo-logs/
@@ -14,3 +15,11 @@ Packages/**/.build/
 # macOS
 .DS_Store
 
+# Fountain local runtime artifacts
+.fountain/
+logs/
+
+# Local embedded repos (do not track as submodules)
+External/LocalAgent/
+External/swiftcurseskit/
+Workspace/the-four-stars/

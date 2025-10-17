@@ -19,7 +19,7 @@ require() {
 
 cleanup() {
   if [[ -n "${GATEWAY_PID:-}" ]] && ps -p "$GATEWAY_PID" >/dev/null 2>&1; then
-    echo "[demo] Stopping gateway server (pid $GATEWAY_PID)…"
+    echo "[demo] Stopping gateway server (pid $GATEWAY_PID)..."
     kill "$GATEWAY_PID" >/dev/null 2>&1 || true
     wait "$GATEWAY_PID" 2>/dev/null || true
   fi
@@ -58,7 +58,7 @@ require "curl"
 mkdir -p "$LOG_DIR"
 trap cleanup EXIT
 
-echo "[demo] Launching gateway server on port ${GATEWAY_PORT}…"
+echo "[demo] Launching gateway server on port ${GATEWAY_PORT}..."
 (
   cd "$ROOT"
   LAUNCHER_SIGNATURE="$LAUNCHER_SIGNATURE_VALUE" \

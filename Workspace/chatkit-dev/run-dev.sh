@@ -11,7 +11,7 @@ GATEWAY_LOG="$LOG_DIR/gateway.log"
 
 cleanup() {
   if [[ -n "${GATEWAY_PID:-}" ]] && ps -p "$GATEWAY_PID" >/dev/null 2>&1; then
-    echo "[dev] Stopping gateway (pid $GATEWAY_PID)…"
+  echo "[dev] Stopping gateway (pid $GATEWAY_PID)..."
     kill "$GATEWAY_PID" >/dev/null 2>&1 || true
     wait "$GATEWAY_PID" 2>/dev/null || true
   fi
@@ -24,7 +24,7 @@ require node
 
 mkdir -p "$LOG_DIR"
 
-echo "[dev] Launching gateway on :$GATEWAY_PORT…"
+echo "[dev] Launching gateway on :$GATEWAY_PORT..."
 (
   cd "$ROOT"
   LAUNCHER_SIGNATURE="$LAUNCHER_SIGNATURE_VALUE" \
@@ -35,7 +35,7 @@ GATEWAY_PID=$!
 
 # Quick readiness wait
 for i in {1..30}; do
-  if curl -sSf "http://127.0.0.1:${GATEWAY_PORT}/health" >/dev/null 2>&1; then
+  if curl -sSf "http://127.0.0.1:"$GATEWAY_PORT"/health" >/dev/null 2>&1; then
     echo "[dev] Gateway ready."
     break
   fi
@@ -50,4 +50,3 @@ else
   npm install
   npx vite --port "$DEV_PORT" --strictPort
 fi
-

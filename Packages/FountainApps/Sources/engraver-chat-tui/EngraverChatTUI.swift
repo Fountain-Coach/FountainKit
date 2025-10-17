@@ -3,6 +3,9 @@ import SwiftCursesKit
 import EngraverChatCore
 import FountainAIAdapters
 import FountainAIKit
+import ProviderOpenAI
+import ProviderLocalLLM
+import ProviderGateway
 import FountainStoreClient
 
 // MARK: - CLI Options
@@ -145,17 +148,13 @@ actor ChatSession {
         self.configuration = configuration
         // Choose provider based on configuration, mirroring EngraverStudioRoot
         let client: ChatStreaming = {
-            if configuration.bypassGateway {
-                if configuration.provider == "openai" {
-                    return DirectOpenAIChatClient(apiKey: configuration.openAIAPIKey)
-                } else { // local default (e.g., Ollama-compatible endpoint)
-                    return DirectOpenAIChatClient(apiKey: nil, endpoint: configuration.localEndpoint)
-                }
-            } else {
-                return GatewayChatClient(
-                    baseURL: configuration.gatewayURL,
-                    tokenProvider: configuration.tokenProvider()
-                )
+            switch configuration.provider {
+            case "gateway":
+                return GatewayProvider.make(baseURL: configuration.gatewayURL, tokenProvider: configuration.tokenProvider())
+            case "openai":
+                return OpenAICompatibleChatProvider(apiKey: configuration.openAIAPIKey)
+            default:
+                return LocalLLMProvider.make(endpoint: configuration.localEndpoint)
             }
         }()
         self.viewModel = await MainActor.run {

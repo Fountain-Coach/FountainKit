@@ -4,6 +4,9 @@ import SwiftUI
 import TeatroGUI
 import FountainAIAdapters
 import FountainAIKit
+import ProviderOpenAI
+import ProviderLocalLLM
+import ProviderGateway
 import EngraverChatCore
 
 @available(macOS 13.0, *)
@@ -14,17 +17,13 @@ public struct EngraverStudioRoot: View {
     public init(configuration: EngraverStudioConfiguration = EngraverStudioConfiguration()) {
         self.configuration = configuration
         let client: ChatStreaming = {
-            if configuration.bypassGateway {
-                if configuration.provider == "openai" {
-                    return DirectOpenAIChatClient(apiKey: configuration.openAIAPIKey)
-                } else { // local default
-                    return DirectOpenAIChatClient(apiKey: nil, endpoint: configuration.localEndpoint)
-                }
-            } else {
-                return GatewayChatClient(
-                    baseURL: configuration.gatewayURL,
-                    tokenProvider: configuration.tokenProvider()
-                )
+            switch configuration.provider {
+            case "gateway":
+                return GatewayProvider.make(baseURL: configuration.gatewayURL, tokenProvider: configuration.tokenProvider())
+            case "openai":
+                return OpenAICompatibleChatProvider(apiKey: configuration.openAIAPIKey)
+            default:
+                return LocalLLMProvider.make(endpoint: configuration.localEndpoint)
             }
         }()
         _viewModel = StateObject(

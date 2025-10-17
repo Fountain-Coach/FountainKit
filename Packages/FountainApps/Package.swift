@@ -33,6 +33,7 @@ let package = Package(
     dependencies: [
         .package(path: "../FountainCore"),
         .package(path: "../FountainAIKit"),
+        .package(path: "../FountainProviders"),
         .package(path: "../FountainAPIClients"),
         .package(path: "../FountainGatewayKit"),
         .package(path: "../FountainServiceKit-Planner"),
@@ -249,6 +250,9 @@ let package = Package(
             dependencies: [
                 "EngraverChatCore",
                 .product(name: "FountainAIKit", package: "FountainAIKit"),
+                .product(name: "ProviderOpenAI", package: "FountainProviders"),
+                .product(name: "ProviderLocalLLM", package: "FountainProviders"),
+                .product(name: "ProviderGateway", package: "FountainProviders"),
                 .product(name: "FountainAIAdapters", package: "FountainGatewayKit"),
                 .product(name: "TeatroGUI", package: "TeatroGUI")
             ],
@@ -259,6 +263,9 @@ let package = Package(
             dependencies: [
                 "EngraverChatCore",
                 .product(name: "FountainAIKit", package: "FountainAIKit"),
+                .product(name: "ProviderOpenAI", package: "FountainProviders"),
+                .product(name: "ProviderLocalLLM", package: "FountainProviders"),
+                .product(name: "ProviderGateway", package: "FountainProviders"),
                 .product(name: "SwiftCursesKit", package: "swiftcurseskit"),
                 .product(name: "FountainAIAdapters", package: "FountainGatewayKit"),
                 .product(name: "FountainStoreClient", package: "FountainCore")

@@ -1,4 +1,8 @@
 import Foundation
+import OpenAPIRuntime
+import OpenAPIURLSession
+import ApiClientsCore
+import SemanticBrowserAPI
 
 public struct SemanticBrowserSeeder {
     public struct Metrics: Sendable {
@@ -35,22 +39,15 @@ public struct SemanticBrowserSeeder {
         }
     }
 
-    public typealias RequestPerformer = @Sendable (URLRequest) async throws -> (Data, HTTPURLResponse)
+    // Optional test hook for injecting a fake HTTP performer (backwards-compat for existing tests)
+    private let requestPerformer: (@Sendable (URLRequest) async throws -> (Data, HTTPURLResponse))?
 
-    private let performRequest: RequestPerformer
+    public init() {
+        self.requestPerformer = nil
+    }
 
-    public init(requestPerformer: RequestPerformer? = nil) {
-        if let requestPerformer {
-            self.performRequest = requestPerformer
-        } else {
-            self.performRequest = { request in
-                let (data, response) = try await URLSession.shared.data(for: request)
-                guard let http = response as? HTTPURLResponse else {
-                    throw SeedingError.invalidResponse
-                }
-                return (data, http)
-            }
-        }
+    public init(requestPerformer: @escaping @Sendable (URLRequest) async throws -> (Data, HTTPURLResponse)) {
+        self.requestPerformer = requestPerformer
     }
 
     public func run(
@@ -58,110 +55,91 @@ public struct SemanticBrowserSeeder {
         browser: EngraverStudioConfiguration.SeedingConfiguration.Browser,
         emitDiagnostic: @Sendable (String) -> Void
     ) async throws -> Metrics {
+        // Compose default headers (API key if present)
+        var defaultHeaders: [String: String] = [:]
+        if let apiKey = browser.apiKey, !apiKey.isEmpty {
+            defaultHeaders["X-API-Key"] = apiKey
+        }
+
+        // Build request payload from configuration
         let combinedLabels = Array(Set(browser.defaultLabels + source.labels + [source.corpusId]))
 
-        let endpoint = browser.baseURL
-            .appendingPathComponent("v1")
-            .appendingPathComponent("browse")
+        let wait = Components.Schemas.WaitPolicy(
+            strategy: .domContentLoaded,
+            networkIdleMs: nil,
+            selector: nil,
+            maxWaitMs: 20000
+        )
 
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let apiKey = browser.apiKey, !apiKey.isEmpty {
-            request.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
-        }
+        let storeOverride: Components.Schemas.IndexOptions.storePayload? = {
+            guard let o = browser.storeOverride else { return nil }
+            return .init(url: o.url.absoluteString, apiKey: o.apiKey, timeoutMs: o.timeoutMs)
+        }()
 
-        var indexOptions: [String: Any] = ["enabled": true]
-        if let pages = browser.pagesCollection, !pages.isEmpty {
-            indexOptions["pagesCollection"] = pages
-        }
-        if let segments = browser.segmentsCollection, !segments.isEmpty {
-            indexOptions["segmentsCollection"] = segments
-        }
-        if let entities = browser.entitiesCollection, !entities.isEmpty {
-            indexOptions["entitiesCollection"] = entities
-        }
-        if let tables = browser.tablesCollection, !tables.isEmpty {
-            indexOptions["tablesCollection"] = tables
-        }
-        if let store = browser.storeOverride {
-            var storeOptions: [String: Any] = ["url": store.url.absoluteString]
-            if let key = store.apiKey, !key.isEmpty {
-                storeOptions["apiKey"] = key
-            }
-            if let timeout = store.timeoutMs {
-                storeOptions["timeoutMs"] = timeout
-            }
-            indexOptions["store"] = storeOptions
-        }
+        let indexOptions = Components.Schemas.IndexOptions(
+            enabled: true,
+            pagesCollection: browser.pagesCollection,
+            segmentsCollection: browser.segmentsCollection,
+            entitiesCollection: browser.entitiesCollection,
+            tablesCollection: browser.tablesCollection,
+            store: storeOverride
+        )
 
-        let waitPolicy: [String: Any] = [
-            "strategy": "domContentLoaded",
-            "maxWaitMs": 20000
-        ]
-
-        let body: [String: Any] = [
-            "url": source.url.absoluteString,
-            "wait": waitPolicy,
-            "mode": browser.mode.rawValue,
-            "index": indexOptions,
-            "storeArtifacts": true,
-            "labels": combinedLabels
-        ]
-
-        do {
-            request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
-        } catch {
-            throw SeedingError.decodingFailure("Unable to encode request body: \(error)")
-        }
+        let request = Components.Schemas.BrowseRequest(
+            url: source.url.absoluteString,
+            wait: wait,
+            mode: Components.Schemas.DissectionMode(rawValue: browser.mode.rawValue) ?? .standard,
+            index: indexOptions,
+            storeArtifacts: true,
+            labels: combinedLabels
+        )
 
         emitDiagnostic("Indexing \(source.name) via Semantic Browser (\(source.url.absoluteString))")
-        let (data, response) = try await performRequest(request)
-        guard response.statusCode == 200 else {
-            let bodyText = String(data: data, encoding: .utf8)
-            throw SeedingError.httpStatus(response.statusCode, bodyText)
-        }
 
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let browseResponse: BrowseResponse
-        do {
-            browseResponse = try decoder.decode(BrowseResponse.self, from: data)
-        } catch {
-            throw SeedingError.decodingFailure(error.localizedDescription)
-        }
+        // If a request performer is injected (tests), bypass the generated client and decode the stubbed response.
+        if let requestPerformer {
+            var urlRequest = URLRequest(url: browser.baseURL.appendingPathComponent("v1").appendingPathComponent("browse"))
+            urlRequest.httpMethod = "POST"
+            urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            for (k, v) in defaultHeaders { urlRequest.setValue(v, forHTTPHeaderField: k) }
+            urlRequest.httpBody = try JSONEncoder().encode(request)
 
-        let metrics = browseResponse.index ?? BrowseResponse.IndexSummary()
-        return Metrics(
-            pagesUpserted: metrics.pagesUpserted ?? 0,
-            segmentsUpserted: metrics.segmentsUpserted ?? 0,
-            entitiesUpserted: metrics.entitiesUpserted ?? 0,
-            tablesUpserted: metrics.tablesUpserted ?? 0
-        )
-    }
-}
-
-private extension SemanticBrowserSeeder {
-    struct BrowseResponse: Decodable {
-        struct IndexSummary: Decodable {
-            let pagesUpserted: Int?
-            let segmentsUpserted: Int?
-            let entitiesUpserted: Int?
-            let tablesUpserted: Int?
-
-            init(
-                pagesUpserted: Int? = nil,
-                segmentsUpserted: Int? = nil,
-                entitiesUpserted: Int? = nil,
-                tablesUpserted: Int? = nil
-            ) {
-                self.pagesUpserted = pagesUpserted
-                self.segmentsUpserted = segmentsUpserted
-                self.entitiesUpserted = entitiesUpserted
-                self.tablesUpserted = tablesUpserted
+            let (data, response) = try await requestPerformer(urlRequest)
+            guard response.statusCode == 200 else {
+                throw SeedingError.httpStatus(response.statusCode, String(data: data, encoding: .utf8))
             }
+            let decoded = try JSONDecoder().decode(Components.Schemas.BrowseResponse.self, from: data)
+            let metrics = decoded.index
+            return Metrics(
+                pagesUpserted: metrics?.pagesUpserted ?? 0,
+                segmentsUpserted: metrics?.segmentsUpserted ?? 0,
+                entitiesUpserted: metrics?.entitiesUpserted ?? 0,
+                tablesUpserted: metrics?.tablesUpserted ?? 0
+            )
         }
 
-        let index: IndexSummary?
+        let transport = URLSessionTransport()
+        let middlewares = APIClientHelpers.defaultMiddlewares(defaultHeaders: defaultHeaders)
+        let client = SemanticBrowserAPI.Client(serverURL: browser.baseURL, transport: transport, middlewares: middlewares)
+        let output = try await client.browseAndDissect(.init(body: .json(request)))
+        switch output {
+        case .ok(let ok):
+            let response = try ok.body.json
+            let metrics = response.index
+            return Metrics(
+                pagesUpserted: metrics?.pagesUpserted ?? 0,
+                segmentsUpserted: metrics?.segmentsUpserted ?? 0,
+                entitiesUpserted: metrics?.entitiesUpserted ?? 0,
+                tablesUpserted: metrics?.tablesUpserted ?? 0
+            )
+        case .badRequest:
+            throw SeedingError.httpStatus(400, "Bad Request")
+        case .tooManyRequests:
+            throw SeedingError.httpStatus(429, "Too Many Requests")
+        case .internalServerError:
+            throw SeedingError.httpStatus(500, "Server Error")
+        case .undocumented(let status, _):
+            throw SeedingError.httpStatus(status, nil)
+        }
     }
 }

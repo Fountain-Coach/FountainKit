@@ -226,6 +226,7 @@ let package = Package(
                 .product(name: "LLMGatewayAPI", package: "FountainAPIClients"),
                 .product(name: "AwarenessAPI", package: "FountainAPIClients"),
                 .product(name: "BootstrapAPI", package: "FountainAPIClients"),
+                .product(name: "SemanticBrowserAPI", package: "FountainAPIClients"),
                 .product(name: "ApiClientsCore", package: "FountainAPIClients"),
                 .product(name: "SecretStore", package: "swift-secretstore")
             ],

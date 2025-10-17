@@ -13,13 +13,18 @@ public struct EngraverStudioRoot: View {
     public init(configuration: EngraverStudioConfiguration = EngraverStudioConfiguration()) {
         self.configuration = configuration
         let client: GatewayChatStreaming = {
-            if configuration.bypassGateway, let key = configuration.openAIAPIKey, !key.isEmpty {
-                return DirectOpenAIChatClient(apiKey: key)
+            if configuration.bypassGateway {
+                if configuration.provider == "openai" {
+                    return DirectOpenAIChatClient(apiKey: configuration.openAIAPIKey)
+                } else { // local default
+                    return DirectOpenAIChatClient(apiKey: nil, endpoint: configuration.localEndpoint)
+                }
+            } else {
+                return GatewayChatClient(
+                    baseURL: configuration.gatewayURL,
+                    tokenProvider: configuration.tokenProvider()
+                )
             }
-            return GatewayChatClient(
-                baseURL: configuration.gatewayURL,
-                tokenProvider: configuration.tokenProvider()
-            )
         }()
         _viewModel = StateObject(
             wrappedValue: EngraverChatViewModel(

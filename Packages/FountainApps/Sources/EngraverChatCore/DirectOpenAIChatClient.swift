@@ -5,11 +5,11 @@ import LLMGatewayAPI
 /// Minimal direct OpenAI client that conforms to GatewayChatStreaming.
 /// Bypasses the local gateway entirely.
 public struct DirectOpenAIChatClient: GatewayChatStreaming {
-    private let apiKey: String
+    private let apiKey: String?
     private let endpoint: URL
     private let session: URLSession
 
-    public init(apiKey: String, endpoint: URL = URL(string: "https://api.openai.com/v1/chat/completions")!, session: URLSession = .shared) {
+    public init(apiKey: String?, endpoint: URL = URL(string: "https://api.openai.com/v1/chat/completions")!, session: URLSession = .shared) {
         self.apiKey = apiKey
         self.endpoint = endpoint
         self.session = session
@@ -19,7 +19,7 @@ public struct DirectOpenAIChatClient: GatewayChatStreaming {
         var req = URLRequest(url: endpoint)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        if let apiKey, !apiKey.isEmpty { req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization") }
         let body: [String: Any] = [
             "model": request.model,
             "messages": request.messages.map { ["role": $0.role, "content": $0.content] },
@@ -63,7 +63,7 @@ public struct DirectOpenAIChatClient: GatewayChatStreaming {
         var req = URLRequest(url: endpoint)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        if let apiKey, !apiKey.isEmpty { req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization") }
         let body: [String: Any] = [
             "model": request.model,
             "messages": request.messages.map { ["role": $0.role, "content": $0.content] },

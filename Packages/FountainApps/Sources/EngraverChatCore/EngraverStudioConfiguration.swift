@@ -19,6 +19,8 @@ public struct EngraverStudioConfiguration: Sendable {
     public let fountainRepoRoot: URL?
     public let bypassGateway: Bool
     public let openAIAPIKey: String?
+    public let provider: String
+    public let localEndpoint: URL
 
     public struct SeedingConfiguration: Sendable {
         public struct Source: Sendable {
@@ -172,9 +174,15 @@ public struct EngraverStudioConfiguration: Sendable {
             self.fountainRepoRoot = nil
         }
 
+        let prov = (env["ENGRAVER_PROVIDER"] ?? "").lowercased()
+        let hasOpenAIKey = !(env["OPENAI_API_KEY"]?.isEmpty ?? true)
+        // Default provider: local (no vendor login). If explicitly 'gateway', use gateway.
+        if prov.isEmpty { self.provider = hasOpenAIKey ? "openai" : "local" } else { self.provider = prov }
         let bypass = (env["ENGRAVER_BYPASS_GATEWAY"] ?? env["ENGRAVER_DIRECT_ONLY"] ?? env["ENGRAVER_DIRECT_LLM"])?.lowercased()
-        self.bypassGateway = (bypass == "1" || bypass == "true" || bypass == "yes")
+        self.bypassGateway = (self.provider != "gateway") || (bypass == "1" || bypass == "true" || bypass == "yes")
         self.openAIAPIKey = env["OPENAI_API_KEY"]
+        let localURL = env["ENGRAVER_LOCAL_LLM_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.localEndpoint = URL(string: localURL ?? "http://127.0.0.1:11434/v1/chat/completions")!
     }
 
     public func tokenProvider() -> GatewayChatClient.TokenProvider {

@@ -425,15 +425,20 @@ private struct PromptTextEditor: NSViewRepresentable {
 @available(macOS 13.0, *)
 private struct DiagnosticsPanel: View {
     let messages: [String]
+    @State private var copied = false
 
     var body: some View {
         GroupBox(label: HStack {
             Text("Diagnostics")
             Spacer()
             Button {
-                copyAll()
+                copyAll(); flashCopied()
             } label: {
-                Label("Copy", systemImage: "doc.on.doc")
+                if copied {
+                    Label("Copied", systemImage: "checkmark")
+                } else {
+                    Label("Copy", systemImage: "doc.on.doc")
+                }
             }
             .buttonStyle(.borderless)
             .help("Copy all diagnostics to clipboard")
@@ -469,6 +474,11 @@ private struct DiagnosticsPanel: View {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(text, forType: .string)
+    }
+
+    private func flashCopied() {
+        copied = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { copied = false }
     }
 }
 
@@ -572,6 +582,14 @@ private struct BootTrailPane: View {
             .help("Kill stray processes and release ports")
 
             Button {
+                viewModel.fixAllServices()
+            } label: {
+                Label("Fix All", systemImage: "wrench.and.screwdriver")
+            }
+            .buttonStyle(.bordered)
+            .help("Kill non-up PIDs and restart missing services")
+
+            Button {
                 viewModel.refreshEnvironmentStatus()
             } label: {
                 Label("Refresh", systemImage: "arrow.clockwise")
@@ -629,10 +647,10 @@ private struct BootTrailPane: View {
             }
 
             Button {
-                viewModel.startEnvironment(includeExtras: true)
+                viewModel.restart(service: svc)
             } label: { Image(systemName: "arrow.triangle.2.circlepath") }
             .buttonStyle(.borderless)
-            .help("Retry start")
+            .help("Restart service")
         }
     }
 
@@ -642,14 +660,7 @@ private struct BootTrailPane: View {
                 Text("Boot Trail")
                     .font(.headline)
                 Spacer()
-                Button {
-                    let text = viewModel.environmentLogs.map(\.line).joined(separator: "\n")
-                    let pb = NSPasteboard.general
-                    pb.clearContents()
-                    pb.setString(text, forType: .string)
-                } label: {
-                    Label("Copy", systemImage: "doc.on.doc")
-                }
+                CopyButton(textProvider: { viewModel.environmentLogs.map(\.line).joined(separator: "\n") })
                 .buttonStyle(.borderless)
                 .help("Copy all boot logs")
             }
@@ -670,6 +681,24 @@ private struct BootTrailPane: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+}
+
+@available(macOS 13.0, *)
+private struct CopyButton: View {
+    let textProvider: () -> String
+    @State private var copied = false
+    var body: some View {
+        Button {
+            let pb = NSPasteboard.general
+            pb.clearContents()
+            pb.setString(textProvider(), forType: .string)
+            copied = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { copied = false }
+        } label: {
+            if copied { Label("Copied", systemImage: "checkmark") }
+            else { Label("Copy", systemImage: "doc.on.doc") }
+        }
     }
 }
 

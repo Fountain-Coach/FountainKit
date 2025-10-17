@@ -698,6 +698,16 @@ public final class EngraverChatViewModel: ObservableObject {
         }
     }
 
+    public func restart(service: EnvironmentServiceStatus) {
+        guard let environmentManager else { return }
+        Task { await environmentManager.restartService(service) }
+    }
+
+    public func fixAllServices() {
+        guard let environmentManager else { return }
+        Task { await environmentManager.fixAll() }
+    }
+
     public func openPersistedSession(id: UUID) {
         let records = persistedRecords.filter { sessionIdentifier(for: $0) == id }
         guard !records.isEmpty else {

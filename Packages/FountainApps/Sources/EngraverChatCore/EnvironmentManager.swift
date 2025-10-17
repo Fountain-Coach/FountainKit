@@ -234,6 +234,40 @@ public final class FountainEnvironmentManager: ObservableObject {
         await refreshStatus()
     }
 
+    public func restartService(_ service: EnvironmentServiceStatus) async {
+        if let pid = service.pid { await forceKillPID(pid) }
+        guard let scriptsRoot, runningProcess == nil else {
+            await refreshStatus()
+            return
+        }
+        let script = scriptsRoot.appendingPathComponent("dev-up")
+        do {
+            try await runStreaming(script: script, arguments: ["--check"]) // start missing
+        } catch {
+            // ignore; status probe will decide
+        }
+        await refreshStatus()
+    }
+
+    public func fixAll() async {
+        // Kill any non-up service PIDs then start missing
+        let targets = services.filter { $0.state != .up }
+        for svc in targets {
+            if let pid = svc.pid { await forceKillPID(pid) }
+        }
+        guard let scriptsRoot, runningProcess == nil else {
+            await refreshStatus()
+            return
+        }
+        let script = scriptsRoot.appendingPathComponent("dev-up")
+        do {
+            try await runStreaming(script: script, arguments: ["--check"]) // start what’s missing
+        } catch {
+            // ignore
+        }
+        await refreshStatus()
+    }
+
     // MARK: - Helpers
 
     private func runAndCapture(script: URL, arguments: [String]) async throws -> String {

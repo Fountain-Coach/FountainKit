@@ -48,7 +48,18 @@ let package = Package(
                 .product(name: "OpenAPISpecs", package: "FountainSpecCuration"),
                 .product(name: "FountainExamples", package: "FountainExamples")
             ],
-            path: "Workspace"
+            path: "Workspace",
+            exclude: [
+                // Exclude development web assets and vendored JS deps to avoid SPM warnings
+                "chatkit-dev",
+                "deps",
+                "demos",
+                "the-four-stars",
+                "runbooks",
+                "chatkit_milestones.md",
+                "chatkit_execution_checklist.md",
+                "chatkit_test_plan.md"
+            ]
         )
     ]
 )

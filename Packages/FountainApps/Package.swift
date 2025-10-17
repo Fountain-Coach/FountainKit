@@ -24,6 +24,7 @@ let package = Package(
         ,
         .executable(name: "engraver-studio-app", targets: ["engraver-studio-app"]),
         .executable(name: "engraver-chat-tui", targets: ["engraver-chat-tui"]),
+        .executable(name: "llm-doctor", targets: ["llm-doctor"]),
         .library(name: "EngraverChatCore", targets: ["EngraverChatCore"]),
         .library(name: "EngraverStudio", targets: ["EngraverStudio"]),
         .executable(name: "fk", targets: ["fk"])
@@ -84,6 +85,10 @@ let package = Package(
                 .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
+        ),
+        .executableTarget(
+            name: "llm-doctor",
+            dependencies: []
         ),
         .executableTarget(
             name: "gateway-ci-smoke",

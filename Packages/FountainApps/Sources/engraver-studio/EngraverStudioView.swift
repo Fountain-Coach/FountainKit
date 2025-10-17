@@ -10,6 +10,7 @@ struct EngraverStudioView: View {
     @ObservedObject var viewModel: EngraverChatViewModel
     let systemPrompts: [String]
     var directMode: Bool = false
+    private let envUIEnabled: Bool = false
 
     @Environment(\.openURL) private var openURL
     @State private var draftPrompt: String = ""
@@ -34,7 +35,7 @@ struct EngraverStudioView: View {
             let maxLeft = max(minSidebar, min(total * 0.45, leftWidth))
             let maxRight = max(minRight, min(total * 0.45, rightWidth))
             HStack(spacing: 0) {
-                if showLeftPane && !directMode {
+                if envUIEnabled && showLeftPane && !directMode {
                     BootSidePane(viewModel: viewModel)
                         .frame(width: maxLeft)
                     draggableDivider(onDrag: { delta in
@@ -46,13 +47,13 @@ struct EngraverStudioView: View {
                 VStack(spacing: 0) {
                     TopBar(viewModel: viewModel,
                            directMode: directMode,
-                           showLeft: Binding(get: { !directMode && showLeftPane }, set: { showLeftPane = $0 }),
-                           showRight: Binding(get: { !directMode && showRightPane }, set: { showRightPane = $0 }))
+                           showLeft: Binding(get: { envUIEnabled && !directMode && showLeftPane }, set: { showLeftPane = $0 }),
+                           showRight: Binding(get: { envUIEnabled && !directMode && showRightPane }, set: { showRightPane = $0 }))
                     Divider()
                     mainPane
                 }
 
-                if showRightPane && !directMode {
+                if envUIEnabled && showRightPane && !directMode {
                     draggableDivider(onDrag: { delta in
                         let newWidth = rightWidth - Double(delta)
                         rightWidth = max(minRight, min(newWidth, total - (showLeftPane ? leftWidth + 400 : 400)))
@@ -343,7 +344,7 @@ struct EngraverStudioView: View {
 @available(macOS 13.0, *)
 extension EngraverStudioView {
     private func applyPerformanceEnv() {
-        // Map UI preset to env vars consumed by DirectOpenAIChatClient
+        // Map UI preset to env vars consumed by the local provider
         let mode = performanceMode.lowercased()
         setenv("ENGRAVER_PERF", mode, 1)
         switch mode {
@@ -1139,7 +1140,7 @@ private struct TopBar: View {
     @Binding var showRight: Bool
     var body: some View {
         HStack(spacing: 12) {
-            if !directMode {
+            if envUIEnabled && !directMode {
                 HStack(spacing: 6) {
                     Circle().fill(viewModel.environmentIsRunning ? Color.green : Color.orange)
                         .frame(width: 8, height: 8)
@@ -1153,7 +1154,7 @@ private struct TopBar: View {
                 }
             }
             Spacer()
-            if !directMode {
+            if envUIEnabled && !directMode {
                 Toggle(isOn: $showLeft) { Image(systemName: "sidebar.left") }
                     .toggleStyle(.button)
                     .help(showLeft ? "Hide environment" : "Show environment")

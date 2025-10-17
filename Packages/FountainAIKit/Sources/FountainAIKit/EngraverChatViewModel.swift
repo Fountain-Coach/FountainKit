@@ -398,12 +398,12 @@ public final class EngraverChatViewModel: ObservableObject {
         setenv("GATEWAY_DISABLE_RATELIMIT", gatewayRateLimiterEnabled ? "0" : "1", 1)
         setenv("GATEWAY_RATE_LIMIT_PER_MINUTE", String(gatewayRateLimitPerMinute), 1)
         emitDiagnostic("Gateway settings applied • ratelimiter=\(gatewayRateLimiterEnabled ? "on" : "off") limit=\(gatewayRateLimitPerMinute)")
-        guard restart, let environmentManager else { return }
-        await environmentManager.stopEnvironment(includeExtras: true, force: true)
-        await environmentManager.startEnvironment(includeExtras: true)
+        guard restart, let environmentController else { return }
+        await environmentController.stopEnvironment(includeExtras: true, force: true)
+        await environmentController.startEnvironment(includeExtras: true)
         // Poll until running to avoid premature requests
         for _ in 0..<30 {
-            await environmentManager.refreshStatus()
+            await environmentController.refreshStatus()
             try? await Task.sleep(nanoseconds: 500_000_000)
             if case .running = environmentState { break }
         }

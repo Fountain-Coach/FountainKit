@@ -23,6 +23,7 @@ let package = Package(
         .executable(name: "mock-localagent-server", targets: ["mock-localagent-server"])
         ,
         .executable(name: "engraver-studio-app", targets: ["engraver-studio-app"]),
+        .executable(name: "gateway-console", targets: ["gateway-console"]),
         .executable(name: "engraver-chat-tui", targets: ["engraver-chat-tui"]),
         .executable(name: "llm-doctor", targets: ["llm-doctor"]),
         .executable(name: "engraver-direct", targets: ["engraver-direct"]),
@@ -217,6 +218,17 @@ let package = Package(
                 "EngraverStudio"
             ],
             path: "Sources/engraver-studio-app"
+        ),
+        .executableTarget(
+            name: "gateway-console",
+            dependencies: [
+                .product(name: "FountainDevHarness", package: "FountainDevHarness"),
+                .product(name: "FountainAIKit", package: "FountainAIKit"),
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
+                .product(name: "ApiClientsCore", package: "FountainAPIClients")
+            ],
+            path: "Sources/gateway-console"
         ),
         .executableTarget(
             name: "local-agent-manager",

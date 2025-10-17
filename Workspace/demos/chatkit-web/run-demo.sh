@@ -4,8 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 DEMO_DIR="$ROOT/Workspace/demos/chatkit-web"
 LOG_DIR="$DEMO_DIR/.demo-logs"
-GATEWAY_PORT="${GATEWAY_PORT:-8010}"
-DEMO_PORT="${DEMO_PORT:-8085}"
+GATEWAY_PORT_DEFAULT="${GATEWAY_PORT:-8010}"
+DEMO_PORT_DEFAULT="${DEMO_PORT:-8085}"
 LAUNCHER_SIGNATURE_VALUE="${LAUNCHER_SIGNATURE:-B86D7CEE-24C4-4C4C-A107-8D0542D1965B}"
 GATEWAY_LOG="$LOG_DIR/gateway.log"
 SERVER_LOG="$LOG_DIR/server.log"
@@ -42,7 +42,7 @@ wait_for_gateway() {
 }
 
 open_browser() {
-  local url="http://127.0.0.1:${DEMO_PORT}/Workspace/demos/chatkit-web/"
+  local url="http://127.0.0.1:${DEMO_PORT}/Workspace/demos/chatkit-web/?base=http://127.0.0.1:${GATEWAY_PORT}"
   if command -v open >/dev/null 2>&1; then
     open "$url" >/dev/null 2>&1 || true
   elif command -v xdg-open >/dev/null 2>&1; then
@@ -58,6 +58,33 @@ require "curl"
 mkdir -p "$LOG_DIR"
 trap cleanup EXIT
 
+echo "[demo] Selecting ports..."
+
+# Find a free TCP port in a small range starting at the provided base
+find_free_port() {
+  local start="$1"
+  local end=$((start + 30))
+  for p in $(seq "$start" "$end"); do
+    if python3 - "$p" <<'PY'
+import socket, sys
+with socket.socket() as s:
+    try:
+        s.bind(("127.0.0.1", int(sys.argv[1])))
+        sys.exit(0)
+    except OSError:
+        sys.exit(1)
+PY
+    then
+      echo "$p"
+      return 0
+    fi
+  done
+  echo "$start"
+}
+
+GATEWAY_PORT="$(find_free_port "$GATEWAY_PORT_DEFAULT")"
+DEMO_PORT="$(find_free_port "$DEMO_PORT_DEFAULT")"
+
 echo "[demo] Launching gateway server on port ${GATEWAY_PORT}..."
 (
   cd "$ROOT"
@@ -68,26 +95,6 @@ echo "[demo] Launching gateway server on port ${GATEWAY_PORT}..."
 GATEWAY_PID=$!
 
 wait_for_gateway
-
-# Enforce stable demo port; fail fast if it's busy
-python3 - "$DEMO_PORT" <<'PY'
-import socket, sys
-p = int(sys.argv[1])
-s = socket.socket()
-try:
-    s.bind(("127.0.0.1", p))
-    s.close()
-    sys.exit(0)
-except OSError:
-    sys.exit(2)
-PY
-rc=$?
-if [[ $rc -ne 0 ]]; then
-  echo "[demo] Port $DEMO_PORT is already in use."
-  echo "[demo] Use DEMO_PORT=XXXX ./Workspace/demos/chatkit-web/run-demo.sh to select a different port,"
-  echo "[demo] or open the gateway-hosted UI at: http://127.0.0.1:${GATEWAY_PORT}/"
-  exit 2
-fi
 
 echo "[demo] Starting static server on http://127.0.0.1:${DEMO_PORT}/"
 open_browser

@@ -752,6 +752,7 @@ private struct BootSidePane: View {
     @ObservedObject var viewModel: EngraverChatViewModel
     @State private var webPreviewItem: IdentifiableURL? = nil
     @Environment(\.openURL) private var openURL
+    @State private var chatkitResponder: String = ((ProcessInfo.processInfo.environment["CHATKIT_RESPONDER"]?.lowercased() == "echo") ? "echo" : "chatkit")
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -884,9 +885,7 @@ private struct BootSidePane: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Text("Responder").font(.caption)
-                        Picker("Responder", selection: Binding(get: {
-                            (ProcessInfo.processInfo.environment["CHATKIT_RESPONDER"]?.lowercased() == "echo") ? "echo" : "chatkit"
-                        }, set: { sel in setenv("CHATKIT_RESPONDER", sel, 1) })) {
+                        Picker("Responder", selection: $chatkitResponder) {
                             Text("LLM").tag("chatkit")
                             Text("Echo").tag("echo")
                         }
@@ -894,6 +893,7 @@ private struct BootSidePane: View {
                         .frame(width: 200)
                         Spacer()
                         Button {
+                            _ = setenv("CHATKIT_RESPONDER", chatkitResponder, 1)
                             Task { await viewModel.applyGatewaySettings(restart: true) }
                         } label: { Label("Apply & Restart", systemImage: "arrow.clockwise") }
                         .buttonStyle(.bordered)

@@ -42,10 +42,31 @@ async function createSession(config) {
   return session;
 }
 
-async function mountChatKit(config, session) {
-  if (typeof window.ChatKit?.mount !== 'function') {
-    throw new Error('ChatKit-JS not available. Verify the CDN script URL.');
+const DEFAULT_CDN = 'https://cdn.openai.com/chatkit/v1/chatkit.umd.js';
+
+async function ensureChatKitLoaded(config) {
+  if (typeof window.ChatKit?.mount === 'function') return;
+  const url = (config && config.cdnUrl) || DEFAULT_CDN;
+  // Avoid double-injection
+  if (!document.querySelector('script[data-chatkit-cdn]')) {
+    const tag = document.createElement('script');
+    tag.src = url;
+    tag.defer = true;
+    tag.setAttribute('data-chatkit-cdn', '1');
+    document.head.appendChild(tag);
+    await new Promise((resolve, reject) => {
+      tag.addEventListener('load', resolve, { once: true });
+      tag.addEventListener('error', () => reject(new Error('Failed to load ChatKit-JS CDN script')), { once: true });
+      setTimeout(() => reject(new Error('Timed out loading ChatKit-JS CDN script')), 10000);
+    });
   }
+  if (typeof window.ChatKit?.mount !== 'function') {
+    throw new Error('ChatKit-JS not available after CDN load');
+  }
+}
+
+async function mountChatKit(config, session) {
+  await ensureChatKitLoaded(config);
 
   const target = document.getElementById(config.elementId);
   if (!target) {
@@ -84,6 +105,7 @@ async function bootstrapChatKit(userConfig = {}) {
       `;
     }
     try { window.dispatchEvent(new CustomEvent('chatkit:bootstrap:error', { detail: { message: error?.message ?? String(error) } })); } catch {}
+    throw error;
   }
 }
 

@@ -491,7 +491,7 @@ private struct BootTrailPane: View {
     @ObservedObject var viewModel: EngraverChatViewModel
     @Environment(\.openURL) private var openURL
     var onProceed: () -> Void
-    @State private var webPreviewURL: URL? = nil
+    @State private var webPreviewItem: IdentifiableURL? = nil
 
     private var stateText: String {
         switch viewModel.environmentState {
@@ -545,17 +545,17 @@ private struct BootTrailPane: View {
             // Ensure we probe status when entering the boot pane
             viewModel.refreshEnvironmentStatus()
         }
-        .sheet(item: $webPreviewURL.asIdentifiable()) { url in
+        .sheet(item: $webPreviewItem) { item in
             VStack(spacing: 0) {
                 HStack {
-                    Text(url.absoluteString).font(.caption).textSelection(.enabled)
+                    Text(item.url.absoluteString).font(.caption).textSelection(.enabled)
                     Spacer()
-                    Button { openURL(url) } label: { Label("Open in Browser", systemImage: "safari") }
+                    Button { openURL(item.url) } label: { Label("Open in Browser", systemImage: "safari") }
                         .buttonStyle(.borderless)
                 }
                 .padding(8)
                 Divider()
-                EmbeddedWebView(url: url)
+                EmbeddedWebView(url: item.url)
                     .frame(minWidth: 720, minHeight: 480)
             }
             .frame(minWidth: 720, minHeight: 520)
@@ -658,7 +658,7 @@ private struct BootTrailPane: View {
     private func controlButtons(for svc: EnvironmentServiceStatus) -> some View {
         HStack(spacing: 6) {
             Button {
-                if let url = URL(string: "http://127.0.0.1:\(svc.port)/metrics") { webPreviewURL = url }
+                if let url = URL(string: "http://127.0.0.1:\(svc.port)/metrics") { webPreviewItem = IdentifiableURL(url: url) }
             } label: { Image(systemName: "globe") }
             .buttonStyle(.borderless)
             .help("Open metrics (embedded)")
@@ -706,15 +706,6 @@ private struct BootTrailPane: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-    }
-}
-
-private extension Binding where Value == URL? {
-    func asIdentifiable() -> Binding<IdentifiableURL?> {
-        Binding<IdentifiableURL?>(
-            get: { self.wrappedValue.map(IdentifiableURL.init) },
-            set: { self.wrappedValue = $0?.url }
-        )
     }
 }
 

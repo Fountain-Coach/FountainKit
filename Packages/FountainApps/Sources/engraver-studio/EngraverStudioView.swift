@@ -27,30 +27,19 @@ struct EngraverStudioView: View {
     private var tabBinding: Binding<Tab> { .init(get: { tab }, set: { tab = $0 }) }
 
     var body: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Picker("", selection: tabBinding) {
-                    Text("Boot").tag(Tab.boot)
-                    Text("Studio").tag(Tab.studio)
-                }
-                .pickerStyle(.segmented)
-                Spacer()
+        TabView(selection: tabBinding) {
+            BootTrailPane(viewModel: viewModel, onProceed: { tab = .studio })
+                .tabItem { Label("Boot", systemImage: "bolt.circle") }
+                .tag(Tab.boot)
+            HStack(spacing: 0) {
+                sidebar
+                Divider()
+                mainPane
             }
-
-            Divider()
-
-            Group {
-                if tab == .boot {
-                    BootTrailPane(viewModel: viewModel, onProceed: { tab = .studio })
-                } else {
-                    HStack(spacing: 0) {
-                        sidebar
-                        Divider()
-                        mainPane
-                    }
-                }
-            }
+            .tabItem { Label("Studio", systemImage: "text.bubble") }
+            .tag(Tab.studio)
         }
+        .ignoresSafeArea(edges: .top)
         .onChange(of: viewModel.lastError) { _, newValue in
             showErrorAlert = newValue != nil
         }
@@ -502,6 +491,7 @@ private struct BootTrailPane: View {
     @ObservedObject var viewModel: EngraverChatViewModel
     @Environment(\.openURL) private var openURL
     var onProceed: () -> Void
+    @State private var webPreviewURL: URL? = nil
 
     private var stateText: String {
         switch viewModel.environmentState {
@@ -653,12 +643,10 @@ private struct BootTrailPane: View {
     private func controlButtons(for svc: EnvironmentServiceStatus) -> some View {
         HStack(spacing: 6) {
             Button {
-                if let url = URL(string: "http://127.0.0.1:\(svc.port)/metrics") {
-                    openURL(url)
-                }
-            } label: { Image(systemName: "safari") }
+                if let url = URL(string: "http://127.0.0.1:\(svc.port)/metrics") { webPreviewURL = url }
+            } label: { Image(systemName: "globe") }
             .buttonStyle(.borderless)
-            .help("Open metrics")
+            .help("Open metrics (embedded)")
 
             if let pid = svc.pid {
                 Button(role: .destructive) {
@@ -704,7 +692,33 @@ private struct BootTrailPane: View {
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
+    .sheet(item: $webPreviewURL.asIdentifiable()) { url in
+        VStack(spacing: 0) {
+            HStack {
+                Text(url.absoluteString).font(.caption).textSelection(.enabled)
+                Spacer()
+                Button { openURL(url) } label: { Label("Open in Browser", systemImage: "safari") }
+                    .buttonStyle(.borderless)
+            }
+            .padding(8)
+            Divider()
+            EmbeddedWebView(url: url)
+                .frame(minWidth: 720, minHeight: 480)
+        }
+        .frame(minWidth: 720, minHeight: 520)
+    }
 }
+
+private extension Binding where Value == URL? {
+    func asIdentifiable() -> Binding<IdentifiableURL?> {
+        Binding<IdentifiableURL?>(
+            get: { self.wrappedValue.map(IdentifiableURL.init) },
+            set: { self.wrappedValue = $0?.url }
+        )
+    }
+}
+
+private struct IdentifiableURL: Identifiable { let url: URL; var id: String { url.absoluteString } }
 
 @available(macOS 13.0, *)
 private struct CopyButton: View {

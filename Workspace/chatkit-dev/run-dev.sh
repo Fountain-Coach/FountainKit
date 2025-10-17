@@ -21,27 +21,18 @@ trap cleanup EXIT
 require() { command -v "$1" >/dev/null 2>&1 || { echo "[dev] Missing $1"; exit 1; }; }
 require swift
 require node
+require lsof
 
 mkdir -p "$LOG_DIR"
 
-# Find a free TCP port in a small range starting at the provided base
+# Find a free TCP port (trial-and-error) starting at the provided base,
+# using lsof to avoid IPv4/IPv6 ambiguity.
 find_free_port() {
   local start="$1"
   local end=$((start + 30))
   for p in $(seq "$start" "$end"); do
-    if python3 - "$p" <<'PY'
-import socket, sys
-s = socket.socket()
-try:
-    s.bind(("127.0.0.1", int(sys.argv[1])))
-    s.close()
-    sys.exit(0)
-except OSError:
-    sys.exit(1)
-PY
-    then
-      echo "$p"
-      return 0
+    if ! lsof -nP -iTCP:"$p" -sTCP:LISTEN >/dev/null 2>&1; then
+      echo "$p"; return 0
     fi
   done
   echo "$start"

@@ -54,6 +54,7 @@ open_browser() {
 require "swift"
 require "python3"
 require "curl"
+require "lsof"
 
 mkdir -p "$LOG_DIR"
 trap cleanup EXIT
@@ -65,18 +66,8 @@ find_free_port() {
   local start="$1"
   local end=$((start + 30))
   for p in $(seq "$start" "$end"); do
-    if python3 - "$p" <<'PY'
-import socket, sys
-with socket.socket() as s:
-    try:
-        s.bind(("127.0.0.1", int(sys.argv[1])))
-        sys.exit(0)
-    except OSError:
-        sys.exit(1)
-PY
-    then
-      echo "$p"
-      return 0
+    if ! lsof -nP -iTCP:"$p" -sTCP:LISTEN >/dev/null 2>&1; then
+      echo "$p"; return 0
     fi
   done
   echo "$start"

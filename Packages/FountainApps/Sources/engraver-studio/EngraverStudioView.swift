@@ -17,11 +17,12 @@ struct EngraverStudioView: View {
     @State private var showDiagnostics: Bool = false
     @State private var promptEditorIsFocused: Bool = false
     @State private var showSemanticBrowser: Bool = false
+    @State private var showBootIntro: Bool = true
 
     var body: some View {
         Group {
             if showBootPane {
-                BootTrailPane(viewModel: viewModel)
+                BootTrailPane(viewModel: viewModel, onProceed: { showBootIntro = false })
             } else {
                 HStack(spacing: 0) {
                     sidebar
@@ -58,9 +59,10 @@ struct EngraverStudioView: View {
 
     private var showBootPane: Bool {
         #if os(macOS)
+        if showBootIntro { return true }
         return viewModel.environmentConfigured && !viewModel.environmentIsRunning
         #else
-        return false
+        return showBootIntro
         #endif
     }
 
@@ -486,6 +488,7 @@ private struct DiagnosticsPanel: View {
 private struct BootTrailPane: View {
     @ObservedObject var viewModel: EngraverChatViewModel
     @Environment(\.openURL) private var openURL
+    var onProceed: () -> Void
 
     private var stateText: String {
         switch viewModel.environmentState {
@@ -506,6 +509,12 @@ private struct BootTrailPane: View {
                     .font(.title2.weight(.semibold))
                 Spacer()
                 statusBadge
+                Button {
+                    onProceed()
+                } label: {
+                    Label("Proceed to Studio", systemImage: "chevron.right")
+                }
+                .buttonStyle(.bordered)
             }
 
             Text("Starting local services for the FULL RANGE experience. This may take a moment on first launch.")

@@ -24,6 +24,7 @@ let package = Package(
         ,
         .executable(name: "engraver-studio-app", targets: ["engraver-studio-app"]),
         .executable(name: "gateway-console", targets: ["gateway-console"]),
+        .executable(name: "gateway-console-app", targets: ["gateway-console-app"]),
         .executable(name: "engraver-chat-tui", targets: ["engraver-chat-tui"]),
         .executable(name: "llm-doctor", targets: ["llm-doctor"]),
         .executable(name: "engraver-direct", targets: ["engraver-direct"]),
@@ -229,6 +230,14 @@ let package = Package(
                 .product(name: "ApiClientsCore", package: "FountainAPIClients")
             ],
             path: "Sources/gateway-console"
+        ),
+        .executableTarget(
+            name: "gateway-console-app",
+            dependencies: [
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
+            ],
+            path: "Sources/gateway-console-app"
         ),
         .executableTarget(
             name: "local-agent-manager",

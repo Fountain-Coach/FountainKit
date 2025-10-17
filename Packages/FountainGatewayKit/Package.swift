@@ -9,6 +9,7 @@ let package = Package(
     products: [
         .library(name: "FountainAIAdapters", targets: ["FountainAIAdapters"]),
         .library(name: "GatewayPersonaOrchestrator", targets: ["GatewayPersonaOrchestrator"]),
+        .library(name: "PolicyGatewayPlugin", targets: ["PolicyGatewayPlugin"]),
         .library(name: "LLMGatewayPlugin", targets: ["LLMGatewayPlugin"]),
         .library(name: "AuthGatewayPlugin", targets: ["AuthGatewayPlugin"]),
         .library(name: "RateLimiterGatewayPlugin", targets: ["RateLimiterGatewayPlugin"]),
@@ -33,6 +34,12 @@ let package = Package(
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0")
     ],
     targets: [
+        .target(
+            name: "PolicyGatewayPlugin",
+            dependencies: [
+                .product(name: "FountainRuntime", package: "FountainCore")
+            ]
+        ),
         .target(
             name: "FountainAIAdapters",
             dependencies: [

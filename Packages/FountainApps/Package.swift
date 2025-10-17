@@ -70,6 +70,7 @@ let package = Package(
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "PublishingFrontend", package: "FountainGatewayKit"),
                 .product(name: "LLMGatewayPlugin", package: "FountainGatewayKit"),
+                .product(name: "PolicyGatewayPlugin", package: "FountainGatewayKit"),
                 .product(name: "AuthGatewayPlugin", package: "FountainGatewayKit"),
                 .product(name: "CuratorGatewayPlugin", package: "FountainGatewayKit"),
                 .product(name: "RateLimiterGatewayPlugin", package: "FountainGatewayKit"),
@@ -272,7 +273,6 @@ let package = Package(
             dependencies: [
                 "EngraverChatCore",
                 .product(name: "FountainAIKit", package: "FountainAIKit"),
-                .product(name: "FountainDevHarness", package: "FountainDevHarness"),
                 .product(name: "ProviderOpenAI", package: "FountainProviders"),
                 .product(name: "ProviderLocalLLM", package: "FountainProviders"),
                 .product(name: "ProviderGateway", package: "FountainProviders"),

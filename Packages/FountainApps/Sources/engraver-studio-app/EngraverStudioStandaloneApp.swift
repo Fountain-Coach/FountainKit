@@ -3,6 +3,7 @@ import SwiftUI
 import AppKit
 import EngraverStudio
 import EngraverChatCore
+import FountainDevHarness
 import Darwin
 
 @main
@@ -37,7 +38,8 @@ struct EngraverStudioStandaloneApp: App {
 
     var body: some Scene {
         WindowGroup {
-            EngraverStudioRoot(configuration: configuration)
+            let env: EnvironmentController? = configuration.bypassGateway ? nil : EnvironmentControllerAdapter(fountainRepoRoot: configuration.fountainRepoRoot)
+            EngraverStudioRoot(configuration: configuration, environmentController: env)
                 .frame(minWidth: 960, minHeight: 620)
         }
         .windowResizability(.contentSize)

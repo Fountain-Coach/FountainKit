@@ -4,7 +4,6 @@ import SwiftUI
 import TeatroGUI
 import FountainAIAdapters
 import FountainAIKit
-import FountainDevHarness
 import ProviderOpenAI
 import ProviderLocalLLM
 import ProviderGateway
@@ -15,7 +14,8 @@ public struct EngraverStudioRoot: View {
     private let configuration: EngraverStudioConfiguration
     @StateObject private var viewModel: EngraverChatViewModel
 
-    public init(configuration: EngraverStudioConfiguration = EngraverStudioConfiguration()) {
+    public init(configuration: EngraverStudioConfiguration = EngraverStudioConfiguration(),
+                environmentController: EnvironmentController? = nil) {
         self.configuration = configuration
         let client: ChatStreaming = {
             switch configuration.provider {
@@ -27,7 +27,6 @@ public struct EngraverStudioRoot: View {
                 return LocalLLMProvider.make(endpoint: configuration.localEndpoint)
             }
         }()
-        let envController: EnvironmentController? = configuration.bypassGateway ? nil : EnvironmentControllerAdapter(fountainRepoRoot: configuration.fountainRepoRoot)
         _viewModel = StateObject(
             wrappedValue: EngraverChatViewModel(
                 chatClient: client,
@@ -41,7 +40,7 @@ public struct EngraverStudioRoot: View {
                 bootstrapBaseURL: configuration.bootstrapBaseURL,
                 bearerToken: configuration.bearerToken,
                 seedingConfiguration: Self.mapSeeding(configuration.seedingConfiguration),
-                environmentController: envController,
+                environmentController: environmentController,
                 gatewayBaseURL: configuration.gatewayBaseURL,
                 directMode: configuration.bypassGateway
             )

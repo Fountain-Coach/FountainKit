@@ -4,6 +4,7 @@ import PublishingFrontend
 import FountainRuntime
 import LLMGatewayPlugin
 import AuthGatewayPlugin
+import PolicyGatewayPlugin
 import RateLimiterGatewayPlugin
 import CuratorGatewayPlugin
 import ChatKitGatewayPlugin
@@ -35,6 +36,7 @@ let rateLimiter: RateLimiterGatewayPlugin? = {
 let curatorPlugin = CuratorGatewayPlugin()
 let llmPlugin = LLMGatewayPlugin()
 let authPlugin = AuthGatewayPlugin()
+let policyPlugin = PolicyGatewayPlugin()
 let attachmentClient = FountainStoreClient(client: EmbeddedFountainStoreClient())
 let attachmentMetadataStore = GatewayAttachmentStore(store: attachmentClient)
 let attachmentUploadStore = ChatKitUploadStore(store: attachmentClient)
@@ -85,6 +87,7 @@ if let jwksURL = env["GATEWAY_JWKS_URL"], let provider = JWKSKeyProvider(jwksURL
 }
 plugins.append(contentsOf: [
     authPlugin as any GatewayPlugin,
+    policyPlugin as any GatewayPlugin,
     curatorPlugin as any GatewayPlugin,
     chatKitPlugin as any GatewayPlugin,
     llmPlugin as any GatewayPlugin

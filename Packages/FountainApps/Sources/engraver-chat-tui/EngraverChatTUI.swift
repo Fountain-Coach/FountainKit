@@ -158,7 +158,8 @@ actor ChatSession {
             }
         }()
         self.viewModel = await MainActor.run {
-            EngraverChatViewModel(
+            let env: EnvironmentController? = configuration.bypassGateway ? nil : EnvironmentControllerAdapter(fountainRepoRoot: configuration.fountainRepoRoot)
+            return EngraverChatViewModel(
                 chatClient: client,
                 persistenceStore: configuration.persistenceStore,
                 corpusId: configuration.corpusId,
@@ -170,7 +171,7 @@ actor ChatSession {
                 bootstrapBaseURL: configuration.bootstrapBaseURL,
                 bearerToken: configuration.bearerToken,
                 seedingConfiguration: Self.mapSeeding(configuration.seedingConfiguration),
-                fountainRepoRoot: configuration.fountainRepoRoot
+                environmentController: env
             )
         }
     }

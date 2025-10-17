@@ -8,6 +8,7 @@ import AwarenessAPI
 import BootstrapAPI
 import OpenAPIRuntime
 import os
+// No direct dependency on DevHarness; environment integration is injected via EnvironmentController.
 
 /// Current lifecycle state of the chat stream.
 public enum EngraverChatState: Equatable, Sendable {
@@ -285,7 +286,7 @@ public final class EngraverChatViewModel: ObservableObject {
     private let awarenessClient: AwarenessClient?
     private let bootstrapClient: BootstrapClient?
     private let seedingConfiguration: SeedingConfiguration?
-    private let environmentManager: FountainEnvironmentManager?
+    private let environmentController: EnvironmentController?
     private let bearerToken: String?
     private let persistenceContext: PersistenceContext?
     private var streamTask: Task<Void, Never>? = nil
@@ -442,7 +443,7 @@ public final class EngraverChatViewModel: ObservableObject {
         bootstrapBaseURL: URL? = nil,
         bearerToken: String? = nil,
         seedingConfiguration: SeedingConfiguration? = nil,
-        fountainRepoRoot: URL? = nil,
+        environmentController: EnvironmentController? = nil,
         semanticSeeder: SemanticBrowserSeeder = SemanticBrowserSeeder(),
         idGenerator: @escaping @Sendable () -> UUID = { UUID() },
         dateProvider: @escaping @Sendable () -> Date = { Date() },
@@ -470,15 +471,12 @@ public final class EngraverChatViewModel: ObservableObject {
         self.seedingConfiguration = seedingConfiguration
         self.semanticSeeder = semanticSeeder
         if directMode {
-            self.environmentManager = nil
-            self.environmentState = .unavailable("Environment manager disabled (direct mode)")
+            self.environmentController = nil
+            self.environmentState = .unavailable("Environment disabled (direct mode)")
         } else {
-            let manager = FountainEnvironmentManager(fountainRepoRoot: fountainRepoRoot)
-            if manager.isConfigured {
-                self.environmentManager = manager
-            } else {
-                self.environmentManager = nil
-                self.environmentState = .unavailable("Environment manager not configured")
+            self.environmentController = environmentController
+            if environmentController == nil {
+                self.environmentState = .unavailable("Environment controller not configured")
             }
         }
 
@@ -534,8 +532,8 @@ public final class EngraverChatViewModel: ObservableObject {
             emitDiagnostic("Seeding disabled • configuration unavailable.")
         }
 
-        if let environmentManager, !directMode {
-            configureEnvironmentManager(environmentManager)
+        if let environmentController, !directMode {
+            configureEnvironmentController(environmentController)
         }
 
         if persistenceContext != nil {
@@ -878,38 +876,32 @@ public final class EngraverChatViewModel: ObservableObject {
     }
 
     public func stopEnvironment(includeExtras: Bool, force: Bool) {
-        guard let environmentManager else { return }
-        Task {
-            await environmentManager.stopEnvironment(includeExtras: includeExtras, force: force)
-        }
+        guard let environmentController else { return }
+        Task { await environmentController.stopEnvironment(includeExtras: includeExtras, force: force) }
     }
 
     public func refreshEnvironmentStatus() {
-        guard let environmentManager else { return }
-        Task {
-            await environmentManager.refreshStatus()
-        }
+        guard let environmentController else { return }
+        Task { await environmentController.refreshStatus() }
     }
 
     public func clearEnvironmentLogs() {
-        environmentManager?.clearLogs()
+        environmentController?.clearLogs()
     }
 
     public func forceKill(pid: String) {
-        guard let environmentManager else { return }
-        Task {
-            await environmentManager.forceKillPID(pid)
-        }
+        guard let environmentController else { return }
+        Task { await environmentController.forceKillPID(pid) }
     }
 
     public func restart(service: EnvironmentServiceStatus) {
-        guard let environmentManager else { return }
-        Task { await environmentManager.restartService(service) }
+        guard let environmentController else { return }
+        Task { await environmentController.restartService(service) }
     }
 
     public func fixAllServices() {
-        guard let environmentManager else { return }
-        Task { await environmentManager.fixAll() }
+        guard let environmentController else { return }
+        Task { await environmentController.fixAll() }
     }
 
     public func openPersistedSession(id: UUID) {
@@ -1093,33 +1085,27 @@ public final class EngraverChatViewModel: ObservableObject {
         }
     }
 
-    private func configureEnvironmentManager(_ manager: FountainEnvironmentManager) {
-        environmentState = manager.overallState
-        environmentServices = manager.services
-        environmentLogs = manager.logs
-        manager.$overallState
-            .sink { [weak self] state in
-                self?.handleEnvironmentStateChange(state)
-            }
-            .store(in: &environmentCancellables)
-        manager.$services
-            .sink { [weak self] services in
-                self?.environmentServices = services
-            }
-            .store(in: &environmentCancellables)
-        manager.$logs
-            .sink { [weak self] entries in
-                self?.environmentLogs = entries
-            }
-            .store(in: &environmentCancellables)
-        handleEnvironmentStateChange(manager.overallState)
+    private func configureEnvironmentController(_ controller: EnvironmentController) {
+        environmentState = controller.overallState
+        environmentServices = controller.services
+        environmentLogs = controller.logs
+        controller.observeOverallState { [weak self] state in
+            self?.handleEnvironmentStateChange(state)
+        }.store(in: &environmentCancellables)
+        controller.observeServices { [weak self] services in
+            self?.environmentServices = services
+        }.store(in: &environmentCancellables)
+        controller.observeLogs { [weak self] entries in
+            self?.environmentLogs = entries
+        }.store(in: &environmentCancellables)
+        handleEnvironmentStateChange(controller.overallState)
         Task {
-            await manager.refreshStatus()
+            await controller.refreshStatus()
             if !didRequestAutoStartEnvironment {
-                switch manager.overallState {
+                switch controller.overallState {
                 case .idle, .unavailable, .failed:
                     didRequestAutoStartEnvironment = true
-                    await manager.startEnvironment(includeExtras: true)
+                    await controller.startEnvironment(includeExtras: true)
                 default:
                     break
                 }

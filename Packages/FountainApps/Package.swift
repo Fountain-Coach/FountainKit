@@ -34,6 +34,7 @@ let package = Package(
         .package(path: "../FountainCore"),
         .package(path: "../FountainAIKit"),
         .package(path: "../FountainProviders"),
+        .package(path: "../FountainDevHarness"),
         .package(path: "../FountainAPIClients"),
         .package(path: "../FountainGatewayKit"),
         .package(path: "../FountainServiceKit-Planner"),
@@ -250,6 +251,7 @@ let package = Package(
             dependencies: [
                 "EngraverChatCore",
                 .product(name: "FountainAIKit", package: "FountainAIKit"),
+                .product(name: "FountainDevHarness", package: "FountainDevHarness"),
                 .product(name: "ProviderOpenAI", package: "FountainProviders"),
                 .product(name: "ProviderLocalLLM", package: "FountainProviders"),
                 .product(name: "ProviderGateway", package: "FountainProviders"),
@@ -263,6 +265,7 @@ let package = Package(
             dependencies: [
                 "EngraverChatCore",
                 .product(name: "FountainAIKit", package: "FountainAIKit"),
+                .product(name: "FountainDevHarness", package: "FountainDevHarness"),
                 .product(name: "ProviderOpenAI", package: "FountainProviders"),
                 .product(name: "ProviderLocalLLM", package: "FountainProviders"),
                 .product(name: "ProviderGateway", package: "FountainProviders"),

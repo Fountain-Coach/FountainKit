@@ -304,6 +304,7 @@ public final class EngraverChatViewModel: ObservableObject {
     private var didRequestAutoStartEnvironment: Bool = false
     private var environmentCancellables: Set<AnyCancellable> = []
     private let semanticSeeder: SemanticBrowserSeeder
+    private let memoryAugmentationEnabled: Bool = true
     private static let sessionTitleFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMM d, HH:mm"
@@ -589,10 +590,21 @@ public final class EngraverChatViewModel: ObservableObject {
         let currentSessionName = sessionName
         let currentSessionStartedAt = sessionStartedAt
         let turnIndex = historySnapshot.count + 1
+        // Optional memory augmentation from seeded segments
+        var memoryAppendix: [String] = []
+        if memoryAugmentationEnabled {
+            let snippets = await retrieveMemorySnippets(for: prompt, limit: 5)
+            if !snippets.isEmpty {
+                let joined = snippets.enumerated().map { idx, s in "\(idx+1). \(s)" }.joined(separator: "\n\n")
+                memoryAppendix.append("Relevant knowledge from your corpus (top matches):\n\n\(joined)\n\nUse these facts when answering, and cite them if appropriate.")
+                emitDiagnostic("Memory augmentation: \(snippets.count) snippets attached for prompt \(truncateForContext(prompt, limit: 64))")
+            }
+        }
+
         let requestMessages = makePromptMessages(
             history: historySnapshot,
             prompt: prompt,
-            systemPrompts: systemPrompts
+            systemPrompts: systemPrompts + memoryAppendix
         )
         let request = CoreChatRequest(model: model, messages: requestMessages)
         let persistenceTarget = persistenceContext?.overridingCorpus(corpusOverride)
@@ -699,6 +711,44 @@ public final class EngraverChatViewModel: ObservableObject {
                 emitDiagnostic("Stream error: \(description)")
             }
         }
+    }
+
+    // MARK: - Memory Augmentation
+    private func retrieveMemorySnippets(for prompt: String, limit: Int = 5) async -> [String] {
+        guard let context = persistenceContext, let cfg = seedingConfiguration else { return [] }
+        // Prefer configured segments collection; otherwise fall back to a conventional name
+        let collection = cfg.browser.segmentsCollection ?? "segments"
+        do {
+            let q = Query(filters: ["corpusId": context.corpusId], text: prompt, limit: limit)
+            let resp = try await context.store.query(corpusId: context.corpusId, collection: collection, query: q)
+            var out: [String] = []
+            for data in resp.documents {
+                if let snippet = extractText(from: data), !snippet.isEmpty {
+                    out.append(truncateForContext(snippet, limit: 320))
+                }
+            }
+            return out
+        } catch {
+            emitDiagnostic("Memory retrieval failed: \(error)")
+            return []
+        }
+    }
+
+    private func extractText(from data: Data) -> String? {
+        if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            // Common keys in semantic segments or pages
+            let candidates = ["text", "content", "summary", "title", "body"]
+            for key in candidates {
+                if let s = obj[key] as? String, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return s
+                }
+            }
+            // If entities exist, synthesise a brief line
+            if let entities = obj["entities"] as? [Any], !entities.isEmpty {
+                return "Entities: " + entities.prefix(5).map { String(describing: $0) }.joined(separator: ", ")
+            }
+        }
+        return nil
     }
 
     private func isCannotConnect(_ error: Error) -> Bool {

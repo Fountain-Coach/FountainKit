@@ -536,7 +536,7 @@ public final class EngraverChatViewModel: ObservableObject {
                 }
                 emitDiagnostic("Stream cancelled.")
             } catch {
-                let description = describe(error: error)
+                let description = userFacingError(from: error)
                 await MainActor.run {
                     self.activeTokens.removeAll()
                     self.state = .failed(description)
@@ -1463,5 +1463,23 @@ private func bootstrapCorpusIfNeeded() async {
             return description
         }
         return String(describing: error)
+    }
+
+    private func userFacingError(from error: Error) -> String {
+        // Map common gateway errors to friendly messages with hints.
+        if let gw = error as? GatewayChatError {
+            switch gw {
+            case .serverError(let status, let message):
+                if status == 429 {
+                    return "Gateway rate limited (429). Reduce request rate or increase limits.\(message.map { "\n\nDetails: \($0)" } ?? "")"
+                } else if status == 401 || status == 403 {
+                    return "Gateway authentication failed (\(status)). Ensure GATEWAY_BEARER or API key is set.\(message.map { "\n\nDetails: \($0)" } ?? "")"
+                }
+                return "Gateway returned status \(status).\(message.map { "\n\nDetails: \($0)" } ?? "")"
+            case .invalidResponse:
+                return "Gateway did not return a valid HTTP response. Check connectivity."
+            }
+        }
+        return describe(error: error)
     }
 }

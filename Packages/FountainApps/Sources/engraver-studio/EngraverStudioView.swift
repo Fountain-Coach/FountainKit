@@ -548,6 +548,7 @@ private struct BootTrailPane: View {
             // Ensure we probe status when entering the boot pane
             viewModel.refreshEnvironmentStatus()
         }
+        .animation(.easeInOut(duration: 0.25), value: viewModel.environmentState)
         .sheet(item: $webPreviewItem) { item in
             VStack(spacing: 0) {
                 HStack {

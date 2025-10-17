@@ -20,28 +20,43 @@ struct EngraverStudioView: View {
     @AppStorage("EngraverStudio.ShowLeftPane") private var showLeftPane: Bool = true
     @AppStorage("EngraverStudio.ShowRightPane") private var showRightPane: Bool = true
     @State private var toast: String? = nil
+    @AppStorage("EngraverStudio.LeftWidth") private var leftWidth: Double = 340
+    @AppStorage("EngraverStudio.RightWidth") private var rightWidth: Double = 380
 
 
     var body: some View {
-        HStack(spacing: 0) {
-            if showLeftPane {
-                BootSidePane(viewModel: viewModel)
-                    .frame(width: 340)
-                Divider()
-            }
+        GeometryReader { proxy in
+            let total = proxy.size.width
+            let minSidebar: Double = 240
+            let minRight: Double = 260
+            let maxLeft = max(minSidebar, min(total * 0.45, leftWidth))
+            let maxRight = max(minRight, min(total * 0.45, rightWidth))
+            HStack(spacing: 0) {
+                if showLeftPane {
+                    BootSidePane(viewModel: viewModel)
+                        .frame(width: maxLeft)
+                    draggableDivider(onDrag: { delta in
+                        let newWidth = leftWidth + Double(delta)
+                        leftWidth = max(minSidebar, min(newWidth, total - (showRightPane ? rightWidth + 400 : 400)))
+                    })
+                }
 
-            VStack(spacing: 0) {
-                TopBar(viewModel: viewModel,
-                       showLeft: $showLeftPane,
-                       showRight: $showRightPane)
-                Divider()
-                mainPane
-            }
+                VStack(spacing: 0) {
+                    TopBar(viewModel: viewModel,
+                           showLeft: $showLeftPane,
+                           showRight: $showRightPane)
+                    Divider()
+                    mainPane
+                }
 
-            if showRightPane {
-                Divider()
-                RightPane(viewModel: viewModel)
-                    .frame(width: 380)
+                if showRightPane {
+                    draggableDivider(onDrag: { delta in
+                        let newWidth = rightWidth - Double(delta)
+                        rightWidth = max(minRight, min(newWidth, total - (showLeftPane ? leftWidth + 400 : 400)))
+                    })
+                    RightPane(viewModel: viewModel)
+                        .frame(width: maxRight)
+                }
             }
         }
         .onChange(of: viewModel.lastError) { _, newValue in
@@ -837,6 +852,9 @@ private struct BootSidePane: View {
 @available(macOS 13.0, *)
 private struct RightPane: View {
     @ObservedObject var viewModel: EngraverChatViewModel
+    @State private var methodFilter: String = "ALL"
+    @State private var statusFilter: String = "ALL"
+    @State private var pathFilter: String = ""
     @AppStorage("EngraverStudio.RightPaneTab") private var rightTabRaw: String = "logs"
     private enum Tab: String { case logs, diagnostics }
     private var tab: Tab { get { Tab(rawValue: rightTabRaw) ?? .logs } nonmutating set { rightTabRaw = newValue.rawValue } }
@@ -871,21 +889,42 @@ private struct RightPane: View {
                 DiagnosticsPanel(messages: viewModel.diagnostics)
             }
             GroupBox(label: HStack { Text("Gateway Traffic"); Spacer(); Button { Task { await viewModel.refreshGatewayTraffic() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }.buttonStyle(.borderless) }) {
-                if viewModel.trafficEvents.isEmpty {
+                // Filters
+                HStack(spacing: 8) {
+                    Picker("Method", selection: $methodFilter) {
+                        Text("ALL").tag("ALL"); Text("GET").tag("GET"); Text("POST").tag("POST"); Text("PUT").tag("PUT"); Text("PATCH").tag("PATCH"); Text("DELETE").tag("DELETE")
+                    }
+                    .labelsHidden().frame(width: 90)
+                    Picker("Status", selection: $statusFilter) {
+                        Text("ALL").tag("ALL"); Text("2xx").tag("2xx"); Text("3xx").tag("3xx"); Text("4xx").tag("4xx"); Text("5xx").tag("5xx"); Text("429").tag("429")
+                    }
+                    .labelsHidden().frame(width: 90)
+                    TextField("Filter path…", text: $pathFilter).textFieldStyle(.roundedBorder).frame(maxWidth: .infinity)
+                }
+                .padding(.bottom, 4)
+
+                let filtered = filteredTraffic()
+                if filtered.isEmpty {
                     Text("No recent traffic. Press Refresh.").foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    ScrollView { LazyVStack(alignment: .leading, spacing: 6) {
-                        ForEach(viewModel.trafficEvents) { ev in
-                            HStack(spacing: 8) {
-                                statusDot(ev.status)
-                                Text("\(ev.method)").font(.caption.weight(.semibold))
-                                Text(ev.path).font(.caption).lineLimit(1)
-                                Spacer()
-                                Text("\(ev.status)").font(.caption2)
-                                Text("\(ev.durationMs)ms").font(.caption2).foregroundStyle(.secondary)
+                    ScrollViewReader { proxy in
+                        ScrollView { LazyVStack(alignment: .leading, spacing: 6) {
+                            ForEach(filtered) { ev in
+                                HStack(spacing: 8) {
+                                    statusDot(ev.status)
+                                    Text("\(ev.method)").font(.caption.weight(.semibold))
+                                    Text(ev.path).font(.caption).lineLimit(1)
+                                    Spacer()
+                                    Text("\(ev.status)").font(.caption2)
+                                    Text("\(ev.durationMs)ms").font(.caption2).foregroundStyle(.secondary)
+                                }
+                                .id(ev.id)
                             }
+                        } }
+                        .onChange(of: filtered.count) { _, _ in
+                            if let last = filtered.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
                         }
-                    } }
+                    }
                     .textSelection(.enabled)
                     .frame(minHeight: 160)
                 }
@@ -898,6 +937,21 @@ private struct RightPane: View {
     private func statusDot(_ status: Int) -> some View {
         let color: Color = (200...299).contains(status) ? .green : (status == 429 ? .orange : .red)
         return Circle().fill(color).frame(width: 6, height: 6)
+    }
+
+    private func filteredTraffic() -> [EngraverChatViewModel.GatewayRequestEvent] {
+        var items = viewModel.trafficEvents
+        if methodFilter != "ALL" { items = items.filter { $0.method == methodFilter } }
+        if statusFilter == "2xx" { items = items.filter { (200...299).contains($0.status) } }
+        else if statusFilter == "3xx" { items = items.filter { (300...399).contains($0.status) } }
+        else if statusFilter == "4xx" { items = items.filter { (400...499).contains($0.status) } }
+        else if statusFilter == "5xx" { items = items.filter { (500...599).contains($0.status) } }
+        else if statusFilter == "429" { items = items.filter { $0.status == 429 } }
+        if !pathFilter.trimmingCharacters(in: .whitespaces).isEmpty {
+            let needle = pathFilter.lowercased()
+            items = items.filter { $0.path.lowercased().contains(needle) }
+        }
+        return items
     }
 }
 
@@ -922,6 +976,26 @@ private struct CopyButton: View {
 }
 
 @available(macOS 13.0, *)
+private struct DividerHandle: View {
+    let onDrag: (CGFloat) -> Void
+    @State private var hovering = false
+    var body: some View {
+        Rectangle()
+            .fill(hovering ? Color.accentColor.opacity(0.25) : Color.clear)
+            .frame(width: 6)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0).onChanged { value in onDrag(value.translation.width) })
+            .onHover { hovering = $0 }
+            .overlay(Rectangle().fill(Color.gray.opacity(0.25)).frame(width: 1))
+    }
+}
+
+@available(macOS 13.0, *)
+private func draggableDivider(onDrag: @escaping (CGFloat) -> Void) -> some View {
+    DividerHandle(onDrag: onDrag)
+}
+
+@available(macOS 13.0, *)
 private struct TopBar: View {
     @ObservedObject var viewModel: EngraverChatViewModel
     @Binding var showLeft: Bool
@@ -933,6 +1007,11 @@ private struct TopBar: View {
                     .frame(width: 8, height: 8)
                 Text(viewModel.environmentIsRunning ? "ALL GREEN" : "Starting…")
                     .font(.caption.weight(.semibold))
+                HStack(spacing: 4) {
+                    ForEach(Array(viewModel.environmentServices.prefix(8))) { svc in
+                        Circle().fill(color(for: svc.state)).frame(width: 6, height: 6).help("\(svc.name): \(svc.state.rawValue) :\(svc.port)")
+                    }
+                }
             }
             Spacer()
             Toggle(isOn: $showLeft) { Image(systemName: "sidebar.left") }
@@ -943,6 +1022,10 @@ private struct TopBar: View {
                 .help(showRight ? "Hide diagnostics" : "Show diagnostics")
         }
         .padding(8)
+    }
+
+    private func color(for state: EnvironmentServiceState) -> Color {
+        switch state { case .up: return .green; case .down: return .red; case .unknown: return .gray }
     }
 }
 

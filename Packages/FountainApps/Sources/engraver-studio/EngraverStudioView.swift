@@ -475,6 +475,7 @@ private struct DiagnosticsPanel: View {
 @available(macOS 13.0, *)
 private struct BootTrailPane: View {
     @ObservedObject var viewModel: EngraverChatViewModel
+    @Environment(\.openURL) private var openURL
 
     private var stateText: String {
         switch viewModel.environmentState {
@@ -595,6 +596,7 @@ private struct BootTrailPane: View {
                         Spacer()
                         Text(":\(svc.port)").font(.caption).foregroundStyle(.secondary)
                         if let pid = svc.pid { Text("PID \(pid)").font(.caption).foregroundStyle(.secondary) }
+                        controlButtons(for: svc)
                     }
                 }
             }
@@ -605,6 +607,33 @@ private struct BootTrailPane: View {
     private func stateDot(_ s: EnvironmentServiceState) -> some View {
         let color: Color = (s == .up) ? .green : (s == .down ? .red : .gray)
         return Circle().fill(color).frame(width: 9, height: 9)
+    }
+
+    @ViewBuilder
+    private func controlButtons(for svc: EnvironmentServiceStatus) -> some View {
+        HStack(spacing: 6) {
+            Button {
+                if let url = URL(string: "http://127.0.0.1:\(svc.port)/metrics") {
+                    openURL(url)
+                }
+            } label: { Image(systemName: "safari") }
+            .buttonStyle(.borderless)
+            .help("Open metrics")
+
+            if let pid = svc.pid {
+                Button(role: .destructive) {
+                    viewModel.forceKill(pid: pid)
+                } label: { Image(systemName: "xmark.circle") }
+                .buttonStyle(.borderless)
+                .help("Kill PID \(pid)")
+            }
+
+            Button {
+                viewModel.startEnvironment(includeExtras: true)
+            } label: { Image(systemName: "arrow.triangle.2.circlepath") }
+            .buttonStyle(.borderless)
+            .help("Retry start")
+        }
     }
 
     private var logsPanel: some View {

@@ -691,6 +691,13 @@ public final class EngraverChatViewModel: ObservableObject {
         environmentManager?.clearLogs()
     }
 
+    public func forceKill(pid: String) {
+        guard let environmentManager else { return }
+        Task {
+            await environmentManager.forceKillPID(pid)
+        }
+    }
+
     public func openPersistedSession(id: UUID) {
         let records = persistedRecords.filter { sessionIdentifier(for: $0) == id }
         guard !records.isEmpty else {

@@ -210,6 +210,30 @@ public final class FountainEnvironmentManager: ObservableObject {
         logRemainder = ""
     }
 
+    // MARK: - Process controls
+
+    public func forceKillPID(_ pid: String) async {
+        await Task.detached(priority: .utility) {
+            func run(_ args: [String]) throws {
+                let proc = Process()
+                proc.executableURL = URL(fileURLWithPath: "/bin/kill")
+                proc.arguments = args
+                try proc.run(); proc.waitUntilExit()
+            }
+            do {
+                try run(["-TERM", pid])
+                // brief grace period
+                try await Task.sleep(nanoseconds: 200_000_000)
+                try run(["-0", pid]) // probe if still alive
+                // still alive -> KILL
+                try run(["-KILL", pid])
+            } catch {
+                // Best-effort: ignore failures, status refresh will reflect reality
+            }
+        }.value
+        await refreshStatus()
+    }
+
     // MARK: - Helpers
 
     private func runAndCapture(script: URL, arguments: [String]) async throws -> String {

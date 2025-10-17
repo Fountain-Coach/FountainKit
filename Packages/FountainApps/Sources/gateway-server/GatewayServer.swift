@@ -140,7 +140,7 @@ public final class GatewayServer {
         let kernel = HTTPKernel { [plugins, zoneManager, self] req in
             if req.method == "GET" && req.path.split(separator: "?", maxSplits: 1).first == "/admin/recent" {
                 let items = await recentStore.snapshot()
-                let data = (try? JSONEncoder().encode(items)) ?? Data()
+                let data = (try? JSONEncoder().encode(items)) ?? Data("[]".utf8)
                 return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: data)
             }
             var request = req

@@ -879,6 +879,29 @@ private struct BootSidePane: View {
                     .buttonStyle(.bordered)
                 }
             }
+            GroupBox(label: Text("ChatKit Settings")) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Text("Responder").font(.caption)
+                        Picker("Responder", selection: Binding(get: {
+                            (ProcessInfo.processInfo.environment["CHATKIT_RESPONDER"]?.lowercased() == "echo") ? "echo" : "chatkit"
+                        }, set: { sel in setenv("CHATKIT_RESPONDER", sel, 1) })) {
+                            Text("LLM").tag("chatkit")
+                            Text("Echo").tag("echo")
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 200)
+                        Spacer()
+                        Button {
+                            Task { await viewModel.applyGatewaySettings(restart: true) }
+                        } label: { Label("Apply & Restart", systemImage: "arrow.clockwise") }
+                        .buttonStyle(.bordered)
+                    }
+                    Text("Echo responds instantly using a local stub to validate the full path without upstream dependencies.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
     }
 

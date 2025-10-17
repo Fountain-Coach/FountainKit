@@ -59,6 +59,25 @@ public final class GatewayServer {
     private struct TokenResponse: Codable { let token: String; let expiresAt: String }
     private struct ErrorResponse: Codable { let error: String }
 
+    // Recent traffic ring buffer for control pane
+    private actor RecentRequestsStore {
+        struct Item: Codable {
+            let method: String
+            let path: String
+            let status: Int
+            let durationMs: Int
+            let timestamp: String
+            let client: String?
+        }
+        private var items: [Item] = []
+        private let limit: Int = 200
+        func append(_ item: Item) {
+            items.append(item)
+            if items.count > limit { items.removeFirst(items.count - limit) }
+        }
+        func snapshot() -> [Item] { items }
+    }
+
     /// Encodes an error message as JSON and sets the appropriate content type.
     /// - Parameters:
     ///   - status: HTTP status code to return.
@@ -109,6 +128,7 @@ public final class GatewayServer {
         self.certificatePath = certificatePath
         self.server = NIOHTTPServer(kernel: HTTPKernel { _ in HTTPResponse(status: 500) }, group: group)
         self.rateLimiter = rateLimiter
+        let recentStore = RecentRequestsStore()
         // Initialize admin token validator early
         if let jwksURL = ProcessInfo.processInfo.environment["GATEWAY_JWKS_URL"], let provider = JWKSKeyProvider(jwksURL: jwksURL) {
             self.adminValidator = HMACKeyValidator(keyProvider: provider)
@@ -118,6 +138,11 @@ public final class GatewayServer {
         // Load persisted routes if configured
         self.reloadRoutes()
         let kernel = HTTPKernel { [plugins, zoneManager, self] req in
+            if req.method == "GET" && req.path.split(separator: "?", maxSplits: 1).first == "/admin/recent" {
+                let items = await recentStore.snapshot()
+                let data = (try? JSONEncoder().encode(items)) ?? Data()
+                return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: data)
+            }
             var request = req
             do {
                 for plugin in plugins {
@@ -264,6 +289,12 @@ public final class GatewayServer {
             if let data = try? JSONSerialization.data(withJSONObject: log), let line = String(data: data, encoding: .utf8) {
                 FileHandle.standardError.write(Data((line + "\n").utf8))
             }
+            await recentStore.append(.init(method: request.method,
+                                           path: request.path,
+                                           status: response.status,
+                                           durationMs: durMs,
+                                           timestamp: ISO8601DateFormatter().string(from: Date()),
+                                           client: request.headers["Authorization"]))
             return response
         }
         self.server = NIOHTTPServer(kernel: kernel, group: group)

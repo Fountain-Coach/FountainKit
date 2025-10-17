@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import Combine
 import FountainAIAdapters
 import FountainStoreClient
@@ -391,6 +392,29 @@ public final class EngraverChatViewModel: ObservableObject {
         }
     }
 
+    public func applyGatewaySettings(restart: Bool) async {
+        // Push env so child processes inherit the configuration
+        setenv("GATEWAY_DISABLE_RATELIMIT", gatewayRateLimiterEnabled ? "0" : "1", 1)
+        setenv("GATEWAY_RATE_LIMIT_PER_MINUTE", String(gatewayRateLimitPerMinute), 1)
+        emitDiagnostic("Gateway settings applied • ratelimiter=\(gatewayRateLimiterEnabled ? "on" : "off") limit=\(gatewayRateLimitPerMinute)")
+        guard restart, let environmentManager else { return }
+        await environmentManager.stopEnvironment(includeExtras: true, force: true)
+        await environmentManager.startEnvironment(includeExtras: true)
+    }
+
+    // MARK: - Gateway settings (rate limiter)
+    @Published public var gatewayRateLimiterEnabled: Bool
+    @Published public var gatewayRateLimitPerMinute: Int
+
+    private static func readEnv(_ key: String) -> String? {
+        ProcessInfo.processInfo.environment[key]
+    }
+
+    private static func parseBoolEnv(_ value: String?) -> Bool? {
+        guard let v = value?.lowercased() else { return nil }
+        return (v == "1" || v == "true" || v == "yes") ? true : (v == "0" || v == "false" || v == "no" ? false : nil)
+    }
+
     public init(
         chatClient: GatewayChatStreaming,
         persistenceStore: FountainStoreClient? = nil,
@@ -468,6 +492,13 @@ public final class EngraverChatViewModel: ObservableObject {
         } else {
             self.bootstrapState = .idle
         }
+
+        // Load gateway settings from environment
+        let disabledEnv = Self.readEnv("GATEWAY_DISABLE_RATELIMIT")
+        let disabled = Self.parseBoolEnv(disabledEnv) ?? false
+        self.gatewayRateLimiterEnabled = !disabled
+        let rateEnv = Self.readEnv("GATEWAY_RATE_LIMIT_PER_MINUTE")
+        self.gatewayRateLimitPerMinute = Int(rateEnv ?? "") ?? 60
 
         let initialSessionId = idGenerator()
         self.sessionId = initialSessionId

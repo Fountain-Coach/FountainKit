@@ -815,6 +815,28 @@ private struct BootSidePane: View {
                     }
                 }
             }
+            Divider()
+            GroupBox(label: Text("Gateway Settings")) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("Rate Limiter", isOn: $viewModel.gatewayRateLimiterEnabled)
+                    HStack(spacing: 8) {
+                        Text("Limit/min:").font(.caption)
+                        Stepper(value: $viewModel.gatewayRateLimitPerMinute, in: 1...10000, step: 10) {
+                            Text("\(viewModel.gatewayRateLimitPerMinute)").font(.caption)
+                        }
+                    }
+                    HStack(spacing: 8) {
+                        Button {
+                            Task { await viewModel.applyGatewaySettings(restart: false) }
+                        } label: { Label("Apply", systemImage: "checkmark") }
+                        .buttonStyle(.bordered)
+                        Button {
+                            Task { await viewModel.applyGatewaySettings(restart: true) }
+                        } label: { Label("Apply & Restart", systemImage: "arrow.clockwise") }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
+            }
         }
     }
 

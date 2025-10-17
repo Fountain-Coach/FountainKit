@@ -19,6 +19,7 @@ struct EngraverStudioView: View {
     @State private var showSemanticBrowser: Bool = false
     @AppStorage("EngraverStudio.ShowLeftPane") private var showLeftPane: Bool = true
     @AppStorage("EngraverStudio.ShowRightPane") private var showRightPane: Bool = true
+    @State private var toast: String? = nil
 
 
     var body: some View {
@@ -45,6 +46,7 @@ struct EngraverStudioView: View {
         }
         .onChange(of: viewModel.lastError) { _, newValue in
             showErrorAlert = newValue != nil
+            if let msg = newValue { withAnimation { toast = msg } ; DispatchQueue.main.asyncAfter(deadline: .now() + 3) { withAnimation { if toast == msg { toast = nil } } } }
         }
         .onChange(of: viewModel.state) { _, newState in
             if newState != .streaming {
@@ -66,6 +68,22 @@ struct EngraverStudioView: View {
         .sheet(isPresented: $showSemanticBrowser) {
             SemanticBrowserSheet(viewModel: viewModel, openURL: { url in openURL(url) })
                 .frame(minWidth: 520, minHeight: 360)
+        }
+        .overlay(alignment: .top) {
+            if let toast {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    Text(toast).font(.caption)
+                    Button { withAnimation { self.toast = nil } } label: { Image(systemName: "xmark") }.buttonStyle(.borderless)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(.thinMaterial)
+                .clipShape(Capsule())
+                .shadow(radius: 3)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .padding(.top, 12)
+            }
         }
     }
 

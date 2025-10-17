@@ -20,6 +20,13 @@ struct EngraverStudioStandaloneApp: App {
            let token = SecretStoreHelper.read(service: "FountainAI", account: "GATEWAY_BEARER") {
             env["GATEWAY_BEARER"] = token
         }
+
+        // Best-effort: infer FountainKit repo root if not set (enables auto environment management)
+        if env["FOUNTAINKIT_ROOT"] == nil {
+            if let inferred = Self.inferRepoRoot() {
+                env["FOUNTAINKIT_ROOT"] = inferred.path
+            }
+        }
         configuration = EngraverStudioConfiguration(environment: env)
     }
 
@@ -51,3 +58,26 @@ enum EngraverStudioUnavailable {
     }
 }
 #endif
+
+// MARK: - Repo root inference
+
+extension EngraverStudioStandaloneApp {
+    private static func inferRepoRoot() -> URL? {
+        // Walk up from current working directory to find a directory containing
+        // both Package.swift and Scripts/.
+        let fm = FileManager.default
+        var url = URL(fileURLWithPath: fm.currentDirectoryPath, isDirectory: true)
+        for _ in 0..<6 { // walk up to 6 levels
+            let package = url.appendingPathComponent("Package.swift")
+            let scripts = url.appendingPathComponent("Scripts", isDirectory: true)
+            var isDir: ObjCBool = false
+            if fm.fileExists(atPath: package.path), fm.fileExists(atPath: scripts.path, isDirectory: &isDir), isDir.boolValue {
+                return url
+            }
+            let parent = url.deletingLastPathComponent()
+            if parent.path == url.path { break }
+            url = parent
+        }
+        return nil
+    }
+}

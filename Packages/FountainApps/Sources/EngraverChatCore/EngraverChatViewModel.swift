@@ -298,6 +298,7 @@ public final class EngraverChatViewModel: ObservableObject {
     private let bootstrapBaseURL: URL?
     private var didBootstrapCorpus: Bool = false
     private var didAutoBootstrapAfterEnvironment: Bool = false
+    private var didRequestAutoStartEnvironment: Bool = false
     private var environmentCancellables: Set<AnyCancellable> = []
     private let semanticSeeder: SemanticBrowserSeeder
     private static let sessionTitleFormatter: DateFormatter = {
@@ -410,16 +411,8 @@ public final class EngraverChatViewModel: ObservableObject {
                 await self?.hydrateFromPersistence()
             }
         }
-        if awarenessClient != nil, environmentManager == nil {
-            Task { [weak self] in
-                await self?.refreshAwarenessSummary()
-            }
-        }
-        if bootstrapClient != nil, environmentManager == nil {
-            Task { [weak self] in
-                await self?.bootstrapCorpusIfNeeded()
-            }
-        }
+        // When environment manager is unavailable, avoid eager network calls that would error.
+        // If a manager is configured, we'll auto-start and then refresh.
     }
 
     deinit {
@@ -904,6 +897,15 @@ public final class EngraverChatViewModel: ObservableObject {
         handleEnvironmentStateChange(manager.overallState)
         Task {
             await manager.refreshStatus()
+            if !didRequestAutoStartEnvironment {
+                switch manager.overallState {
+                case .idle, .unavailable, .failed:
+                    didRequestAutoStartEnvironment = true
+                    await manager.startEnvironment(includeExtras: true)
+                default:
+                    break
+                }
+            }
         }
     }
 

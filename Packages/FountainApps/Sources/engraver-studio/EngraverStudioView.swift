@@ -11,7 +11,6 @@ struct EngraverStudioView: View {
     let systemPrompts: [String]
 
     @Environment(\.openURL) private var openURL
-    @AppStorage("EngraverStudio.SelectedTab") private var selectedTabRaw: String = "boot"
     @State private var draftPrompt: String = ""
     @State private var selectedTurnID: UUID?
     @State private var showErrorAlert: Bool = false
@@ -19,27 +18,17 @@ struct EngraverStudioView: View {
     @State private var promptEditorIsFocused: Bool = false
     @State private var showSemanticBrowser: Bool = false
 
-    private enum Tab: String { case boot, studio }
-    private var tab: Tab {
-        get { Tab(rawValue: selectedTabRaw) ?? .boot }
-        nonmutating set { selectedTabRaw = newValue.rawValue }
-    }
-    private var tabBinding: Binding<Tab> { .init(get: { tab }, set: { tab = $0 }) }
 
     var body: some View {
-        TabView(selection: tabBinding) {
-            BootTrailPane(viewModel: viewModel, onProceed: { tab = .studio })
-                .tabItem { Label("Boot", systemImage: "bolt.circle") }
-                .tag(Tab.boot)
-            HStack(spacing: 0) {
-                sidebar
-                Divider()
-                mainPane
-            }
-            .tabItem { Label("Studio", systemImage: "text.bubble") }
-            .tag(Tab.studio)
+        HStack(spacing: 0) {
+            BootSidePane(viewModel: viewModel)
+                .frame(width: 340)
+            Divider()
+            mainPane
+            Divider()
+            RightPane(viewModel: viewModel)
+                .frame(width: 380)
         }
-        .ignoresSafeArea(edges: .top)
         .onChange(of: viewModel.lastError) { _, newValue in
             showErrorAlert = newValue != nil
         }
@@ -706,6 +695,99 @@ private struct BootTrailPane: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+}
+
+@available(macOS 13.0, *)
+private struct BootSidePane: View {
+    @ObservedObject var viewModel: EngraverChatViewModel
+    @State private var webPreviewItem: IdentifiableURL? = nil
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Environment")
+                .font(.headline)
+            controlRow
+            Divider()
+            servicesPanel
+        }
+        .padding(12)
+        .sheet(item: $webPreviewItem) { item in
+            VStack(spacing: 0) {
+                HStack { Text(item.url.absoluteString).font(.caption).textSelection(.enabled); Spacer(); Button { openURL(item.url) } label: { Label("Open in Browser", systemImage: "safari") } .buttonStyle(.borderless) }
+                    .padding(8)
+                Divider()
+                EmbeddedWebView(url: item.url).frame(minWidth: 720, minHeight: 480)
+            }
+            .frame(minWidth: 720, minHeight: 520)
+        }
+    }
+
+    private var controlRow: some View {
+        HStack(spacing: 8) {
+            Button { viewModel.startEnvironment(includeExtras: true) } label: { Label("Start", systemImage: "play.fill") }
+                .buttonStyle(.borderedProminent)
+                .disabled(viewModel.environmentIsBusy || viewModel.environmentIsRunning)
+            Button { viewModel.stopEnvironment(includeExtras: true, force: false) } label: { Label("Stop", systemImage: "stop.fill") }
+                .buttonStyle(.bordered)
+                .disabled(viewModel.environmentIsBusy || !viewModel.environmentIsRunning)
+            Button(role: .destructive) { viewModel.stopEnvironment(includeExtras: true, force: true) } label: { Label("Force", systemImage: "trash") }
+                .buttonStyle(.bordered)
+            Button { viewModel.fixAllServices() } label: { Label("Fix All", systemImage: "wrench.and.screwdriver") }
+                .buttonStyle(.bordered)
+            Button { viewModel.refreshEnvironmentStatus() } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                .buttonStyle(.borderless)
+        }
+    }
+
+    private var servicesPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Services").font(.subheadline)
+            if viewModel.environmentServices.isEmpty {
+                Text("Probing…").foregroundStyle(.secondary)
+            } else {
+                ForEach(viewModel.environmentServices) { svc in
+                    HStack(spacing: 8) {
+                        stateDot(svc.state)
+                        Text(svc.name).font(.callout)
+                        Spacer()
+                        Text(":\(svc.port)").font(.caption).foregroundStyle(.secondary)
+                        if let pid = svc.pid { Text("PID \(pid)").font(.caption).foregroundStyle(.secondary) }
+                        Button { if let url = URL(string: "http://127.0.0.1:\(svc.port)/metrics") { webPreviewItem = IdentifiableURL(url: url) } } label: { Image(systemName: "globe") }.buttonStyle(.borderless).help("Metrics")
+                        if let pid = svc.pid { Button(role: .destructive) { viewModel.forceKill(pid: pid) } label: { Image(systemName: "xmark.circle") }.buttonStyle(.borderless).help("Kill") }
+                        Button { viewModel.restart(service: svc) } label: { Image(systemName: "arrow.triangle.2.circlepath") }.buttonStyle(.borderless).help("Restart")
+                    }
+                }
+            }
+        }
+    }
+
+    private func stateDot(_ s: EnvironmentServiceState) -> some View {
+        let color: Color = (s == .up) ? .green : (s == .down ? .red : .gray)
+        return Circle().fill(color).frame(width: 8, height: 8)
+    }
+}
+
+@available(macOS 13.0, *)
+private struct RightPane: View {
+    @ObservedObject var viewModel: EngraverChatViewModel
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            GroupBox(label: Text("Boot Trail")) {
+                if viewModel.environmentLogs.isEmpty {
+                    Text("Waiting for logs…").foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    ScrollView { LazyVStack(alignment: .leading, spacing: 6) { ForEach(viewModel.environmentLogs) { entry in Text("[\(entry.timestamp.ISO8601Format())] \(entry.line)").font(.system(size: 11, design: .monospaced)).frame(maxWidth: .infinity, alignment: .leading) } } }
+                        .textSelection(.enabled)
+                        .frame(minHeight: 260)
+                }
+            }
+            DiagnosticsPanel(messages: viewModel.diagnostics)
+            Spacer()
+        }
+        .padding(12)
     }
 }
 

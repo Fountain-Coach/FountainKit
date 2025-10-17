@@ -317,13 +317,38 @@ public final class EngraverChatViewModel: ObservableObject {
 
     // MARK: - Gateway traffic control pane
     public struct GatewayRequestEvent: Identifiable, Codable, Sendable {
-        public let id = UUID()
+        public let id: UUID
         public let method: String
         public let path: String
         public let status: Int
         public let durationMs: Int
         public let timestamp: String
         public let client: String?
+
+        enum CodingKeys: String, CodingKey {
+            case method, path, status, durationMs, timestamp, client
+        }
+
+        public init(id: UUID = UUID(), method: String, path: String, status: Int, durationMs: Int, timestamp: String, client: String?) {
+            self.id = id
+            self.method = method
+            self.path = path
+            self.status = status
+            self.durationMs = durationMs
+            self.timestamp = timestamp
+            self.client = client
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            self.method = try c.decode(String.self, forKey: .method)
+            self.path = try c.decode(String.self, forKey: .path)
+            self.status = try c.decode(Int.self, forKey: .status)
+            self.durationMs = try c.decode(Int.self, forKey: .durationMs)
+            self.timestamp = try c.decode(String.self, forKey: .timestamp)
+            self.client = try c.decodeIfPresent(String.self, forKey: .client)
+            self.id = UUID()
+        }
     }
     @Published public private(set) var trafficEvents: [GatewayRequestEvent] = []
     @Published public var trafficAutoRefresh: Bool = false

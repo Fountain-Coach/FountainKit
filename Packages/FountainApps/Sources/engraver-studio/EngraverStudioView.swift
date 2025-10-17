@@ -991,6 +991,7 @@ private struct DividerHandle: View {
 }
 
 @available(macOS 13.0, *)
+@MainActor
 private func draggableDivider(onDrag: @escaping (CGFloat) -> Void) -> some View {
     DividerHandle(onDrag: onDrag)
 }

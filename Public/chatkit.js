@@ -74,7 +74,18 @@ async function ensureChatKitLoaded(config) {
     document.head.appendChild(script);
   }
 
-  await waitForLoad(script);
+  try {
+    await waitForLoad(script);
+  } catch (e) {
+    // Try local dev stub as a fallback
+    window.dispatchEvent(new CustomEvent('chatkit:loader:fallback', { detail: { reason: (e && e.message) || 'cdn_error' } }));
+    script = document.createElement('script');
+    script.src = (config && config.localUrl) || '/Public/vendor/chatkit/chatkit.dev.js';
+    script.defer = true;
+    script.setAttribute('data-chatkit-cdn', 'dev-stub');
+    document.head.appendChild(script);
+    await waitForLoad(script);
+  }
 
   // After the script tag has loaded, poll briefly for the global to attach
   const started = Date.now();
@@ -82,7 +93,7 @@ async function ensureChatKitLoaded(config) {
     await new Promise(r => setTimeout(r, 50));
   }
   if (typeof window.ChatKit?.mount !== 'function') {
-    throw new Error('ChatKit-JS not available after CDN load');
+    throw new Error('ChatKit-JS not available after load');
   }
 }
 

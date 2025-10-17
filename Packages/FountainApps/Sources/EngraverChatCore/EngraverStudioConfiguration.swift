@@ -14,8 +14,11 @@ public struct EngraverStudioConfiguration: Sendable {
     public let debugEnabled: Bool
     public let awarenessBaseURL: URL?
     public let bootstrapBaseURL: URL?
+    public var gatewayBaseURL: URL { gatewayURL }
     public let seedingConfiguration: SeedingConfiguration?
     public let fountainRepoRoot: URL?
+    public let bypassGateway: Bool
+    public let openAIAPIKey: String?
 
     public struct SeedingConfiguration: Sendable {
         public struct Source: Sendable {
@@ -168,6 +171,10 @@ public struct EngraverStudioConfiguration: Sendable {
         } else {
             self.fountainRepoRoot = nil
         }
+
+        let bypass = (env["ENGRAVER_BYPASS_GATEWAY"] ?? env["ENGRAVER_DIRECT_ONLY"] ?? env["ENGRAVER_DIRECT_LLM"])?.lowercased()
+        self.bypassGateway = (bypass == "1" || bypass == "true" || bypass == "yes")
+        self.openAIAPIKey = env["OPENAI_API_KEY"]
     }
 
     public func tokenProvider() -> GatewayChatClient.TokenProvider {

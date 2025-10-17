@@ -9,6 +9,7 @@ import EngraverChatCore
 struct EngraverStudioView: View {
     @ObservedObject var viewModel: EngraverChatViewModel
     let systemPrompts: [String]
+    var directMode: Bool = false
 
     @Environment(\.openURL) private var openURL
     @State private var draftPrompt: String = ""
@@ -32,7 +33,7 @@ struct EngraverStudioView: View {
             let maxLeft = max(minSidebar, min(total * 0.45, leftWidth))
             let maxRight = max(minRight, min(total * 0.45, rightWidth))
             HStack(spacing: 0) {
-                if showLeftPane {
+                if showLeftPane && !directMode {
                     BootSidePane(viewModel: viewModel)
                         .frame(width: maxLeft)
                     draggableDivider(onDrag: { delta in
@@ -43,13 +44,13 @@ struct EngraverStudioView: View {
 
                 VStack(spacing: 0) {
                     TopBar(viewModel: viewModel,
-                           showLeft: $showLeftPane,
-                           showRight: $showRightPane)
+                           showLeft: Binding(get: { !directMode && showLeftPane }, set: { showLeftPane = $0 }),
+                           showRight: Binding(get: { !directMode && showRightPane }, set: { showRightPane = $0 }))
                     Divider()
                     mainPane
                 }
 
-                if showRightPane {
+                if showRightPane && !directMode {
                     draggableDivider(onDrag: { delta in
                         let newWidth = rightWidth - Double(delta)
                         rightWidth = max(minRight, min(newWidth, total - (showLeftPane ? leftWidth + 400 : 400)))

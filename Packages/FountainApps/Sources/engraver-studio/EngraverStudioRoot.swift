@@ -12,10 +12,15 @@ public struct EngraverStudioRoot: View {
 
     public init(configuration: EngraverStudioConfiguration = EngraverStudioConfiguration()) {
         self.configuration = configuration
-        let client = GatewayChatClient(
-            baseURL: configuration.gatewayURL,
-            tokenProvider: configuration.tokenProvider()
-        )
+        let client: GatewayChatStreaming = {
+            if configuration.bypassGateway, let key = configuration.openAIAPIKey, !key.isEmpty {
+                return DirectOpenAIChatClient(apiKey: key)
+            }
+            return GatewayChatClient(
+                baseURL: configuration.gatewayURL,
+                tokenProvider: configuration.tokenProvider()
+            )
+        }()
         _viewModel = StateObject(
             wrappedValue: EngraverChatViewModel(
                 chatClient: client,
@@ -38,7 +43,8 @@ public struct EngraverStudioRoot: View {
     public var body: some View {
         EngraverStudioView(
             viewModel: viewModel,
-            systemPrompts: configuration.systemPrompts
+            systemPrompts: configuration.systemPrompts,
+            directMode: configuration.bypassGateway
         )
     }
 }

@@ -413,11 +413,22 @@ private struct DiagnosticsPanel: View {
     let messages: [String]
 
     var body: some View {
-        GroupBox(label: Text("Diagnostics")) {
+        GroupBox(label: HStack {
+            Text("Diagnostics")
+            Spacer()
+            Button {
+                copyAll()
+            } label: {
+                Label("Copy", systemImage: "doc.on.doc")
+            }
+            .buttonStyle(.borderless)
+            .help("Copy all diagnostics to clipboard")
+        }) {
             if messages.isEmpty {
                 Text("Enable ENGRAVER_DEBUG=1 to capture verbose logs.")
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 6) {
@@ -429,10 +440,21 @@ private struct DiagnosticsPanel: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .textSelection(.enabled)
                 .frame(minHeight: 140, maxHeight: 220)
             }
         }
         .frame(maxWidth: .infinity)
+        .contextMenu {
+            Button("Copy All") { copyAll() }
+        }
+    }
+
+    private func copyAll() {
+        let text = messages.joined(separator: "\n")
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(text, forType: .string)
     }
 }
 

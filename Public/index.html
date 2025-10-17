@@ -2,13 +2,29 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>FountainKit Publishing Frontend</title>
+    <title>FountainKit ChatKit Gateway</title>
     <link rel="stylesheet" href="/styles.css" />
+    <script src="https://cdn.openai.com/chatkit/v1/chatkit.umd.js" defer></script>
   </head>
   <body>
-    <main>
-      <h1>FountainKit</h1>
-      <p>The modular publishing frontend is now served from the shared <code>Public/</code> directory.</p>
+    <main class="chatkit-shell">
+      <header>
+        <h1>FountainKit Chat</h1>
+        <p class="subtitle">
+          This frontend boots ChatKit-JS against the FountainKit gateway. Logs stream to the browser console.
+        </p>
+      </header>
+      <section class="chatkit-container">
+        <div id="chatkit-root" aria-live="polite">
+          <noscript>You need to enable JavaScript to run the ChatKit client.</noscript>
+        </div>
+      </section>
+      <footer>
+        <p>
+          Having trouble? Check <code>CHATKIT_*</code> environment variables and confirm the gateway session endpoint is reachable.
+        </p>
+      </footer>
     </main>
+    <script src="/chatkit.js" type="module"></script>
   </body>
 </html>

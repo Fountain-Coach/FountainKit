@@ -1,12 +1,16 @@
+# Node / Vite
+Workspace/chatkit-dev/node_modules/
+Workspace/chatkit-dev/dist/
+Workspace/chatkit-dev/.vite/
+
+# Demo logs
+Workspace/demos/chatkit-web/.demo-logs/
+Workspace/chatkit-dev/.dev-logs/
+
+# Swift build artifacts
 .build/
-.swiftpm/
+Packages/**/.build/
+
+# macOS
 .DS_Store
-.fountain/
-External/*
-External/LocalAgent/
-External/swiftcurseskit/
-External/.DS_Store
-!External/Teatro/
-!External/Teatro/**
-logs/guardian.log
-*.log
+

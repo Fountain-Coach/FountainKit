@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>ChatKit Web Demo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="demo-shell">
+      <header>
+        <h1>ChatKit Web Demo</h1>
+        <p class="subtitle">
+          Connect to a FountainKit gateway and interact with the ChatKit widget.
+        </p>
+      </header>
+
+      <section class="config">
+        <form id="config-form">
+          <div class="field">
+            <label for="gateway">Gateway URL</label>
+            <input id="gateway" type="url" required />
+          </div>
+          <div class="field">
+            <label for="persona">Persona</label>
+            <input id="persona" type="text" />
+          </div>
+          <div class="actions">
+            <button type="submit">Connect</button>
+            <button type="button" id="reset-config">Reset</button>
+          </div>
+        </form>
+        <p id="status" class="status" role="status"></p>
+      </section>
+
+      <section class="chatkit">
+        <div id="chatkit-root" aria-live="polite">
+          <p class="placeholder">
+            Submit the form above to start a ChatKit session.
+          </p>
+        </div>
+      </section>
+
+      <section class="debug">
+        <div class="debug-header">
+          <h2>Debug</h2>
+          <div class="debug-actions">
+            <button type="button" id="copy-logs">Copy Logs</button>
+            <button type="button" id="clear-logs">Clear</button>
+          </div>
+        </div>
+        <pre id="debug-log" class="debug-log" aria-live="polite"></pre>
+      </section>
+    </main>
+
+    <script type="module" src="./demo.js"></script>
+  </body>
+</html>

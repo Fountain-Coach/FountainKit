@@ -1,0 +1,29 @@
+{
+  "annotations" : [
+
+  ],
+  "audio" : [
+
+  ],
+  "corpusId" : "the-four-stars-romeo-and-juliet",
+  "documents" : [
+    {
+      "metadata" : {
+        "act" : "I",
+        "index" : "1",
+        "play" : "romeo-and-juliet",
+        "playTitle" : "Romeo and Juliet",
+        "speaker" : "**** PROLOGUE ****",
+        "type" : "speech"
+      },
+      "path" : "derived\/romeo-and-juliet\/act-i\/scene-unknown\/prologue-1",
+      "sha256" : "1278930b43a881bbb9965f0bdac472f4cadbece48677efa0ed266b7c10ecd4a0",
+      "size" : 629
+    }
+  ],
+  "generatedAt" : "2025-10-15T15:55:03Z",
+  "sourceRepo" : "https:\/\/github.com\/Fountain-Coach\/the-four-stars",
+  "translations" : [
+
+  ]
+}

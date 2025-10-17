@@ -1,0 +1,276 @@
+Building for debugging...
+[0/3] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'AgentService' complete! (0.22s)
+e' complete! (0.42s)
+e
+[4/6] Compiling AgentCore NIOHTTPServer.swift
+[4/8] Write sources
+[6/10] Compiling AgentService main.swift
+[7/10] Emitting module AgentService
+[7/10] Write Objects.LinkFileList
+[8/10] Linking AgentService
+[9/10] Applying AgentService
+Build of product 'AgentService' complete! (2.86s)
+ft-system.git from cache (0.97s)
+Fetched https://github.com/apple/swift-nio.git from cache (1.24s)
+Computing version for https://github.com/apple/swift-nio.git
+Computed https://github.com/apple/swift-nio.git at 2.86.2 (1.78s)
+Computed https://github.com/apple/swift-nio.git at 2.86.2 (0.00s)
+Computing version for https://github.com/apple/swift-system.git
+Computed https://github.com/apple/swift-system.git at 1.6.3 (0.44s)
+Computing version for https://github.com/apple/swift-collections.git
+Computed https://github.com/apple/swift-collections.git at 1.2.1 (0.45s)
+Computing version for https://github.com/apple/swift-atomics.git
+Computed https://github.com/apple/swift-atomics.git at 1.3.0 (0.37s)
+Creating working copy for https://github.com/apple/swift-nio.git
+Working copy of https://github.com/apple/swift-nio.git resolved at 2.86.2
+Creating working copy for https://github.com/apple/swift-system.git
+Working copy of https://github.com/apple/swift-system.git resolved at 1.6.3
+Creating working copy for https://github.com/apple/swift-atomics.git
+Working copy of https://github.com/apple/swift-atomics.git resolved at 1.3.0
+Creating working copy for https://github.com/apple/swift-collections.git
+Working copy of https://github.com/apple/swift-collections.git resolved at 1.2.1
+Building for debugging...
+[0/32] Compiling CNIOWindows WSAStartup.c
+[0/32] Copying PrivacyInfo.xcprivacy
+[0/32] Write sources
+[4/32] Write swift-version--58304C5D6DBC2206.txt
+[5/32] Write sources
+[6/32] Compiling _AtomicsShims.c
+[7/32] Compiling CNIOLLHTTP c_nio_http.c
+[7/32] Write sources
+[15/49] Compiling CNIOLLHTTP c_nio_api.c
+[16/52] Compiling CNIOWindows shim.c
+[17/52] Compiling CNIOWASI CNIOWASI.c
+[18/52] Compiling CNIOPosix event_loop_id.c
+[19/52] Compiling CNIOLinux shim.c
+[20/52] Compiling CNIOLinux liburing_shims.c
+[21/52] Write sources
+[23/70] Compiling CNIOLLHTTP c_nio_llhttp.c
+[24/70] Write AgentService-entitlement.plist
+[25/70] Write sources
+[26/70] Compiling CNIODarwin shim.c
+[28/70] Compiling Atomics ManagedAtomicLazyReference.swift
+[29/70] Compiling Atomics IntegerConformances.swift
+[30/70] Compiling Atomics UnsafeAtomicLazyReference.swift
+[31/70] Compiling Atomics ManagedAtomic.swift
+[32/70] Compiling InternalCollectionsUtilities UnsafeBufferPointer+Extras.swift
+[33/71] Compiling _NIOBase64 Base64.swift
+[34/71] Emitting module _NIOBase64
+[35/71] Compiling InternalCollectionsUtilities UnsafeMutableBufferPointer+Extras.swift
+[36/71] Compiling Atomics AtomicStorage.swift
+[37/71] Compiling Atomics AtomicValue.swift
+[38/73] Compiling _NIODataStructures _TinyArray.swift
+[39/73] Emitting module InternalCollectionsUtilities
+[40/73] Compiling Atomics OptionalRawRepresentable.swift
+[41/73] Compiling Atomics RawRepresentable.swift
+[42/73] Compiling Atomics IntegerOperations.swift
+[43/73] Compiling Atomics Unmanaged extensions.swift
+[44/73] Compiling Atomics PointerConformances.swift
+[45/73] Compiling Atomics Primitives.native.swift
+[46/73] Compiling Atomics AtomicBool.swift
+[47/73] Compiling Atomics AtomicMemoryOrderings.swift
+[48/73] Compiling Atomics DoubleWord.swift
+[49/73] Compiling Atomics UnsafeAtomic.swift
+[54/73] Compiling Atomics AtomicInteger.swift
+[55/73] Compiling Atomics AtomicOptionalWrappable.swift
+[56/73] Compiling Atomics AtomicReference.swift
+[57/88] Compiling _NIODataStructures PriorityQueue.swift
+[58/88] Compiling _NIODataStructures Heap.swift
+[59/88] Emitting module _NIODataStructures
+[60/88] Compiling DequeModule Deque+Collection.swift
+[61/88] Compiling DequeModule Deque+CustomReflectable.swift
+[62/88] Emitting module Atomics
+[63/88] Compiling DequeModule Deque+Extras.swift
+[64/88] Compiling DequeModule Deque+Hashable.swift
+[65/88] Compiling DequeModule _DequeBuffer.swift
+[66/88] Compiling DequeModule Deque+Descriptions.swift
+[67/88] Compiling DequeModule Deque._UnsafeHandle.swift
+[68/88] Compiling DequeModule Deque.swift
+[69/88] Compiling DequeModule Deque+Testing.swift
+[70/88] Compiling DequeModule Deque._Storage.swift
+[74/88] Compiling DequeModule _DequeBufferHeader.swift
+[77/88] Compiling DequeModule Deque+Codable.swift
+[81/88] Compiling DequeModule Deque+Equatable.swift
+[82/88] Compiling DequeModule Deque+ExpressibleByArrayLiteral.swift
+[83/88] Emitting module DequeModule
+[83/90] Compiling c-nioatomics.c
+[85/90] Compiling DequeModule _DequeSlot.swift
+[86/90] Compiling DequeModule _UnsafeWrappedBuffer.swift
+[86/90] Compiling c-atomics.c
+[88/96] Compiling NIOConcurrencyHelpers lock.swift
+[89/96] Compiling NIOConcurrencyHelpers NIOLockedValueBox.swift
+[90/96] Compiling NIOConcurrencyHelpers NIOLock.swift
+[91/96] Emitting module NIOConcurrencyHelpers
+[92/96] Compiling NIOConcurrencyHelpers NIOAtomic.swift
+[93/96] Compiling NIOConcurrencyHelpers atomics.swift
+[94/157] Compiling NIOCore NIOAny.swift
+[95/157] Compiling NIOCore NIOCloseOnErrorHandler.swift
+[96/157] Compiling NIOCore NIOCoreSendableMetatype.swift
+[97/157] Compiling NIOCore NIOLoopBound.swift
+[98/157] Compiling NIOCore NIOPooledRecvBufferAllocator.swift
+[99/157] Compiling NIOCore NIOScheduledCallback.swift
+[100/157] Compiling NIOCore NIOSendable.swift
+[101/157] Compiling NIOCore RecvByteBufferAllocator.swift
+[102/165] Compiling NIOCore IOData.swift
+[103/165] Compiling NIOCore IPProtocol.swift
+[104/165] Compiling NIOCore IntegerBitPacking.swift
+[105/165] Compiling NIOCore IntegerTypes.swift
+[106/165] Compiling NIOCore Interfaces.swift
+[107/165] Compiling NIOCore Linux.swift
+[108/165] Compiling NIOCore MarkedCircularBuffer.swift
+[109/165] Compiling NIOCore MulticastChannel.swift
+[110/165] Compiling NIOCore EventLoopFuture+Deprecated.swift
+[111/165] Compiling NIOCore EventLoopFuture+WithEventLoop.swift
+[112/165] Compiling NIOCore EventLoopFuture.swift
+[113/165] Compiling NIOCore FileDescriptor.swift
+[114/165] Compiling NIOCore FileHandle.swift
+[115/165] Compiling NIOCore FileRegion.swift
+[116/165] Compiling NIOCore GlobalSingletons.swift
+[117/165] Compiling NIOCore IO.swift
+[118/165] Compiling NIOCore SingleStepByteToMessageDecoder.swift
+[119/165] Compiling NIOCore SocketAddresses.swift
+[120/165] Compiling NIOCore SocketOptionProvider.swift
+[121/165] Compiling NIOCore SystemCallHelpers.swift
+[122/165] Compiling NIOCore TimeAmount+Duration.swift
+[123/165] Compiling NIOCore TypeAssistedChannelHandler.swift
+[124/165] Compiling NIOCore UniversalBootstrapSupport.swift
+[125/165] Compiling NIOCore Utilities.swift
+[126/165] Compiling NIOCore AddressedEnvelope.swift
+[127/165] Compiling NIOCore AsyncAwaitSupport.swift
+[128/165] Compiling NIOCore AsyncChannel.swift
+[129/165] Compiling NIOCore AsyncChannelHandler.swift
+[130/165] Compiling NIOCore AsyncChannelInboundStream.swift
+[131/165] Compiling NIOCore AsyncChannelOutboundWriter.swift
+[132/165] Compiling NIOCore NIOAsyncSequenceProducer.swift
+[133/165] Compiling NIOCore NIOAsyncSequenceProducerStrategies.swift
+[134/165] Compiling NIOCore NIOAsyncWriter.swift
+[135/165] Compiling NIOCore CircularBuffer.swift
+[136/165] Compiling NIOCore Codec.swift
+[137/165] Compiling NIOCore ConvenienceOptionSupport.swift
+[138/165] Compiling NIOCore DeadChannel.swift
+[139/165] Compiling NIOCore DispatchQueue+WithFuture.swift
+[140/165] Compiling NIOCore EventLoop+Deprecated.swift
+[141/165] Compiling NIOCore EventLoop+SerialExecutor.swift
+[142/165] Compiling NIOCore EventLoop.swift
+[143/165] Compiling NIOCore EventLoopFuture+AssumeIsolated.swift
+[144/165] Compiling NIOCore NIOThrowingAsyncSequenceProducer.swift
+[145/165] Compiling NIOCore BSDSocketAPI.swift
+[146/165] Compiling NIOCore ByteBuffer-aux.swift
+[147/165] Compiling NIOCore ByteBuffer-binaryEncodedLengthPrefix.swift
+[148/165] Compiling NIOCore ByteBuffer-conversions.swift
+[149/165] Compiling NIOCore ByteBuffer-core.swift
+[150/165] Compiling NIOCore ByteBuffer-hex.swift
+[151/165] Compiling NIOCore ByteBuffer-int.swift
+[152/165] Compiling NIOCore ByteBuffer-lengthPrefix.swift
+[153/165] Emitting module NIOCore
+[154/165] Compiling NIOCore ByteBuffer-multi-int.swift
+[155/165] Compiling NIOCore ByteBuffer-quicBinaryEncodingStrategy.swift
+[156/165] Compiling NIOCore ByteBuffer-views.swift
+[157/165] Compiling NIOCore Channel.swift
+[158/165] Compiling NIOCore ChannelHandler.swift
+[159/165] Compiling NIOCore ChannelHandlers.swift
+[160/165] Compiling NIOCore ChannelInvoker.swift
+[161/165] Compiling NIOCore ChannelOption.swift
+[162/165] Compiling NIOCore ChannelPipeline.swift
+[163/219] Compiling NIOEmbedded AsyncTestingEventLoop.swift
+[164/219] Compiling NIOEmbedded AsyncTestingChannel.swift
+[165/219] Compiling NIOEmbedded Embedded.swift
+[166/219] Emitting module NIOEmbedded
+[167/219] Emitting module NIOPosix
+[168/226] Compiling NIOPosix Pool.swift
+[169/226] Compiling NIOPosix PosixSingletons+ConcurrencyTakeOver.swift
+[170/226] Compiling NIOPosix PosixSingletons.swift
+[171/226] Compiling NIOPosix RawSocketBootstrap.swift
+[172/226] Compiling NIOPosix Resolver.swift
+[173/226] Compiling NIOPosix Selectable.swift
+[174/226] Compiling NIOPosix SelectableChannel.swift
+[175/226] Compiling NIOPosix SelectableEventLoop.swift
+[176/226] Compiling NIOPosix SelectorEpoll.swift
+[177/226] Compiling NIOPosix SelectorGeneric.swift
+[178/226] Compiling NIOPosix SelectorKqueue.swift
+[179/226] Compiling NIOPosix SelectorUring.swift
+[180/226] Compiling NIOPosix SelectorWSAPoll.swift
+[181/226] Compiling NIOPosix ServerSocket.swift
+[182/226] Compiling NIOPosix IO.swift
+[183/226] Compiling NIOPosix IntegerBitPacking.swift
+[184/226] Compiling NIOPosix IntegerTypes.swift
+[185/226] Compiling NIOPosix Linux.swift
+[186/226] Compiling NIOPosix LinuxCPUSet.swift
+[187/226] Compiling NIOPosix LinuxUring.swift
+[188/226] Compiling NIOPosix MultiThreadedEventLoopGroup.swift
+[189/226] Compiling NIOPosix BSDSocketAPICommon.swift
+[190/226] Compiling NIOPosix BSDSocketAPIPosix.swift
+[191/226] Compiling NIOPosix BSDSocketAPIWindows.swift
+[192/226] Compiling NIOPosix BaseSocket.swift
+[193/226] Compiling NIOPosix BaseSocketChannel+SocketOptionProvider.swift
+[194/226] Compiling NIOPosix BaseSocketChannel.swift
+[195/226] Compiling NIOPosix BaseStreamSocketChannel.swift
+[196/226] Compiling NIOPosix NIOPosixSendableMetatype.swift
+[197/226] Compiling NIOPosix NIOThreadPool.swift
+[198/226] Compiling NIOPosix NonBlockingFileIO.swift
+[199/226] Compiling NIOPosix PendingDatagramWritesManager.swift
+[200/226] Compiling NIOPosix PendingWritesManager.swift
+[201/226] Compiling NIOPosix PipeChannel.swift
+[202/226] Compiling NIOPosix PipePair.swift
+[203/226] Compiling NIOPosix Socket.swift
+[204/226] Compiling NIOPosix SocketChannel.swift
+[205/226] Compiling NIOPosix SocketProtocols.swift
+[206/226] Compiling NIOPosix StructuredConcurrencyHelpers.swift
+[207/226] Compiling NIOPosix System.swift
+[208/226] Compiling NIOPosix Thread.swift
+[209/226] Compiling NIOPosix ThreadPosix.swift
+[210/226] Compiling NIOPosix Bootstrap.swift
+[211/226] Compiling NIOPosix ControlMessage.swift
+[212/226] Compiling NIOPosix DatagramVectorReadManager.swift
+[213/226] Compiling NIOPosix Errors+Any.swift
+[214/226] Compiling NIOPosix FileDescriptor.swift
+[215/226] Compiling NIOPosix GetaddrinfoResolver.swift
+[216/226] Compiling NIOPosix HappyEyeballs.swift
+[217/226] Compiling NIOPosix ThreadWindows.swift
+[218/226] Compiling NIOPosix UnsafeTransfer.swift
+[219/226] Compiling NIOPosix Utilities.swift
+[220/226] Compiling NIOPosix VsockAddress.swift
+[221/226] Compiling NIOPosix VsockChannelEvents.swift
+[222/226] Compiling NIOPosix Windows.swift
+[223/226] Compiling NIOPosix resource_bundle_accessor.swift
+[224/228] Emitting module NIO
+[225/228] Compiling NIO Exports.swift
+[226/244] Compiling NIOHTTP1 NIOTypedHTTPClientUpgradeHandler.swift
+[227/244] Compiling NIOHTTP1 NIOTypedHTTPClientUpgraderStateMachine.swift
+[228/246] Compiling NIOHTTP1 NIOHTTPClientUpgradeHandler.swift
+[229/246] Compiling NIOHTTP1 NIOHTTPObjectAggregator.swift
+[230/246] Compiling NIOHTTP1 HTTPTypedPipelineSetup.swift
+[231/246] Compiling NIOHTTP1 HTTPTypes.swift
+[232/246] Compiling NIOHTTP1 HTTPPipelineSetup.swift
+[233/246] Compiling NIOHTTP1 HTTPServerPipelineHandler.swift
+[234/246] Compiling NIOHTTP1 NIOTypedHTTPServerUpgradeHandler.swift
+[235/246] Compiling NIOHTTP1 NIOTypedHTTPServerUpgraderStateMachine.swift
+[236/246] Compiling NIOHTTP1 HTTPServerProtocolErrorHandler.swift
+[237/246] Compiling NIOHTTP1 HTTPServerUpgradeHandler.swift
+[238/246] Compiling NIOHTTP1 HTTPHeaderValidator.swift
+[239/246] Compiling NIOHTTP1 HTTPHeaders+Validation.swift
+[240/246] Emitting module NIOHTTP1
+[241/246] Compiling NIOHTTP1 ByteCollectionUtils.swift
+[242/246] Compiling NIOHTTP1 HTTPDecoder.swift
+[243/246] Compiling NIOHTTP1 HTTPEncoder.swift
+[244/258] Compiling AgentCore Router.swift
+[245/258] Compiling AgentCore AgentConfig.swift
+[246/258] Compiling AgentCore HTTPModels.swift
+[247/258] Compiling AgentCore Sampling.swift
+[248/259] Compiling AgentCore ModelBackend.swift
+[249/259] Compiling AgentCore HTTPKernel.swift
+[250/259] Compiling AgentCore NIOHTTPServer.swift
+[251/259] Compiling AgentCore Tokenization.swift
+[252/259] Compiling AgentCore HTTPRequest.swift
+[253/259] Compiling AgentCore HTTPResponse.swift
+[254/259] Emitting module AgentCore
+[255/259] Compiling AgentCore CoreMLBackend.swift
+[256/259] Compiling AgentCore LlamaCppBackend.swift
+[257/261] Compiling AgentService main.swift
+[258/261] Emitting module AgentService
+[258/261] Write Objects.LinkFileList
+[259/261] Linking AgentService
+[260/261] Applying AgentService
+Build of product 'AgentService' complete! (13.90s)
+[AgentService] listening on 127.0.0.1:8080 using backend=mock

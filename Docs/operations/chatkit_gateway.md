@@ -24,3 +24,12 @@ The gateway reads attachment controls from process environment variables when bo
 - Ensure `AttachmentCleanupJob` is running by confirming logs emit `attachmentCleanup` events at the expected cadence.
 - Track upload rejections by monitoring `attachmentUploadFailed` events; repeated `413`/`payload_too_large` statuses usually indicate the maximum size is misconfigured between clients and the gateway.
 - When enabling streaming, validate that downstream SSE consumers observe `delta` events and final `done` markers—mismatched proxy buffers can strip the `text/event-stream` content type.
+
+## Publishing frontend
+
+- The bundled frontend lives in `Public/` and consists of `index.html`, `styles.css`, and `chatkit.js`. The HTML document loads the official ChatKit-JS bundle from the CDN (`https://cdn.openai.com/chatkit/v1/chatkit.umd.js`) and delegates session bootstrap to the local `/chatkit/session` endpoint.
+- Override `PUBLISHING_STATIC_ROOT` when deploying the gateway from a different working directory, ensuring the publishing plugin resolves to the directory containing the ChatKit assets.
+- Open the browser console to inspect bootstrap logs; the `chatkit.js` helper prints success and failure messages as it negotiates sessions with the gateway.
+- The upstream widget sources are mirrored as a git submodule in `Workspace/deps/chatkit-js`. Pull the latest changes with `git submodule update --remote Workspace/deps/chatkit-js` before rebuilding or linting the local bundle.
+- For manual QA, use the plain web demo under `Workspace/demos/chatkit-web` (`./Workspace/demos/chatkit-web/run-demo.sh` starts both the gateway and static server; `Ctrl+C` stops them).
+- To disable automatic bootstrap when embedding the helper into your own pages, set `window.chatkitConfig = { auto: false, … }` before importing `Public/chatkit.js` and call `bootstrapChatKit` manually.

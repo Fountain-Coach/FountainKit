@@ -72,10 +72,10 @@ This document describes the automated test suite we will build while wiring the 
    - DELETE thread -> future events using same secret fail.
 
 ### Publishing Frontend
-11. **`testPublishingFrontendServesChatKitIndex`**  
-   - Drop mock `Public/index.html` into temp dir, boot plugin pointing there, GET `/` -> 200 with HTML snippet.  
-12. **`testChatKitScriptServedWithCorrectMime`**  
-   - Place `chatkit.js`; assert `application/javascript`.
+11. **`testPublishingFrontendServesChatKitIndex`** ✅  
+   - Boot `PublishingFrontendPlugin` against real `Public/` assets; assert `/` returns HTML pointing at `chatkit.js`.  
+12. **`testChatKitScriptServedWithCorrectMime`** ✅  
+   - Request `/chatkit.js`; assert `application/javascript` and bootstrap guard present.
 
 ### Security & Observability
 13. **`testCorsPreflightHandled`**  

@@ -1,0 +1,3 @@
+[submodule "Workspace/deps/chatkit-js"]
+	path = Workspace/deps/chatkit-js
+	url = https://github.com/openai/chatkit-js

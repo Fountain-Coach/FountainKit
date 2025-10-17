@@ -1,0 +1,29 @@
+{
+  "annotations" : [
+
+  ],
+  "audio" : [
+
+  ],
+  "corpusId" : "the-four-stars-the-life-of-king-henry-the-fifth",
+  "documents" : [
+    {
+      "metadata" : {
+        "act" : "I",
+        "index" : "1",
+        "play" : "the-life-of-king-henry-the-fifth",
+        "playTitle" : "The Life of King Henry the Fifth",
+        "speaker" : "**** PROLOGUE ****",
+        "type" : "speech"
+      },
+      "path" : "derived\/the-life-of-king-henry-the-fifth\/act-i\/scene-unknown\/prologue-1",
+      "sha256" : "3dd3e3819bde155c5367b0053b3c10947ac5f62f6f1a64593c3f7366f2bf2799",
+      "size" : 1446
+    }
+  ],
+  "generatedAt" : "2025-10-16T04:55:45Z",
+  "sourceRepo" : "https:\/\/github.com\/Fountain-Coach\/the-four-stars",
+  "translations" : [
+
+  ]
+}

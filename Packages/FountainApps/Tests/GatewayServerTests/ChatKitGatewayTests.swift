@@ -5,8 +5,10 @@ import FoundationNetworking
 import XCTest
 import FountainStoreClient
 import GatewayAPI
+import FountainRuntime
 @testable import ChatKitGatewayPlugin
 @testable import gateway_server
+@testable import PublishingFrontend
 
 private struct StubResponder: ChatResponder {
     func respond(session: ChatKitSessionStore.StoredSession,
@@ -74,6 +76,7 @@ final class ChatKitGatewayTests: XCTestCase {
     private var metadataStore: GatewayAttachmentStore?
     private var attachmentClient: FountainStoreClient?
     private var uploadStore: (any ChatKitUploadStoring)?
+    private var cachedRepoRoot: URL?
 
     private struct Session: Decodable, Sendable {
         let client_secret: String
@@ -416,6 +419,31 @@ final class ChatKitGatewayTests: XCTestCase {
         XCTAssertFalse(decoded.attachment_id.isEmpty)
         XCTAssertTrue(decoded.upload_url.starts(with: "fountain://chatkit/attachments/"))
         XCTAssertEqual(decoded.mime_type, "application/octet-stream")
+    }
+
+    func testPublishingFrontendServesChatKitIndex() async throws {
+        let plugin = PublishingFrontendPlugin(rootPath: publicRootPath())
+        let request = HTTPRequest(method: "GET", path: "/", headers: [:], body: Data())
+        let upstream = HTTPResponse(status: 404, headers: [:], body: Data())
+        let response = try await plugin.respond(upstream, for: request)
+        XCTAssertEqual(response.status, 200)
+        XCTAssertEqual(response.headers["Content-Type"], "text/html")
+        let html = String(data: response.body, encoding: .utf8)
+        XCTAssertNotNil(html)
+        XCTAssertTrue(html?.contains("ChatKit") ?? false)
+        XCTAssertTrue(html?.contains("chatkit.js") ?? false)
+    }
+
+    func testChatKitScriptServedWithCorrectMime() async throws {
+        let plugin = PublishingFrontendPlugin(rootPath: publicRootPath())
+        let request = HTTPRequest(method: "GET", path: "/chatkit.js", headers: [:], body: Data())
+        let upstream = HTTPResponse(status: 404, headers: [:], body: Data())
+        let response = try await plugin.respond(upstream, for: request)
+        XCTAssertEqual(response.status, 200)
+        XCTAssertEqual(response.headers["Content-Type"], "application/javascript")
+        let script = String(data: response.body, encoding: .utf8)
+        XCTAssertNotNil(script)
+        XCTAssertTrue(script?.contains("bootstrapChatKit") ?? false)
     }
 
     func testChatKitUploadRejectsInvalidSecret() async throws {
@@ -916,5 +944,22 @@ final class ChatKitGatewayTests: XCTestCase {
         XCTAssertTrue(contents.contains("/chatkit/upload"))
         XCTAssertTrue(contents.contains("/chatkit/attachments/{attachmentId}"))
         XCTAssertTrue(contents.contains("/chatkit/threads"))
+    }
+}
+
+private extension ChatKitGatewayTests {
+    func publicRootPath() -> String {
+        if let cached = cachedRepoRoot {
+            return cached.appendingPathComponent("Public").path
+        }
+        let testFile = URL(fileURLWithPath: #filePath)
+        let repoRoot = testFile
+            .deletingLastPathComponent() // ChatKitGatewayTests.swift
+            .deletingLastPathComponent() // GatewayServerTests
+            .deletingLastPathComponent() // Tests
+            .deletingLastPathComponent() // FountainApps
+            .deletingLastPathComponent() // Packages
+        cachedRepoRoot = repoRoot
+        return repoRoot.appendingPathComponent("Public").path
     }
 }

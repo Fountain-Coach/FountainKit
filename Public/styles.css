@@ -9,13 +9,42 @@ body {
   min-height: 100vh;
   color: #101828;
 }
-main {
+.chatkit-shell {
   background: rgba(255, 255, 255, 0.85);
   border-radius: 16px;
   padding: 2rem;
-  max-width: 640px;
+  max-width: 680px;
   box-shadow: 0 12px 48px rgba(16, 24, 40, 0.18);
+  margin: 0 auto;
 }
-h1 {
+.chatkit-shell h1 {
   margin-top: 0;
+}
+.chatkit-shell header {
+  margin-bottom: 1.5rem;
+}
+.chatkit-shell .subtitle {
+  margin: 0.25rem 0 0;
+  color: #475467;
+}
+.chatkit-container {
+  min-height: 420px;
+  border: 1px solid rgba(16, 24, 40, 0.12);
+  border-radius: 12px;
+  background: rgba(249, 250, 251, 0.85);
+  padding: 1rem;
+  overflow: hidden;
+}
+.chatkit-shell footer {
+  margin-top: 1.5rem;
+  font-size: 0.85rem;
+  color: #667085;
+}
+
+.chatkit-error {
+  padding: 1rem;
+  border-radius: 12px;
+  background: rgba(255, 240, 240, 0.9);
+  color: #b42318;
+  border: 1px solid rgba(244, 63, 94, 0.35);
 }

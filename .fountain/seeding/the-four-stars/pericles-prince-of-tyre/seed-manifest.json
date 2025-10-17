@@ -1,0 +1,29 @@
+{
+  "annotations" : [
+
+  ],
+  "audio" : [
+
+  ],
+  "corpusId" : "the-four-stars-pericles-prince-of-tyre",
+  "documents" : [
+    {
+      "metadata" : {
+        "act" : "I",
+        "index" : "1",
+        "play" : "pericles-prince-of-tyre",
+        "playTitle" : "Pericles, Prince of Tyre",
+        "speaker" : "**** PROLOGUE ****",
+        "type" : "speech"
+      },
+      "path" : "derived\/pericles-prince-of-tyre\/act-i\/scene-unknown\/prologue-1",
+      "sha256" : "68386523163d5a5f5842dc4eccf4cddb62020ca1ee6aa81756bb413e0e2c38ae",
+      "size" : 1498
+    }
+  ],
+  "generatedAt" : "2025-10-15T15:55:03Z",
+  "sourceRepo" : "https:\/\/github.com\/Fountain-Coach\/the-four-stars",
+  "translations" : [
+
+  ]
+}

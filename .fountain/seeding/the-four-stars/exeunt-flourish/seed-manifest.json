@@ -1,0 +1,29 @@
+{
+  "annotations" : [
+
+  ],
+  "audio" : [
+
+  ],
+  "corpusId" : "the-four-stars-exeunt-flourish",
+  "documents" : [
+    {
+      "metadata" : {
+        "act" : "II",
+        "index" : "1",
+        "play" : "exeunt-flourish",
+        "playTitle" : "Exeunt. Flourish",
+        "speaker" : "**** PROLOGUE ****",
+        "type" : "speech"
+      },
+      "path" : "derived\/exeunt-flourish\/act-ii\/scene-unknown\/prologue-1",
+      "sha256" : "9d866e563ff747179766efa1aebd03fda112857d841cb67d8c17b94c32c8c652",
+      "size" : 1839
+    }
+  ],
+  "generatedAt" : "2025-10-15T15:55:03Z",
+  "sourceRepo" : "https:\/\/github.com\/Fountain-Coach\/the-four-stars",
+  "translations" : [
+
+  ]
+}

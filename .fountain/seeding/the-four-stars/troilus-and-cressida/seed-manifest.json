@@ -1,0 +1,29 @@
+{
+  "annotations" : [
+
+  ],
+  "audio" : [
+
+  ],
+  "corpusId" : "the-four-stars-troilus-and-cressida",
+  "documents" : [
+    {
+      "metadata" : {
+        "act" : "I",
+        "index" : "1",
+        "play" : "troilus-and-cressida",
+        "playTitle" : "Troilus and Cressida",
+        "speaker" : "**** PROLOGUE ****",
+        "type" : "speech"
+      },
+      "path" : "derived\/troilus-and-cressida\/act-i\/scene-unknown\/prologue-1",
+      "sha256" : "a5db6c09c2c70fc2f17467b256ff6c21cfa7860a2bbe65a299bfa7d9cfd4b264",
+      "size" : 1318
+    }
+  ],
+  "generatedAt" : "2025-10-15T15:55:03Z",
+  "sourceRepo" : "https:\/\/github.com\/Fountain-Coach\/the-four-stars",
+  "translations" : [
+
+  ]
+}

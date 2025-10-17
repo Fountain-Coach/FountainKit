@@ -6,6 +6,8 @@ This checklist translates the recent ChatKit commits and milestone roadmap into 
 - [x] `/chatkit/messages` streaming endpoint wired to the LLM gateway (`d34df91` → `88abf97`).
 - [x] Attachment upload endpoint implemented with persistence via FountainStore (`cdb5723` → `7378e2d`).
 - [x] Milestone roadmap documented (`6ee02a1`).
+- [x] Publishing frontend serves ChatKit-JS bundle with regression tests for index + script delivery.
+- [x] Plain web demo scaffolded in `Workspace/demos/chatkit-web` for manual ChatKit-JS exploration.
 
 ## 🚀 Next 0–2 days
 ### 1. LLM Streaming Bridge

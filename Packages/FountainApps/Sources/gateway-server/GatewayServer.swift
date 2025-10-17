@@ -219,6 +219,22 @@ public final class GatewayServer {
             try? api.registerHandlers(on: transport)
             let openapiKernel = transport.asKernel()
 
+            // Handle CORS preflight early for browser-based clients
+            if request.method == "OPTIONS" {
+                var allowHeaders = request.headers["Access-Control-Request-Headers"] ?? "Content-Type, Authorization"
+                if allowHeaders.isEmpty { allowHeaders = "Content-Type, Authorization" }
+                return HTTPResponse(
+                    status: 204,
+                    headers: [
+                        "Access-Control-Allow-Origin": request.headers["Origin"] ?? "*",
+                        "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+                        "Access-Control-Allow-Headers": allowHeaders,
+                        "Access-Control-Max-Age": "600"
+                    ],
+                    body: Data()
+                )
+            }
+
             // Enforce auth on metrics (OpenAPI routes) before dispatching
             if request.method == "GET" && request.path.split(separator: "?", maxSplits: 1).first == "/metrics" {
                 if let err = await self.requireAdminAuthorization(request) { return err }
@@ -228,6 +244,12 @@ public final class GatewayServer {
             for plugin in plugins.reversed() {
                 response = try await plugin.respond(response, for: request)
             }
+            // Add default CORS header for browser accessibility
+            var headers = response.headers
+            if headers["Access-Control-Allow-Origin"] == nil {
+                headers["Access-Control-Allow-Origin"] = request.headers["Origin"] ?? "*"
+            }
+            response.headers = headers
             // Record metrics and emit a structured log line
             await GatewayRequestMetrics.shared.record(method: request.method, status: response.status)
             let durMs = Int(Date().timeIntervalSince(start) * 1000)

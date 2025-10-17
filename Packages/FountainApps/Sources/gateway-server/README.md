@@ -39,6 +39,14 @@ These specs describe every HTTP contract the server exposes or invokes, replacin
 - The responder decodes incremental SSE frames, emitting `delta` events for partial tokens and forwarding final usage metadata and tool-call envelopes so ChatKit sessions receive the same timeline a direct LLM client would observe.
 - When a non-streaming response is returned, the responder falls back to the JSON contract, extracting the `answer`, provider/model hints, token usage, and any surfaced tool calls before replying to the ChatKit client.
 
+### Publishing frontend
+
+- Static assets under `Public/` ship a ChatKit-JS shell (`index.html`, `chatkit.js`, `styles.css`). The bootstrap file requests `/chatkit/session` and mounts the ChatKit widget once `window.ChatKit` is available from the CDN.
+- Regression tests (`ChatKitGatewayTests/testPublishingFrontendServesChatKitIndex`, `ChatKitGatewayTests/testChatKitScriptServedWithCorrectMime`) ensure the publishing plugin keeps serving the expected HTML and JavaScript MIME types.
+- Upstream sources for the widget live in the `Workspace/deps/chatkit-js` submodule; update it regularly (`git submodule update --remote Workspace/deps/chatkit-js`) before refreshing the static bundle.
+- A ready-to-run plain web demo lives in `Workspace/demos/chatkit-web`; launch it with `./Workspace/demos/chatkit-web/run-demo.sh` for a one-command gateway + static server setup (or host manually if preferred).
+- Set `window.chatkitConfig.auto = false` when importing `Public/chatkit.js` from custom pages to opt out of automatic bootstrap and drive the session flow yourself.
+
 ## Related packages
 
 - `FountainGatewayKit`: shared gateway plugins, orchestrator, and utilities referenced by this executable.

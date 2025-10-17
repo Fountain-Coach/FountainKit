@@ -1,0 +1,29 @@
+{
+  "annotations" : [
+
+  ],
+  "audio" : [
+
+  ],
+  "corpusId" : "the-four-stars-the-life-of-king-henry-the-eighth",
+  "documents" : [
+    {
+      "metadata" : {
+        "act" : "I",
+        "index" : "1",
+        "play" : "the-life-of-king-henry-the-eighth",
+        "playTitle" : "The Life of King Henry the Eighth",
+        "speaker" : "**** PROLOGUE ****",
+        "type" : "speech"
+      },
+      "path" : "derived\/the-life-of-king-henry-the-eighth\/act-i\/scene-unknown\/prologue-1",
+      "sha256" : "cfd4f4fd6f0d26331c407d1b369c05630a2e4fd506390ffb27139d997597be83",
+      "size" : 1360
+    }
+  ],
+  "generatedAt" : "2025-10-15T15:55:03Z",
+  "sourceRepo" : "https:\/\/github.com\/Fountain-Coach\/the-four-stars",
+  "translations" : [
+
+  ]
+}

@@ -20,11 +20,7 @@ public struct DirectOpenAIChatClient: GatewayChatStreaming {
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let apiKey, !apiKey.isEmpty { req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization") }
-        let body: [String: Any] = [
-            "model": request.model,
-            "messages": request.messages.map { ["role": $0.role, "content": $0.content] },
-            "stream": false
-        ]
+        let body = buildBody(from: request, stream: false)
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, resp) = try await session.data(for: req)
         guard let http = resp as? HTTPURLResponse else { throw URLError(.badServerResponse) }
@@ -64,11 +60,7 @@ public struct DirectOpenAIChatClient: GatewayChatStreaming {
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let apiKey, !apiKey.isEmpty { req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization") }
-        let body: [String: Any] = [
-            "model": request.model,
-            "messages": request.messages.map { ["role": $0.role, "content": $0.content] },
-            "stream": true
-        ]
+        let body = buildBody(from: request, stream: true)
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (bytes, resp) = try await session.bytes(for: req)
         guard let http = resp as? HTTPURLResponse else { throw URLError(.badServerResponse) }
@@ -103,5 +95,47 @@ public struct DirectOpenAIChatClient: GatewayChatStreaming {
         }
         if !buffer.isEmpty { process(buffer) }
         continuation.finish()
+    }
+}
+
+// MARK: - LocalAgent controls mapping
+private extension DirectOpenAIChatClient {
+    func buildBody(from request: ChatRequest, stream: Bool) -> [String: Any] {
+        var body: [String: Any] = [
+            "model": request.model,
+            "messages": request.messages.map { ["role": $0.role, "content": $0.content] },
+            "stream": stream
+        ]
+        // Only attach controls when talking to a LocalAgent-like endpoint (OpenAI would reject unknown keys)
+        if apiKey == nil, endpoint.host == "127.0.0.1", endpoint.path.contains("/chat") {
+            let env = ProcessInfo.processInfo.environment
+            let perf = (env["ENGRAVER_PERF"] ?? "balanced").lowercased()
+            // Defaults
+            var temperature = 0.8
+            var topP = 0.95
+            var topK = 40
+            var maxTokens = 256
+            switch perf {
+            case "fast":
+                temperature = 0.7; topP = 0.9; topK = 40; maxTokens = 128
+            case "quality":
+                temperature = 0.9; topP = 0.97; topK = 60; maxTokens = 512
+            default: break
+            }
+            // Allow direct overrides via env
+            if let s = env["ENGRAVER_TEMP"], let v = Double(s) { temperature = v }
+            if let s = env["ENGRAVER_TOP_P"], let v = Double(s) { topP = v }
+            if let s = env["ENGRAVER_TOP_K"], let v = Int(s) { topK = v }
+            if let s = env["ENGRAVER_MAX_TOKENS"], let v = Int(s) { maxTokens = v }
+            let cores = max(1, ProcessInfo.processInfo.processorCount - 1)
+            let threads = Int(env["ENGRAVER_THREADS"] ?? "") ?? cores
+
+            body["temperature"] = temperature
+            body["top_p"] = topP
+            body["top_k"] = topK
+            body["max_tokens"] = maxTokens
+            body["threads"] = threads
+        }
+        return body
     }
 }

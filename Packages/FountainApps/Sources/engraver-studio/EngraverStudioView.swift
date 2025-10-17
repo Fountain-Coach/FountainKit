@@ -23,6 +23,7 @@ struct EngraverStudioView: View {
     @State private var toast: String? = nil
     @AppStorage("EngraverStudio.LeftWidth") private var leftWidth: Double = 340
     @AppStorage("EngraverStudio.RightWidth") private var rightWidth: Double = 380
+    @AppStorage("EngraverStudio.Performance") private var performanceMode: String = "balanced"
 
 
     var body: some View {
@@ -81,6 +82,8 @@ struct EngraverStudioView: View {
         )
         .frame(minWidth: 900, minHeight: 600)
         .background(WindowActivationView())
+        .onAppear { applyPerformanceEnv() }
+        .onChange(of: performanceMode) { _, _ in applyPerformanceEnv() }
         .sheet(isPresented: $showSemanticBrowser) {
             SemanticBrowserSheet(viewModel: viewModel, openURL: { url in openURL(url) })
                 .frame(minWidth: 520, minHeight: 360)
@@ -317,6 +320,29 @@ struct EngraverStudioView: View {
         promptEditorIsFocused = true
     }
 }
+
+    private func applyPerformanceEnv() {
+        // Map UI preset to env vars consumed by DirectOpenAIChatClient
+        let mode = performanceMode.lowercased()
+        setenv("ENGRAVER_PERF", mode, 1)
+        switch mode {
+        case "fast":
+            setenv("ENGRAVER_TEMP", "0.7", 1)
+            setenv("ENGRAVER_TOP_P", "0.9", 1)
+            setenv("ENGRAVER_TOP_K", "40", 1)
+            setenv("ENGRAVER_MAX_TOKENS", "128", 1)
+        case "quality":
+            setenv("ENGRAVER_TEMP", "0.9", 1)
+            setenv("ENGRAVER_TOP_P", "0.97", 1)
+            setenv("ENGRAVER_TOP_K", "60", 1)
+            setenv("ENGRAVER_MAX_TOKENS", "512", 1)
+        default:
+            setenv("ENGRAVER_TEMP", "0.8", 1)
+            setenv("ENGRAVER_TOP_P", "0.95", 1)
+            setenv("ENGRAVER_TOP_K", "40", 1)
+            setenv("ENGRAVER_MAX_TOKENS", "256", 1)
+        }
+    }
 
 @available(macOS 13.0, *)
 private struct PromptTextEditor: NSViewRepresentable {
@@ -820,6 +846,17 @@ private struct BootSidePane: View {
             Divider()
             GroupBox(label: Text("Gateway Settings")) {
                 VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Text("Performance").font(.caption)
+                        Picker("Performance", selection: $performanceMode) {
+                            Text("Fast").tag("fast")
+                            Text("Balanced").tag("balanced")
+                            Text("Quality").tag("quality")
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 260)
+                        Spacer()
+                    }
                     Toggle("Rate Limiter", isOn: $viewModel.gatewayRateLimiterEnabled)
                     HStack(spacing: 8) {
                         Text("Limit/min:").font(.caption)

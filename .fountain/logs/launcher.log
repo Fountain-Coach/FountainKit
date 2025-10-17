@@ -1,21 +1,16 @@
-[launcher] Stopping Fountain services
-Another instance of SwiftPM is already running using '/Users/benedikteickhoff/Development/Github-Desktop/FountainKit/Packages/FountainApps/.build', waiting until that process has finished execution...warning: 'fountainapps': dependency 'swift-log' is not used by any target
-warning: 'fountainapps': dependency 'swift-openapi-urlsession' is not used by any target
+[launcher] Starting Fountain services from /Users/benedikteickhoff/Development/Github-Desktop/FountainKit
+warning: 'fountainapps': dependency 'swift-log' is not used by any target
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-[1/4] Compiling _NumericsShims _NumericsShims.c
-[2/5] Compiling api.c
-[3/11] Compiling writer.c
-[4/11] Compiling reader.c
-[5/11] Compiling parser.c
-[6/11] Compiling emitter.c
-[7/11] Compiling scanner.c
-[8/11] Write Objects.LinkFileList
-[9/11] Linking swift-openapi-generator-tool
-[10/11] Applying swift-openapi-generator-tool
+warning: 'fountainapps': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
+    /Users/benedikteickhoff/Development/Github-Desktop/FountainKit/Packages/FountainApps/Sources/engraver-studio/README.md
 warning: 'fountaintooling': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
     /Users/benedikteickhoff/Development/Github-Desktop/FountainKit/Packages/FountainTooling/Sources/openapi-curator-service/README.md
 [0/1] Planning build
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'local-agent-manager' complete! (12.05s)
-not running
+Build of product 'local-agent-manager' complete! (10.20s)
+warning: 'fountainapps': dependency 'swift-log' is not used by any target
+Building for debugging...
+[0/3] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'local-agent-manager' complete! (0.34s)
+healthy

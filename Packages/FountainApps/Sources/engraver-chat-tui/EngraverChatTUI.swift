@@ -142,10 +142,21 @@ actor ChatSession {
 
     init(configuration: EngraverStudioConfiguration) async {
         self.configuration = configuration
-        let client = GatewayChatClient(
-            baseURL: configuration.gatewayURL,
-            tokenProvider: configuration.tokenProvider()
-        )
+        // Choose provider based on configuration, mirroring EngraverStudioRoot
+        let client: GatewayChatStreaming = {
+            if configuration.bypassGateway {
+                if configuration.provider == "openai" {
+                    return DirectOpenAIChatClient(apiKey: configuration.openAIAPIKey)
+                } else { // local default (e.g., Ollama-compatible endpoint)
+                    return DirectOpenAIChatClient(apiKey: nil, endpoint: configuration.localEndpoint)
+                }
+            } else {
+                return GatewayChatClient(
+                    baseURL: configuration.gatewayURL,
+                    tokenProvider: configuration.tokenProvider()
+                )
+            }
+        }()
         self.viewModel = await MainActor.run {
             EngraverChatViewModel(
                 chatClient: client,

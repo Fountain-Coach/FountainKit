@@ -37,11 +37,18 @@ let attachmentUploadStore = ChatKitUploadStore(store: attachmentClient)
 let threadStore = GatewayThreadStore(store: attachmentClient)
 let chatKitSessionStore = ChatKitSessionStore()
 let chatKitLogger = ChatKitLogging.makeLogger()
+let responder: any ChatResponder = {
+    if (env["CHATKIT_RESPONDER"]?.lowercased() == "echo") {
+        return EchoChatResponder()
+    }
+    return ChatKitGatewayResponder()
+}()
+
 let chatKitPlugin = ChatKitGatewayPlugin(store: chatKitSessionStore,
                                          uploadStore: attachmentUploadStore,
                                          metadataStore: attachmentMetadataStore,
                                          threadStore: threadStore,
-                                         responder: ChatKitGatewayResponder(),
+                                         responder: responder,
                                          maxAttachmentBytes: chatKitConfig.maxAttachmentBytes,
                                          allowedAttachmentMIMEs: chatKitConfig.allowedMimeTypes,
                                          logger: chatKitLogger)

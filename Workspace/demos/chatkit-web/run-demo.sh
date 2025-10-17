@@ -80,6 +80,7 @@ echo "[demo] Launching gateway server on port ${GATEWAY_PORT}..."
 (
   cd "$ROOT"
   LAUNCHER_SIGNATURE="$LAUNCHER_SIGNATURE_VALUE" \
+  CHATKIT_RESPONDER="echo" \
   GATEWAY_PORT="$GATEWAY_PORT" \
   swift run --package-path Packages/FountainApps gateway-server
 ) >"$GATEWAY_LOG" 2>&1 &

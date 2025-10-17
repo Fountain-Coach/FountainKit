@@ -1,9 +1,8 @@
 import Foundation
 import Darwin
 import Combine
-import FountainAIAdapters
+import FountainAICore
 import FountainStoreClient
-import LLMGatewayAPI
 import ApiClientsCore
 import AwarenessAPI
 import BootstrapAPI
@@ -27,7 +26,7 @@ public struct EngraverChatTurn: Identifiable, Sendable {
     public let provider: String?
     public let model: String?
     public let tokens: [String]
-    public let response: GatewayChatResponse
+    public let response: CoreChatResponse
 
     public init(id: UUID,
                 sessionId: UUID,
@@ -37,7 +36,7 @@ public struct EngraverChatTurn: Identifiable, Sendable {
                 provider: String?,
                 model: String?,
                 tokens: [String],
-                response: GatewayChatResponse) {
+                response: CoreChatResponse) {
         self.id = id
         self.sessionId = sessionId
         self.createdAt = createdAt
@@ -280,7 +279,8 @@ public final class EngraverChatViewModel: ObservableObject {
         }
     }
 
-    private let chatClient: GatewayChatStreaming
+    private let chatClient: CoreChatStreaming
+    private let directMode: Bool
     private let gatewayBaseURL: URL
     private let awarenessClient: AwarenessClient?
     private let bootstrapClient: BootstrapClient?
@@ -431,7 +431,7 @@ public final class EngraverChatViewModel: ObservableObject {
     }
 
     public init(
-        chatClient: GatewayChatStreaming,
+        chatClient: CoreChatStreaming,
         persistenceStore: FountainStoreClient? = nil,
         corpusId: String = "engraver-space",
         collection: String = "chat-turns",
@@ -446,9 +446,11 @@ public final class EngraverChatViewModel: ObservableObject {
         semanticSeeder: SemanticBrowserSeeder = SemanticBrowserSeeder(),
         idGenerator: @escaping @Sendable () -> UUID = { UUID() },
         dateProvider: @escaping @Sendable () -> Date = { Date() },
-        gatewayBaseURL: URL
+        gatewayBaseURL: URL,
+        directMode: Bool = false
     ) {
         self.chatClient = chatClient
+        self.directMode = directMode
         self.gatewayBaseURL = gatewayBaseURL
         if let persistenceStore {
             self.persistenceContext = PersistenceContext(store: persistenceStore, corpusId: corpusId, collection: collection)
@@ -467,12 +469,17 @@ public final class EngraverChatViewModel: ObservableObject {
         self.bearerToken = bearerToken
         self.seedingConfiguration = seedingConfiguration
         self.semanticSeeder = semanticSeeder
-        let manager = FountainEnvironmentManager(fountainRepoRoot: fountainRepoRoot)
-        if manager.isConfigured {
-            self.environmentManager = manager
-        } else {
+        if directMode {
             self.environmentManager = nil
-            self.environmentState = .unavailable("Environment manager not configured")
+            self.environmentState = .unavailable("Environment manager disabled (direct mode)")
+        } else {
+            let manager = FountainEnvironmentManager(fountainRepoRoot: fountainRepoRoot)
+            if manager.isConfigured {
+                self.environmentManager = manager
+            } else {
+                self.environmentManager = nil
+                self.environmentState = .unavailable("Environment manager not configured")
+            }
         }
 
         let defaultHeaders = Self.makeDefaultHeaders(bearerToken: bearerToken)
@@ -527,7 +534,7 @@ public final class EngraverChatViewModel: ObservableObject {
             emitDiagnostic("Seeding disabled • configuration unavailable.")
         }
 
-        if let environmentManager {
+        if let environmentManager, !directMode {
             configureEnvironmentManager(environmentManager)
         }
 
@@ -589,7 +596,7 @@ public final class EngraverChatViewModel: ObservableObject {
             prompt: prompt,
             systemPrompts: systemPrompts
         )
-        let request = ChatRequest(model: model, messages: requestMessages)
+        let request = CoreChatRequest(model: model, messages: requestMessages)
         let persistenceTarget = persistenceContext?.overridingCorpus(corpusOverride)
         let client = chatClient
 
@@ -597,7 +604,7 @@ public final class EngraverChatViewModel: ObservableObject {
             do {
                 var collectedTokens: [String] = []
                 var aggregatedAnswer = ""
-                var finalResponse: GatewayChatResponse?
+                var finalResponse: CoreChatResponse?
 
                 for try await chunk in client.stream(request: request, preferStreaming: preferStreaming) {
                     if !chunk.text.isEmpty {
@@ -625,10 +632,10 @@ public final class EngraverChatViewModel: ObservableObject {
                 guard let response = finalResponse else {
                     await MainActor.run {
                         self.activeTokens.removeAll()
-                        self.state = .failed("gateway.chat.missingFinalResponse")
-                        self.lastError = "Gateway did not return a final response."
+                        self.state = .failed("chat.missingFinalResponse")
+                        self.lastError = "Provider did not return a final response."
                     }
-                    emitDiagnostic("Failed: Gateway returned no final response.")
+                    emitDiagnostic("Failed: Provider returned no final response.")
                     return
                 }
 
@@ -710,8 +717,8 @@ public final class EngraverChatViewModel: ObservableObject {
         corpusOverride: String?
     ) async -> Bool {
         // Case 1: 429 — disable limiter and retry once (non-streaming to simplify)
-        if let gw = error as? GatewayChatError {
-            if case .serverError(let status, _) = gw, status == 429 {
+        if let pe = error as? ProviderError {
+            if case .serverError(let status, _) = pe, status == 429 {
                 emitDiagnostic("Auto-remediation: disabling rate limiter and restarting gateway due to 429…")
                 self.gatewayRateLimiterEnabled = false
                 await applyGatewaySettings(restart: true)
@@ -919,13 +926,13 @@ public final class EngraverChatViewModel: ObservableObject {
         history: [EngraverChatTurn],
         prompt: String,
         systemPrompts: [String]
-    ) -> [ChatMessage] {
-        var messages: [ChatMessage] = systemPrompts.map { ChatMessage(role: "system", content: $0) }
+    ) -> [CoreChatMessage] {
+        var messages: [CoreChatMessage] = systemPrompts.map { CoreChatMessage(role: .system, content: $0) }
         for turn in history {
-            messages.append(ChatMessage(role: "user", content: turn.prompt))
-            messages.append(ChatMessage(role: "assistant", content: turn.answer))
+            messages.append(CoreChatMessage(role: .user, content: turn.prompt))
+            messages.append(CoreChatMessage(role: .assistant, content: turn.answer))
         }
-        messages.append(ChatMessage(role: "user", content: prompt))
+        messages.append(CoreChatMessage(role: .user, content: prompt))
         return messages
     }
 
@@ -1012,13 +1019,10 @@ public final class EngraverChatViewModel: ObservableObject {
         }
 
         turns = targetRecords.map { record in
-            let response = GatewayChatResponse(
+            let response = CoreChatResponse(
                 answer: record.answer,
                 provider: record.provider,
-                model: record.model,
-                usage: record.usage,
-                raw: record.raw,
-                functionCall: record.functionCall
+                model: record.model
             )
             return EngraverChatTurn(
                 id: UUID(uuidString: record.recordId) ?? UUID(),
@@ -1590,9 +1594,9 @@ private func bootstrapCorpusIfNeeded() async {
             answer: turn.answer,
             provider: turn.provider,
             model: turn.model ?? modelName,
-            usage: turn.response.usage,
-            raw: turn.response.raw,
-            functionCall: turn.response.functionCall,
+            usage: nil,
+            raw: nil,
+            functionCall: nil,
             tokens: turn.tokens,
             systemPrompts: systemPrompts,
             history: fullHistory.map { EngraverChatRecord.HistoryMessage(role: $0.role, content: $0.content) }
@@ -1663,18 +1667,25 @@ private func bootstrapCorpusIfNeeded() async {
     }
 
     private func userFacingError(from error: Error) -> String {
-        // Map common gateway errors to friendly messages with hints.
-        if let gw = error as? GatewayChatError {
-            switch gw {
+        // Map common provider/gateway errors to friendly messages with hints.
+        if let pe = error as? ProviderError {
+            switch pe {
             case .serverError(let status, let message):
                 if status == 429 {
-                    return "Gateway rate limited (429). Reduce request rate or increase limits.\(message.map { "\n\nDetails: \($0)" } ?? "")"
+                    let src = directMode ? "Provider" : "Gateway"
+                    return "\(src) rate limited (429). Reduce request rate or increase limits.\(message.map { "\n\nDetails: \($0)" } ?? "")"
                 } else if status == 401 || status == 403 {
-                    return "Gateway authentication failed (\(status)). Ensure GATEWAY_BEARER or API key is set.\(message.map { "\n\nDetails: \($0)" } ?? "")"
+                    let src = directMode ? "Provider" : "Gateway"
+                    return "\(src) authentication failed (\(status)). Ensure API key is set.\(message.map { "\n\nDetails: \($0)" } ?? "")"
                 }
-                return "Gateway returned status \(status).\(message.map { "\n\nDetails: \($0)" } ?? "")"
+                let src = directMode ? "Provider" : "Gateway"
+                return "\(src) returned status \(status).\(message.map { "\n\nDetails: \($0)" } ?? "")"
             case .invalidResponse:
-                return "Gateway did not return a valid HTTP response. Check connectivity."
+                let src = directMode ? "Provider" : "Gateway"
+                return "\(src) did not return a valid HTTP response. Check connectivity."
+            case .networkError(let msg):
+                let src = directMode ? "Provider" : "Gateway"
+                return "\(src) network error: \(msg)"
             }
         }
         return describe(error: error)

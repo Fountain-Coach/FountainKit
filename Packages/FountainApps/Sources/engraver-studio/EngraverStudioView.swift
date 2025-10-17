@@ -45,6 +45,7 @@ struct EngraverStudioView: View {
 
                 VStack(spacing: 0) {
                     TopBar(viewModel: viewModel,
+                           directMode: directMode,
                            showLeft: Binding(get: { !directMode && showLeftPane }, set: { showLeftPane = $0 }),
                            showRight: Binding(get: { !directMode && showRightPane }, set: { showRightPane = $0 }))
                     Divider()
@@ -71,7 +72,7 @@ struct EngraverStudioView: View {
             }
         }
         .alert(
-            "Gateway Error",
+            directMode ? "Provider Error" : "Gateway Error",
             isPresented: $showErrorAlert,
             actions: {
                 Button("Dismiss", role: .cancel) { showErrorAlert = false }
@@ -119,6 +120,24 @@ struct EngraverStudioView: View {
                 loss: 0
             )
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: 8) {
+                Text("Performance").font(.caption)
+                Picker(
+                    "Performance",
+                    selection: Binding<String>(
+                        get: { self.performanceMode },
+                        set: { self.performanceMode = $0 }
+                    )
+                ) {
+                    Text("Fast").tag("fast" as String)
+                    Text("Balanced").tag("balanced" as String)
+                    Text("Quality").tag("quality" as String)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 260)
+                Spacer()
+            }
 
             mainTranscriptGroup
 
@@ -321,6 +340,8 @@ struct EngraverStudioView: View {
     }
 }
 
+@available(macOS 13.0, *)
+extension EngraverStudioView {
     private func applyPerformanceEnv() {
         // Map UI preset to env vars consumed by DirectOpenAIChatClient
         let mode = performanceMode.lowercased()
@@ -343,6 +364,7 @@ struct EngraverStudioView: View {
             setenv("ENGRAVER_MAX_TOKENS", "256", 1)
         }
     }
+}
 
 @available(macOS 13.0, *)
 private struct PromptTextEditor: NSViewRepresentable {
@@ -693,8 +715,7 @@ private struct BootTrailPane: View {
 
     private var servicesPanel: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Services")
-                .font(.headline)
+            Text("Services").font(.headline)
             if viewModel.environmentServices.isEmpty {
                 Text("Probing…").foregroundStyle(.secondary)
             } else {
@@ -846,17 +867,6 @@ private struct BootSidePane: View {
             Divider()
             GroupBox(label: Text("Gateway Settings")) {
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        Text("Performance").font(.caption)
-                        Picker("Performance", selection: $performanceMode) {
-                            Text("Fast").tag("fast")
-                            Text("Balanced").tag("balanced")
-                            Text("Quality").tag("quality")
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(width: 260)
-                        Spacer()
-                    }
                     Toggle("Rate Limiter", isOn: $viewModel.gatewayRateLimiterEnabled)
                     HStack(spacing: 8) {
                         Text("Limit/min:").font(.caption)
@@ -1124,28 +1134,33 @@ private func draggableDivider(onDrag: @escaping (CGFloat) -> Void) -> some View 
 @available(macOS 13.0, *)
 private struct TopBar: View {
     @ObservedObject var viewModel: EngraverChatViewModel
+    var directMode: Bool = false
     @Binding var showLeft: Bool
     @Binding var showRight: Bool
     var body: some View {
         HStack(spacing: 12) {
-            HStack(spacing: 6) {
-                Circle().fill(viewModel.environmentIsRunning ? Color.green : Color.orange)
-                    .frame(width: 8, height: 8)
-                Text(viewModel.environmentIsRunning ? "ALL GREEN" : "Starting…")
-                    .font(.caption.weight(.semibold))
-                HStack(spacing: 4) {
-                    ForEach(Array(viewModel.environmentServices.prefix(8))) { svc in
-                        Circle().fill(color(for: svc.state)).frame(width: 6, height: 6).help("\(svc.name): \(svc.state.rawValue) :\(svc.port)")
+            if !directMode {
+                HStack(spacing: 6) {
+                    Circle().fill(viewModel.environmentIsRunning ? Color.green : Color.orange)
+                        .frame(width: 8, height: 8)
+                    Text(viewModel.environmentIsRunning ? "ALL GREEN" : "Starting…")
+                        .font(.caption.weight(.semibold))
+                    HStack(spacing: 4) {
+                        ForEach(Array(viewModel.environmentServices.prefix(8))) { svc in
+                            Circle().fill(color(for: svc.state)).frame(width: 6, height: 6).help("\(svc.name): \(svc.state.rawValue) :\(svc.port)")
+                        }
                     }
                 }
             }
             Spacer()
-            Toggle(isOn: $showLeft) { Image(systemName: "sidebar.left") }
-                .toggleStyle(.button)
-                .help(showLeft ? "Hide environment" : "Show environment")
-            Toggle(isOn: $showRight) { Image(systemName: "sidebar.right") }
-                .toggleStyle(.button)
-                .help(showRight ? "Hide diagnostics" : "Show diagnostics")
+            if !directMode {
+                Toggle(isOn: $showLeft) { Image(systemName: "sidebar.left") }
+                    .toggleStyle(.button)
+                    .help(showLeft ? "Hide environment" : "Show environment")
+                Toggle(isOn: $showRight) { Image(systemName: "sidebar.right") }
+                    .toggleStyle(.button)
+                    .help(showRight ? "Hide diagnostics" : "Show diagnostics")
+            }
         }
         .padding(8)
     }

@@ -25,9 +25,13 @@ case "$COMMAND" in
     if [[ $# -gt 0 ]]; then
       echo "[launcher] Options: $*" | tee -a "$LOG_DIR/launcher.log"
     fi
-    # Start LocalAgent under launcher control via manager (config from ConfigurationStore or Configuration/local-agent.json)
-    swift run --package-path "$REPO_ROOT/Packages/FountainApps" local-agent-manager ensure --repo-root "$REPO_ROOT" >>"$LOG_DIR/launcher.log" 2>&1 || true
-    swift run --package-path "$REPO_ROOT/Packages/FountainApps" local-agent-manager start --repo-root "$REPO_ROOT" >>"$LOG_DIR/launcher.log" 2>&1 || true
+    # Start LocalAgent under launcher control via manager unless disabled
+    if [[ "${LAUNCHER_DISABLE_LOCAL_AGENT:-0}" != "1" ]]; then
+      swift run --package-path "$REPO_ROOT/Packages/FountainApps" local-agent-manager ensure --repo-root "$REPO_ROOT" >>"$LOG_DIR/launcher.log" 2>&1 || true
+      swift run --package-path "$REPO_ROOT/Packages/FountainApps" local-agent-manager start --repo-root "$REPO_ROOT" >>"$LOG_DIR/launcher.log" 2>&1 || true
+    else
+      echo "[launcher] Skipping LocalAgent (LAUNCHER_DISABLE_LOCAL_AGENT=1)" | tee -a "$LOG_DIR/launcher.log"
+    fi
     ;;
   stop)
     echo "[launcher] Stopping Fountain services" | tee "$LOG_DIR/launcher.log"

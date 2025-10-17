@@ -32,6 +32,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../FountainCore"),
+        .package(path: "../FountainAIKit"),
         .package(path: "../FountainAPIClients"),
         .package(path: "../FountainGatewayKit"),
         .package(path: "../FountainServiceKit-Planner"),
@@ -247,6 +248,7 @@ let package = Package(
             name: "EngraverStudio",
             dependencies: [
                 "EngraverChatCore",
+                .product(name: "FountainAIKit", package: "FountainAIKit"),
                 .product(name: "FountainAIAdapters", package: "FountainGatewayKit"),
                 .product(name: "TeatroGUI", package: "TeatroGUI")
             ],
@@ -256,6 +258,7 @@ let package = Package(
             name: "engraver-chat-tui",
             dependencies: [
                 "EngraverChatCore",
+                .product(name: "FountainAIKit", package: "FountainAIKit"),
                 .product(name: "SwiftCursesKit", package: "swiftcurseskit"),
                 .product(name: "FountainAIAdapters", package: "FountainGatewayKit"),
                 .product(name: "FountainStoreClient", package: "FountainCore")

@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import TeatroGUI
 import FountainAIAdapters
+import FountainAIKit
 import EngraverChatCore
 
 @available(macOS 13.0, *)
@@ -12,7 +13,7 @@ public struct EngraverStudioRoot: View {
 
     public init(configuration: EngraverStudioConfiguration = EngraverStudioConfiguration()) {
         self.configuration = configuration
-        let client: GatewayChatStreaming = {
+        let client: ChatStreaming = {
             if configuration.bypassGateway {
                 if configuration.provider == "openai" {
                     return DirectOpenAIChatClient(apiKey: configuration.openAIAPIKey)
@@ -40,7 +41,8 @@ public struct EngraverStudioRoot: View {
                 bearerToken: configuration.bearerToken,
                 seedingConfiguration: configuration.seedingConfiguration,
                 fountainRepoRoot: configuration.fountainRepoRoot,
-                gatewayBaseURL: configuration.gatewayBaseURL
+                gatewayBaseURL: configuration.gatewayBaseURL,
+                directMode: configuration.bypassGateway
             )
         )
     }

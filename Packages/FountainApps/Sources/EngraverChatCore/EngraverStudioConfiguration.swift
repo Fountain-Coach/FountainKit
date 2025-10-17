@@ -127,16 +127,17 @@ public struct EngraverStudioConfiguration: Sendable {
             "You are the Engraver inside Fountain Studio. Maintain semantic memory across turns and cite corpora where relevant."
         self.systemPrompts = [systemPrompt]
 
-        if let modelsEnv = env["ENGRAVER_MODELS"] {
+        let modelsEnvOpt = env["ENGRAVER_MODELS"]
+        var resolvedModels: [String]
+        if let modelsEnv = modelsEnvOpt {
             let parsed = modelsEnv
                 .split(separator: ",")
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
-            self.availableModels = parsed.isEmpty ? ["gpt-4o-mini", "gpt-4o"] : parsed
+            resolvedModels = parsed.isEmpty ? ["gpt-4o-mini", "gpt-4o"] : parsed
         } else {
-            self.availableModels = ["gpt-4o-mini", "gpt-4o"]
+            resolvedModels = ["gpt-4o-mini", "gpt-4o"]
         }
-        self.defaultModel = env["ENGRAVER_DEFAULT_MODEL"] ?? availableModels.first ?? "gpt-4o-mini"
 
         if let disable = env["ENGRAVER_DISABLE_PERSISTENCE"], disable.lowercased() == "true" {
             self.persistenceStore = nil
@@ -175,15 +176,19 @@ public struct EngraverStudioConfiguration: Sendable {
         }
 
         let prov = (env["ENGRAVER_PROVIDER"] ?? "").lowercased()
-        let hasOpenAIKey = !(env["OPENAI_API_KEY"]?.isEmpty ?? true)
-        // Default provider: local (no vendor login). If explicitly 'gateway', use gateway.
-        if prov.isEmpty { self.provider = hasOpenAIKey ? "openai" : "local" } else { self.provider = prov }
+        // Default provider: openai (remote API). Only use gateway/local if explicitly requested.
+        if prov.isEmpty { self.provider = "openai" } else { self.provider = prov }
         let bypass = (env["ENGRAVER_BYPASS_GATEWAY"] ?? env["ENGRAVER_DIRECT_ONLY"] ?? env["ENGRAVER_DIRECT_LLM"])?.lowercased()
         self.bypassGateway = (self.provider != "gateway") || (bypass == "1" || bypass == "true" || bypass == "yes")
         self.openAIAPIKey = env["OPENAI_API_KEY"]
         let localURL = env["ENGRAVER_LOCAL_LLM_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Default to LocalAgent (Hermes via llama.cpp): http://127.0.0.1:8080/chat
-        self.localEndpoint = URL(string: localURL ?? "http://127.0.0.1:8080/chat")!
+        // Local endpoint retained for advanced users; not used by default provider=openai
+        self.localEndpoint = URL(string: localURL ?? "http://127.0.0.1:11434/v1/chat/completions")!
+
+        // If running in local provider and models were not explicitly provided, use a sensible Ollama default.
+        // Default model set for OpenAI; model list remains if provided via env
+        self.availableModels = resolvedModels
+        self.defaultModel = env["ENGRAVER_DEFAULT_MODEL"] ?? "gpt-4o-mini"
     }
 
     public func tokenProvider() -> GatewayChatClient.TokenProvider {

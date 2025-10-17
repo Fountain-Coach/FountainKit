@@ -2,6 +2,7 @@ import Foundation
 import SwiftCursesKit
 import EngraverChatCore
 import FountainAIAdapters
+import FountainAIKit
 import FountainStoreClient
 
 // MARK: - CLI Options
@@ -143,7 +144,7 @@ actor ChatSession {
     init(configuration: EngraverStudioConfiguration) async {
         self.configuration = configuration
         // Choose provider based on configuration, mirroring EngraverStudioRoot
-        let client: GatewayChatStreaming = {
+        let client: ChatStreaming = {
             if configuration.bypassGateway {
                 if configuration.provider == "openai" {
                     return DirectOpenAIChatClient(apiKey: configuration.openAIAPIKey)

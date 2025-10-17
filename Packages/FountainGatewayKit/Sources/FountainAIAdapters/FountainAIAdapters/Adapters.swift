@@ -23,13 +23,7 @@ public final class LLMGatewayAdapter: LLMService {
         switch out {
         case .ok(let ok):
             if case let .json(obj) = ok.body {
-                // Best-effort extract text/answer from arbitrary JSON
-                if let answer = obj.value["answer"] as? String { return answer }
-                if let text = obj.value["text"] as? String { return text }
-                if let data = try? JSONEncoder().encode(obj), let json = String(data: data, encoding: .utf8) {
-                    return json
-                }
-                return "{}"
+                return obj.answer ?? obj.delta?.content ?? ""
             }
             return ""
         default:

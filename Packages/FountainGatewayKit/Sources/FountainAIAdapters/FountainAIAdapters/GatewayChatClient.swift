@@ -1,5 +1,6 @@
 import Foundation
 import LLMGatewayAPI
+import OpenAPIURLSession
 import ApiClientsCore
 
 /// Represents a single chunk of assistant output produced by the Fountain gateway.
@@ -88,14 +89,69 @@ public struct GatewayChatClient: Sendable {
 
     /// Convenience helper that waits for the final response without streaming.
     public func complete(request: ChatRequest) async throws -> GatewayChatResponse {
-        let dataRequest = try await makeURLRequest(for: request, preferStreaming: false)
-        let (data, response) = try await session.data(for: dataRequest)
-        guard let http = response as? HTTPURLResponse else {
-            throw GatewayChatError.invalidResponse
+        // Use generated OpenAPI client for non-streaming calls
+        var headers: [String: String] = ["Accept": "application/json"]
+        if let token = try await tokenProvider(), !token.isEmpty {
+            headers["Authorization"] = "Bearer \(token)"
         }
-        try validate(statusCode: http.statusCode, data: data)
-        let envelope = try decodeEnvelope(from: data)
-        return makeResponse(from: envelope)
+
+        let transport = URLSessionTransport()
+        let middlewares = APIClientHelpers.defaultMiddlewares(defaultHeaders: headers)
+        let client = LLMGatewayAPI.Client(serverURL: baseURL, transport: transport, middlewares: middlewares)
+
+        // Map manual ChatRequest into generated schema
+        let genMessages = request.messages.map { m in
+            LLMGatewayAPI.Components.Schemas.MessageObject(role: m.role, content: m.content)
+        }
+        let genFunctions = request.functions?.map { f in
+            LLMGatewayAPI.Components.Schemas.FunctionObject(name: f.name, description: f.description)
+        }
+        let genFunctionCall: LLMGatewayAPI.Components.Schemas.ChatRequest.function_callPayload?
+        if let fc = request.function_call {
+            switch fc {
+            case .left(let value):
+                genFunctionCall = (value == "auto") ? .case1(.auto) : nil
+            case .right(let obj):
+                genFunctionCall = .FunctionCallObject(.init(name: obj.name))
+            }
+        } else {
+            genFunctionCall = nil
+        }
+        let genBody = LLMGatewayAPI.Components.Schemas.ChatRequest(
+            model: request.model,
+            messages: genMessages,
+            functions: genFunctions,
+            function_call: genFunctionCall
+        )
+
+        let output = try await client.chatWithObjective(.init(body: .json(genBody)))
+        func toJSONValue<T: Encodable>(_ value: T?) -> JSONValue? {
+            guard let value else { return nil }
+            if let data = try? JSONEncoder().encode(value) {
+                return try? JSONDecoder().decode(JSONValue.self, from: data)
+            }
+            return nil
+        }
+
+        switch output {
+        case .ok(let ok):
+            // Map generated response to adapter response
+            let payload = try ok.body.json
+            let answer = payload.answer ?? payload.delta?.content ?? ""
+            let provider = payload.provider
+            let model = payload.model
+            // usage/raw/function_call are free-form objects -> map to JSONValue via encoding round-trip
+            let usage = toJSONValue(payload.usage)
+            let raw = toJSONValue(payload.raw)
+            let functionCall = toJSONValue(payload.function_call)
+            return GatewayChatResponse(answer: answer, provider: provider, model: model, usage: usage, raw: raw, functionCall: functionCall)
+        case .badRequest:
+            throw GatewayChatError.serverError(statusCode: 400, message: "Bad Request")
+        case .unprocessableContent:
+            throw GatewayChatError.serverError(statusCode: 422, message: "Validation Error")
+        case .undocumented(let status, _):
+            throw GatewayChatError.serverError(statusCode: status, message: nil)
+        }
     }
 
     // MARK: - Internal helpers

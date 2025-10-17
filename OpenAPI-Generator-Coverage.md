@@ -12,7 +12,7 @@ _Git HEAD: work (`6316b06` — "Merge pull request #38 from Fountain-Coach/codex
 ## Outstanding gaps
 - `v1/tool-server.yml` lacks a first-party generated client; service implementers use manual HTTP calls.
 - `v1/dns.yml` is curated but not yet wired into a Swift server target; only the generated `DNSAPI` client consumes it.
-- `v1/llm-gateway.yml` remains a manual plugin inside `FountainGatewayKit` despite the generated client being in use.
+- `v1/llm-gateway.yml` updated to model `ChatResponse` and `stream` SSE behavior. Engraver Studio uses the generated client for non-streaming calls; SSE streaming remains via a lightweight adapter until generator-level streaming lands.
 - `v1/openapi-curator.yml` has neither server nor client bindings; the service and CLI continue to hand-roll transports.
 
 ## Git history reference

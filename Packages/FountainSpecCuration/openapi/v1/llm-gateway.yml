@@ -41,6 +41,12 @@ paths:
       x-fountain.visibility: public
       x-fountain.reason: ""
       x-fountain.allow-as-tool: true
+      parameters:
+        - name: stream
+          in: query
+          required: false
+          description: When true, emits Server-Sent Events (`text/event-stream`).
+          schema: { type: boolean, default: false }
       requestBody:
         required: true
         content:
@@ -53,8 +59,13 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties: {}
+                $ref: '#/components/schemas/ChatResponse'
+            text/event-stream:
+              schema:
+                type: string
+                description: >
+                  Server-Sent Events stream where each `data:` line is a JSON
+                  object compatible with `ChatResponse` (with optional `delta`).
         "400":
           $ref: '#/components/responses/BadRequest'
         "422":
@@ -140,6 +151,43 @@ components:
         description:
           type: string
           description: Optional description of the function
+    ChatDelta:
+      title: ChatDelta
+      type: object
+      properties:
+        content:
+          type: string
+          description: Incremental text token (streaming only)
+        function_call:
+          type: object
+          additionalProperties: true
+          description: Incremental function call payload (streaming only)
+    ChatResponse:
+      title: ChatResponse
+      type: object
+      properties:
+        answer:
+          type: string
+        provider:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        usage:
+          type: object
+          additionalProperties: true
+          nullable: true
+        raw:
+          type: object
+          additionalProperties: true
+          nullable: true
+        function_call:
+          type: object
+          additionalProperties: true
+          nullable: true
+        delta:
+          $ref: '#/components/schemas/ChatDelta'
     HTTPValidationError:
       title: HTTPValidationError
       type: object

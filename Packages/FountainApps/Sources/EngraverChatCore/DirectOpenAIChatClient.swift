@@ -1,5 +1,6 @@
 import Foundation
 import FountainAIAdapters
+import LLMGatewayAPI
 
 /// Minimal direct OpenAI client that conforms to GatewayChatStreaming.
 /// Bypasses the local gateway entirely.
@@ -68,12 +69,11 @@ public struct DirectOpenAIChatClient: GatewayChatStreaming {
             "messages": request.messages.map { ["role": $0.role, "content": $0.content] },
             "stream": true
         ]
-        req.httpBody = try JSONSerialization.data(with: body)
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (bytes, resp) = try await session.bytes(for: req)
         guard let http = resp as? HTTPURLResponse else { throw URLError(.badServerResponse) }
         guard (200...299).contains(http.statusCode) else {
-            let data = try await Data(bytes: bytes)
-            throw GatewayChatError.serverError(statusCode: http.statusCode, message: String(data: data, encoding: .utf8))
+            throw GatewayChatError.serverError(statusCode: http.statusCode, message: nil)
         }
         var buffer = ""
         func process(_ payload: String) {
@@ -105,4 +105,3 @@ public struct DirectOpenAIChatClient: GatewayChatStreaming {
         continuation.finish()
     }
 }
-

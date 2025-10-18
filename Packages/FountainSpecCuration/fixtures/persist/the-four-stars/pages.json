@@ -1,0 +1,58 @@
+[
+  {
+    "corpusId" : "the-four-stars",
+    "host" : "the-four-stars",
+    "pageId" : "act-i-scene-i",
+    "title" : "Act I Scene I – Orchard of Oliver's house",
+    "url" : "the-four-stars:\/\/act-i-scene-i"
+  },
+  {
+    "corpusId" : "the-four-stars",
+    "host" : "the-four-stars",
+    "pageId" : "act-i-scene-ii",
+    "title" : "Act I Scene II – Lawn before the Duke's palace",
+    "url" : "the-four-stars:\/\/act-i-scene-ii"
+  },
+  {
+    "corpusId" : "the-four-stars",
+    "host" : "the-four-stars",
+    "pageId" : "act-i-scene-iii",
+    "title" : "Act I Scene III – A room in the palace",
+    "url" : "the-four-stars:\/\/act-i-scene-iii"
+  },
+  {
+    "corpusId" : "the-four-stars",
+    "host" : "the-four-stars",
+    "pageId" : "as-you-like-it\/act-i-scene-i",
+    "title" : "Act I Scene I – Orchard of Oliver's house",
+    "url" : "the-four-stars:\/\/as-you-like-it\/act-i-scene-i"
+  },
+  {
+    "corpusId" : "the-four-stars",
+    "host" : "the-four-stars",
+    "pageId" : "as-you-like-it\/act-i-scene-ii",
+    "title" : "Act I Scene II – Lawn before the Duke's palace",
+    "url" : "the-four-stars:\/\/as-you-like-it\/act-i-scene-ii"
+  },
+  {
+    "corpusId" : "the-four-stars",
+    "host" : "the-four-stars",
+    "pageId" : "as-you-like-it\/act-i-scene-iii",
+    "title" : "Act I Scene III – A room in the palace",
+    "url" : "the-four-stars:\/\/as-you-like-it\/act-i-scene-iii"
+  },
+  {
+    "corpusId" : "the-four-stars",
+    "host" : "example.com",
+    "pageId" : "page-act-i-scene-i",
+    "title" : "Act I Scene I",
+    "url" : "https:\/\/example.com\/act-i-scene-i"
+  },
+  {
+    "corpusId" : "the-four-stars",
+    "host" : "example.com",
+    "pageId" : "page-act-ii-scene-i",
+    "title" : "Act II Scene I",
+    "url" : "https:\/\/example.com\/act-ii-scene-i"
+  }
+]

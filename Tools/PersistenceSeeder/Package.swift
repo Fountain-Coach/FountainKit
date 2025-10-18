@@ -9,7 +9,8 @@ let package = Package(
     ],
     products: [
         .library(name: "PersistenceSeederKit", targets: ["PersistenceSeederKit"]),
-        .executable(name: "persistence-seeder", targets: ["PersistenceSeeder"])
+        .executable(name: "persistence-seeder", targets: ["PersistenceSeeder"]),
+        .executable(name: "persistence-exporter", targets: ["PersistenceExporter"])
     ],
     dependencies: [
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.1"),
@@ -34,6 +35,13 @@ let package = Package(
                 "PersistenceSeederKit"
             ],
             path: "Sources/PersistenceSeeder"
+        ),
+        .executableTarget(
+            name: "PersistenceExporter",
+            dependencies: [
+                "PersistenceSeederKit"
+            ],
+            path: "Sources/PersistenceExporter"
         ),
         .testTarget(
             name: "PersistenceSeederTests",

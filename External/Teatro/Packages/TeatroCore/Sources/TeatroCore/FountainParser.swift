@@ -34,9 +34,10 @@ public struct FountainParser: Sendable {
             }
 
             nodes.append(FountainNode(type: nodeType, rawText: trimmed))
-            if nodeType == .action {
+            switch nodeType {
+            case .action:
                 previousSignificant = nil
-            } else {
+            default:
                 previousSignificant = nodeType
             }
         }

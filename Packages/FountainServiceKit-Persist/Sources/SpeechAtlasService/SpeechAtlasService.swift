@@ -295,8 +295,39 @@ public struct SpeechAtlasHandlers: APIProtocol, @unchecked Sendable {
             }
         }
         flush()
-        // Normalize speaker names to display-friendly (uppercase words separated by spaces)
-        let out = blocks.map { spk, lines in (speakerDisplayName(from: spk.lowercased()), lines) }
+        // Normalize speaker names to display-friendly (uppercase words separated by spaces), allow alias overrides
+        let map = speakerAliasMap()
+        let out = blocks.map { spk, lines in
+            let key = spk.lowercased()
+            if let alias = map[key] { return (alias, lines) }
+            return (speakerDisplayName(from: key), lines)
+        }
+        return out
+    }
+
+    // MARK: - Speaker alias mapping
+    private func speakerAliasMap() -> [String: String] {
+        var out: [String: String] = [:]
+        let env = ProcessInfo.processInfo.environment
+        if let mapStr = env["SPEAKER_MAP"], !mapStr.isEmpty {
+            // Format: slug=Display,slug2=Display Two
+            for pair in mapStr.split(separator: ",") {
+                let parts = pair.split(separator: "=", maxSplits: 1).map(String.init)
+                if parts.count == 2 { out[parts[0].lowercased()] = parts[1] }
+            }
+        }
+        // File fallback: Configuration/speakers.map lines: slug=Display
+        let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+        let defaultPath = cwd.appendingPathComponent("Configuration/speakers.map")
+        if FileManager.default.fileExists(atPath: defaultPath.path),
+           let data = try? Data(contentsOf: defaultPath), let text = String(data: data, encoding: .utf8) {
+            for raw in text.components(separatedBy: .newlines) {
+                let line = raw.trimmingCharacters(in: .whitespaces)
+                if line.isEmpty || line.hasPrefix("#") { continue }
+                let parts = line.split(separator: "=", maxSplits: 1).map(String.init)
+                if parts.count == 2 { out[parts[0].lowercased()] = parts[1] }
+            }
+        }
         return out
     }
 

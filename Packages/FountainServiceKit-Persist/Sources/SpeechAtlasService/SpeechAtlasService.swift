@@ -133,6 +133,76 @@ public struct SpeechAtlasHandlers: APIProtocol, @unchecked Sendable {
         return .ok(.init(body: .json(.init(result: summary))))
     }
 
+    public func speechesScript(_ input: Operations.speechesScript.Input) async throws -> Operations.speechesScript.Output {
+        guard case let .json(req) = input.body else {
+            return .badRequest(.init(body: .json(.init(error: "Unsupported content type"))))
+        }
+        let act = req.act
+        let scene = req.scene
+        let format = (req.format?.rawValue ?? "markdown").lowercased()
+        let groupConsecutive = req.group_consecutive ?? true
+
+        let pages = try await loadPages()
+        let filtered = filterPages(pages: pages, act: req.act, scene: req.scene)
+        guard let page = filtered.values.sorted(by: { $0.sortKey < $1.sortKey }).first else {
+            return .badRequest(.init(body: .json(.init(error: "Scene not found"))))
+        }
+
+        // Load all speech segments for page and order by segment index
+        let segments = try await loadSegments(for: page.page.pageId)
+        let ordered = segments.compactMap { seg -> (speaker: String, idx: Int, lines: [String])? in
+            guard let info = parseSegmentIdentifier(seg.segmentId) else { return nil }
+            let speaker = speakerDisplayName(from: info.speakerSlug)
+            let lines = seg.text.split(separator: "\n").map { String($0) }
+            return (speaker: speaker, idx: info.index, lines: lines)
+        }.sorted { $0.idx < $1.idx }
+
+        let header: String = {
+            if let loc = page.location, !loc.isEmpty {
+                return "Act \(act) Scene \(scene) – \(loc)"
+            } else {
+                return "Act \(act) Scene \(scene)"
+            }
+        }()
+
+        // Build blocks with optional grouping of consecutive same-speaker segments
+        var blocks: [(speaker: String, lines: [String])] = []
+        if groupConsecutive {
+            var lastSpeaker: String? = nil
+            var buf: [String] = []
+            for seg in ordered {
+                if seg.speaker == lastSpeaker {
+                    buf.append(contentsOf: seg.lines)
+                } else {
+                    if let ls = lastSpeaker { blocks.append((ls, buf)) }
+                    lastSpeaker = seg.speaker
+                    buf = seg.lines
+                }
+            }
+            if let ls = lastSpeaker { blocks.append((ls, buf)) }
+        } else {
+            blocks = ordered.map { ($0.speaker, $0.lines) }
+        }
+
+        if format == "json" {
+            let items = blocks.map { block in
+                Components.Schemas.ScriptBlock(speaker: block.speaker, lines: block.lines)
+            }
+            let payload = Components.Schemas.SceneScriptResponse(result: .init(header: header, markdown: nil, blocks: items))
+            return .ok(.init(body: .json(payload)))
+        } else {
+            // Markdown: header + blocks rendered as SPEAKER: lines
+            var md: [String] = ["# \(header)"]
+            for block in blocks {
+                md.append("\n**\(block.speaker)**")
+                for line in block.lines { md.append(line) }
+            }
+            let content = md.joined(separator: "\n")
+            let payload = Components.Schemas.SceneScriptResponse(result: .init(header: header, markdown: content, blocks: nil))
+            return .ok(.init(body: .json(payload)))
+        }
+    }
+
     // MARK: - Segment Fetching
 
     private struct SpeechFetchStrategy: Sendable {

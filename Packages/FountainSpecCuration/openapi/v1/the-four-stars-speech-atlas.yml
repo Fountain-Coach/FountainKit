@@ -87,6 +87,33 @@ paths:
                 $ref: '#/components/schemas/SpeechesSummaryResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
+
+  /speeches/script:
+    post:
+      tags: [Speeches]
+      summary: Render a scene to a human‑readable script
+      description: >
+        Returns a readable scene script assembled from speech segments for a given Act and Scene.
+        Useful for previewing or exporting the canonical text without additional client logic.
+      operationId: speechesScript
+      x-fountain.visibility: internal
+      x-fountain.reason: Provide ergonomic reading/export of the corpus as Markdown or structured blocks.
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SceneScriptRequest'
+      responses:
+        '200':
+          description: Script rendering of the requested scene.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SceneScriptResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
 components:
   securitySchemes:
     ApiKeyAuth:
@@ -192,6 +219,58 @@ components:
       x-fountain-guarantees:
         - cites source speeches
         - deterministic for identical inputs
+
+    SceneScriptRequest:
+      type: object
+      title: SceneScriptRequest
+      required: [act, scene]
+      properties:
+        act:
+          $ref: '#/components/schemas/ActCode'
+        scene:
+          $ref: '#/components/schemas/SceneCode'
+        format:
+          type: string
+          enum: [markdown, json]
+          default: markdown
+        group_consecutive:
+          type: boolean
+          default: true
+          description: Merge consecutive segments by the same speaker into one block.
+
+    SceneScriptResponse:
+      type: object
+      title: SceneScriptResponse
+      required: [result]
+      properties:
+        result:
+          type: object
+          properties:
+            header:
+              type: string
+              description: Human‑readable header, e.g. "Act I Scene I – <location>"
+            markdown:
+              type: string
+              description: Rendered Markdown when `format=markdown`.
+            blocks:
+              type: array
+              description: Structured blocks when `format=json`.
+              items:
+                $ref: '#/components/schemas/ScriptBlock'
+
+    ScriptBlock:
+      type: object
+      title: ScriptBlock
+      required: [speaker, lines]
+      properties:
+        speaker:
+          type: string
+          description: Upper‑cased speaker name.
+        lines:
+          type: array
+          items:
+            type: string
+          description: Lines of dialogue for the block.
     SpeechList:
       type: object
       title: SpeechList

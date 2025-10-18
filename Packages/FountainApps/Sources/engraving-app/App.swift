@@ -478,6 +478,8 @@ struct AttachmentDoc: Codable, Hashable {
 
 struct ChatView: View {
     @EnvironmentObject var model: AppModel
+    @State private var traces: [String: [GatewayEvent]] = [:]
+    @State private var traceLoading: Set<String> = []
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
@@ -503,6 +505,20 @@ struct ChatView: View {
                                 }
                             }
                         }
+                        HStack(spacing: 8) {
+                            Button {
+                                Task { await loadGatewayTrace(for: turn) }
+                            } label: {
+                                if traceLoading.contains(turn.recordId) {
+                                    ProgressView().scaleEffect(0.6)
+                                }
+                                Text("Trace")
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                        if let events = traces[turn.recordId], !events.isEmpty {
+                            TraceListView(events: events)
+                        }
                         if let ts = turn.createdAt { Text(ts).font(.caption2).foregroundStyle(.secondary) }
                     }
                     .padding(.vertical, 4)
@@ -510,6 +526,31 @@ struct ChatView: View {
             }
         }
         .padding(.bottom, 6)
+    }
+
+    private func loadGatewayTrace(for turn: ChatDoc) async {
+        if traces[turn.recordId] != nil { return }
+        traceLoading.insert(turn.recordId)
+        defer { traceLoading.remove(turn.recordId) }
+        guard let base = ProcessInfo.processInfo.environment["FOUNTAIN_GATEWAY_URL"], !base.isEmpty, let baseURL = URL(string: base) else { return }
+        var url = baseURL
+        url.append(path: "/admin/recent")
+        var req = URLRequest(url: url)
+        if let token = ProcessInfo.processInfo.environment["GATEWAY_BEARER"], !token.isEmpty {
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        do {
+            let (data, _) = try await URLSession.shared.data(for: req)
+            let events = (try? JSONDecoder().decode([GatewayEvent].self, from: data)) ?? []
+            // Filter to relevant reasoning/chat endpoints
+            let relevant = events.filter { ev in
+                let p = ev.path.lowercased()
+                return p.contains("/chat") || p.contains("/planner/reason") || p.contains("/planner/execute") || p.contains("/function")
+            }
+            self.traces[turn.recordId] = relevant
+        } catch {
+            self.traces[turn.recordId] = []
+        }
     }
 }
 
@@ -531,5 +572,34 @@ private struct ContextChips: View {
                 Text(notes).font(.caption).foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+struct GatewayEvent: Codable, Identifiable, Hashable {
+    let id: UUID
+    let method: String
+    let path: String
+    let status: Int
+    let durationMs: Int
+    let timestamp: String
+    let client: String?
+}
+
+private struct TraceListView: View {
+    let events: [GatewayEvent]
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Gateway Trace").font(.caption).foregroundStyle(.secondary)
+            ForEach(events) { ev in
+                HStack(spacing: 8) {
+                    Text(ev.method).font(.caption2).monospaced().frame(width: 48, alignment: .leading)
+                    Text(ev.path).font(.caption2).lineLimit(1)
+                    Spacer()
+                    Text("\(ev.status)").font(.caption2)
+                    Text("\(ev.durationMs)ms").font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.top, 4)
     }
 }

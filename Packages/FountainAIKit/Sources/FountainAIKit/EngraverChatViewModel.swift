@@ -264,7 +264,7 @@ public final class EngraverChatViewModel: ObservableObject {
     public var seedingBrowserEndpoint: URL? { seedingConfiguration?.browser.baseURL }
     public var seedingBrowserMode: SeedingConfiguration.Browser.Mode? { seedingConfiguration?.browser.mode }
     public var seedingBrowserLabels: [String]? { seedingConfiguration?.browser.defaultLabels }
-    public var environmentConfigured: Bool { environmentManager != nil }
+    public var environmentConfigured: Bool { environmentController != nil }
     public var environmentIsRunning: Bool {
         if case .running = environmentState {
             return true
@@ -499,7 +499,7 @@ public final class EngraverChatViewModel: ObservableObject {
         }
 
         if awarenessClient != nil {
-            if environmentManager == nil {
+            if environmentController == nil {
                 self.awarenessStatus = .refreshing(lastUpdated: nil)
             } else {
                 self.awarenessStatus = .idle(lastUpdated: nil)
@@ -509,7 +509,7 @@ public final class EngraverChatViewModel: ObservableObject {
         }
 
         if bootstrapClient != nil {
-            self.bootstrapState = environmentManager == nil ? .bootstrapping : .idle
+            self.bootstrapState = environmentController == nil ? .bootstrapping : .idle
         } else {
             self.bootstrapState = .idle
         }
@@ -558,11 +558,13 @@ public final class EngraverChatViewModel: ObservableObject {
         preferStreaming: Bool = true,
         corpusOverride: String? = nil
     ) {
-        sendInternal(prompt: rawPrompt,
-                     systemPrompts: systemPrompts,
-                     preferStreaming: preferStreaming,
-                     corpusOverride: corpusOverride,
-                     allowRemediation: true)
+        Task { [weak self] in
+            await self?.sendInternal(prompt: rawPrompt,
+                                     systemPrompts: systemPrompts,
+                                     preferStreaming: preferStreaming,
+                                     corpusOverride: corpusOverride,
+                                     allowRemediation: true)
+        }
     }
 
     private func sendInternal(
@@ -571,7 +573,7 @@ public final class EngraverChatViewModel: ObservableObject {
         preferStreaming: Bool,
         corpusOverride: String?,
         allowRemediation: Bool
-    ) {
+    ) async {
         let prompt = rawPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty else { return }
 
@@ -599,18 +601,24 @@ public final class EngraverChatViewModel: ObservableObject {
                 memoryAppendix.append("Relevant knowledge from your corpus (top matches):\n\n\(joined)\n\nUse these facts when answering, and cite them if appropriate.")
                 emitDiagnostic("Memory augmentation: \(snippets.count) snippets attached for prompt \(truncateForContext(prompt, limit: 64))")
             }
+            if let ops = await makeOperationalContextSummary() {
+                memoryAppendix.append(ops)
+            }
         }
 
-        let requestMessages = makePromptMessages(
-            history: historySnapshot,
-            prompt: prompt,
-            systemPrompts: systemPrompts + memoryAppendix
-        )
-        let request = CoreChatRequest(model: model, messages: requestMessages)
-        let persistenceTarget = persistenceContext?.overridingCorpus(corpusOverride)
-        let client = chatClient
-
         streamTask = Task {
+            var localSystemPrompts = systemPrompts + memoryAppendix
+            if let ops = await makeOperationalContextSummary() {
+                localSystemPrompts.append(ops)
+            }
+            let requestMessages = makePromptMessages(
+                history: historySnapshot,
+                prompt: prompt,
+                systemPrompts: localSystemPrompts
+            )
+            let request = CoreChatRequest(model: model, messages: requestMessages)
+            let persistenceTarget = persistenceContext?.overridingCorpus(corpusOverride)
+            let client = chatClient
             do {
                 var collectedTokens: [String] = []
                 var aggregatedAnswer = ""
@@ -751,6 +759,46 @@ public final class EngraverChatViewModel: ObservableObject {
         return nil
     }
 
+    /// Builds a compact operational context summary to guide the assistant discreetly.
+    /// The summary intentionally avoids revealing chain-of-thought and focuses on observable state.
+    private func makeOperationalContextSummary() async -> String? {
+        guard let context = persistenceContext else { return nil }
+        do {
+            // Counts across history/curation
+            async let b = context.store.listBaselines(corpusId: context.corpusId, limit: 10, offset: 0)
+            async let r = context.store.listReflections(corpusId: context.corpusId, limit: 10, offset: 0)
+            async let d = context.store.listDrifts(corpusId: context.corpusId, limit: 10, offset: 0)
+            async let p = context.store.listPatterns(corpusId: context.corpusId, limit: 10, offset: 0)
+            let (bCount, _)=try await b; let (rCount,_)=try await r; let (dCount,_)=try await d; let (pCount, plist)=try await p
+
+            // Summarise recent findings from patterns content (best-effort JSON parse)
+            var errors = 0, warns = 0, infos = 0
+            var files = Set<String>()
+            for pat in plist.prefix(3) { // only sample a few recent
+                if let data = pat.content.data(using: .utf8),
+                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let findings = obj["findings"] as? [[String: Any]] {
+                    for f in findings.prefix(20) {
+                        let sev = (f["severity"] as? String)?.lowercased()
+                        switch sev { case "error": errors += 1; case "warn": warns += 1; default: infos += 1 }
+                        if let file = f["file"] as? String { files.insert(file) }
+                    }
+                }
+            }
+
+            var parts: [String] = []
+            if (errors + warns + infos) > 0 {
+                parts.append("findings: \(errors) error, \(warns) warn, \(infos) info across \(files.count) file(s)")
+            }
+            parts.append("history: baselines=\(bCount), drifts=\(dCount), reflections=\(rCount), patterns=\(pCount)")
+            let line = parts.joined(separator: " • ")
+            return "Operational context for this corpus: \(line). Prefer using this context silently; do not expose internal rationale."
+        } catch {
+            emitDiagnostic("Operational context summary failed: \(error)")
+            return nil
+        }
+    }
+
     private func isCannotConnect(_ error: Error) -> Bool {
         let ns = error as NSError
         if ns.domain == NSURLErrorDomain && ns.code == -1004 { return true }
@@ -770,12 +818,12 @@ public final class EngraverChatViewModel: ObservableObject {
                 emitDiagnostic("Auto-remediation: disabling rate limiter and restarting gateway due to 429…")
                 self.gatewayRateLimiterEnabled = false
                 await applyGatewaySettings(restart: true)
-                await MainActor.run {
-                    self.sendInternal(prompt: rawPrompt,
-                                      systemPrompts: systemPrompts,
-                                      preferStreaming: false,
-                                      corpusOverride: corpusOverride,
-                                      allowRemediation: false)
+                Task { [weak self] in
+                    await self?.sendInternal(prompt: rawPrompt,
+                                             systemPrompts: systemPrompts,
+                                             preferStreaming: false,
+                                             corpusOverride: corpusOverride,
+                                             allowRemediation: false)
                 }
                 return true
             }
@@ -783,16 +831,16 @@ public final class EngraverChatViewModel: ObservableObject {
         // Case 2: gateway unreachable — ensure environment running and retry once
         if isCannotConnect(error) {
             emitDiagnostic("Auto-remediation: ensuring gateway is running after connection failure…")
-            if let environmentManager {
-                await environmentManager.startEnvironment(includeExtras: true)
-                for _ in 0..<20 { await environmentManager.refreshStatus(); try? await Task.sleep(nanoseconds: 300_000_000); if case .running = environmentState { break } }
+            if let environmentController {
+                await environmentController.startEnvironment(includeExtras: true)
+                for _ in 0..<20 { await environmentController.refreshStatus(); try? await Task.sleep(nanoseconds: 300_000_000); if case .running = environmentState { break } }
             }
-            await MainActor.run {
-                self.sendInternal(prompt: rawPrompt,
-                                  systemPrompts: systemPrompts,
-                                  preferStreaming: false,
-                                  corpusOverride: corpusOverride,
-                                  allowRemediation: false)
+            Task { [weak self] in
+                await self?.sendInternal(prompt: rawPrompt,
+                                         systemPrompts: systemPrompts,
+                                         preferStreaming: false,
+                                         corpusOverride: corpusOverride,
+                                         allowRemediation: false)
             }
             return true
         }
@@ -833,7 +881,7 @@ public final class EngraverChatViewModel: ObservableObject {
 
     public func refreshAwareness() {
         guard awarenessBaseURL != nil else { return }
-        if environmentManager != nil && !environmentIsRunning {
+        if environmentController != nil && !environmentIsRunning {
             let last = awarenessStatus.lastUpdated
             awarenessStatus = .failed(message: "Environment not running", lastUpdated: last)
             emitDiagnostic("Skipped awareness refresh: environment offline.")
@@ -848,7 +896,7 @@ public final class EngraverChatViewModel: ObservableObject {
 
     public func rerunBootstrap() {
         guard bootstrapBaseURL != nil else { return }
-        if environmentManager != nil && !environmentIsRunning {
+        if environmentController != nil && !environmentIsRunning {
             bootstrapState = .failed(message: "Environment not running", timestamp: dateProvider())
             emitDiagnostic("Skipped bootstrap: environment offline.")
             return
@@ -919,9 +967,9 @@ public final class EngraverChatViewModel: ObservableObject {
     }
 
     public func startEnvironment(includeExtras: Bool) {
-        guard let environmentManager else { return }
+        guard let environmentController else { return }
         Task {
-            await environmentManager.startEnvironment(includeExtras: includeExtras)
+            await environmentController.startEnvironment(includeExtras: includeExtras)
         }
     }
 

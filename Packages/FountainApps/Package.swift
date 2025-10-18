@@ -28,6 +28,7 @@ let package = Package(
         .executable(name: "engraver-chat-tui", targets: ["engraver-chat-tui"]),
         .executable(name: "engraving-app", targets: ["engraving-app"]),
         .executable(name: "engraving-demo-seed", targets: ["engraving-demo-seed"]),
+        .executable(name: "memchat-concept-seed", targets: ["memchat-concept-seed"]),
         .executable(name: "llm-doctor", targets: ["llm-doctor"]),
         .executable(name: "engraver-direct", targets: ["engraver-direct"]),
         .library(name: "EngraverChatCore", targets: ["EngraverChatCore"]),
@@ -94,6 +95,14 @@ let package = Package(
                 .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
+        ),
+        .executableTarget(
+            name: "memchat-concept-seed",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ],
+            path: "Sources/memchat-concept-seed"
         ),
         .executableTarget(
             name: "engraving-demo-seed",

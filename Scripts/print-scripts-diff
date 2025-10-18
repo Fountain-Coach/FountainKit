@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+import argparse, json, subprocess, sys
+from typing import Dict, Tuple
+
+def get_json(url, timeout=30):
+    out = subprocess.checkoutput(['curl','-sf', url], timeout=timeout)
+    return json.loads(out.decode('utf-8'))
+
+def get_json2(url, timeout=30):
+    # guard for older Python not having checkoutput alias
+    out = subprocess.check_output(['curl','-sf', url], timeout=timeout)
+    return json.loads(out.decode('utf-8'))
+
+def fetch_seed_pairs(base_url: str, corpus: str):
+    data = get_json2(f"{base_url.rstrip('/')}/corpora/{corpus}/baselines?limit=200&sort=-baselineId")
+    baselines = data.get('baselines') or []
+    seeds = []
+    for b in baselines:
+        v = b.get('value2') or b
+        c = v.get('content')
+        try:
+            obj = json.loads(c) if isinstance(c, str) else c
+        except Exception:
+            continue
+        if isinstance(obj, dict) and obj.get('kind') == 'scripts-catalog-seed':
+            seeds.append((v.get('baselineId'), obj))
+    if not seeds:
+        return None, None
+    current = seeds[0]
+    previous = seeds[1] if len(seeds) > 1 else None
+    return current, previous
+
+def items_map(items) -> Dict[str, Tuple[str,str]]:
+    # name -> (sha, path)
+    m = {}
+    if not items:
+        return m
+    for it in items:
+        m[it.get('name')] = (it.get('sha256'), it.get('path'))
+    return m
+
+def emit_table(rows, fmt='tsv'):
+    sep = '\t' if fmt == 'tsv' else ','
+    for r in rows:
+        print(sep.join(r))
+
+def main():
+    ap = argparse.ArgumentParser(description='Print scripts diff (added/removed/changed) between latest two seeds')
+    ap.add_argument('--persist-url', default='http://127.0.0.1:8005')
+    ap.add_argument('--corpus', default='fountain-scripts')
+    ap.add_argument('--format', choices=['tsv','csv'], default='tsv')
+    ap.add_argument('--out-dir', default='')
+    args = ap.parse_args()
+
+    cur, prev = fetch_seed_pairs(args.persist_url, args.corpus)
+    if not cur:
+        print('No scripts seed baselines found', file=sys.stderr)
+        sys.exit(2)
+    cur_items = items_map(cur[1].get('items'))
+    prev_items = items_map(prev[1].get('items')) if prev else {}
+
+    cur_names = set(cur_items.keys())
+    prev_names = set(prev_items.keys())
+
+    added = sorted(cur_names - prev_names)
+    removed = sorted(prev_names - cur_names)
+    changed = sorted([n for n in (cur_names & prev_names) if prev_items[n][0] != cur_items[n][0]])
+
+    def write_or_print(name, rows):
+        if args.out_dir:
+            import os
+            ext = 'tsv' if args.format=='tsv' else 'csv'
+            path = os.path.join(args.out_dir, f"{name}.{ext}")
+            with open(path, 'w', encoding='utf-8') as f:
+                for r in rows:
+                    f.write((('\t' if args.format=='tsv' else ',').join(r))+'\n')
+        else:
+            print(f"# {name}")
+            emit_table(rows, fmt=args.format)
+            print()
+
+    added_rows = [('name','sha','path')] + [(n, cur_items[n][0], cur_items[n][1]) for n in added]
+    removed_rows = [('name','sha','path')] + [(n, prev_items[n][0], prev_items[n][1]) for n in removed]
+    changed_rows = [('name','sha_old','sha_new','path')] + [(n, prev_items[n][0], cur_items[n][0], cur_items[n][1]) for n in changed]
+
+    write_or_print('added', added_rows)
+    write_or_print('removed', removed_rows)
+    write_or_print('changed', changed_rows)
+
+if __name__ == '__main__':
+    main()
+

@@ -1,5 +1,5 @@
 {
-  "originHash" : "fd005783ab9921aab2accc6b57efd856577f71ca5e5de23b1fceb076c7f54230",
+  "originHash" : "ad300b2bad88558e5ef1ed1279cbe988c5ca1f76d3901fd444f67c25fd707f87",
   "pins" : [
     {
       "identity" : "async-http-client",
@@ -17,15 +17,6 @@
       "state" : {
         "revision" : "42404e5b5fa2759ac56eb91151b8287a9c4b5d29",
         "version" : "0.2.0"
-      }
-    },
-    {
-      "identity" : "midi2",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Fountain-Coach/midi2",
-      "state" : {
-        "revision" : "fec93dae9efbb4f1d56984eb0889983962a1dbab",
-        "version" : "0.3.1"
       }
     },
     {

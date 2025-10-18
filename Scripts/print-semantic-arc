@@ -12,12 +12,25 @@ def main():
     args = ap.parse_args()
 
     data = get_json(f"{args.awareness_url.rstrip('/')}/corpus/semantic-arc?corpus_id={args.corpus}")
-    arc = data.get('arc') or []
+    arc = data.get('arc')
     total = data.get('total')
-    print(f"Semantic Arc for corpus={args.corpus} (total={total})")
-    for phase in arc:
-        print(f" - {phase.get('phase')}: weight={phase.get('weight')} pct={phase.get('pct'):.3f}")
+    if arc and total is not None:
+        print(f"Semantic Arc for corpus={args.corpus} (total={total})")
+        for phase in arc:
+            w = phase.get('weight') or 0
+            pct = phase.get('pct') or 0.0
+            print(f" - {phase.get('phase')}: weight={w} pct={pct:.3f}")
+    else:
+        # Fallback to counts-only shape
+        b = int(data.get('baselines') or 0)
+        r = int(data.get('reflections') or 0)
+        d = int(data.get('drifts') or 0)
+        p = int(data.get('patterns') or 0)
+        total = max(b + r + d + p, 1)
+        print(f"Semantic Arc (counts) for corpus={args.corpus} (total={total})")
+        parts = [('baseline', b), ('reflections', r), ('drift', d), ('patterns', p)]
+        for name, weight in parts:
+            print(f" - {name}: weight={weight} pct={weight/total:.3f}")
 
 if __name__ == '__main__':
     main()
-

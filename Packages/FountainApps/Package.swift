@@ -26,6 +26,7 @@ let package = Package(
         .executable(name: "gateway-console", targets: ["gateway-console"]),
         .executable(name: "gateway-console-app", targets: ["gateway-console-app"]),
         .executable(name: "engraver-chat-tui", targets: ["engraver-chat-tui"]),
+        .executable(name: "engraving-app", targets: ["engraving-app"]),
         .executable(name: "llm-doctor", targets: ["llm-doctor"]),
         .executable(name: "engraver-direct", targets: ["engraver-direct"]),
         .library(name: "EngraverChatCore", targets: ["EngraverChatCore"]),
@@ -303,6 +304,14 @@ let package = Package(
                 .product(name: "FountainStoreClient", package: "FountainCore")
             ],
             path: "Sources/engraving-tui"
+        ),
+        .executableTarget(
+            name: "engraving-app",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ],
+            path: "Sources/engraving-app"
         ),
         .executableTarget(
             name: "fk-ops-server",

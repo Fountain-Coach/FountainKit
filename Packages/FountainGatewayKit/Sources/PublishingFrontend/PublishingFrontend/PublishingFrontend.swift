@@ -201,6 +201,7 @@ private func resolveRootPath(_ path: String, repoRoot: URL?) -> String {
 func mimeType(forPath path: String) -> String {
     switch URL(fileURLWithPath: path).pathExtension.lowercased() {
     case "html", "htm": return "text/html"
+    case "md", "markdown": return "text/markdown"
     case "css": return "text/css"
     case "js": return "application/javascript"
     case "json": return "application/json"

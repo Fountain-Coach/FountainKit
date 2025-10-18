@@ -230,7 +230,22 @@ public struct SpeechAtlasHandlers: APIProtocol, @unchecked Sendable {
         for (i, n) in nodes.enumerated() {
             switch n.type {
             case .section(let level):
-                if level == 1 { currentAct = stripSections(from: n.rawText).replacingOccurrences(of: "ACT ", with: "").trimmingCharacters(in: .whitespaces) }
+                if level == 1 {
+                    currentAct = stripSections(from: n.rawText).replacingOccurrences(of: "ACT ", with: "").trimmingCharacters(in: .whitespaces)
+                } else if level >= 2 {
+                    // Treat level>=2 sections as scene headings for parser-normalised input
+                    if currentAct == act {
+                        let desc = stripSections(from: n.rawText)
+                        let u = desc.uppercased()
+                        if u.hasPrefix("SCENE \(scene.uppercased())") {
+                            startIndex = i + 1
+                            headerText = desc
+                        } else if startIndex != nil {
+                            let slice = Array(nodes[(startIndex!)..<i])
+                            return (header: headerText, nodes: slice)
+                        }
+                    }
+                }
             case .sceneHeading:
                 if currentAct == act {
                     let desc = stripSections(from: n.rawText)

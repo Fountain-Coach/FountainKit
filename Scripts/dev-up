@@ -240,6 +240,8 @@ if [[ "${DEV_UP_AUTO_SEED_SCRIPTS:-1}" == "1" ]]; then
     echo "[dev-up] Seeding scripts corpus (fountain-scripts)…"
     ver="auto-$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
     "$REPO_ROOT/Scripts/seed-scripts-corpus" --persist-url "http://127.0.0.1:$(port_for persist)" --corpus fountain-scripts --version "$ver" >/dev/null 2>&1 || true
+    echo "[dev-up] Registering scripts as functions…"
+    "$REPO_ROOT/Scripts/register-scripts-functions" --persist-url "http://127.0.0.1:$(port_for persist)" --corpus fountain-scripts >/dev/null 2>&1 || true
   fi
 fi
 

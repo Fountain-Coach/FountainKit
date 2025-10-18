@@ -1,8 +1,9 @@
+[0/1] Planning build
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'AgentService' complete! (0.20s)
+Build of product 'AgentService' complete! (0.41s)
 ggml_metal_library_init: using embedded metal library
-ggml_metal_library_init: loaded in 0.018 sec
+ggml_metal_library_init: loaded in 0.019 sec
 ggml_metal_device_init: GPU name:   Apple M2
 ggml_metal_device_init: GPU family: MTLGPUFamilyApple8  (1008)
 ggml_metal_device_init: GPU family: MTLGPUFamilyCommon3 (3003)
@@ -427,9 +428,9 @@ load_tensors: tensor 'token_embd.weight' (q4_K) (and 2 others) cannot be used wi
 ggml_metal_log_allocated_size: allocated buffer, size =  4095.16 MiB, ( 4095.53 /  5461.34)
 load_tensors: offloading 32 repeating layers to GPU
 load_tensors: offloaded 32/33 layers to GPU
-load_tensors:   CPU_Mapped model buffer size =  4165.54 MiB
 load_tensors: Metal_Mapped model buffer size =  4095.14 MiB
-.................................................................................................
+load_tensors:   CPU_Mapped model buffer size =  4165.54 MiB
+................................................................................................
 llama_context: constructing llama_context
 llama_context: n_seq_max     = 1
 llama_context: n_ctx         = 4096
@@ -500,7 +501,7 @@ llama_context:      Metal compute buffer size =   112.01 MiB
 llama_context:        CPU compute buffer size =    70.56 MiB
 llama_context: graph nodes  = 999
 llama_context: graph splits = 4 (with bs=512), 3 (with bs=1)
-=512), 3 (with bs=1)
+
 et_n_threads: n_threads = 7, n_threads_batch = 7
 set_causal_attn: value = 1
 set_embeddings: value = 0

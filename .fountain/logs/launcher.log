@@ -12,9 +12,9 @@ warning: 'fountaintooling': found 1 file(s) which are unhandled; explicitly decl
 [0/1] Planning build
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'local-agent-manager' complete! (10.89s)
+Build of product 'local-agent-manager' complete! (12.09s)
 warning: 'fountainapps': dependency 'swift-log' is not used by any target
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'local-agent-manager' complete! (0.34s)
-healthy
+Build of product 'local-agent-manager' complete! (0.37s)
+already running pid 35761

@@ -66,18 +66,48 @@ public final class AwarenessRouter: @unchecked Sendable {
     }
 
     public func readSemanticArc(corpusId: String) async throws -> HTTPResponse {
-        let (bt, _) = try await persistence.listBaselines(corpusId: corpusId, limit: 1000, offset: 0)
-        let (rt, _) = try await persistence.listReflections(corpusId: corpusId, limit: 1000, offset: 0)
-        let (dt, _) = try await persistence.listDrifts(corpusId: corpusId, limit: 1000, offset: 0)
-        let (pt, _) = try await persistence.listPatterns(corpusId: corpusId, limit: 1000, offset: 0)
-        let total = max(bt + rt + dt + pt, 1)
-        let arc: [[String: Any]] = [
-            ["phase": "baseline", "weight": bt, "pct": Double(bt) / Double(total)],
-            ["phase": "reflections", "weight": rt, "pct": Double(rt) / Double(total)],
-            ["phase": "drift", "weight": dt, "pct": Double(dt) / Double(total)],
-            ["phase": "patterns", "weight": pt, "pct": Double(pt) / Double(total)]
+        // Core store-derived counts
+        let (pagesCount, _) = try await persistence.listPages(corpusId: corpusId, limit: 1, offset: 0)
+        let (segmentsCount, _) = try await persistence.listSegments(corpusId: corpusId, limit: 1, offset: 0)
+        let (entitiesCount, _) = try await persistence.listEntities(corpusId: corpusId, limit: 1, offset: 0)
+        let (analysesCount, _) = try await persistence.listAnalyses(corpusId: corpusId, limit: 1, offset: 0)
+
+        // History/curation signal counts
+        let (baselinesCount, _) = try await persistence.listBaselines(corpusId: corpusId, limit: 1000, offset: 0)
+        let (reflectionsCount, _) = try await persistence.listReflections(corpusId: corpusId, limit: 1000, offset: 0)
+        let (driftsCount, _) = try await persistence.listDrifts(corpusId: corpusId, limit: 1000, offset: 0)
+        let (patternsCount, _) = try await persistence.listPatterns(corpusId: corpusId, limit: 1000, offset: 0)
+
+        // Build a richer semantic arc across ingestion→structure→index→curation phases
+        let phases: [(String, Int)] = [
+            ("ingestion/pages", pagesCount),
+            ("structure/segments", segmentsCount),
+            ("index/entities", entitiesCount),
+            ("analysis/summaries", analysesCount),
+            ("curation/baselines", baselinesCount),
+            ("evolution/drift", driftsCount),
+            ("reasoning/reflections", reflectionsCount),
+            ("patterns", patternsCount)
         ]
-        let data = try JSONSerialization.data(withJSONObject: ["arc": arc, "total": total])
+        let total = max(phases.reduce(0) { $0 + $1.1 }, 1)
+        let arc: [[String: Any]] = phases.map { (name, weight) in
+            ["phase": name, "weight": weight, "pct": Double(weight) / Double(total)]
+        }
+        let obj: [String: Any] = [
+            "arc": arc,
+            "total": total,
+            "counts": [
+                "pages": pagesCount,
+                "segments": segmentsCount,
+                "entities": entitiesCount,
+                "analyses": analysesCount,
+                "baselines": baselinesCount,
+                "reflections": reflectionsCount,
+                "drifts": driftsCount,
+                "patterns": patternsCount
+            ]
+        ]
+        let data = try JSONSerialization.data(withJSONObject: obj)
         return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: data)
     }
 

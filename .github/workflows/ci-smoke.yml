@@ -14,9 +14,23 @@ jobs:
       - name: Smoke test
         run: |
           bash Scripts/ci-smoke.sh
+      - name: Seed scripts corpus and diff
+        run: |
+          set -euo pipefail
+          # Start persist quickly and ensure it is ready
+          bash Scripts/dev-up --check
+          # Diff tables (written to artifact dir)
+          mkdir -p artifacts/scripts-diff
+          Scripts/print-scripts-diff --persist-url http://127.0.0.1:8005 --corpus fountain-scripts --format csv --out-dir artifacts/scripts-diff || true
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: fountain-logs
           path: .fountain/logs
+      - name: Upload scripts diff
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scripts-diff
+          path: artifacts/scripts-diff

@@ -13,6 +13,7 @@ def post_json(url, obj, timeout=30):
 def main():
     ap = argparse.ArgumentParser(description='Seed patterns/reflections for canonical Shakespeare corpus based on verification results')
     ap.add_argument('--persist-url', default='http://127.0.0.1:8005')
+    ap.add_argument('--awareness-url', default='http://127.0.0.1:8001')
     ap.add_argument('--corpus', default='shakespeare-canonical')
     ap.add_argument('--report', default='Packages/FountainSpecCuration/reports/shakespeare-verify/summary.json')
     ap.add_argument('--coverage-threshold', type=float, default=0.95)
@@ -57,7 +58,15 @@ def main():
             'outliers': outliers
         }, ensure_ascii=False)
     }
-    post_json(f"{base}/corpora/{args.corpus}/patterns", patterns)
+    try:
+        post_json(f"{base}/corpora/{args.corpus}/patterns", patterns)
+    except subprocess.CalledProcessError:
+        # Fallback to Awareness service if Persist HTTP does not expose patterns endpoint
+        post_json(f"{args.awareness_url.rstrip('/')}/corpus/patterns", {
+            'corpusId': args.corpus,
+            'patternsId': patterns['patternsId'],
+            'content': patterns['content']
+        })
 
     # Seed a reflection summary
     summary_lines = [
@@ -81,4 +90,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

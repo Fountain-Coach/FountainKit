@@ -83,7 +83,7 @@ Commands:
   open schema <target>  Open OpenAPI document (/openapi.yaml) for a target
   open list       Print all targets, ports, and URLs
   api <url>       Generic HTTP call with JSON helpers
-  export persist  Export pages/segments to fixtures (wrapper)
+  export persist  Export pages/segments (and more) to fixtures
 
 Shortcuts:
   toolserver ...  Proxy to Scripts/toolserver

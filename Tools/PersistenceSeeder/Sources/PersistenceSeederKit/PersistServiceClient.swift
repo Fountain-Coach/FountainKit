@@ -66,6 +66,48 @@ public struct PersistServiceClient: Sendable {
         }
     }
 
+    public struct Entity: Codable, Sendable {
+        public let corpusId: String
+        public let entityId: String
+        public let name: String
+        public let type: String
+
+        public init(corpusId: String, entityId: String, name: String, type: String) {
+            self.corpusId = corpusId
+            self.entityId = entityId
+            self.name = name
+            self.type = type
+        }
+    }
+
+    public struct Table: Codable, Sendable {
+        public let corpusId: String
+        public let tableId: String
+        public let pageId: String
+        public let csv: String
+
+        public init(corpusId: String, tableId: String, pageId: String, csv: String) {
+            self.corpusId = corpusId
+            self.tableId = tableId
+            self.pageId = pageId
+            self.csv = csv
+        }
+    }
+
+    public struct Analysis: Codable, Sendable {
+        public let corpusId: String
+        public let analysisId: String
+        public let pageId: String
+        public let summary: String
+
+        public init(corpusId: String, analysisId: String, pageId: String, summary: String) {
+            self.corpusId = corpusId
+            self.analysisId = analysisId
+            self.pageId = pageId
+            self.summary = summary
+        }
+    }
+
     public struct PageList: Sendable {
         public let total: Int
         public let pages: [Page]
@@ -74,6 +116,21 @@ public struct PersistServiceClient: Sendable {
     public struct SegmentList: Sendable {
         public let total: Int
         public let segments: [Segment]
+    }
+
+    public struct EntityList: Sendable {
+        public let total: Int
+        public let entities: [Entity]
+    }
+
+    public struct TableList: Sendable {
+        public let total: Int
+        public let tables: [Table]
+    }
+
+    public struct AnalysisList: Sendable {
+        public let total: Int
+        public let analyses: [Analysis]
     }
 
     private struct ListCorporaResponse: Codable {
@@ -89,6 +146,21 @@ public struct PersistServiceClient: Sendable {
     private struct SegmentListResponse: Codable {
         let total: Int
         let segments: [Segment]
+    }
+
+    private struct EntityListResponse: Codable {
+        let total: Int
+        let entities: [Entity]
+    }
+
+    private struct TableListResponse: Codable {
+        let total: Int
+        let tables: [Table]
+    }
+
+    private struct AnalysisListResponse: Codable {
+        let total: Int
+        let analyses: [Analysis]
     }
 
     private let rest: RESTClient
@@ -179,5 +251,58 @@ public struct PersistServiceClient: Sendable {
         let response = try await rest.send(APIRequest(method: .GET, url: url))
         let payload = try decoder.decode(SegmentListResponse.self, from: response.data)
         return SegmentList(total: payload.total, segments: payload.segments)
+    }
+
+    public func listEntities(
+        corpusId: String,
+        limit: Int = 50,
+        offset: Int = 0,
+        type: String? = nil,
+        query: String? = nil
+    ) async throws -> EntityList {
+        var queryItems: [String: String?] = [
+            "limit": "\(limit)",
+            "offset": "\(offset)"
+        ]
+        if let type, !type.isEmpty { queryItems["type"] = type }
+        if let query, !query.isEmpty { queryItems["q"] = query }
+        guard let url = rest.buildURL(path: "/corpora/\(corpusId)/entities", query: queryItems) else { throw APIError.invalidURL }
+        let response = try await rest.send(APIRequest(method: .GET, url: url))
+        let payload = try decoder.decode(EntityListResponse.self, from: response.data)
+        return EntityList(total: payload.total, entities: payload.entities)
+    }
+
+    public func listTables(
+        corpusId: String,
+        limit: Int = 50,
+        offset: Int = 0,
+        pageId: String? = nil
+    ) async throws -> TableList {
+        var queryItems: [String: String?] = [
+            "limit": "\(limit)",
+            "offset": "\(offset)"
+        ]
+        if let pageId, !pageId.isEmpty { queryItems["pageId"] = pageId }
+        guard let url = rest.buildURL(path: "/corpora/\(corpusId)/tables", query: queryItems) else { throw APIError.invalidURL }
+        let response = try await rest.send(APIRequest(method: .GET, url: url))
+        let payload = try decoder.decode(TableListResponse.self, from: response.data)
+        return TableList(total: payload.total, tables: payload.tables)
+    }
+
+    public func listAnalyses(
+        corpusId: String,
+        limit: Int = 50,
+        offset: Int = 0,
+        pageId: String? = nil
+    ) async throws -> AnalysisList {
+        var queryItems: [String: String?] = [
+            "limit": "\(limit)",
+            "offset": "\(offset)"
+        ]
+        if let pageId, !pageId.isEmpty { queryItems["pageId"] = pageId }
+        guard let url = rest.buildURL(path: "/corpora/\(corpusId)/analyses", query: queryItems) else { throw APIError.invalidURL }
+        let response = try await rest.send(APIRequest(method: .GET, url: url))
+        let payload = try decoder.decode(AnalysisListResponse.self, from: response.data)
+        return AnalysisList(total: payload.total, analyses: payload.analyses)
     }
 }

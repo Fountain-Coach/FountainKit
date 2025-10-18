@@ -83,10 +83,12 @@ Commands:
   open schema <target>  Open OpenAPI document (/openapi.yaml) for a target
   open list       Print all targets, ports, and URLs
   api <url>       Generic HTTP call with JSON helpers
+  export persist  Export pages/segments to fixtures (wrapper)
 
 Shortcuts:
   toolserver ...  Proxy to Scripts/toolserver
   ts-api ...      Proxy to Scripts/toolserver-api
+  export ...      Proxy to Scripts/export-persist
 
 Examples:
   fk up
@@ -190,6 +192,16 @@ LIST
   api) shift; api "$@" ;;
   toolserver) shift; "$ROOT/Scripts/toolserver" "$@" ;;
   ts-api) shift; "$ROOT/Scripts/toolserver-api" "$@" ;;
+  export)
+    shift
+    sub=${1:-}
+    case "$sub" in
+      persist)
+        shift
+        "$ROOT/Scripts/export-persist" "$@"
+        ;;
+      *) echo "usage: fk export persist [--corpus <id>] [--out <dir>] [--url <persist-url>] [--api-key <key>]" ;;
+    esac ;;
   help|--help|-h) help ;;
   *) help ;;
 esac

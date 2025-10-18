@@ -3,6 +3,8 @@ import argparse, json, os, sys, subprocess
 from pathlib import Path
 from urllib.parse import urlparse
 
+CANON_VERSION = 'v1'
+
 def http_json(method, url, obj, timeout=60):
     data = json.dumps(obj, ensure_ascii=False).encode('utf-8')
     out = subprocess.check_output([
@@ -14,6 +16,10 @@ def http_json(method, url, obj, timeout=60):
 
 def post_json(url, obj):
     return http_json('POST', url, obj)
+
+def get_json(url, timeout=30):
+    out = subprocess.check_output(['curl','-sf',url], timeout=timeout)
+    return json.loads(out.decode('utf-8'))
 
 def pick_source(canon_list):
     # Prefer MIT when present
@@ -40,6 +46,24 @@ def main():
     except subprocess.CalledProcessError:
         pass
 
+    # Guard: if a canonical baseline with same version exists, skip seeding
+    try:
+        bl = get_json(f"{args.persist_url.rstrip('/')}/corpora/{args.corpus}/baselines?limit=200")
+        for item in bl.get('baselines', []) or []:
+            content = item.get('content') or item.get('value2',{}).get('content')
+            if not content:
+                continue
+            try:
+                obj = json.loads(content)
+            except Exception:
+                continue
+            if obj.get('kind') == 'canonical-shakespeare-seed' and obj.get('version') == CANON_VERSION:
+                print(f"[seed] Guard: canonical version {CANON_VERSION} already present. Skipping seeding.")
+                return
+    except Exception:
+        # Best-effort guard; continue if fetch fails
+        pass
+
     for it in items:
         title = it['title']
         canon = pick_source(it.get('canonical',[]))
@@ -60,7 +84,8 @@ def main():
             print(f"[seed] ERROR: no analysis for {title}", file=sys.stderr)
             continue
         env = analysis.get('envelope', {})
-        page_id = env.get('id') or it.get('slug')
+        slug = it.get('slug')
+        page_id = slug or env.get('id')
         page_url = env.get('source',{}).get('uri') or url
         host = urlparse(page_url).netloc or 'canonical'
         # Title: prefer mapping title; else first heading block
@@ -80,7 +105,7 @@ def main():
                 text = json.dumps(b['table'], ensure_ascii=False)
             if not seg_id:
                 continue
-            seg = {"corpusId": args.corpus, "segmentId": seg_id, "pageId": page_id, "kind": kind, "text": text}
+            seg = {"corpusId": args.corpus, "segmentId": f"{page_id}:{seg_id}", "pageId": page_id, "kind": kind, "text": text}
             try:
                 post_json(f"{args.persist_url.rstrip('/')}/corpora/{args.corpus}/segments", seg)
             except subprocess.CalledProcessError:

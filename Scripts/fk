@@ -230,8 +230,10 @@ LIST
     shift
     if [[ "${1:-}" == "corpus" ]]; then
       shift
-      SEMANTIC_BROWSER_URL="${SEMANTIC_BROWSER_URL:-http://127.0.0.1:${SEMANTIC_BROWSER_PORT:-8007}}" \
-        "$ROOT/Scripts/verify-shakespeare-corpus" --sb-url "$SEMANTIC_BROWSER_URL" "$@"
+      local __sb_url="${SEMANTIC_BROWSER_URL:-}"
+      local __sb_port="${SEMANTIC_BROWSER_PORT:-8007}"
+      if [[ -z "$__sb_url" ]]; then __sb_url="http://127.0.0.1:$__sb_port"; fi
+      "$ROOT/Scripts/verify-shakespeare-corpus" --sb-url "$__sb_url" "$@"
       exit 0
     fi
     SB_BASE="${SEMANTIC_BROWSER_URL:-http://127.0.0.1:${SEMANTIC_BROWSER_PORT:-8007}}"

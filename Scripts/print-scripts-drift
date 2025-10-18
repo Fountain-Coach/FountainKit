@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+import argparse, json, subprocess
+
+def get_json(url, timeout=30):
+    out = subprocess.check_output(['curl','-sf', url], timeout=timeout)
+    return json.loads(out.decode('utf-8'))
+
+def main():
+    ap = argparse.ArgumentParser(description='Print latest Scripts corpus drift report')
+    ap.add_argument('--persist-url', default='http://127.0.0.1:8005')
+    ap.add_argument('--corpus', default='fountain-scripts')
+    args = ap.parse_args()
+
+    base = args.persist_url.rstrip('/')
+    data = get_json(f"{base}/corpora/{args.corpus}/baselines?limit=200&sort=-baselineId")
+    baselines = data.get('baselines') or []
+    drift = None
+    seed = None
+    for b in baselines:
+        v = b.get('value2') or b
+        c = v.get('content')
+        try:
+            obj = json.loads(c) if isinstance(c, str) else c
+        except Exception:
+            continue
+        if isinstance(obj, dict) and obj.get('kind') == 'scripts-catalog-drift' and drift is None:
+            drift = (v.get('baselineId'), obj)
+        if isinstance(obj, dict) and obj.get('kind') == 'scripts-catalog-seed' and seed is None:
+            seed = (v.get('baselineId'), obj)
+        if drift and seed:
+            break
+
+    if not drift and not seed:
+        print('No scripts baselines found.')
+        return
+    if drift:
+        did, dobj = drift
+        print(f"Scripts Drift: {dobj.get('fromVersion')} -> {dobj.get('toVersion')} (baselineId: {did})")
+        print(f"Counts: old={dobj.get('count',{}).get('old',0)} new={dobj.get('count',{}).get('new',0)}")
+        print()
+        print(f"Added ({len(dobj.get('added',[]))}):")
+        for n in dobj.get('added',[]): print(f" - {n}")
+        if not dobj.get('added'): print(' - none')
+        print()
+        print(f"Removed ({len(dobj.get('removed',[]))}):")
+        for n in dobj.get('removed',[]): print(f" - {n}")
+        if not dobj.get('removed'): print(' - none')
+        print()
+        print(f"Changed ({len(dobj.get('changed',[]))}):")
+        for n in dobj.get('changed',[]): print(f" ~ {n}")
+        if not dobj.get('changed'): print(' - none')
+    else:
+        sid, sobj = seed
+        print(f"Latest Scripts Seed: version={sobj.get('version')} (baselineId: {sid})")
+        print(f"Items: {len(sobj.get('items',[]))}")
+
+if __name__ == '__main__':
+    main()
+

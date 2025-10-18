@@ -109,6 +109,7 @@ Commands:
   read play       Render the whole play by stitching acts & scenes
   scripts list    List scripts from the scripts corpus
   scripts show    Show details for a script (header/usage)
+  scripts drift   Show latest scripts drift report
 
 Shortcuts:
   toolserver ...  Proxy to Scripts/toolserver
@@ -328,6 +329,8 @@ PY
         "$ROOT/Scripts/print-scripts" list "$@" ;;
       show)
         "$ROOT/Scripts/print-scripts" show "$@" ;;
+      drift)
+        "$ROOT/Scripts/print-scripts-drift" "$@" ;;
       *) echo "usage: fk scripts <list|show> [args]" ;;
     esac ;;
   read)

@@ -234,5 +234,14 @@ if [[ "$CHECK" == "1" || "${DEV_UP_CHECKS:-0}" == "1" ]]; then
   fi
 fi
 
+# Auto-seed Scripts corpus into FountainStore (idempotent; guarded by baselines)
+if [[ "${DEV_UP_AUTO_SEED_SCRIPTS:-1}" == "1" ]]; then
+  if command -v python3 >/dev/null 2>&1; then
+    echo "[dev-up] Seeding scripts corpus (fountain-scripts)…"
+    ver="auto-$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    "$REPO_ROOT/Scripts/seed-scripts-corpus" --persist-url "http://127.0.0.1:$(port_for persist)" --corpus fountain-scripts --version "$ver" >/dev/null 2>&1 || true
+  fi
+fi
+
 echo "[dev-up] Done. Logs under .fountain/logs; pids under .fountain/pids"
 echo "[dev-up] Tip: 'source Scripts/dev-up env' to export LAUNCHER_SIGNATURE into your shell"

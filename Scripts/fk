@@ -16,6 +16,17 @@ conf_val(){
   awk -F: -v k="^"$key":" 'BEGIN{ORS=""} $0 ~ k { $1=""; sub(/^:[ \t]*/,"",$0); sub(/[ \t\r\n]+$/,"",$0); print $0; exit }' "$file"
 }
 
+# Locate a Chromium/Chrome binary for headless PDF export
+find_chrome(){
+  for bin in google-chrome-stable google-chrome chromium chromium-browser \
+             "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+             "/Applications/Chromium.app/Contents/MacOS/Chromium"; do
+    if command -v "$bin" >/dev/null 2>&1; then echo "$bin"; return 0; fi
+    [[ -x "$bin" ]] && { echo "$bin"; return 0; }
+  done
+  return 1
+}
+
 doctor(){
   echo "[fk] Doctor: checking tools…"
   for bin in swift docker jq curl; do
@@ -91,6 +102,7 @@ Commands:
   open list       Print all targets, ports, and URLs
   api <url>       Generic HTTP call with JSON helpers
   export persist  Export pages/segments (and more) to fixtures
+  verify          Compare an edition against canonical web sources (Semantic Browser)
   read scene      Render a human-readable scene script (Speech Atlas)
   read act        Render a whole act by stitching scenes
   read play       Render the whole play by stitching acts & scenes
@@ -213,6 +225,90 @@ LIST
         ;;
       *) echo "usage: fk export persist [--corpus <id>] [--out <dir>] [--url <persist-url>] [--api-key <key>]" ;;
     esac ;;
+  verify)
+    shift
+    SB_BASE="${SEMANTIC_BROWSER_URL:-http://127.0.0.1:${SEMANTIC_BROWSER_PORT:-8007}}"
+    EDITION_URL=""; EDITION_FILE=""; EDITION_TEXT=""; EDITION_TITLE=""; SHINGLE=3; MAX_EX=20; MIN_LINE=12; JSON=0
+    declare -a CANONICAL
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --edition-url) EDITION_URL=${2:-}; shift 2;;
+        --edition-file) EDITION_FILE=${2:-}; shift 2;;
+        --edition-text) EDITION_TEXT=${2:-}; shift 2;;
+        --title) EDITION_TITLE=${2:-}; shift 2;;
+        --canonical-url) CANONICAL+=("${2:-}"); shift 2;;
+        --canonical-list) while IFS= read -r line; do [[ -n "$line" ]] && CANONICAL+=("$line"); done < "${2:-}"; shift 2;;
+        --url) SB_BASE=${2:-}; shift 2;;
+        --shingle|--shingle-size) SHINGLE=${2:-}; shift 2;;
+        --max-examples) MAX_EX=${2:-}; shift 2;;
+        --min-line-len) MIN_LINE=${2:-}; shift 2;;
+        --json) JSON=1; shift 1;;
+        *) break;;
+      esac
+    done
+    [[ -n "$EDITION_URL" || -n "$EDITION_FILE" || -n "$EDITION_TEXT" ]] || { echo "usage: fk verify [--edition-url URL|--edition-file FILE|--edition-text TEXT] [--title TITLE] --canonical-url URL [--canonical-url URL ...] [--canonical-list FILE] [--url SB_BASE] [--shingle N] [--max-examples N] [--min-line-len N] [--json]"; exit 2; }
+    [[ ${#CANONICAL[@]} -gt 0 ]] || { echo "error: at least one --canonical-url or --canonical-list required"; exit 2; }
+    # Build edition object
+    ed_fields=()
+    [[ -n "$EDITION_TITLE" ]] && ed_fields+=("\"title\":\"$EDITION_TITLE\"")
+    if [[ -n "$EDITION_URL" ]]; then
+      ed_fields+=("\"url\":\"$EDITION_URL\"")
+    elif [[ -n "$EDITION_FILE" ]]; then
+      ED_TXT=$(cat "$EDITION_FILE" | python3 - <<'PY'
+import sys, json
+data=sys.stdin.read()
+print(json.dumps(data))
+PY
+)
+      ed_fields+=("\"text\":$ED_TXT")
+    else
+      # Raw text provided
+      ED_TXT=$(python3 - <<PY
+import json, sys
+print(json.dumps(sys.argv[1]))
+PY
+"$EDITION_TEXT")
+      ed_fields+=("\"text\":$ED_TXT")
+    fi
+    edition_json="{${ed_fields[*]}}"
+    # Canonical array: support lines of either URL or NAME|URL
+    canon_items=()
+    for item in "${CANONICAL[@]}"; do
+      name=""; url="$item"
+      if [[ "$item" == *"|"* ]]; then name="${item%%|*}"; url="${item#*|}"; fi
+      if [[ -n "$name" ]]; then
+        canon_items+=("{\"name\":\"$name\",\"url\":\"$url\"}")
+      else
+        canon_items+=("{\"url\":\"$url\"}")
+      fi
+    done
+    canonical_json="[${canon_items[*]}]"
+    options_json="{\"shingleSize\":$SHINGLE,\"maxExamples\":$MAX_EX,\"minLineLen\":$MIN_LINE}"
+    body="{\"edition\":$edition_json,\"canonical\":$canonical_json,\"options\":$options_json}"
+    url="$SB_BASE/v1/verify"
+    resp=$(curl -sf -X POST "$url" -H 'Content-Type: application/json' -d "$body") || { echo "error: request failed" >&2; exit 1; }
+    if (( JSON )); then printf "%s\n" "$resp" | jq .; exit 0; fi
+    # Summary line
+    best=$(printf "%s\n" "$resp" | jq -r '.summary.bestSource // ""')
+    sj=$(printf "%s\n" "$resp" | jq -r '.summary.shingleJaccardBest // 0')
+    tj=$(printf "%s\n" "$resp" | jq -r '.summary.tokenJaccardBest // 0')
+    lc=$(printf "%s\n" "$resp" | jq -r '.summary.lineCoverageBest // 0')
+    printf "Best source: %s (shingleJ=%.3f, tokenJ=%.3f, lineCov=%.3f)\n" "$best" "$sj" "$tj" "$lc"
+    # Table header
+    printf "\n%-32s  %-6s  %-8s  %-8s\n" "Source" "k" "Jacc(T)" "Jacc(k)"
+    printf "%-32s  %-6s  %-8s  %-8s\n" "--------------------------------" "------" "--------" "--------"
+    printf "%s\n" "$resp" | jq -r --arg k "$SHINGLE" '
+      .results[] | [(.source.name // .source.url), (.metrics.editionTokens|tostring+"/"+(.metrics.canonicalTokens|tostring)), (.metrics.tokenJaccard|tostring), (.metrics.shingleJaccard|tostring)] | @tsv
+    ' | while IFS=$'\t' read -r name tok j1 j2; do
+      printf "%-32s  %-6s  %-8.3f  %-8.3f\n" "${name:0:32}" "$tok" "$j1" "$j2"
+    done
+    # Examples (first source)
+    first_missing=$(printf "%s\n" "$resp" | jq -r '.results[0].examples.missingFromEdition[]? | .[0:120]') || true
+    if [[ -n "$first_missing" ]]; then
+      printf "\nMissing (from first source):\n"
+      printf " - %s\n" $first_missing
+    fi
+    ;;
   read)
     shift
     sub=${1:-}; shift || true

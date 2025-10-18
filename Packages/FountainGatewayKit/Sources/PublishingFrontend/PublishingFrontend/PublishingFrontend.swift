@@ -41,6 +41,7 @@ public final class PublishingFrontend {
         self.group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         let env = ProcessInfo.processInfo.environment
         let persistBase = env["PERSIST_URL"] ?? "http://127.0.0.1:\(env["FOUNTAINSTORE_PORT"] ?? "8005")"
+        let awarenessBase = env["AWARENESS_URL"] ?? "http://127.0.0.1:\(env["BASELINE_AWARENESS_PORT"] ?? "8001")"
         func proxyPersist(_ req: HTTPRequest) -> HTTPResponse? {
             // Supported proxies:
             //  - /api/scripts/pages?limit=&sort=&corpus=
@@ -68,8 +69,30 @@ public final class PublishingFrontend {
             }
             return nil
         }
+        func proxyAwareness(_ req: HTTPRequest) -> HTTPResponse? {
+            // GET /api/arc?corpus=<id>
+            guard req.method == "GET" else { return nil }
+            if req.path.hasPrefix("/api/arc") {
+                let query = URL(string: "http://localhost\(req.path)")?.query ?? ""
+                let qp: [String:String] = query.split(separator: "&").reduce(into: [:]) { dict, pair in
+                    let parts = pair.split(separator: "=", maxSplits: 1).map(String.init)
+                    if parts.count == 2 { dict[parts[0]] = parts[1] }
+                }
+                guard let corpusEnc = qp["corpus"], !corpusEnc.isEmpty, let corpus = corpusEnc.removingPercentEncoding else {
+                    return HTTPResponse(status: 400, headers: ["Content-Type":"application/json"], body: Data("{}".utf8))
+                }
+                let target = "\(awarenessBase)/corpus/semantic-arc?corpus_id=\(corpus.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? corpus)"
+                if let url = URL(string: target), let data = try? Data(contentsOf: url) {
+                    return HTTPResponse(status: 200, headers: ["Content-Type": "application/json", "Cache-Control": "no-store"], body: data)
+                } else {
+                    return HTTPResponse(status: 502, headers: ["Content-Type": "application/json"], body: Data("{}".utf8))
+                }
+            }
+            return nil
+        }
         let kernel = HTTPKernel { [config] req in
             if let proxied = proxyPersist(req) { return proxied }
+            if let proxied = proxyAwareness(req) { return proxied }
             guard req.method == "GET" else { return HTTPResponse(status: 405) }
             let path = config.rootPath + (req.path == "/" ? "/index.html" : req.path)
             if let data = FileManager.default.contents(atPath: path) {

@@ -1,0 +1,100 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Semantic Arc</title>
+  <style>
+    body { font: 14px/1.5 -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial; margin: 2rem; }
+    h1 { margin-bottom: .5rem }
+    .row { display: flex; gap: 1.5rem; align-items: center; }
+    label { font-weight: 600; }
+    input { padding: .3rem .4rem; }
+    button { padding: .35rem .6rem; }
+    canvas { border: 1px solid #eee; border-radius: 6px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+    th, td { border: 1px solid #ddd; padding: .5rem; text-align: left; }
+    th { background: #f7f7f7 }
+  </style>
+  <script>
+    async function fetchArc(corpus){
+      const res = await fetch(`/api/arc?corpus=${encodeURIComponent(corpus)}`);
+      if(!res.ok) throw new Error('fetch failed');
+      return res.json();
+    }
+    function drawBars(canvas, arc){
+      const ctx = canvas.getContext('2d');
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0,0,W,H);
+      const max = Math.max(...arc.map(a => a.weight), 1);
+      const barW = Math.max(20, (W - 40) / arc.length - 10);
+      const baseY = H - 30;
+      const colors = ['#4F46E5','#0EA5E9','#10B981','#F59E0B','#EF4444','#8B5CF6','#14B8A6','#64748B'];
+      ctx.font = '12px -apple-system, Segoe UI, Roboto, Helvetica, Arial';
+      ctx.fillStyle = '#111';
+      ctx.fillText('Phases', 10, 14);
+      arc.forEach((a,i) => {
+        const x = 20 + i*(barW+10);
+        const h = Math.round((a.weight/max)*(H-80));
+        ctx.fillStyle = colors[i % colors.length];
+        ctx.fillRect(x, baseY - h, barW, h);
+        ctx.fillStyle = '#111';
+        const label = a.phase.replace(/^[^/]+\//,'');
+        ctx.save();
+        ctx.translate(x + barW/2, H - 10);
+        ctx.rotate(-Math.PI/4);
+        ctx.textAlign = 'right';
+        ctx.fillText(label, 0, 0);
+        ctx.restore();
+      });
+    }
+    function renderTable(tbody, arc){
+      tbody.innerHTML='';
+      arc.forEach(a => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${a.phase}</td><td>${a.weight}</td><td>${(a.pct*100).toFixed(1)}%</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+    async function load(){
+      const qs = new URLSearchParams(location.search);
+      const corpus = qs.get('corpus') || 'fountain-scripts';
+      document.getElementById('corpus').value = corpus;
+      try {
+        const data = await fetchArc(corpus);
+        const arc = data.arc || [];
+        document.getElementById('summary').textContent = `Total weight: ${data.total ?? (data.counts ? (data.counts.pages+data.counts.segments) : 'n/a')}`;
+        drawBars(document.getElementById('chart'), arc);
+        renderTable(document.querySelector('#tbl tbody'), arc);
+      } catch(e){
+        document.getElementById('summary').textContent = 'Failed to fetch arc';
+        console.error(e);
+      }
+    }
+    function refetch(){
+      const corpus = document.getElementById('corpus').value.trim();
+      if(!corpus) return;
+      const url = new URL(location.href);
+      url.searchParams.set('corpus', corpus);
+      history.replaceState({}, '', url);
+      load();
+    }
+    window.addEventListener('DOMContentLoaded', load);
+  </script>
+</head>
+<body>
+  <h1>Semantic Arc</h1>
+  <div class="row" style="margin-bottom:1rem;">
+    <label for="corpus">Corpus</label>
+    <input id="corpus" placeholder="fountain-scripts"/>
+    <button onclick="refetch()">Load</button>
+    <div id="summary" style="margin-left:1rem; color:#555;"></div>
+  </div>
+  <canvas id="chart" width="860" height="260"></canvas>
+  <table id="tbl">
+    <thead><tr><th>Phase</th><th>Weight</th><th>Percent</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</body>
+</html>
+

@@ -563,6 +563,7 @@ struct ChatView: View {
 private struct LiveChatView: View {
     @StateObject private var vm: EngraverChatViewModel
     @State private var input: String = ""
+    @State private var chatCorpusId: String
 
     init(corpusId: String) {
         // Resolve store (disk if FOUNTAINSTORE_DIR set)
@@ -616,6 +617,8 @@ private struct LiveChatView: View {
             gatewayBaseURL: gatewayBase,
             directMode: true
         ))
+        // New per-chat corpus id for persistence
+        _chatCorpusId = State(initialValue: "chat-\(Int(Date().timeIntervalSince1970))-\(UUID().uuidString.prefix(6))")
     }
 
     var body: some View {
@@ -623,6 +626,7 @@ private struct LiveChatView: View {
             Text("Live Chat").font(.headline)
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
+                    Text("Chat corpus: \(chatCorpusId)").font(.caption).foregroundStyle(.secondary)
                     ForEach(vm.turns, id: \.id) { t in
                         VStack(alignment: .leading, spacing: 4) {
                             Text("You:").font(.caption).foregroundStyle(.secondary)
@@ -642,7 +646,7 @@ private struct LiveChatView: View {
                 TextField("Type a message…", text: $input)
                 Button("Send") {
                     let sys = vm.makeSystemPrompts(base: [])
-                    vm.send(prompt: input, systemPrompts: sys, preferStreaming: true, corpusOverride: nil)
+                    vm.send(prompt: input, systemPrompts: sys, preferStreaming: true, corpusOverride: chatCorpusId)
                     input = ""
                 }.disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }

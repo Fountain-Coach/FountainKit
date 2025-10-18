@@ -1,0 +1,127 @@
+[
+  {"title":"As You Like It","slug":"as-you-like-it","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/asyoulikeit/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/as-you-like-it/"}
+  ]},
+  {"title":"A Midsummer Night's Dream","slug":"a-midsummer-nights-dream","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/midsummer/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/a-midsummer-nights-dream/"}
+  ]},
+  {"title":"The Tempest","slug":"the-tempest","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/tempest/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/the-tempest/"}
+  ]},
+  {"title":"King Lear","slug":"king-lear","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/lear/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/king-lear/"}
+  ]},
+  {"title":"Twelfth Night","slug":"twelfth-night","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/twelfth_night/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/twelfth-night/"}
+  ]},
+  {"title":"Romeo and Juliet","slug":"romeo-and-juliet","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/romeo_juliet/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/romeo-and-juliet/"}
+  ]},
+  {"title":"The Tragedy of Hamlet, Prince of Denmark","slug":"hamlet","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/hamlet/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/hamlet/"}
+  ]},
+  {"title":"Othello, the Moore of Venice","slug":"othello","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/othello/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/othello/"}
+  ]},
+  {"title":"The Life and Death of Julius Caesar","slug":"julius-caesar","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/julius_caesar/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/julius-caesar/"}
+  ]},
+  {"title":"The Merchant of Venice","slug":"the-merchant-of-venice","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/merchant/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/the-merchant-of-venice/"}
+  ]},
+  {"title":"Much Ado About Nothing","slug":"much-ado-about-nothing","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/much_ado/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/much-ado-about-nothing/"}
+  ]},
+  {"title":"The Tragedy of Macbeth","slug":"macbeth","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/macbeth/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/macbeth/"}
+  ]},
+  {"title":"The Tragedy of Coriolanus","slug":"coriolanus","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/coriolanus/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/coriolanus/"}
+  ]},
+  {"title":"Cymbeline","slug":"cymbeline","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/cymbeline/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/cymbeline/"}
+  ]},
+  {"title":"Titus Andronicus","slug":"titus-andronicus","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/titus/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/titus-andronicus/"}
+  ]},
+  {"title":"Timon of Athens","slug":"timon-of-athens","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/timon/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/timon-of-athens/"}
+  ]},
+  {"title":"Pericles, Prince of Tyre","slug":"pericles-prince-of-tyre","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/pericles/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/pericles/"}
+  ]},
+  {"title":"Troilus and Cressida","slug":"troilus-and-cressida","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/troilus_cressida/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/troilus-and-cressida/"}
+  ]},
+  {"title":"All's Well That Ends Well","slug":"alls-well-that-ends-well","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/allswell/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/alls-well-that-ends-well/"}
+  ]},
+  {"title":"Two Gentlemen of Verona","slug":"two-gentlemen-of-verona","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/two_gentlemen/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/the-two-gentlemen-of-verona/"}
+  ]},
+  {"title":"The Life and Death of Richard the Second","slug":"richard-ii","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/richardii/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/richard-ii/"}
+  ]},
+  {"title":"The Life and Death of Richard the Third","slug":"richard-iii","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/richardiii/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/richard-iii/"}
+  ]},
+  {"title":"The Life of King Henry the Fifth","slug":"henry-v","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/henryv/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/henry-v/"}
+  ]},
+  {"title":"The First Part of King Henry the Fourth","slug":"henry-iv-part-1","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/1henryiv/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/henry-iv-part-1/"}
+  ]},
+  {"title":"The Second Part of King Henry the Fourth","slug":"henry-iv-part-2","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/2henryiv/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/henry-iv-part-2/"}
+  ]},
+  {"title":"The First Part of King Henry the Sixth","slug":"henry-vi-part-1","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/1henryvi/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/henry-vi-part-1/"}
+  ]},
+  {"title":"The Second Part of King Henry the Sixth","slug":"henry-vi-part-2","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/2henryvi/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/henry-vi-part-2/"}
+  ]},
+  {"title":"The Third Part of King Henry the Sixth","slug":"henry-vi-part-3","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/3henryvi/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/henry-vi-part-3/"}
+  ]},
+  {"title":"The Life of King Henry the Eighth","slug":"henry-viii","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/henryviii/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/henry-viii/"}
+  ]},
+  {"title":"The Life and Death of King John","slug":"king-john","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/john/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/king-john/"}
+  ]},
+  {"title":"The Taming of the Shrew","slug":"the-taming-of-the-shrew","canonical":[
+    {"name":"MIT","url":"https://shakespeare.mit.edu/taming_shrew/full.html"},
+    {"name":"Folger","url":"https://shakespeare.folger.edu/shakespeare-plays/the-taming-of-the-shrew/"}
+  ]}
+]
+

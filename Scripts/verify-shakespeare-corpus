@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+import argparse, json, os, re, sys, textwrap, subprocess, time
+from pathlib import Path
+
+def load_mapping(path: Path):
+    with open(path, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+def slugify(title: str) -> str:
+    s = title.lower()
+    s = re.sub(r"[^a-z0-9]+", "-", s).strip('-')
+    return s
+
+def split_plays(fountain_path: Path, titles):
+    data = fountain_path.read_text(encoding='utf-8', errors='ignore')
+    lines = data.splitlines()
+    # Build index of line numbers where each play title occurs
+    title_positions = []
+    for i, line in enumerate(lines):
+        t = line.strip()
+        if t in titles:
+            # lookahead to ensure this block represents a play (next non-empty is ACT)
+            j = i+1
+            while j < len(lines) and not lines[j].strip():
+                j += 1
+            if j < len(lines) and lines[j].strip().startswith('**** ACT '):
+                title_positions.append((i, t))
+    # Deduplicate consecutive duplicates
+    unique = []
+    for i, t in title_positions:
+        if not unique or unique[-1][1] != t:
+            unique.append((i, t))
+    # Slice text for each title
+    blocks = {}
+    for k, (i, t) in enumerate(unique):
+        start = i
+        end = unique[k+1][0] if k+1 < len(unique) else len(lines)
+        body = '\n'.join(lines[start:end]).strip()
+        # Ensure the first line is the exact title
+        if not body.startswith(t):
+            body = f"{t}\n{body}"
+        blocks[t] = body
+    return blocks
+
+def ensure_dir(p: Path):
+    p.mkdir(parents=True, exist_ok=True)
+
+def call_verify(sb_url: str, edition_title: str, edition_text: str, canon: list, shingle: int, min_line: int, max_ex: int, timeout: int = 60):
+    payload = {
+        "edition": {"title": edition_title, "text": edition_text},
+        "canonical": canon,
+        "options": {"shingleSize": int(shingle), "maxExamples": int(max_ex), "minLineLen": int(min_line)}
+    }
+    data = json.dumps(payload)
+    try:
+        out = subprocess.check_output(
+            ["curl","-sf","-X","POST", f"{sb_url.rstrip('/')}/v1/verify","-H","Content-Type: application/json","-d", data],
+            timeout=timeout
+        )
+        return json.loads(out.decode('utf-8'))
+    except subprocess.CalledProcessError as e:
+        return {"error": f"verify call failed: {e}"}
+    except subprocess.TimeoutExpired:
+        return {"error": "verify call timed out"}
+
+def main():
+    ap = argparse.ArgumentParser(description="Verify Four Stars Shakespeare plays against canonical web editions")
+    ap.add_argument('--source', default='Workspace/the-four-stars/the four stars', help='Path to fountain source file')
+    ap.add_argument('--mapping', default='Configuration/shakespeare-canonical.json', help='JSON mapping of titles to canonical URLs')
+    ap.add_argument('--out', default='Packages/FountainSpecCuration/reports/shakespeare-verify', help='Output directory for editions and results')
+    ap.add_argument('--sb-url', default=os.environ.get('SEMANTIC_BROWSER_URL','http://127.0.0.1:8007'), help='Semantic Browser base URL')
+    ap.add_argument('--shingle', type=int, default=3)
+    ap.add_argument('--min-line-len', type=int, default=20)
+    ap.add_argument('--max-examples', type=int, default=5)
+    ap.add_argument('--only', default='', help='Comma-separated list of titles to include (exact match)')
+    args = ap.parse_args()
+
+    root = Path.cwd()
+    source = root / args.source
+    mapping_path = root / args.mapping
+    out_dir = root / args.out
+    ensure_dir(out_dir)
+    editions_dir = out_dir / 'editions'
+    results_dir = out_dir / 'results'
+    ensure_dir(editions_dir)
+    ensure_dir(results_dir)
+
+    mapping = load_mapping(mapping_path)
+    by_title = {m['title']: m for m in mapping}
+    titles = list(by_title.keys())
+    if args.only:
+        requested = [t.strip() for t in args.only.split(',') if t.strip()]
+        titles = [t for t in titles if t in requested]
+    # Split the fountain into per-play text using known titles
+    blocks = split_plays(source, titles)
+
+    summary = []
+    for title in titles:
+        meta = by_title[title]
+        body = blocks.get(title)
+        if not body:
+            print(f"[verify] WARN: could not locate '{title}' in source; skipping", file=sys.stderr)
+            continue
+        slug = meta.get('slug') or slugify(title)
+        ed_path = editions_dir / f"{slug}.txt"
+        ed_path.write_text(body, encoding='utf-8')
+        # Call verify
+        res = call_verify(args.sb_url, title, body, meta.get('canonical', []), args.shingle, args.min_line_len, args.max_examples)
+        (results_dir / f"{slug}.json").write_text(json.dumps(res, ensure_ascii=False, indent=2), encoding='utf-8')
+        # Extract top metrics (best source from summary; also record per-source metrics)
+        best = res.get('summary',{}).get('bestSource')
+        best_tj = res.get('summary',{}).get('tokenJaccardBest') or 0
+        best_sj = res.get('summary',{}).get('shingleJaccardBest') or 0
+        best_cov = res.get('summary',{}).get('lineCoverageBest') or 0
+        # If results present, also log MIT/Folger individually
+        mit = folger = None
+        for r in res.get('results', []) or []:
+            name = r.get('source',{}).get('name') or r.get('source',{}).get('url')
+            if name and 'MIT' in name:
+                mit = r
+            if name and 'Folger' in name:
+                folger = r
+        def metric(x):
+            return (
+                (x.get('metrics',{}).get('tokenJaccard') or 0),
+                (x.get('metrics',{}).get('shingleJaccard') or 0),
+                (x.get('metrics',{}).get('lineCoverage') or 0)
+            ) if x else (0,0,0)
+        mit_tj, mit_sj, mit_cov = metric(mit)
+        fol_tj, fol_sj, fol_cov = metric(folger)
+        summary.append({
+            'title': title,
+            'slug': slug,
+            'best': best,
+            'best_tokenJ': best_tj,
+            'best_shingleJ': best_sj,
+            'best_coverage': best_cov,
+            'mit_tokenJ': mit_tj,
+            'mit_shingleJ': mit_sj,
+            'mit_coverage': mit_cov,
+            'folger_tokenJ': fol_tj,
+            'folger_shingleJ': fol_sj,
+            'folger_coverage': fol_cov
+        })
+
+    # Write summaries
+    (out_dir / 'summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
+    # TSV
+    header = ['title','slug','best','best_tokenJ','best_shingleJ','best_coverage','mit_tokenJ','mit_shingleJ','mit_coverage','folger_tokenJ','folger_shingleJ','folger_coverage']
+    with (out_dir / 'summary.tsv').open('w', encoding='utf-8') as f:
+        f.write('\t'.join(header)+'\n')
+        for r in summary:
+            row = [str(r.get(k,'')) for k in header]
+            f.write('\t'.join(row)+'\n')
+    print(f"[verify] Wrote results to {out_dir}")
+
+if __name__ == '__main__':
+    main()
+

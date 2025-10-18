@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+import argparse, json, os, sys, subprocess, time
+from pathlib import Path
+from urllib.parse import urlparse
+
+def curl_json(method, url, obj, timeout=15):
+    data = json.dumps(obj, ensure_ascii=False).encode('utf-8')
+    try:
+        out = subprocess.check_output([
+            'curl','-sf','-X',method, url,
+            '-H','Content-Type: application/json',
+            '--data-binary','@-'
+        ], input=data, timeout=timeout)
+        return out.decode('utf-8')
+    except subprocess.CalledProcessError as e:
+        return ''
+
+def ensure_corpus(base, corpus):
+    url = f"{base.rstrip('/')}/corpora"
+    body = {"corpusId": corpus}
+    # Ignore errors if exists
+    curl_json('POST', url, body)
+
+def add_page(base, corpus, page_id, url, title):
+    host = urlparse(url).netloc or 'local'
+    body = {
+        "value1": {"corpusId": corpus},
+        "value2": {"pageId": page_id, "url": url, "host": host, "title": title}
+    }
+    curl_json('POST', f"{base.rstrip('/')}/corpora/{corpus}/pages", body)
+
+def add_segment(base, corpus, segment_id, page_id, kind, text):
+    body = {
+        "value1": {"corpusId": corpus},
+        "value2": {"segmentId": segment_id, "pageId": page_id, "kind": kind, "text": text}
+    }
+    curl_json('POST', f"{base.rstrip('/')}/corpora/{corpus}/segments", body)
+
+def add_analysis(base, corpus, analysis_id, page_id, summary):
+    body = {
+        "value1": {"corpusId": corpus},
+        "value2": {"analysisId": analysis_id, "pageId": page_id, "summary": summary}
+    }
+    curl_json('POST', f"{base.rstrip('/')}/corpora/{corpus}/analyses", body)
+
+def main():
+    ap = argparse.ArgumentParser(description='Ingest Shakespeare verification results into FountainStore')
+    ap.add_argument('--report', default='Packages/FountainSpecCuration/reports/shakespeare-verify', help='Verification report directory')
+    ap.add_argument('--persist-url', default=os.environ.get('PERSIST_URL','http://127.0.0.1:8005'), help='Persist base URL')
+    ap.add_argument('--corpus', default='shakespeare-verified', help='Target corpus ID')
+    args = ap.parse_args()
+
+    root = Path.cwd()
+    report = root / args.report
+    summary_path = report / 'summary.json'
+    results_dir = report / 'results'
+    if not summary_path.exists():
+        print(f"[ingest] summary.json not found in {report}", file=sys.stderr)
+        sys.exit(2)
+    data = json.loads(summary_path.read_text(encoding='utf-8'))
+    by_slug = {item['slug']: item for item in data}
+
+    ensure_corpus(args.persist_url, args.corpus)
+
+    for res_file in sorted(results_dir.glob('*.json')):
+        slug = res_file.stem
+        meta = by_slug.get(slug)
+        if not meta:
+            print(f"[ingest] WARN: no summary meta for {slug}", file=sys.stderr)
+            continue
+        title = meta['title']
+        obj = json.loads(res_file.read_text(encoding='utf-8'))
+        # Pick best or fall back to first source for page URL
+        best = obj.get('summary',{}).get('bestSource')
+        chosen = None
+        for r in obj.get('results',[]) or []:
+            name = r.get('source',{}).get('name') or r.get('source',{}).get('url')
+            if (best and name and best in name) or chosen is None:
+                chosen = r
+        page_url = chosen.get('source',{}).get('url') if chosen else f"https://four-stars.local/{slug}"
+
+        # Add page
+        add_page(args.persist_url, args.corpus, slug, page_url, title)
+
+        # Add per-source segments (kind=verification)
+        for r in obj.get('results',[]) or []:
+            src = r.get('source',{})
+            sname = (src.get('name') or src.get('url') or 'source').lower().replace(' ','-')
+            seg_id = f"verification:{slug}:{sname}"
+            text = json.dumps(r, ensure_ascii=False)
+            add_segment(args.persist_url, args.corpus, seg_id, slug, 'verification', text)
+
+        # Add top-level analysis summary
+        summary = obj.get('summary',{})
+        summ_line = f"best={summary.get('bestSource')} tokenJ={summary.get('tokenJaccardBest')} shingleJ={summary.get('shingleJaccardBest')} coverage={summary.get('lineCoverageBest')}"
+        add_analysis(args.persist_url, args.corpus, f"verify:{slug}:best", slug, summ_line)
+
+    print(f"[ingest] Ingested verification results into corpus '{args.corpus}' at {args.persist_url}")
+
+if __name__ == '__main__':
+    main()
+

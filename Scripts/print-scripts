@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+import argparse, json, subprocess
+
+def get_json(url, timeout=30):
+    out = subprocess.check_output(['curl','-sf', url], timeout=timeout)
+    return json.loads(out.decode('utf-8'))
+
+def main():
+    ap = argparse.ArgumentParser(description='List/show scripts from scripts corpus')
+    ap.add_argument('action', choices=['list','show'])
+    ap.add_argument('name', nargs='?')
+    ap.add_argument('--persist-url', default='http://127.0.0.1:8005')
+    ap.add_argument('--corpus', default='fountain-scripts')
+    ap.add_argument('--limit', type=int, default=20)
+    args = ap.parse_args()
+
+    base = args.persist_url.rstrip('/')
+    if args.action == 'list':
+        data = get_json(f"{base}/corpora/{args.corpus}/pages?limit={args.limit}&sort=title")
+        pages = data.get('pages') or []
+        for p in pages:
+            print(f"{p.get('pageId')}\t{p.get('title')}\t{p.get('url')}")
+    else:  # show
+        if not args.name:
+            print('usage: print-scripts show <name> [--persist-url ...] [--corpus ...]')
+            return
+        # Find page(s) matching name
+        data = get_json(f"{base}/corpora/{args.corpus}/pages?limit=50&q={args.name}")
+        pages = data.get('pages') or []
+        for p in pages:
+            pid = p.get('pageId')
+            print(f"== {p.get('title')} ({pid}) ==")
+            # Segments (best-effort via text search on pageId)
+            segs = get_json(f"{base}/corpora/{args.corpus}/segments?limit=200&q={pid}").get('segments') or []
+            for s in segs:
+                print(f"[{s.get('kind')}]\n{s.get('text')}\n")
+
+if __name__ == '__main__':
+    main()
+

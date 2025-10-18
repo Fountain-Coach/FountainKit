@@ -107,6 +107,8 @@ Commands:
   read scene      Render a human-readable scene script (Speech Atlas)
   read act        Render a whole act by stitching scenes
   read play       Render the whole play by stitching acts & scenes
+  scripts list    List scripts from the scripts corpus
+  scripts show    Show details for a script (header/usage)
 
 Shortcuts:
   toolserver ...  Proxy to Scripts/toolserver
@@ -318,6 +320,16 @@ PY
       printf " - %s\n" $first_missing
     fi
     ;;
+  scripts)
+    shift
+    sub=${1:-}; shift || true
+    case "$sub" in
+      list)
+        "$ROOT/Scripts/print-scripts" list "$@" ;;
+      show)
+        "$ROOT/Scripts/print-scripts" show "$@" ;;
+      *) echo "usage: fk scripts <list|show> [args]" ;;
+    esac ;;
   read)
     shift
     sub=${1:-}; shift || true

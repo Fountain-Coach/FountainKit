@@ -1,0 +1,192 @@
+#!/usr/bin/env python3
+import argparse, hashlib, json, os, re, subprocess
+from pathlib import Path
+
+SEED_KIND = 'scripts-catalog-seed'
+DRIFT_KIND = 'scripts-catalog-drift'
+
+def sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+def read_file(path: Path) -> bytes:
+    try:
+        return path.read_bytes()
+    except Exception:
+        return b''
+
+def extract_metadata(path: Path) -> dict:
+    data = read_file(path)
+    text = data.decode('utf-8', errors='ignore')
+    lines = text.splitlines()
+    shebang = lines[0].strip() if lines and lines[0].startswith('#!') else ''
+    lang = 'bash' if 'bash' in shebang or 'sh' in shebang else ('python' if 'python' in shebang else 'unknown')
+    # header: consecutive comment lines at top (strip '# ')
+    header_lines = []
+    for i, line in enumerate(lines[:200]):
+        if not line.strip():
+            if i == 0:
+                continue
+            else:
+                break
+        if not line.lstrip().startswith(('#','//')):
+            break
+        header_lines.append(line)
+    header = '\n'.join([re.sub(r'^[#\/\s]+','', l) for l in header_lines]).strip()
+    # usage: find 'Usage:' block heuristically
+    usage = ''
+    for i, line in enumerate(lines[:400]):
+        if 'Usage:' in line or 'usage:' in line:
+            block = [re.sub(r'^[#\/\s]+','', line)]
+            for l in lines[i+1:i+40]:
+                if not l.strip():
+                    break
+                block.append(re.sub(r'^[#\/\s]+','', l))
+            usage = '\n'.join(block)
+            break
+    # env vars: uppercase tokens used or declared
+    envs = sorted(set(re.findall(r'\b[A-Z][A-Z0-9_]{2,}\b', text)))
+    # flags: --long and -s patterns
+    long_flags = sorted(set(re.findall(r'--[a-zA-Z0-9][a-zA-Z0-9_-]*', text)))[:50]
+    short_flags = sorted(set(re.findall(r'\s-[a-zA-Z]\b', text)))[:50]
+    return {
+        'path': str(path),
+        'name': path.name,
+        'sha256': sha256_bytes(data),
+        'bytes': len(data),
+        'shebang': shebang,
+        'lang': lang,
+        'header': header,
+        'usage': usage,
+        'env': envs[:50],
+        'flags': {'long': long_flags, 'short': short_flags}
+    }
+
+def curl_json(method, url, obj, timeout=30):
+    data = json.dumps(obj, ensure_ascii=False).encode('utf-8')
+    out = subprocess.check_output(['curl','-sf','-X',method, url,'-H','Content-Type: application/json','--data-binary','@-'], input=data, timeout=timeout)
+    return json.loads(out.decode('utf-8')) if out else {}
+
+def get_json(url, timeout=30):
+    out = subprocess.check_output(['curl','-sf', url], timeout=timeout)
+    return json.loads(out.decode('utf-8'))
+
+def main():
+    ap = argparse.ArgumentParser(description='Seed Scripts/ into FountainStore as a Scripts corpus with baseline and drift')
+    ap.add_argument('--scripts-dir', default='Scripts', help='Directory to scan')
+    ap.add_argument('--persist-url', default=os.environ.get('PERSIST_URL','http://127.0.0.1:8005'))
+    ap.add_argument('--corpus', default='fountain-scripts')
+    ap.add_argument('--version', default='v1')
+    args = ap.parse_args()
+
+    root = Path.cwd()
+    scripts_dir = root / args.scripts_dir
+    files = [p for p in scripts_dir.iterdir() if p.is_file() and not p.name.startswith('.')]
+    items = [extract_metadata(p) for p in files]
+
+    # Ensure corpus exists
+    try:
+        curl_json('POST', f"{args.persist_url.rstrip('/')}/corpora", {'corpusId': args.corpus})
+    except subprocess.CalledProcessError:
+        pass
+
+    # Guard: skip if baseline with same version exists
+    prior_items = None
+    prior_version = None
+    try:
+        bl = get_json(f"{args.persist_url.rstrip('/')}/corpora/{args.corpus}/baselines?limit=200")
+        for b in bl.get('baselines') or []:
+            v = b.get('value2') or b
+            c = v.get('content')
+            try:
+                obj = json.loads(c) if isinstance(c, str) else c
+            except Exception:
+                continue
+            if isinstance(obj, dict) and obj.get('kind') == SEED_KIND:
+                prior_items = obj.get('items')
+                prior_version = obj.get('version')
+            if isinstance(obj, dict) and obj.get('kind') == SEED_KIND and obj.get('version') == args.version:
+                print(f"[scripts] Guard: version {args.version} already present. Skipping seeding.")
+                return
+    except Exception:
+        pass
+
+    # Ingest pages+segments+analysis
+    commit = subprocess.check_output(['git','rev-parse','--short','HEAD']).decode().strip()
+    for it in items:
+        name = it['name']
+        sha = it['sha256'][:12]
+        page_id = f"script:{name}@{sha}"
+        url = f"file://{it['path']}"
+        host = 'repo'
+        title = f"{name}"
+        # Page
+        curl_json('POST', f"{args.persist_url.rstrip('/')}/corpora/{args.corpus}/pages", {
+            'corpusId': args.corpus, 'pageId': page_id, 'url': url, 'host': host, 'title': title
+        })
+        # Segments: info, header, usage
+        info = {k: it[k] for k in ('path','sha256','bytes','shebang','lang','env','flags')}
+        segs = [
+            ('info', json.dumps(info, ensure_ascii=False)),
+            ('header', it.get('header','') or '(no header)'),
+            ('usage', it.get('usage','') or '(no usage found)')
+        ]
+        for idx,(kind,text) in enumerate(segs):
+            seg_id = f"{page_id}:{kind}:{idx}"
+            try:
+                curl_json('POST', f"{args.persist_url.rstrip('/')}/corpora/{args.corpus}/segments", {
+                    'corpusId': args.corpus, 'segmentId': seg_id, 'pageId': page_id, 'kind': kind, 'text': text
+                })
+            except subprocess.CalledProcessError:
+                pass
+        # Analysis summary
+        summary = f"{name} ({it['lang']}): {it['flags']['long'][:3]}"
+        try:
+            curl_json('POST', f"{args.persist_url.rstrip('/')}/corpora/{args.corpus}/analyses", {
+                'corpusId': args.corpus, 'analysisId': f"seed:{page_id}", 'pageId': page_id, 'summary': summary
+            })
+        except subprocess.CalledProcessError:
+            pass
+
+    # Baseline seed
+    seed = {
+        'kind': SEED_KIND,
+        'version': args.version,
+        'items': [{'name': it['name'], 'path': it['path'], 'sha256': it['sha256'][:12]} for it in items],
+        'seed': {'by':'Scripts/seed-scripts-corpus','commit':commit}
+    }
+    sid = f"scripts-{args.version}-{commit}"
+    curl_json('POST', f"{args.persist_url.rstrip('/')}/corpora/{args.corpus}/baselines", {
+        'corpusId': args.corpus, 'baselineId': sid, 'content': json.dumps(seed, ensure_ascii=False)
+    })
+
+    # Drift report if prior exists
+    if prior_items is not None:
+        old = {i['name']: i['sha256'] for i in prior_items}
+        new = {i['name']: i['sha256'][:12] for i in seed['items']}
+        added = sorted(new.keys() - old.keys())
+        removed = sorted(old.keys() - new.keys())
+        changed = sorted([n for n in (new.keys() & old.keys()) if old[n][:12] != new[n]])
+        drift = {
+            'kind': DRIFT_KIND,
+            'fromVersion': prior_version,
+            'toVersion': args.version,
+            'added': added,
+            'removed': removed,
+            'changed': changed,
+            'count': {'old': len(old), 'new': len(new)}
+        }
+        did = f"scripts-drift-{args.version}-{commit}"
+        curl_json('POST', f"{args.persist_url.rstrip('/')}/corpora/{args.corpus}/baselines", {
+            'corpusId': args.corpus, 'baselineId': did, 'content': json.dumps(drift, ensure_ascii=False)
+        })
+        # Summary analysis
+        summary = f"scripts drift: +{len(added)} / -{len(removed)} / ~{len(changed)}"
+        curl_json('POST', f"{args.persist_url.rstrip('/')}/corpora/{args.corpus}/analyses", {
+            'corpusId': args.corpus, 'analysisId': f"drift:{prior_version or 'nil'}→{args.version}", 'pageId': 'scripts-index', 'summary': summary
+        })
+
+    print(f"[scripts] Seed complete: {args.corpus} version={args.version}")
+
+if __name__ == '__main__':
+    main()
+

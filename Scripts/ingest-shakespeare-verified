@@ -23,24 +23,15 @@ def ensure_corpus(base, corpus):
 
 def add_page(base, corpus, page_id, url, title):
     host = urlparse(url).netloc or 'local'
-    body = {
-        "value1": {"corpusId": corpus},
-        "value2": {"pageId": page_id, "url": url, "host": host, "title": title}
-    }
+    body = {"corpusId": corpus, "pageId": page_id, "url": url, "host": host, "title": title}
     curl_json('POST', f"{base.rstrip('/')}/corpora/{corpus}/pages", body)
 
 def add_segment(base, corpus, segment_id, page_id, kind, text):
-    body = {
-        "value1": {"corpusId": corpus},
-        "value2": {"segmentId": segment_id, "pageId": page_id, "kind": kind, "text": text}
-    }
+    body = {"corpusId": corpus, "segmentId": segment_id, "pageId": page_id, "kind": kind, "text": text}
     curl_json('POST', f"{base.rstrip('/')}/corpora/{corpus}/segments", body)
 
 def add_analysis(base, corpus, analysis_id, page_id, summary):
-    body = {
-        "value1": {"corpusId": corpus},
-        "value2": {"analysisId": analysis_id, "pageId": page_id, "summary": summary}
-    }
+    body = {"corpusId": corpus, "analysisId": analysis_id, "pageId": page_id, "summary": summary}
     curl_json('POST', f"{base.rstrip('/')}/corpora/{corpus}/analyses", body)
 
 def main():
@@ -99,4 +90,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+import argparse, json, subprocess
+
+def get_json(url, timeout=30):
+    out = subprocess.check_output(['curl','-sf', url], timeout=timeout)
+    return json.loads(out.decode('utf-8'))
+
+def main():
+    ap = argparse.ArgumentParser(description='Print semantic arc for a corpus via Awareness service')
+    ap.add_argument('--awareness-url', default='http://127.0.0.1:8001')
+    ap.add_argument('--corpus', required=True)
+    args = ap.parse_args()
+
+    data = get_json(f"{args.awareness_url.rstrip('/')}/corpus/semantic-arc?corpus_id={args.corpus}")
+    arc = data.get('arc') or []
+    total = data.get('total')
+    print(f"Semantic Arc for corpus={args.corpus} (total={total})")
+    for phase in arc:
+        print(f" - {phase.get('phase')}: weight={phase.get('weight')} pct={phase.get('pct'):.3f}")
+
+if __name__ == '__main__':
+    main()
+

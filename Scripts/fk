@@ -85,12 +85,14 @@ Commands:
   api <url>       Generic HTTP call with JSON helpers
   export persist  Export pages/segments (and more) to fixtures
   read scene      Render a human-readable scene script (Speech Atlas)
+  read act        Render a whole act by stitching scenes
+  read play       Render the whole play by stitching acts & scenes
 
 Shortcuts:
   toolserver ...  Proxy to Scripts/toolserver
   ts-api ...      Proxy to Scripts/toolserver-api
   export ...      Proxy to Scripts/export-persist
-  read ...        Speech Atlas helpers (scene script)
+  read ...        Speech Atlas helpers (scene/act/play script)
 
 Examples:
   fk up
@@ -290,6 +292,84 @@ JSON
           if command -v open >/dev/null 2>&1; then open "$html_file"; fi
         elif (( OPEN_NATIVE )); then
           file=${OUT_FILE:-"/tmp/act-$ACT.md"}
+          printf "%s\n" "$doc" > "$file"
+          if command -v open >/dev/null 2>&1; then open "$file"; fi
+        else
+          printf "%s\n" "$doc"
+        fi
+        ;;
+      act)
+        ACT=""; CORPUS="${CORPUS_ID:-the-four-stars}"; BASE="${PERSIST_URL:-http://127.0.0.1:${FOUNTAINSTORE_PORT:-8005}}"; OUT_FILE=""; OPEN_HTML=0; OPEN_NATIVE=0
+        while [[ $# -gt 0 ]]; do
+          case "$1" in
+            --act) ACT=${2:-}; shift 2;;
+            --corpus) CORPUS=${2:-}; shift 2;;
+            --url) BASE=${2:-}; shift 2;;
+            --out) OUT_FILE=${2:-}; shift 2;;
+            --open) OPEN_NATIVE=1; shift 1;;
+            --open-html) OPEN_HTML=1; shift 1;;
+            *) break;;
+          esac
+        done
+        [[ -n "$ACT" ]] || { echo "usage: fk read act --act <I> [--corpus id] [--url base] [--out file] [--open|--open-html]"; exit 2; }
+        scenes=$(curl -sf -X POST "$BASE/arcs/$CORPUS/speeches/list" -H 'Content-Type: application/json' -d "{\"act\":\"$ACT\",\"limit\":2000,\"offset\":0}" | jq -r '[.result.items[].scene] | unique | .[]')
+        doc="# Act $ACT\n"
+        for SCENE in $scenes; do
+          req=$(cat <<JSON
+{"act":"$ACT","scene":"$SCENE","format":"markdown","group_consecutive":true}
+JSON
+)
+          md=$(curl -sf -X POST "$BASE/arcs/$CORPUS/speeches/script" -H 'Content-Type: application/json' -d "$req" | jq -r '.result.markdown')
+          md=$(printf "%s" "$md" | sed -e 's/^# /## /')
+          doc+=$'\n'"$md"$'\n'
+        done
+        if [[ -n "$OUT_FILE" ]]; then printf "%s\n" "$doc" > "$OUT_FILE"; fi
+        if (( OPEN_HTML )); then
+          html_file=${OUT_FILE:-"/tmp/act-$ACT.html"}
+          { printf "<html><head><meta charset=\"utf-8\"><title>Act %s</title></head><body><pre style=\"white-space:pre-wrap;font-family:ui-monospace,monospace\">" "$ACT"; \
+            printf "%s" "$doc" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; \
+            printf "</pre></body></html>"; } > "$html_file"
+          if command -v open >/dev/null 2>&1; then open "$html_file"; fi
+        elif (( OPEN_NATIVE )); then
+          file=${OUT_FILE:-"/tmp/act-$ACT.md"}
+          printf "%s\n" "$doc" > "$file"
+          if command -v open >/dev/null 2>&1; then open "$file"; fi
+        else
+          printf "%s\n" "$doc"
+        fi
+        ;;
+      play)
+        CORPUS="${CORPUS_ID:-the-four-stars}"; BASE="${PERSIST_URL:-http://127.0.0.1:${FOUNTAINSTORE_PORT:-8005}}"; OUT_FILE=""; OPEN_HTML=0; OPEN_NATIVE=0; TITLE="Play"
+        while [[ $# -gt 0 ]]; do
+          case "$1" in
+            --corpus) CORPUS=${2:-}; shift 2;;
+            --url) BASE=${2:-}; shift 2;;
+            --out) OUT_FILE=${2:-}; shift 2;;
+            --title) TITLE=${2:-}; shift 2;;
+            --open) OPEN_NATIVE=1; shift 1;;
+            --open-html) OPEN_HTML=1; shift 1;;
+            *) break;;
+          esac
+        done
+        # Gather acts present (unique) and sort I,V via mapping
+        acts=$(curl -sf -X POST "$BASE/arcs/$CORPUS/speeches/list" -H 'Content-Type: application/json' -d '{"limit":5000,"offset":0}' | jq -r '[.result.items[].act] | unique | .[]')
+        # Simple roman order map
+        order() { case "$1" in I) echo 1;; II) echo 2;; III) echo 3;; IV) echo 4;; V) echo 5;; VI) echo 6;; VII) echo 7;; VIII) echo 8;; IX) echo 9;; X) echo 10;; *) echo 999;; esac; }
+        sorted_acts=$(for a in $acts; do printf "%02d %s\n" "$(order "$a")" "$a"; done | sort -n | awk '{print $2}')
+        doc="# $TITLE\n"
+        for ACT in $sorted_acts; do
+          part=$(bash "$0" read act --act "$ACT" --corpus "$CORPUS" --url "$BASE" --no-pager)
+          doc+=$'\n'"$part"$'\n'
+        done
+        if [[ -n "$OUT_FILE" ]]; then printf "%s\n" "$doc" > "$OUT_FILE"; fi
+        if (( OPEN_HTML )); then
+          html_file=${OUT_FILE:-"/tmp/play.html"}
+          { printf "<html><head><meta charset=\"utf-8\"><title>%s</title></head><body><pre style=\"white-space:pre-wrap;font-family:ui-monospace,monospace\">" "$TITLE"; \
+            printf "%s" "$doc" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; \
+            printf "</pre></body></html>"; } > "$html_file"
+          if command -v open >/dev/null 2>&1; then open "$html_file"; fi
+        elif (( OPEN_NATIVE )); then
+          file=${OUT_FILE:-"/tmp/play.md"}
           printf "%s\n" "$doc" > "$file"
           if command -v open >/dev/null 2>&1; then open "$file"; fi
         else

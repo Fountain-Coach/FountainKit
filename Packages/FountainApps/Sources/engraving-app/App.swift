@@ -22,8 +22,10 @@ struct EngravingMacApp: App {
 
 @MainActor
 final class AppModel: ObservableObject {
+    enum ViewMode: String, CaseIterable, Identifiable { case browse = "Browse", chat = "Chat"; var id: String { rawValue } }
     @Published var corpusId: String
     @Published var corpora: [String] = []
+    @Published var viewMode: ViewMode = .browse
     @Published var pages: [PageDoc] = []
     @Published var selected: PageDoc?
     @Published var selectedCode: String = ""
@@ -32,6 +34,8 @@ final class AppModel: ObservableObject {
     @Published var showArc: Bool = false
     @Published var arcPhases: [ArcPhase] = []
     @Published var arcTotal: Int = 0
+    @Published var chatTurns: [ChatDoc] = []
+    @Published var attachmentsByRecord: [String: AttachmentDoc] = [:]
 
     private let store: FountainStoreClient
 
@@ -60,6 +64,7 @@ final class AppModel: ObservableObject {
             if selected == nil { selected = pages.first }
             await loadCode()
             await loadFindings()
+            await loadChat()
         } catch { status = "Load error: \(error.localizedDescription)" }
     }
 
@@ -78,6 +83,40 @@ final class AppModel: ObservableObject {
             if !list.contains(corpusId), let first = list.first { self.corpusId = first }
         } catch {
             self.corpora = [corpusId]
+        }
+    }
+
+    func loadChat() async {
+        do {
+            let qTurns = Query(filters: ["corpusId": corpusId], sort: [(field: "createdAt", ascending: true)], limit: 500, offset: 0)
+            let resp = try await store.query(corpusId: corpusId, collection: "chat-turns", query: qTurns)
+            let dec = JSONDecoder()
+            dec.dateDecodingStrategy = .iso8601
+            let turns = try resp.documents.compactMap { data -> ChatDoc? in
+                return try? dec.decode(ChatDoc.self, from: data)
+            }
+            self.chatTurns = turns
+        } catch {
+            self.chatTurns = []
+        }
+        do {
+            let q = Query(filters: ["corpusId": corpusId], limit: 1000, offset: 0)
+            let resp = try await store.query(corpusId: corpusId, collection: "attachments", query: q)
+            let attachments = try resp.documents.compactMap { data -> AttachmentDoc? in
+                return try? JSONDecoder().decode(AttachmentDoc.self, from: data)
+            }
+            var map: [String: AttachmentDoc] = [:]
+            for a in attachments { map[a.recordId] = a }
+            self.attachmentsByRecord = map
+        } catch {
+            self.attachmentsByRecord = [:]
+        }
+    }
+
+    func selectPage(pageId: String) {
+        if let page = pages.first(where: { $0.pageId == pageId }) {
+            selected = page
+            Task { await loadCode() }
         }
     }
 
@@ -255,27 +294,32 @@ struct ContentView: View {
             .navigationTitle("Pages")
             .navigationSplitViewColumnWidth(min: 220, ideal: 280)
         } content: {
-            // CENTER: Code viewer
+            // CENTER: Mode-aware content
             Group {
-                if model.pages.isEmpty {
-                    QuickStartView().environmentObject(model)
-                } else if let p = model.selected {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(p.title).font(.title2)
-                        Text(p.url).font(.caption).foregroundStyle(.secondary)
-                        Divider()
-                        ScrollView {
-                            Text(model.selectedCode)
-                                .font(.system(.body, design: .monospaced))
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .topLeading)
+                switch model.viewMode {
+                case .browse:
+                    if model.pages.isEmpty {
+                        QuickStartView().environmentObject(model)
+                    } else if let p = model.selected {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(p.title).font(.title2)
+                            Text(p.url).font(.caption).foregroundStyle(.secondary)
+                            Divider()
+                            ScrollView {
+                                Text(model.selectedCode)
+                                    .font(.system(.body, design: .monospaced))
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                            }
+                            Spacer()
+                            Text(model.status).font(.footnote).foregroundStyle(.secondary)
                         }
-                        Spacer()
-                        Text(model.status).font(.footnote).foregroundStyle(.secondary)
+                        .padding()
+                    } else {
+                        VStack { Text("No selection") }.frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    .padding()
-                } else {
-                    VStack { Text("No selection") }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                case .chat:
+                    ChatView().environmentObject(model)
                 }
             }
             .navigationSplitViewColumnWidth(min: 400, ideal: 700)
@@ -286,6 +330,9 @@ struct ContentView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .automatic) {
+                Picker("Mode", selection: $model.viewMode) {
+                    ForEach(AppModel.ViewMode.allCases) { mode in Text(mode.rawValue).tag(mode) }
+                }.pickerStyle(.segmented)
                 Picker("Corpus", selection: $model.corpusId) {
                     ForEach(model.corpora, id: \.self) { Text($0).tag($0) }
                 }
@@ -297,6 +344,7 @@ struct ContentView: View {
             }
         }
         .onChange(of: model.corpusId) { _ in Task { await model.load() } }
+        .onChange(of: model.viewMode) { newValue in if newValue == .chat { Task { await model.loadChat() } } }
         .sheet(isPresented: $model.showArc) {
             ArcSheet(phases: model.arcPhases, total: model.arcTotal, corpus: model.corpusId)
                 .frame(minWidth: 560, minHeight: 360)
@@ -404,3 +452,84 @@ private struct SheetDoneButton: View {
 
 struct Finding: Identifiable, Hashable { var id = UUID(); var title: String; var severity: String; var location: String?; var line: Int? }
 struct ArcPhase: Identifiable, Hashable { var id = UUID(); var phase: String; var weight: Int; var pct: Double }
+
+// MARK: - Chat (Demo) Models + View
+
+struct ChatDoc: Codable, Identifiable, Hashable {
+    var id: String { recordId }
+    let recordId: String
+    let sessionId: String?
+    let sessionName: String?
+    let createdAt: String?
+    let prompt: String
+    let answer: String
+}
+
+struct AttachmentDoc: Codable, Hashable {
+    let attachmentId: String
+    let corpusId: String
+    let recordId: String
+    let pages: [String]?
+    let segments: [String]?
+    let patterns: [String]?
+    let entities: [String]?
+    let notes: String?
+}
+
+struct ChatView: View {
+    @EnvironmentObject var model: AppModel
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Chat (Demo Context)").font(.title3)
+                Spacer()
+                Button("Refresh") { Task { await model.loadChat() } }
+            }.padding(8)
+            Divider()
+            if model.chatTurns.isEmpty {
+                VStack { Text("No chat turns in this corpus.") }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List(model.chatTurns, id: \.id) { turn in
+                    VStack(alignment: .leading, spacing: 6) {
+                        if let name = turn.sessionName { Text(name).font(.caption).foregroundStyle(.secondary) }
+                        Text(turn.prompt).font(.headline)
+                        Text(turn.answer).font(.body)
+                        if let att = model.attachmentsByRecord[turn.recordId] {
+                            ContextChips(attachment: att) { action in
+                                switch action {
+                                case .openPage(let pageId): model.selectPage(pageId: pageId)
+                                case .openPattern(_): break
+                                case .openEntity(_): break
+                                }
+                            }
+                        }
+                        if let ts = turn.createdAt { Text(ts).font(.caption2).foregroundStyle(.secondary) }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+        .padding(.bottom, 6)
+    }
+}
+
+private struct ContextChips: View {
+    enum Action { case openPage(String); case openPattern(String); case openEntity(String) }
+    let attachment: AttachmentDoc
+    let handler: (Action) -> Void
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                if let pages = attachment.pages, !pages.isEmpty {
+                    ForEach(pages, id: \.self) { pid in
+                        Button(pid.replacingOccurrences(of: "file:", with: "")) { handler(.openPage(pid)) }
+                            .buttonStyle(.bordered)
+                    }
+                }
+            }
+            if let notes = attachment.notes, !notes.isEmpty {
+                Text(notes).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+}

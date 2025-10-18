@@ -80,6 +80,75 @@ struct EngravingDemoSeed {
             _ = try? await store.addPatterns(.init(corpusId: corpusId, patternsId: "rules-seeded", content: pjson))
         }
 
+        // Seed a minimal chat transcript (context-first demo)
+        let sessionId = UUID()
+        let sessionName = "Demo Walkthrough"
+        let startedAt = ISO8601DateFormatter().string(from: Date())
+        func chatRecord(
+            id: UUID, index: Int, createdAt: Date, prompt: String, answer: String, history: [[String: String]]
+        ) -> [String: Any] {
+            return [
+                "recordId": id.uuidString,
+                "corpusId": corpusId,
+                "sessionId": sessionId.uuidString,
+                "sessionName": sessionName,
+                "sessionStartedAt": startedAt,
+                "turnIndex": index,
+                "createdAt": ISO8601DateFormatter().string(from: createdAt),
+                "prompt": prompt,
+                "answer": answer,
+                "provider": "demo",
+                "model": "demo",
+                "usage": NSNull(),
+                "raw": NSNull(),
+                "functionCall": NSNull(),
+                "tokens": [],
+                "systemPrompts": [
+                    "You are Engraver assistant. Keep context bundles attached to each answer."
+                ],
+                "history": history
+            ]
+        }
+        let t0 = UUID()
+        let r0 = chatRecord(
+            id: t0,
+            index: 0,
+            createdAt: Date(),
+            prompt: "Show me the Greeter code and point out issues.",
+            answer: "Here is Greeter.greet from Hello.swift. I found a TODO, a fatalError, and an overly long line.",
+            history: []
+        )
+        let t1 = UUID()
+        let r1 = chatRecord(
+            id: t1,
+            index: 1,
+            createdAt: Date().addingTimeInterval(2),
+            prompt: "Create a baseline for this corpus.",
+            answer: "I created baseline-initial; you can Diff to track drift.",
+            history: [["role": "user", "content": "Show me the Greeter code and point out issues."],
+                      ["role": "assistant", "content": "Here is Greeter.greet from Hello.swift. I found a TODO, a fatalError, and an overly long line."]]
+        )
+        for rec in [r0, r1] {
+            if let data = try? JSONSerialization.data(withJSONObject: rec) {
+                try? await store.putDoc(corpusId: corpusId, collection: "chat-turns", id: (rec["recordId"] as? String) ?? UUID().uuidString, body: data)
+            }
+        }
+
+        // Attach explicit context to the first turn
+        let attach0: [String: Any] = [
+            "attachmentId": "attach:\(t0.uuidString)",
+            "corpusId": corpusId,
+            "recordId": t0.uuidString,
+            "pages": ["file:Hello.swift"],
+            "segments": ["file:Hello.swift:code"],
+            "patterns": ["rules-seeded"],
+            "entities": ["entity:Greeter", "entity:greet"],
+            "notes": "Findings were derived from the code segment and stored as a patterns document."
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: attach0) {
+            try? await store.putDoc(corpusId: corpusId, collection: "attachments", id: attach0["attachmentId"] as! String, body: data)
+        }
+
         print("engraving-demo corpus seeded • corpusId=\(corpusId)")
         print("Tip: Run engraving-app with FOUNTAINSTORE_DIR set, then select the \"engraving-demo\" corpus.")
         print("     For the Arc sheet, run baseline-awareness-server against the same store.")

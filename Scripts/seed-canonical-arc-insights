@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+import argparse, json, subprocess, os
+from pathlib import Path
+
+def load_verify_summary(path: Path):
+    return json.loads(path.read_text(encoding='utf-8'))
+
+def post_json(url, obj, timeout=30):
+    data = json.dumps(obj, ensure_ascii=False).encode('utf-8')
+    out = subprocess.check_output(['curl','-sf','-X','POST', url, '-H','Content-Type: application/json', '--data-binary','@-'], input=data, timeout=timeout)
+    return json.loads(out.decode('utf-8')) if out else {}
+
+def main():
+    ap = argparse.ArgumentParser(description='Seed patterns/reflections for canonical Shakespeare corpus based on verification results')
+    ap.add_argument('--persist-url', default='http://127.0.0.1:8005')
+    ap.add_argument('--corpus', default='shakespeare-canonical')
+    ap.add_argument('--report', default='Packages/FountainSpecCuration/reports/shakespeare-verify/summary.json')
+    ap.add_argument('--coverage-threshold', type=float, default=0.95)
+    args = ap.parse_args()
+
+    base = args.persist_url.rstrip('/')
+    report = Path(args.report)
+    if not report.exists():
+        print(f"[arc] WARN: report not found: {report}")
+        return
+    rows = load_verify_summary(report)
+    if not isinstance(rows, list) or not rows:
+        print('[arc] WARN: report empty')
+        return
+
+    n = len(rows)
+    covs = [r.get('best_coverage') for r in rows if isinstance(r.get('best_coverage'), (int,float))]
+    avg_cov = sum(covs)/len(covs) if covs else None
+    avg_shingle = None
+    shs = [r.get('best_shingleJ') for r in rows if isinstance(r.get('best_shingleJ'), (int,float))]
+    if shs:
+        avg_shingle = sum(shs)/len(shs)
+    best_src = {}
+    outliers = []
+    for r in rows:
+        b = r.get('best')
+        best_src[b] = best_src.get(b, 0)+1
+        bc = r.get('best_coverage')
+        if isinstance(bc, (int,float)) and bc < args.coverage_threshold:
+            outliers.append({ 'title': r.get('title'), 'coverage': bc, 'best': b })
+
+    # Seed Patterns
+    patterns = {
+        'corpusId': args.corpus,
+        'patternsId': f"canonical-verify-stats",
+        'content': json.dumps({
+            'total': n,
+            'avgCoverage': avg_cov,
+            'avgShingleJ': avg_shingle,
+            'bestSourceCounts': best_src,
+            'coverageThreshold': args.coverage_threshold,
+            'outliers': outliers
+        }, ensure_ascii=False)
+    }
+    post_json(f"{base}/corpora/{args.corpus}/patterns", patterns)
+
+    # Seed a reflection summary
+    summary_lines = [
+        f"Canonical verification summary (n={n})",
+        f"Average coverage: {avg_cov:.3f}" if avg_cov is not None else "Average coverage: n/a",
+        f"Average shingleJ: {avg_shingle:.3f}" if avg_shingle is not None else "Average shingleJ: n/a",
+        f"Best source counts: {best_src}",
+        f"Outliers (coverage<{args.coverage_threshold}): {len(outliers)}"
+    ]
+    for o in outliers[:10]:
+        summary_lines.append(f" - {o['title']}: cov={o['coverage']:.3f} ({o['best']})")
+    reflection = {
+        'corpusId': args.corpus,
+        'reflectionId': 'canonical-verify-summary',
+        'question': 'What did the canonical verification reveal?',
+        'content': "\n".join(summary_lines)
+    }
+    post_json(f"{base}/corpora/{args.corpus}/reflections", reflection)
+
+    print('[arc] Seeded patterns and reflection for canonical corpus')
+
+if __name__ == '__main__':
+    main()
+

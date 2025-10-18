@@ -41,6 +41,8 @@ tags:
       auditing and handoff.
   - name: Admin
     description: Health, version, and runtime information.
+  - name: Verify
+    description: Compare an edition against canonical web sources and report match metrics.
 
 paths:
   /v1/browse:
@@ -326,6 +328,49 @@ paths:
                     properties:
                       capacity: {type: integer}
                       inUse: {type: integer}
+
+  /v1/verify:
+    post:
+      operationId: verifyEdition
+      x-fountain.visibility: public
+      x-fountain.reason: Validate deterministic Shakespeare text against canonical sources.
+      x-fountain.allow-as-tool: true
+      tags: [Verify]
+      summary: Verify a local edition against canonical web sources.
+      description: >
+        Given an edition (inline text or URL) and one or more canonical URLs,
+        fetch each source, normalise text, and compute similarity metrics
+        (token/shingle Jaccard, line coverage). Returns per-source results and
+        sample mismatches for auditing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyRequest'
+            examples:
+              hamlet:
+                value:
+                  edition:
+                    title: Hamlet
+                    url: https://the-four-stars.local/editions/hamlet
+                  canonical:
+                    - name: Folger Digital Texts
+                      url: https://shakespeare.folger.edu/shakespeare-plays/hamlet/
+                    - name: MIT Shakespeare
+                      url: https://shakespeare.mit.edu/hamlet/full.html
+                  options:
+                    shingleSize: 3
+                    maxExamples: 20
+      responses:
+        '200':
+          description: Verification results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyResponse'
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '500': {$ref: '#/components/responses/ServerError'}
 
 components:
   securitySchemes:
@@ -755,6 +800,77 @@ components:
         segmentsUpserted: {type: integer}
         entitiesUpserted: {type: integer}
         tablesUpserted: {type: integer}
+
+    # -------- Verify Edition --------
+    VerifyRequest:
+      type: object
+      required: [edition, canonical]
+      properties:
+        edition:
+          type: object
+          required: []
+          properties:
+            title: {type: string}
+            url: {type: string, format: uri}
+            text: {type: string}
+        canonical:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [url]
+            properties:
+              name: {type: string}
+              url: {type: string, format: uri}
+        options:
+          type: object
+          properties:
+            shingleSize: {type: integer, minimum: 1, maximum: 10, default: 3}
+            maxExamples: {type: integer, minimum: 0, maximum: 200, default: 20}
+            minLineLen: {type: integer, minimum: 1, maximum: 200, default: 12}
+
+    VerifyResponse:
+      type: object
+      required: [summary, results]
+      properties:
+        summary:
+          type: object
+          properties:
+            bestSource: {type: string, description: Name or URL of best-matching source}
+            tokenJaccardBest: {type: number}
+            shingleJaccardBest: {type: number}
+            lineCoverageBest: {type: number}
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/VerifyResult'
+
+    VerifyResult:
+      type: object
+      required: [source, metrics]
+      properties:
+        source:
+          type: object
+          properties:
+            name: {type: string}
+            url: {type: string, format: uri}
+        metrics:
+          type: object
+          properties:
+            tokenJaccard: {type: number}
+            shingleJaccard: {type: number}
+            lineCoverage: {type: number}
+            editionTokens: {type: integer}
+            canonicalTokens: {type: integer}
+        examples:
+          type: object
+          properties:
+            missingFromEdition:
+              type: array
+              items: {type: string}
+            addedInEdition:
+              type: array
+              items: {type: string}
 
     # -------- Errors --------
     Error:

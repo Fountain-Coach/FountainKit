@@ -121,6 +121,81 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
         let analysis = makeAnalysis(fromHTML: html, text: text, url: url, contentType: contentType)
         return .ok(.init(body: .json(analysis)))
     }
+    public func verifyEdition(_ input: Operations.verifyEdition.Input) async throws -> Operations.verifyEdition.Output {
+        guard case let .json(req) = input.body else {
+            return .undocumented(statusCode: 400, OpenAPIRuntime.UndocumentedPayload())
+        }
+        // Resolve edition text
+        var editionText: String? = nil
+        if let t = req.edition.text, !t.isEmpty { editionText = t }
+        if editionText == nil, let u = req.edition.url, !u.isEmpty {
+            let snap = try await engine.snapshot(for: u, wait: nil, capture: nil)
+            editionText = snap.text
+        }
+        if editionText == nil || (editionText?.isEmpty ?? true) {
+            return .undocumented(statusCode: 400, OpenAPIRuntime.UndocumentedPayload())
+        }
+        _ = req.edition.title // currently unused, reserved for reporting
+
+        let shingleSize = req.options?.shingleSize ?? 3
+        let maxExamples = req.options?.maxExamples ?? 20
+        let minLineLen = req.options?.minLineLen ?? 12
+
+        let editionTokens = TextCompare.normalizeForTokens(editionText!)
+        let editionTokenSet = Set(editionTokens)
+        let editionShingles = TextCompare.shingles(tokens: editionTokens, size: max(1, shingleSize))
+
+        var results: [Components.Schemas.VerifyResult] = []
+        for src in req.canonical {
+            let url = src.url
+            let snap = try await engine.snapshot(for: url, wait: nil, capture: nil)
+            let canonicalText = snap.text
+            let canonTokens = TextCompare.normalizeForTokens(canonicalText)
+            let canonTokenSet = Set(canonTokens)
+            let canonShingles = TextCompare.shingles(tokens: canonTokens, size: max(1, shingleSize))
+
+            let tokenJ = TextCompare.jaccard(editionTokenSet, canonTokenSet)
+            let shingleJ = TextCompare.jaccard(editionShingles, canonShingles)
+            let cov = TextCompare.coverage(edition: editionText!, canonical: canonicalText, minLineLen: minLineLen)
+
+            let examplesMissing = Array(cov.missingFromEdition.prefix(maxExamples))
+            let examplesAdded = Array(cov.addedInEdition.prefix(maxExamples))
+
+            let metrics = Components.Schemas.VerifyResult.metricsPayload(
+                tokenJaccard: tokenJ,
+                shingleJaccard: shingleJ,
+                lineCoverage: cov.coverage,
+                editionTokens: editionTokens.count,
+                canonicalTokens: canonTokens.count
+            )
+            let examples = Components.Schemas.VerifyResult.examplesPayload(
+                missingFromEdition: examplesMissing,
+                addedInEdition: examplesAdded
+            )
+            let result = Components.Schemas.VerifyResult(
+                source: .init(name: src.name, url: url),
+                metrics: metrics,
+                examples: examples
+            )
+            results.append(result)
+        }
+
+        // Pick best source by shingle Jaccard, then token Jaccard
+        let best = results.max { a, b in
+            let asj = a.metrics.shingleJaccard ?? 0
+            let bsj = b.metrics.shingleJaccard ?? 0
+            if asj == bsj { return (a.metrics.tokenJaccard ?? 0) < (b.metrics.tokenJaccard ?? 0) }
+            return asj < bsj
+        }
+        let summary = Components.Schemas.VerifyResponse.summaryPayload(
+            bestSource: best?.source.name ?? best?.source.url,
+            tokenJaccardBest: best?.metrics.tokenJaccard,
+            shingleJaccardBest: best?.metrics.shingleJaccard,
+            lineCoverageBest: best?.metrics.lineCoverage
+        )
+        let body = Components.Schemas.VerifyResponse(summary: summary, results: results)
+        return .ok(.init(body: .json(body)))
+    }
     public func indexAnalysis(_ input: Operations.indexAnalysis.Input) async throws -> Operations.indexAnalysis.Output {
         guard case let .json(req) = input.body else {
             return .undocumented(statusCode: 400, OpenAPIRuntime.UndocumentedPayload())

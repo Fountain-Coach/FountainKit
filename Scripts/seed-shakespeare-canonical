@@ -34,6 +34,7 @@ def main():
     ap.add_argument('--persist-url', default=os.environ.get('PERSIST_URL','http://127.0.0.1:8005'))
     ap.add_argument('--corpus', default='shakespeare-canonical')
     ap.add_argument('--limit', type=int, default=0, help='Optional limit for quick runs')
+    ap.add_argument('--version', default=CANON_VERSION, help='Canonical seed version (bump to create new baseline + drift)')
     args = ap.parse_args()
 
     root = Path.cwd()
@@ -47,6 +48,8 @@ def main():
         pass
 
     # Guard: if a canonical baseline with same version exists, skip seeding
+    prior_mapping = None
+    prior_version = None
     try:
         bl = get_json(f"{args.persist_url.rstrip('/')}/corpora/{args.corpus}/baselines?limit=200")
         for item in bl.get('baselines', []) or []:
@@ -57,7 +60,11 @@ def main():
                 obj = json.loads(content)
             except Exception:
                 continue
-            if obj.get('kind') == 'canonical-shakespeare-seed' and obj.get('version') == CANON_VERSION:
+            if obj.get('kind') == 'canonical-shakespeare-seed':
+                # Track last seen canonical baseline for drift
+                prior_mapping = obj.get('mapping')
+                prior_version = obj.get('version')
+            if obj.get('kind') == 'canonical-shakespeare-seed' and obj.get('version') == args.version:
                 print(f"[seed] Guard: canonical version {CANON_VERSION} already present. Skipping seeding.")
                 return
     except Exception:
@@ -121,6 +128,59 @@ def main():
             post_json(f"{args.persist_url.rstrip('/')}/corpora/{args.corpus}/analyses", {"corpusId": args.corpus, "analysisId": f"seed:{page_id}", "pageId": page_id, "summary": summary_line})
         except subprocess.CalledProcessError:
             pass
+
+    # Drift detection vs prior baseline
+    try:
+        def primary_url(m):
+            if not m: return None
+            # Prefer MIT
+            mit = next((c for c in m if 'mit' in (c.get('name','').lower() or c.get('url',''))), None)
+            return (mit or m[0]).get('url')
+        added = []
+        removed = []
+        changed = []
+        if prior_mapping:
+            old = {d['title']: primary_url(d.get('canonical',[])) for d in prior_mapping}
+            new = {d['title']: primary_url(d.get('canonical',[])) for d in mapping}
+            for t in new.keys() - old.keys(): added.append(t)
+            for t in old.keys() - new.keys(): removed.append(t)
+            for t in new.keys() & old.keys():
+                if (old.get(t) or '') != (new.get(t) or ''):
+                    changed.append({'title': t, 'from': old.get(t), 'to': new.get(t)})
+        # Totals
+        import urllib.request
+        pages_total = get_json(f"{args.persist_url.rstrip('/')}/corpora/{args.corpus}/pages?limit=1").get('total', 0)
+        segs_total = get_json(f"{args.persist_url.rstrip('/')}/corpora/{args.corpus}/segments?limit=1").get('total', 0)
+        # Post drift as baseline
+        import datetime
+        ts = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+        commit = subprocess.check_output(['git','rev-parse','--short','HEAD']).decode().strip()
+        drift = {
+            'kind': 'canonical-shakespeare-drift',
+            'fromVersion': prior_version,
+            'toVersion': args.version,
+            'addedTitles': added,
+            'removedTitles': removed,
+            'changedSources': changed,
+            'totals': {'pages': pages_total, 'segments': segs_total},
+            'seed': {'by': 'Scripts/seed-shakespeare-canonical', 'commit': commit, 'time': ts}
+        }
+        drift_id = f"canonical-drift-{args.version}-{ts}-{commit}"
+        post_json(f"{args.persist_url.rstrip('/')}/corpora/{args.corpus}/baselines", {
+            'corpusId': args.corpus,
+            'baselineId': drift_id,
+            'content': json.dumps(drift, ensure_ascii=False)
+        })
+        # And a short analysis summary
+        summary_line = f"drift: +{len(added)} / -{len(removed)} / ~{len(changed)} (pages={pages_total}, segments={segs_total})"
+        post_json(f"{args.persist_url.rstrip('/')}/corpora/{args.corpus}/analyses", {
+            'corpusId': args.corpus,
+            'analysisId': f"drift:{prior_version or 'nil'}→{args.version}",
+            'pageId': 'canonical-index',
+            'summary': summary_line
+        })
+    except Exception as e:
+        print(f"[seed] WARN: drift report failed: {e}", file=sys.stderr)
 
     print(f"[seed] Completed seeding corpus '{args.corpus}'")
 

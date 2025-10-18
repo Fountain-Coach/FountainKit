@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+import argparse, json, sys, subprocess
+
+def get_json(url, timeout=30):
+    out = subprocess.check_output(['curl','-sf', url], timeout=timeout)
+    return json.loads(out.decode('utf-8'))
+
+def main():
+    ap = argparse.ArgumentParser(description='Print latest canonical Shakespeare drift report from Persist baselines')
+    ap.add_argument('--persist-url', default='http://127.0.0.1:8005', help='Persist base URL')
+    ap.add_argument('--corpus', default='shakespeare-canonical', help='Corpus ID')
+    args = ap.parse_args()
+
+    base = args.persist_url.rstrip('/')
+    # Fetch baselines sorted by newest id
+    data = get_json(f"{base}/corpora/{args.corpus}/baselines?limit=200&sort=-baselineId")
+    baselines = data.get('baselines') or []
+    drift = None
+    for item in baselines:
+        v = item.get('value2') or item
+        content = v.get('content')
+        try:
+            obj = json.loads(content) if isinstance(content, str) else content
+        except Exception:
+            continue
+        if isinstance(obj, dict) and obj.get('kind') == 'canonical-shakespeare-drift':
+            drift = (v.get('baselineId') or v.get('id'), obj)
+            break
+
+    if not drift:
+        print('No drift report found for corpus:', args.corpus)
+        sys.exit(0)
+
+    drift_id, obj = drift
+    from_v = obj.get('fromVersion')
+    to_v = obj.get('toVersion')
+    totals = obj.get('totals', {})
+    added = obj.get('addedTitles', []) or []
+    removed = obj.get('removedTitles', []) or []
+    changed = obj.get('changedSources', []) or []
+
+    print(f"Drift Report: {from_v} -> {to_v} (baselineId: {drift_id})")
+    print(f"Totals: pages={totals.get('pages', 0)} segments={totals.get('segments', 0)}")
+    print()
+    print(f"Added ({len(added)}):")
+    for t in added:
+        print(f" - {t}")
+    if not added:
+        print(" - none")
+    print()
+    print(f"Removed ({len(removed)}):")
+    for t in removed:
+        print(f" - {t}")
+    if not removed:
+        print(" - none")
+    print()
+    print(f"Changed Sources ({len(changed)}):")
+    if changed:
+        print(f"{'Title':40}  {'From':45}  {'To'}")
+        print(f"{'-'*40}  {'-'*45}  {'-'*40}")
+        for row in changed:
+            title = (row.get('title') or '')[:40]
+            frm = (row.get('from') or '')[:45]
+            to = (row.get('to') or '')[:120]
+            print(f"{title:40}  {frm:45}  {to}")
+    else:
+        print(" - none")
+
+if __name__ == '__main__':
+    main()
+

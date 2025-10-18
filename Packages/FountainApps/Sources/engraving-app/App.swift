@@ -1,5 +1,7 @@
 import SwiftUI
 import FountainStoreClient
+import FountainAIKit
+import ProviderOpenAI
 import LauncherSignature
 
 @main
@@ -524,6 +526,8 @@ struct ChatView: View {
                     .padding(.vertical, 4)
                 }
             }
+            Divider().padding(.top, 6)
+            LiveChatView(corpusId: model.corpusId)
         }
         .padding(.bottom, 6)
     }
@@ -551,6 +555,102 @@ struct ChatView: View {
         } catch {
             self.traces[turn.recordId] = []
         }
+    }
+}
+
+// MARK: - Live Chat (real OpenAI-compatible call)
+
+private struct LiveChatView: View {
+    @StateObject private var vm: EngraverChatViewModel
+    @State private var input: String = ""
+
+    init(corpusId: String) {
+        // Resolve store (disk if FOUNTAINSTORE_DIR set)
+        let env = ProcessInfo.processInfo.environment
+        let store: FountainStoreClient = {
+            if let dir = env["FOUNTAINSTORE_DIR"], !dir.isEmpty {
+                let url: URL
+                if dir.hasPrefix("~") {
+                    url = URL(fileURLWithPath: FileManager.default.homeDirectoryForCurrentUser.path + String(dir.dropFirst()), isDirectory: true)
+                } else { url = URL(fileURLWithPath: dir, isDirectory: true) }
+                if let disk = try? DiskFountainStoreClient(rootDirectory: url) {
+                    return FountainStoreClient(client: disk)
+                }
+            }
+            return FountainStoreClient(client: EmbeddedFountainStoreClient())
+        }()
+        // Resolve chat provider (OpenAI or local OpenAI-compatible)
+        let apiKey = env["OPENAI_API_KEY"]
+        let endpointString = env["OPENAI_API_URL"] ?? (apiKey == nil ? (env["ENGRAVER_LOCAL_LLM_URL"] ?? "http://127.0.0.1:11434/v1/chat/completions") : "https://api.openai.com/v1/chat/completions")
+        let endpoint = URL(string: endpointString) ?? URL(string: "https://api.openai.com/v1/chat/completions")!
+        let chatClient = OpenAICompatibleChatProvider(apiKey: apiKey, endpoint: endpoint)
+        // Minimal seeding config so memory uses the conventional segments collection
+        let browser = SeedingConfiguration.Browser(
+            baseURL: URL(string: env["SEMANTIC_BROWSER_URL"] ?? "http://127.0.0.1:8003")!,
+            apiKey: nil,
+            mode: .quick,
+            defaultLabels: [],
+            pagesCollection: "pages",
+            segmentsCollection: "segments",
+            entitiesCollection: "entities",
+            tablesCollection: "tables",
+            storeOverride: nil
+        )
+        let seeding = SeedingConfiguration(sources: [], browser: browser)
+        let gatewayBase = URL(string: env["FOUNTAIN_GATEWAY_URL"] ?? "http://127.0.0.1:8010")!
+        // Compose VM
+        _vm = StateObject(wrappedValue: EngraverChatViewModel(
+            chatClient: chatClient,
+            persistenceStore: store,
+            corpusId: corpusId,
+            collection: "chat-turns",
+            availableModels: [env["OPENAI_MODEL"] ?? "gpt-4o-mini"],
+            defaultModel: env["OPENAI_MODEL"] ?? "gpt-4o-mini",
+            debugEnabled: false,
+            awarenessBaseURL: URL(string: env["AWARENESS_URL"] ?? "http://127.0.0.1:8001"),
+            bootstrapBaseURL: nil,
+            bearerToken: nil,
+            seedingConfiguration: seeding,
+            environmentController: nil,
+            semanticSeeder: SemanticBrowserSeeder(),
+            gatewayBaseURL: gatewayBase,
+            directMode: true
+        ))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Live Chat").font(.headline)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(vm.turns, id: \.id) { t in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("You:").font(.caption).foregroundStyle(.secondary)
+                            Text(t.prompt)
+                            Text("Assistant:").font(.caption).foregroundStyle(.secondary)
+                            Text(t.answer)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    if !vm.activeTokens.isEmpty {
+                        Text(vm.activeTokens.joined()).foregroundStyle(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }.frame(minHeight: 120)
+            HStack {
+                TextField("Type a message…", text: $input)
+                Button("Send") {
+                    let sys = vm.makeSystemPrompts(base: [])
+                    vm.send(prompt: input, systemPrompts: sys, preferStreaming: true, corpusOverride: nil)
+                    input = ""
+                }.disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(8)
+        .background(Color(nsColor: .textBackgroundColor))
+        .cornerRadius(6)
+        .onAppear { /* VM ready */ }
     }
 }
 

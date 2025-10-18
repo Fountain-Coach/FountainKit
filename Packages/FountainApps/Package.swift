@@ -318,7 +318,9 @@ let package = Package(
             name: "engraving-app",
             dependencies: [
                 .product(name: "FountainStoreClient", package: "FountainCore"),
-                .product(name: "LauncherSignature", package: "FountainCore")
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "FountainAIKit", package: "FountainAIKit"),
+                .product(name: "ProviderOpenAI", package: "FountainProviders")
             ],
             path: "Sources/engraving-app"
         ),

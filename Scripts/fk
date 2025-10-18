@@ -103,6 +103,7 @@ Commands:
   api <url>       Generic HTTP call with JSON helpers
   export persist  Export pages/segments (and more) to fixtures
   verify          Compare an edition against canonical web sources (Semantic Browser)
+  verify corpus   Verify all plays in the Four Stars fountain against canonical sources
   read scene      Render a human-readable scene script (Speech Atlas)
   read act        Render a whole act by stitching scenes
   read play       Render the whole play by stitching acts & scenes
@@ -227,6 +228,12 @@ LIST
     esac ;;
   verify)
     shift
+    if [[ "${1:-}" == "corpus" ]]; then
+      shift
+      SEMANTIC_BROWSER_URL="${SEMANTIC_BROWSER_URL:-http://127.0.0.1:${SEMANTIC_BROWSER_PORT:-8007}}" \
+        "$ROOT/Scripts/verify-shakespeare-corpus" --sb-url "$SEMANTIC_BROWSER_URL" "$@"
+      exit 0
+    fi
     SB_BASE="${SEMANTIC_BROWSER_URL:-http://127.0.0.1:${SEMANTIC_BROWSER_PORT:-8007}}"
     EDITION_URL=""; EDITION_FILE=""; EDITION_TEXT=""; EDITION_TITLE=""; SHINGLE=3; MAX_EX=20; MIN_LINE=12; JSON=0
     declare -a CANONICAL

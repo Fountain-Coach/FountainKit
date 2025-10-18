@@ -12,7 +12,8 @@ public struct PersistUploader: Sendable {
         manifest: SeedManifest,
         speeches: [FountainPlayParser.Speech],
         uploadLimit: Int? = nil,
-        hostOverride: String? = nil
+        hostOverride: String? = nil,
+        pagePrefix: String? = nil
     ) async throws {
         try await ensureCorpus(manifest.corpusId)
         let payloadSpeeches: [FountainPlayParser.Speech]
@@ -22,7 +23,10 @@ public struct PersistUploader: Sendable {
             payloadSpeeches = speeches
         }
         let host = hostOverride ?? manifest.corpusId
-        try await uploadPagesAndSegments(corpusId: manifest.corpusId, host: host, speeches: payloadSpeeches)
+        try await uploadPagesAndSegments(corpusId: manifest.corpusId,
+                                         host: host,
+                                         speeches: payloadSpeeches,
+                                         pagePrefix: pagePrefix)
     }
 
     private func ensureCorpus(_ corpusId: String) async throws {
@@ -40,12 +44,13 @@ public struct PersistUploader: Sendable {
     private func uploadPagesAndSegments(
         corpusId: String,
         host: String,
-        speeches: [FountainPlayParser.Speech]
+        speeches: [FountainPlayParser.Speech],
+        pagePrefix: String?
     ) async throws {
         var uploadedPages = Set<String>()
 
         for speech in speeches {
-            let pageId = pageIdentifier(for: speech)
+            let pageId = pageIdentifier(for: speech, prefix: pagePrefix)
             if uploadedPages.insert(pageId).inserted {
                 let page = PersistServiceClient.PagePayload(
                     corpusId: corpusId,
@@ -78,10 +83,14 @@ public struct PersistUploader: Sendable {
         }
     }
 
-    private func pageIdentifier(for speech: FountainPlayParser.Speech) -> String {
+    private func pageIdentifier(for speech: FountainPlayParser.Speech, prefix: String?) -> String {
         let actValue = slugify(speech.act).nonEmptyOr("unknown")
         let sceneValue = slugify(speech.scene).nonEmptyOr("unknown")
-        return "act-\(actValue)-scene-\(sceneValue)"
+        let base = "act-\(actValue)-scene-\(sceneValue)"
+        if let p = prefix, !p.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "\(p)/\(base)"
+        }
+        return base
     }
 
     private func segmentIdentifier(for speech: FountainPlayParser.Speech) -> String {

@@ -18,6 +18,7 @@ struct PersistenceSeederCLI {
         var corpusPrefixOverride: String?
         var corpusIdExplicit = false
         var playFilter: String?
+        var nestedUnderCorpus: Bool = false
 
         var idx = 1
         let args = CommandLine.arguments
@@ -83,6 +84,11 @@ struct PersistenceSeederCLI {
                 guard idx + 1 < args.count else { throw CLIError.invalidArguments("--play requires a value") }
                 playFilter = args[idx + 1]
                 idx += 2
+            case "--nested-under-corpus":
+                // When set, seed into the specified corpus (via --corpus) but prefix pageId with the play slug.
+                // This simulates nested corpora semantics without changing the corpusId path shape.
+                nestedUnderCorpus = true
+                idx += 1
             case "-h", "--help":
                 printUsage()
                 return
@@ -148,7 +154,8 @@ struct PersistenceSeederCLI {
                                     manifest: play.result.manifest,
                                     speeches: play.result.speeches,
                                     uploadLimit: uploadLimit,
-                                    hostOverride: play.slug
+                                    hostOverride: play.slug,
+                                    pagePrefix: nil
                                 )
                             } catch {
                                 fputs("UPLOAD ERROR [\(play.slug)]: \(error)\n", stderr)
@@ -182,11 +189,21 @@ struct PersistenceSeederCLI {
                         }
                         let uploader = PersistUploader(baseURL: baseURL, apiKey: persistAPIKey)
                         do {
+                            let pagePrefix: String?
+                            if nestedUnderCorpus, let playFilter, !playFilter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                let plays = try? FountainPlayParser().parseAllPlays(fileURL: URL(fileURLWithPath: repoPath))
+                                pagePrefix = plays?.first { $0.title.localizedCaseInsensitiveContains(playFilter) || $0.slug.localizedCaseInsensitiveContains(playFilter) }?.slug ?? playFilter
+                                    .lowercased()
+                                    .replacingOccurrences(of: " ", with: "-")
+                            } else {
+                                pagePrefix = nil
+                            }
                             try await uploader.apply(
                                 manifest: result.manifest,
                                 speeches: result.speeches,
                                 uploadLimit: uploadLimit,
-                                hostOverride: corpusId
+                                hostOverride: corpusId,
+                                pagePrefix: pagePrefix
                             )
                         } catch {
                             fputs("UPLOAD ERROR: \(error)\n", stderr)

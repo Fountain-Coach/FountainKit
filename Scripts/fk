@@ -209,7 +209,7 @@ LIST
     sub=${1:-}; shift || true
     case "$sub" in
       scene)
-        ACT=""; SCENE=""; FORMAT="markdown"; CORPUS="${CORPUS_ID:-the-four-stars}"; BASE="${PERSIST_URL:-http://127.0.0.1:${FOUNTAINSTORE_PORT:-8005}}"; PAGER_ON=1
+        ACT=""; SCENE=""; FORMAT="markdown"; CORPUS="${CORPUS_ID:-the-four-stars}"; BASE="${PERSIST_URL:-http://127.0.0.1:${FOUNTAINSTORE_PORT:-8005}}"; PAGER_ON=1; OUT_FILE=""; OPEN_HTML=0; OPEN_NATIVE=0
         while [[ $# -gt 0 ]]; do
           case "$1" in
             --act) ACT=${2:-}; shift 2;;
@@ -217,25 +217,83 @@ LIST
             --format) FORMAT=${2:-}; shift 2;;
             --corpus) CORPUS=${2:-}; shift 2;;
             --url) BASE=${2:-}; shift 2;;
+            --out) OUT_FILE=${2:-}; shift 2;;
+            --open) OPEN_NATIVE=1; shift 1;;
+            --open-html) OPEN_HTML=1; shift 1;;
             --no-pager) PAGER_ON=0; shift 1;;
             *) break;;
           esac
         done
-        [[ -n "$ACT" && -n "$SCENE" ]] || { echo "usage: fk read scene --act <I> --scene <II> [--format markdown|json] [--corpus id] [--url base] [--no-pager]"; exit 2; }
+        [[ -n "$ACT" && -n "$SCENE" ]] || { echo "usage: fk read scene --act <I> --scene <II> [--format markdown|json] [--corpus id] [--url base] [--out file] [--open|--open-html] [--no-pager]"; exit 2; }
         req=$(cat <<JSON
 {"act":"$ACT","scene":"$SCENE","format":"$FORMAT","group_consecutive":true}
 JSON
 )
         url="$BASE/arcs/$CORPUS/speeches/script"
         if [[ "$FORMAT" == "json" ]]; then
-          curl -sf -X POST "$url" -H 'Content-Type: application/json' -d "$req" | jq .
+          out=$(curl -sf -X POST "$url" -H 'Content-Type: application/json' -d "$req" | jq .)
+          if [[ -n "$OUT_FILE" ]]; then printf "%s\n" "$out" > "$OUT_FILE"; fi
+          printf "%s\n" "$out"
         else
           body=$(curl -sf -X POST "$url" -H 'Content-Type: application/json' -d "$req" | jq -r '.result.markdown')
-          if (( PAGER_ON )) && command -v less >/dev/null 2>&1; then
-            printf "%s\n" "$body" | less -R
+          if [[ -n "$OUT_FILE" ]]; then printf "%s\n" "$body" > "$OUT_FILE"; fi
+          if (( OPEN_HTML )); then
+            html_file=${OUT_FILE:-"/tmp/scene-$ACT-$SCENE.html"}
+            { printf "<html><head><meta charset=\"utf-8\"><title>Act %s Scene %s</title></head><body><pre style=\"white-space:pre-wrap;font-family:ui-monospace,monospace\">" "$ACT" "$SCENE"; \
+              printf "%s" "$body" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; \
+              printf "</pre></body></html>"; } > "$html_file"
+            if command -v open >/dev/null 2>&1; then open "$html_file"; fi
+          elif (( OPEN_NATIVE )); then
+            file=${OUT_FILE:-"/tmp/scene-$ACT-$SCENE.md"}
+            printf "%s\n" "$body" > "$file"
+            if command -v open >/dev/null 2>&1; then open "$file"; fi
           else
-            printf "%s\n" "$body"
+            if (( PAGER_ON )) && command -v less >/dev/null 2>&1; then
+              printf "%s\n" "$body" | less -R
+            else
+              printf "%s\n" "$body"
+            fi
           fi
+        fi
+        ;;
+      act)
+        ACT=""; CORPUS="${CORPUS_ID:-the-four-stars}"; BASE="${PERSIST_URL:-http://127.0.0.1:${FOUNTAINSTORE_PORT:-8005}}"; OUT_FILE=""; OPEN_HTML=0; OPEN_NATIVE=0
+        while [[ $# -gt 0 ]]; do
+          case "$1" in
+            --act) ACT=${2:-}; shift 2;;
+            --corpus) CORPUS=${2:-}; shift 2;;
+            --url) BASE=${2:-}; shift 2;;
+            --out) OUT_FILE=${2:-}; shift 2;;
+            --open) OPEN_NATIVE=1; shift 1;;
+            --open-html) OPEN_HTML=1; shift 1;;
+            *) break;;
+          esac
+        done
+        [[ -n "$ACT" ]] || { echo "usage: fk read act --act <I> [--corpus id] [--url base] [--out file] [--open|--open-html]"; exit 2; }
+        scenes=$(curl -sf -X POST "$BASE/arcs/$CORPUS/speeches/list" -H 'Content-Type: application/json' -d "{\"act\":\"$ACT\",\"limit\":500,\"offset\":0}" | jq -r '[.result.items[].scene] | unique | .[]')
+        doc="# Act $ACT\n"
+        for SCENE in $scenes; do
+          req=$(cat <<JSON
+{"act":"$ACT","scene":"$SCENE","format":"markdown","group_consecutive":true}
+JSON
+)
+          md=$(curl -sf -X POST "$BASE/arcs/$CORPUS/speeches/script" -H 'Content-Type: application/json' -d "$req" | jq -r '.result.markdown')
+          md=$(printf "%s" "$md" | sed -e 's/^# /## /')
+          doc+=$'\n'"$md"$'\n'
+        done
+        if [[ -n "$OUT_FILE" ]]; then printf "%s\n" "$doc" > "$OUT_FILE"; fi
+        if (( OPEN_HTML )); then
+          html_file=${OUT_FILE:-"/tmp/act-$ACT.html"}
+          { printf "<html><head><meta charset=\"utf-8\"><title>Act %s</title></head><body><pre style=\"white-space:pre-wrap;font-family:ui-monospace,monospace\">" "$ACT"; \
+            printf "%s" "$doc" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; \
+            printf "</pre></body></html>"; } > "$html_file"
+          if command -v open >/dev/null 2>&1; then open "$html_file"; fi
+        elif (( OPEN_NATIVE )); then
+          file=${OUT_FILE:-"/tmp/act-$ACT.md"}
+          printf "%s\n" "$doc" > "$file"
+          if command -v open >/dev/null 2>&1; then open "$file"; fi
+        else
+          printf "%s\n" "$doc"
         fi
         ;;
       *) echo "usage: fk read scene --act <I> --scene <II> [--format markdown|json]" ;;

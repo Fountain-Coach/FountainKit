@@ -39,7 +39,37 @@ public final class PublishingFrontend {
         self.config = config
         self.port = config.port
         self.group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+        let env = ProcessInfo.processInfo.environment
+        let persistBase = env["PERSIST_URL"] ?? "http://127.0.0.1:\(env["FOUNTAINSTORE_PORT"] ?? "8005")"
+        func proxyPersist(_ req: HTTPRequest) -> HTTPResponse? {
+            // Supported proxies:
+            //  - /api/scripts/pages?limit=&sort=&corpus=
+            //  - /api/scripts/segments?limit=&q=&corpus=
+            guard req.method == "GET" else { return nil }
+            if req.path.hasPrefix("/api/scripts/pages") || req.path.hasPrefix("/api/scripts/segments") {
+                let isPages = req.path.hasPrefix("/api/scripts/pages")
+                let query = URL(string: "http://localhost\(req.path)")?.query ?? ""
+                let qp: [String:String] = query.split(separator: "&").reduce(into: [:]) { dict, pair in
+                    let parts = pair.split(separator: "=", maxSplits: 1).map(String.init)
+                    if parts.count == 2 { dict[parts[0]] = parts[1] }
+                }
+                let corpus = qp["corpus"].flatMap { String($0) } ?? "fountain-scripts"
+                var target = "\(persistBase)/corpora/\(corpus)/" + (isPages ? "pages" : "segments")
+                let passthroughKeys = isPages ? ["limit","offset","sort","q","host"] : ["limit","offset","q","kind","pageId"]
+                let passthrough = passthroughKeys.compactMap { key -> String? in
+                    if let v = qp[key], !v.isEmpty { return "\(key)=\(v)" } else { return nil }
+                }
+                if !passthrough.isEmpty { target += "?" + passthrough.joined(separator: "&") }
+                if let url = URL(string: target), let data = try? Data(contentsOf: url) {
+                    return HTTPResponse(status: 200, headers: ["Content-Type": "application/json", "Cache-Control": "no-store"], body: data)
+                } else {
+                    return HTTPResponse(status: 502, headers: ["Content-Type": "application/json"], body: Data("{}".utf8))
+                }
+            }
+            return nil
+        }
         let kernel = HTTPKernel { [config] req in
+            if let proxied = proxyPersist(req) { return proxied }
             guard req.method == "GET" else { return HTTPResponse(status: 405) }
             let path = config.rootPath + (req.path == "/" ? "/index.html" : req.path)
             if let data = FileManager.default.contents(atPath: path) {

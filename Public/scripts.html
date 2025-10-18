@@ -30,7 +30,7 @@
       const corpus = qs.get('corpus') || 'fountain-scripts';
       const $ = sel => document.querySelector(sel);
       try {
-        const pages = await fetch(`${persist}/corpora/${corpus}/pages?limit=500&sort=title`).then(r=>r.json());
+        const pages = await fetch(`/api/scripts/pages?limit=500&sort=title&corpus=${encodeURIComponent(corpus)}`).then(r=>r.json());
         const list = pages.pages || [];
         $('#summary').textContent = `Corpus ${corpus} — ${list.length} scripts`;
         const tbody = $('#tbl tbody');
@@ -39,7 +39,7 @@
           const name = p.title;
           const ver = (pid.split('@')[1]||'').slice(0,12);
           // query usage segment via text search on pageId
-          const segs = await fetch(`${persist}/corpora/${corpus}/segments?limit=200&q=${encodeURIComponent(pid)}`).then(r=>r.json());
+          const segs = await fetch(`/api/scripts/segments?limit=200&corpus=${encodeURIComponent(corpus)}&q=${encodeURIComponent(pid)}`).then(r=>r.json());
           const usage = (segs.segments||[]).find(s=>s.kind==='usage');
           const usageFirst = usage ? (usage.text||'').split('\n')[0] : '';
           const tr = document.createElement('tr');
@@ -54,4 +54,3 @@
   </script>
 </body>
 </html>
-

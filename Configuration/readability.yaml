@@ -1,0 +1,17 @@
+default_corpus: the-four-stars
+default_layout: readable
+# Optionally set a default Persist base URL (overrides FOUNTAINSTORE_PORT)
+# persist_url: http://127.0.0.1:8005
+
+# Theme presets (for HTML rendering)
+# theme:
+#   readable_css: |
+#     body{margin:2rem auto;max-width:800px;background:#fff;color:#222;font:16px/1.6 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial;}
+#     h1,h2,strong{color:#111}
+#     .speaker{margin-top:1rem;font-weight:700}
+#     p{margin:.2rem 0}
+#   screenplay_css: |
+#     body{margin:2rem auto;max-width:860px;background:#fff;color:#111;font:16px/1.6 Courier New,Courier,monospace}
+#     h1{letter-spacing:.5px}
+#     .speaker{margin-top:1rem;font-weight:700;letter-spacing:.5px}
+#     .line{margin:.1rem 0 0 2rem}

@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+import argparse, json, os, subprocess
+from pathlib import Path
+
+def get_json(url, timeout=60):
+    out = subprocess.check_output(['curl','-sf', url], timeout=timeout)
+    return json.loads(out.decode('utf-8'))
+
+def write(path: Path, text: str):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding='utf-8')
+
+def html_escape(s: str) -> str:
+    return s.replace('&','&amp;').replace('<','&lt;').replace('>','&gt;')
+
+def render_catalog(persist, corpus, out: Path):
+    pages = get_json(f"{persist}/corpora/{corpus}/pages?limit=500&sort=title").get('pages') or []
+    rows = []
+    for p in pages:
+        pid = p.get('pageId')
+        segs = get_json(f"{persist}/corpora/{corpus}/segments?limit=200&q={pid}").get('segments') or []
+        usage = next((s for s in segs if s.get('kind')=='usage'), None)
+        usage_first = (usage.get('text') or '').split('\n')[0] if usage else ''
+        rows.append((p.get('title'), p.get('url'), usage_first))
+    html = [
+        '<!doctype html><meta charset="utf-8"/>',
+        '<title>Scripts Catalog (snapshot)</title>',
+        '<style>body{font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial;margin:2rem} table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:.5rem;text-align:left}th{background:#f7f7f7}</style>',
+        f'<h1>Scripts Catalog — corpus {html_escape(corpus)}</h1>',
+        '<table><thead><tr><th>Script</th><th>Path</th><th>Usage (first line)</th></tr></thead><tbody>'
+    ]
+    for title, url, usage in rows:
+        html.append(f'<tr><td>{html_escape(title or "")}</td><td><code>{html_escape(url or "")}</code></td><td>{html_escape(usage or "")}</td></tr>')
+    html.append('</tbody></table>')
+    write(out, '\n'.join(html))
+
+def render_arc(awareness, corpus, out: Path):
+    data = get_json(f"{awareness}/corpus/semantic-arc?corpus_id={corpus}")
+    arc = data.get('arc') or []
+    total = data.get('total') or (data.get('counts',{}).get('pages',0)+data.get('counts',{}).get('segments',0))
+    esc_json = html_escape(json.dumps({'arc': arc, 'total': total}))
+    html = f'''<!doctype html><meta charset="utf-8"/>
+<title>Semantic Arc — {html_escape(corpus)}</title>
+<style>body{{font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial;margin:2rem}}canvas{{border:1px solid #eee;border-radius:6px}}table{{border-collapse:collapse;width:100%;margin-top:1rem}}th,td{{border:1px solid #ddd;padding:.5rem;text-align:left}}th{{background:#f7f7f7}}</style>
+<h1>Semantic Arc — {html_escape(corpus)}</h1>
+<div>Total weight: {total}</div>
+<canvas id="chart" width="860" height="260"></canvas>
+<table id="tbl"><thead><tr><th>Phase</th><th>Weight</th><th>Percent</th></tr></thead><tbody></tbody></table>
+<script id="data" type="application/json">{esc_json}</script>
+<script>
+const data = JSON.parse(document.getElementById('data').textContent);
+const arc = data.arc || [];
+const ctx = document.getElementById('chart').getContext('2d');
+const W=860,H=260; const max=Math.max(...arc.map(a=>a.weight),1); const barW=Math.max(20,(W-40)/arc.length-10); const baseY=H-30; const colors=['#4F46E5','#0EA5E9','#10B981','#F59E0B','#EF4444','#8B5CF6','#14B8A6','#64748B'];
+ctx.font='12px -apple-system, Segoe UI, Roboto, Helvetica, Arial';ctx.fillStyle='#111';ctx.fillText('Phases',10,14);
+arc.forEach((a,i)=>{const x=20+i*(barW+10);const h=Math.round((a.weight/max)*(H-80));ctx.fillStyle=colors[i%colors.length];ctx.fillRect(x,baseY-h,barW,h);ctx.fillStyle='#111';const label=(a.phase||'').replace(/^[^\/]+\//,'');ctx.save();ctx.translate(x+barW/2,H-10);ctx.rotate(-Math.PI/4);ctx.textAlign='right';ctx.fillText(label,0,0);ctx.restore();});
+const tbody=document.querySelector('#tbl tbody');arc.forEach(a=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${a.phase}</td><td>${a.weight}</td><td>${(a.pct*100).toFixed(1)}%</td>`;tbody.appendChild(tr);});
+</script>'''
+    write(out, html)
+
+def render_index(out_dir: Path, entries):
+    html = ['<!doctype html><meta charset="utf-8"/><title>Reports</title><style>body{font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial;margin:2rem} a{display:block;margin:.2rem 0}</style><h1>Reports</h1>']
+    for title, rel in entries:
+        html.append(f'<a href="{rel}">{html_escape(title)}</a>')
+    write(out_dir / 'index.html', '\n'.join(html))
+
+def main():
+    ap = argparse.ArgumentParser(description='Build static reports (catalog + semantic arc)')
+    ap.add_argument('--persist-url', default='http://127.0.0.1:8005')
+    ap.add_argument('--awareness-url', default='http://127.0.0.1:8001')
+    ap.add_argument('--out-dir', default='Public/reports')
+    ap.add_argument('--corpora', default='fountain-scripts,shakespeare-canonical')
+    args = ap.parse_args()
+
+    persist = args.persist-url if hasattr(args,'persist-url') else args.persist_url
+    awareness = args.awareness-url if hasattr(args,'awareness-url') else args.awareness_url
+    out_dir = Path(args.out_dir)
+    corpora = [c.strip() for c in args.corpora.split(',') if c.strip()]
+
+    links = []
+    # Scripts catalog snapshot
+    if 'fountain-scripts' in corpora:
+        catalog_path = out_dir / 'scripts_catalog.html'
+        render_catalog(persist, 'fountain-scripts', catalog_path)
+        links.append(('Scripts Catalog (snapshot)', 'scripts_catalog.html'))
+    # Arc snapshots for each corpus
+    for c in corpora:
+        arc_path = out_dir / f'arc_{c}.html'
+        render_arc(awareness, c, arc_path)
+        links.append((f'Semantic Arc — {c}', arc_path.name))
+    render_index(out_dir, links)
+    print(f"[reports] Wrote static reports to {out_dir}")
+
+if __name__ == '__main__':
+    main()
+

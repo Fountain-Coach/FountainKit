@@ -84,11 +84,13 @@ Commands:
   open list       Print all targets, ports, and URLs
   api <url>       Generic HTTP call with JSON helpers
   export persist  Export pages/segments (and more) to fixtures
+  read scene      Render a human-readable scene script (Speech Atlas)
 
 Shortcuts:
   toolserver ...  Proxy to Scripts/toolserver
   ts-api ...      Proxy to Scripts/toolserver-api
   export ...      Proxy to Scripts/export-persist
+  read ...        Speech Atlas helpers (scene script)
 
 Examples:
   fk up
@@ -201,6 +203,42 @@ LIST
         "$ROOT/Scripts/export-persist" "$@"
         ;;
       *) echo "usage: fk export persist [--corpus <id>] [--out <dir>] [--url <persist-url>] [--api-key <key>]" ;;
+    esac ;;
+  read)
+    shift
+    sub=${1:-}; shift || true
+    case "$sub" in
+      scene)
+        ACT=""; SCENE=""; FORMAT="markdown"; CORPUS="${CORPUS_ID:-the-four-stars}"; BASE="${PERSIST_URL:-http://127.0.0.1:${FOUNTAINSTORE_PORT:-8005}}"; PAGER_ON=1
+        while [[ $# -gt 0 ]]; do
+          case "$1" in
+            --act) ACT=${2:-}; shift 2;;
+            --scene) SCENE=${2:-}; shift 2;;
+            --format) FORMAT=${2:-}; shift 2;;
+            --corpus) CORPUS=${2:-}; shift 2;;
+            --url) BASE=${2:-}; shift 2;;
+            --no-pager) PAGER_ON=0; shift 1;;
+            *) break;;
+          esac
+        done
+        [[ -n "$ACT" && -n "$SCENE" ]] || { echo "usage: fk read scene --act <I> --scene <II> [--format markdown|json] [--corpus id] [--url base] [--no-pager]"; exit 2; }
+        req=$(cat <<JSON
+{"act":"$ACT","scene":"$SCENE","format":"$FORMAT","group_consecutive":true}
+JSON
+)
+        url="$BASE/arcs/$CORPUS/speeches/script"
+        if [[ "$FORMAT" == "json" ]]; then
+          curl -sf -X POST "$url" -H 'Content-Type: application/json' -d "$req" | jq .
+        else
+          body=$(curl -sf -X POST "$url" -H 'Content-Type: application/json' -d "$req" | jq -r '.result.markdown')
+          if (( PAGER_ON )) && command -v less >/dev/null 2>&1; then
+            printf "%s\n" "$body" | less -R
+          else
+            printf "%s\n" "$body"
+          fi
+        fi
+        ;;
+      *) echo "usage: fk read scene --act <I> --scene <II> [--format markdown|json]" ;;
     esac ;;
   help|--help|-h) help ;;
   *) help ;;

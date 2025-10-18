@@ -110,6 +110,9 @@ Commands:
   scripts list    List scripts from the scripts corpus
   scripts show    Show details for a script (header/usage)
   scripts drift   Show latest scripts drift report
+  engraving tui   Launch Engraving TUI (SwiftCurses)
+  engraving bootstrap  Create corpus and seed a starter plan
+  engraving ingest-code  Ingest .swift files as pages/segments
 
 Shortcuts:
   toolserver ...  Proxy to Scripts/toolserver
@@ -332,6 +335,40 @@ PY
       drift)
         "$ROOT/Scripts/print-scripts-drift" "$@" ;;
       *) echo "usage: fk scripts <list|show> [args]" ;;
+    esac ;;
+  engraving)
+    shift
+    sub=${1:-}; shift || true
+    case "$sub" in
+      tui)
+        ENGRAVING_CORPUS_ID="${ENGRAVING_CORPUS_ID:-engraving-lab}" \
+          swift run --package-path "$ROOT/Packages/FountainApps" engraving-tui ;;
+      bootstrap)
+        CORPUS="${1:-engraving-lab}"; shift || true
+        echo "[engraving] bootstrap corpus $CORPUS" >&2
+        curl -sf -X POST "http://127.0.0.1:${FOUNTAINSTORE_PORT:-8005}/corpora" -H 'Content-Type: application/json' -d '{"corpusId":"'"$CORPUS"'"}' >/dev/null || true
+        PLAN_ID="plan:starter"
+        curl -sf -X POST "http://127.0.0.1:${FOUNTAINSTORE_PORT:-8005}/corpora/$CORPUS/pages" -H 'Content-Type: application/json' -d '{"corpusId":"'"$CORPUS"'","pageId":"'"$PLAN_ID"'","url":"store://plan/starter","host":"store","title":"Engraving Plan"}' >/dev/null || true
+        curl -sf -X POST "http://127.0.0.1:${FOUNTAINSTORE_PORT:-8005}/corpora/$CORPUS/segments" -H 'Content-Type: application/json' -d '{"corpusId":"'"$CORPUS"'","segmentId":"'"$PLAN_ID"':notes","pageId":"'"$PLAN_ID"'","kind":"notes","text":"- [ ] Set up corpus\n- [ ] Ingest code\n- [ ] Run rules\n- [ ] Baseline and drift"}' >/dev/null || true
+        echo "[engraving] bootstrap complete" ;;
+      ingest-code)
+        CORPUS="${1:-engraving-lab}"; shift || true
+        ROOTDIR="${1:-$ROOT}"; shift || true
+        echo "[engraving] ingest code from $ROOTDIR into $CORPUS" >&2
+        while IFS= read -r -d '' file; do
+          rel=${file#"$ROOTDIR/"}
+          sha=$(shasum -a 256 "$file" | awk '{print $1}'); id="file:${rel//@/at}@${sha:0:12}"
+          host=repo; url="file://$file"; title="$rel"
+          curl -sf -X POST "http://127.0.0.1:${FOUNTAINSTORE_PORT:-8005}/corpora/$CORPUS/pages" -H 'Content-Type: application/json' -d '{"corpusId":"'"$CORPUS"'","pageId":"'"$id"'","url":"'"$url"'","host":"'"$host"'","title":"'"$title"'"}' >/dev/null || true
+          text=$(python3 - <<PY
+import sys, json
+print(json.dumps(open(sys.argv[1],'r',encoding='utf-8',errors='ignore').read()))
+PY
+"$file")
+          curl -sf -X POST "http://127.0.0.1:${FOUNTAINSTORE_PORT:-8005}/corpora/$CORPUS/segments" -H 'Content-Type: application/json' -d '{"corpusId":"'"$CORPUS"'","segmentId":"'"$id"':code","pageId":"'"$id"'","kind":"code","text":'"$text"'}' >/dev/null || true
+        done < <(find "$ROOTDIR" -type f -name '*.swift' -print0)
+        echo "[engraving] ingest complete" ;;
+      *) echo "usage: fk engraving <tui|bootstrap|ingest-code> [args]" ;;
     esac ;;
   read)
     shift

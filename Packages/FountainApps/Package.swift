@@ -297,6 +297,14 @@ let package = Package(
             path: "Sources/engraver-chat-tui"
         ),
         .executableTarget(
+            name: "engraving-tui",
+            dependencies: [
+                .product(name: "SwiftCursesKit", package: "swiftcurseskit"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/engraving-tui"
+        ),
+        .executableTarget(
             name: "fk-ops-server",
             dependencies: [
                 .product(name: "FountainRuntime", package: "FountainCore"),

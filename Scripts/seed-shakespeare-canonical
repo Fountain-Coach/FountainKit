@@ -54,7 +54,7 @@ def main():
             "wait": {"strategy": "networkIdle", "networkIdleMs": 500, "maxWaitMs": 15000},
             "mode": "standard"
         }
-        resp = post_json(f"{args.sb-url.rstrip('/')}/v1/browse", browse_req)
+        resp = post_json(f"{args.sb_url.rstrip('/')}/v1/browse", browse_req)
         analysis = resp.get('analysis')
         if not analysis:
             print(f"[seed] ERROR: no analysis for {title}", file=sys.stderr)
@@ -101,4 +101,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

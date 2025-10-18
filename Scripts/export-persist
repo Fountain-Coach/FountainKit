@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<USAGE
+Usage:
+  $(basename "$0") --corpus <id> [--out <dir>] [--url <persist-url>] [--api-key <key>]
+
+Defaults:
+  --url  http://127.0.0.1:\${FOUNTAINSTORE_PORT:-8005}
+  --out  <repo-root>/Packages/FountainSpecCuration/fixtures/persist
+
+Examples:
+  $(basename "$0") --corpus the-four-stars
+  $(basename "$0") --corpus the-four-stars --out ./exports
+USAGE
+}
+
+# Repo root
+REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)
+
+URL=${PERSIST_URL:-}
+[[ -z "${URL}" ]] && URL="http://127.0.0.1:${FOUNTAINSTORE_PORT:-8005}"
+OUT="$REPO_ROOT/Packages/FountainSpecCuration/fixtures/persist"
+CORPUS=""
+API_KEY=${PERSIST_API_KEY:-}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --corpus) CORPUS=${2:-}; shift 2;;
+    --out) OUT=${2:-}; shift 2;;
+    --url) URL=${2:-}; shift 2;;
+    --api-key) API_KEY=${2:-}; shift 2;;
+    --help|-h) usage; exit 0;;
+    *) echo "Unknown arg: $1" >&2; usage; exit 2;;
+  esac
+done
+
+[[ -n "$CORPUS" ]] || { echo "error: --corpus is required" >&2; usage; exit 2; }
+
+cmd=(swift run --package-path "$REPO_ROOT/Tools/PersistenceSeeder" persistence-exporter --persist-url "$URL" --corpus "$CORPUS" --out "$OUT")
+if [[ -n "$API_KEY" ]]; then
+  cmd+=(--persist-api-key "$API_KEY")
+fi
+
+echo "[export-persist] Exporting corpus '$CORPUS' from $URL → $OUT" >&2
+"${cmd[@]}"
+
+echo "[export-persist] Done" >&2
+

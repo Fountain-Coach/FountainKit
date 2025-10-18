@@ -1,6 +1,7 @@
 import Foundation
 import OpenAPIRuntime
 import FountainStoreClient
+import TeatroCore
 
 /// Implements the Speech Atlas API on top of the seeded Four Stars corpus.
 public struct SpeechAtlasHandlers: APIProtocol, @unchecked Sendable {
@@ -139,68 +140,164 @@ public struct SpeechAtlasHandlers: APIProtocol, @unchecked Sendable {
         }
         let act = req.act
         let scene = req.scene
+        let layout = (req.layout?.rawValue ?? "readable").lowercased()
         let format = (req.format?.rawValue ?? "markdown").lowercased()
-        let groupConsecutive = req.group_consecutive ?? true
 
-        let pages = try await loadPages()
-        let filtered = filterPages(pages: pages, act: req.act, scene: req.scene)
-        guard let page = filtered.values.sorted(by: { $0.sortKey < $1.sortKey }).first else {
+        guard let sourceURL = resolveFountainSource() else {
+            return .badRequest(.init(body: .json(.init(error: "Fountain source not found"))))
+        }
+        let text = (try? String(contentsOf: sourceURL, encoding: .utf8)) ?? ""
+        guard !text.isEmpty else {
+            return .badRequest(.init(body: .json(.init(error: "Empty source"))))
+        }
+
+        // Normalise and parse via Teatro
+        let normalised = normaliseFountain(text: text)
+        let nodes = FountainParser().parse(normalised)
+        guard let slice = sliceScene(nodes: nodes, act: act, scene: scene) else {
             return .badRequest(.init(body: .json(.init(error: "Scene not found"))))
         }
+        let header = sceneHeader(from: slice.header, act: act, scene: scene)
 
-        // Load all speech segments for page and order by segment index
-        let segments = try await loadSegments(for: page.page.pageId)
-        let ordered = segments.compactMap { seg -> (speaker: String, idx: Int, lines: [String])? in
-            guard let info = parseSegmentIdentifier(seg.segmentId) else { return nil }
-            let speaker = speakerDisplayName(from: info.speakerSlug)
-            let lines = seg.text.split(separator: "\n").map { String($0) }
-            return (speaker: speaker, idx: info.index, lines: lines)
-        }.sorted { $0.idx < $1.idx }
-
-        let header: String = {
-            if let loc = page.location, !loc.isEmpty {
-                return "Act \(act) Scene \(scene) – \(loc)"
-            } else {
-                return "Act \(act) Scene \(scene)"
-            }
-        }()
-
-        // Build blocks with optional grouping of consecutive same-speaker segments
-        var blocks: [(speaker: String, lines: [String])] = []
-        if groupConsecutive {
-            var lastSpeaker: String? = nil
-            var buf: [String] = []
-            for seg in ordered {
-                if seg.speaker == lastSpeaker {
-                    buf.append(contentsOf: seg.lines)
-                } else {
-                    if let ls = lastSpeaker { blocks.append((ls, buf)) }
-                    lastSpeaker = seg.speaker
-                    buf = seg.lines
-                }
-            }
-            if let ls = lastSpeaker { blocks.append((ls, buf)) }
-        } else {
-            blocks = ordered.map { ($0.speaker, $0.lines) }
-        }
+        // Build blocks with .fountain semantics
+        let blocks = buildBlocks(from: slice.nodes)
 
         if format == "json" {
-            let items = blocks.map { block in
-                Components.Schemas.ScriptBlock(speaker: block.speaker, lines: block.lines)
-            }
+            let items = blocks.map { Components.Schemas.ScriptBlock(speaker: $0.speaker, lines: $0.lines) }
             let payload = Components.Schemas.SceneScriptResponse(result: .init(header: header, markdown: nil, blocks: items))
             return .ok(.init(body: .json(payload)))
-        } else {
-            // Markdown: header + blocks rendered as SPEAKER: lines
-            var md: [String] = ["# \(header)"]
+        }
+        // Markdown rendering with layout override
+        var md: [String] = ["# \(header)"]
+        switch layout {
+        case "screenplay":
+            // simple screenplay-like: center scene heading (Markdown can't center reliably), uppercase speakers
+            for block in blocks {
+                md.append("\n**\(block.speaker.uppercased())**")
+                for line in block.lines { md.append("    \(line)") }
+            }
+        default: // readable
             for block in blocks {
                 md.append("\n**\(block.speaker)**")
                 for line in block.lines { md.append(line) }
             }
-            let content = md.joined(separator: "\n")
-            let payload = Components.Schemas.SceneScriptResponse(result: .init(header: header, markdown: content, blocks: nil))
-            return .ok(.init(body: .json(payload)))
         }
+        let content = md.joined(separator: "\n")
+        let payload = Components.Schemas.SceneScriptResponse(result: .init(header: header, markdown: content, blocks: nil))
+        return .ok(.init(body: .json(payload)))
+    }
+
+    // MARK: - Fountain helpers
+    private func resolveFountainSource() -> URL? {
+        let env = ProcessInfo.processInfo.environment
+        if let path = env["FOUNTAIN_SOURCE_PATH"], !path.isEmpty { return URL(fileURLWithPath: path) }
+        let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+        let defaultPath = cwd.appendingPathComponent("Workspace/the-four-stars/the four stars")
+        return FileManager.default.fileExists(atPath: defaultPath.path) ? defaultPath : nil
+    }
+
+    private func normaliseFountain(text: String) -> String {
+        var out: [String] = []
+        let lines = text.components(separatedBy: "\n")
+        for (idx, raw) in lines.enumerated() {
+            if idx == 0 { continue } // skip title line
+            if let act = normaliseActLine(raw) { out.append(act); out.append(""); continue }
+            if let scene = normaliseSceneLine(raw) { out.append(scene); out.append(""); continue }
+            out.append(raw)
+        }
+        return out.joined(separator: "\n")
+    }
+
+    private func normaliseActLine(_ line: String) -> String? {
+        let t = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.hasPrefix("****"), t.uppercased().contains("ACT"), t.hasSuffix("****") else { return nil }
+        let inner = t.trimmingCharacters(in: CharacterSet(charactersIn: "* ")).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard inner.uppercased().hasPrefix("ACT") else { return nil }
+        return "# \(inner)"
+    }
+    private func normaliseSceneLine(_ line: String) -> String? {
+        let t = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.hasPrefix("****"), t.uppercased().contains("SCENE"), t.hasSuffix("****") else { return nil }
+        let inner = t.trimmingCharacters(in: CharacterSet(charactersIn: "* ")).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard inner.uppercased().hasPrefix("SCENE") else { return nil }
+        return "## \(inner)"
+    }
+
+    private func sliceScene(nodes: [FountainNode], act: String, scene: String) -> (header: String, nodes: [FountainNode])? {
+        var currentAct = ""
+        var startIndex: Int?
+        var headerText = ""
+        for (i, n) in nodes.enumerated() {
+            switch n.type {
+            case .section(let level):
+                if level == 1 { currentAct = stripSections(from: n.rawText).replacingOccurrences(of: "ACT ", with: "").trimmingCharacters(in: .whitespaces) }
+            case .sceneHeading:
+                if currentAct == act {
+                    let desc = stripSections(from: n.rawText)
+                    // Expect pattern: SCENE <roman>. <location>
+                    let u = desc.uppercased()
+                    if u.hasPrefix("SCENE \(scene.uppercased())") {
+                        startIndex = i + 1
+                        headerText = desc
+                    } else if startIndex != nil {
+                        // next scene reached
+                        let slice = Array(nodes[(startIndex!)..<i])
+                        return (header: headerText, nodes: slice)
+                    }
+                }
+            default:
+                break
+            }
+        }
+        if let s = startIndex { return (header: headerText, nodes: Array(nodes[s...])) }
+        return nil
+    }
+
+    private func stripSections(from raw: String) -> String {
+        var t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        while t.hasPrefix("#") { t.removeFirst() }
+        return t.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func sceneHeader(from heading: String, act: String, scene: String) -> String {
+        // Heading like: SCENE II. Lawn before the Duke's palace.
+        let parts = heading.split(separator: ".", maxSplits: 1).map(String.init)
+        let location = parts.count > 1 ? parts[1].trimmingCharacters(in: .whitespaces) : nil
+        if let loc = location, !loc.isEmpty { return "Act \(act) Scene \(scene) – \(loc)" }
+        return "Act \(act) Scene \(scene)"
+    }
+
+    private func buildBlocks(from nodes: [FountainNode]) -> [(speaker: String, lines: [String])] {
+        var blocks: [(String, [String])] = []
+        var currentSpeaker: String? = nil
+        var buf: [String] = []
+        func flush() { if let s = currentSpeaker, !buf.isEmpty { blocks.append((s, buf)); buf.removeAll() } }
+        for n in nodes {
+            switch n.type {
+            case .character:
+                flush()
+                currentSpeaker = n.rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+            case .parenthetical:
+                if currentSpeaker != nil {
+                    buf.append("(")
+                    buf.append(n.rawText)
+                }
+            case .dialogue:
+                if currentSpeaker != nil { buf.append(n.rawText) }
+            case .action:
+                flush()
+                currentSpeaker = "[STAGE]"
+                buf = [n.rawText]
+                flush()
+                currentSpeaker = nil
+            default:
+                continue
+            }
+        }
+        flush()
+        // Normalize speaker names to display-friendly (uppercase words separated by spaces)
+        let out = blocks.map { spk, lines in (speakerDisplayName(from: spk.lowercased()), lines) }
+        return out
     }
 
     // MARK: - Segment Fetching

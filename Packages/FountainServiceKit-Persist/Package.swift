@@ -13,6 +13,7 @@ let package = Package(
     dependencies: [
         .package(path: "../FountainCore"),
         .package(path: "../FountainTooling"),
+        .package(path: "../../External/Teatro/Packages/TeatroCore"),
         .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
         .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0")
     ],
@@ -33,7 +34,8 @@ let package = Package(
             name: "SpeechAtlasService",
             dependencies: [
                 .product(name: "FountainStoreClient", package: "FountainCore"),
-                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "TeatroCore", package: "TeatroCore")
             ],
             plugins: [
                 .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),

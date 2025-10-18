@@ -229,6 +229,10 @@ components:
           $ref: '#/components/schemas/ActCode'
         scene:
           $ref: '#/components/schemas/SceneCode'
+        layout:
+          type: string
+          enum: [readable, screenplay]
+          default: readable
         format:
           type: string
           enum: [markdown, json]

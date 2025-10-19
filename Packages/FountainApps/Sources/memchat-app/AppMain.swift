@@ -30,7 +30,13 @@ struct MemChatApp: App {
             MemChatRootView(config: $config, controllerHolder: controllerHolder) { showSettings = true }
             .frame(minWidth: 640, minHeight: 480)
             .sheet(isPresented: $showSettings) {
-                SettingsView(memoryCorpusId: config.memoryCorpusId, openAIKey: config.openAIAPIKey ?? "", model: config.model) { newCfg in
+                SettingsView(
+                    memoryCorpusId: config.memoryCorpusId,
+                    openAIKey: config.openAIAPIKey ?? "",
+                    model: config.model,
+                    useGateway: config.gatewayURL != nil,
+                    gatewayURLString: config.gatewayURL?.absoluteString ?? (ProcessInfo.processInfo.environment["FOUNTAIN_GATEWAY_URL"] ?? "http://127.0.0.1:8010")
+                ) { newCfg in
                     self.config = newCfg
                     controllerHolder.recreate(with: newCfg)
                 }

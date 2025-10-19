@@ -7,6 +7,8 @@ struct SettingsView: View {
     @State var memoryCorpusId: String
     @State var openAIKey: String
     @State var model: String
+    @State var useGateway: Bool
+    @State var gatewayURLString: String
     var apply: (MemChatConfiguration) -> Void
 
     var body: some View {
@@ -15,9 +17,10 @@ struct SettingsView: View {
             Divider()
             Form {
                 LabeledContent("Memory Corpus") { TextField("memchat-app", text: $memoryCorpusId).textFieldStyle(.roundedBorder) }
-                LabeledContent("Model") { TextField("gpt-4o-mini or llama3.1", text: $model).textFieldStyle(.roundedBorder) }
+                LabeledContent("Model") { TextField("gpt-4o-mini", text: $model).textFieldStyle(.roundedBorder) }
                 LabeledContent("OpenAI API Key") { SecureField("sk-...", text: $openAIKey).textFieldStyle(.roundedBorder) }
-                // Local LLM is no longer supported; OpenAI only
+                Toggle("Use Gateway", isOn: $useGateway)
+                LabeledContent("Gateway URL") { TextField("http://127.0.0.1:8010", text: $gatewayURLString).textFieldStyle(.roundedBorder).disabled(!useGateway) }
             }.formStyle(.grouped)
             HStack {
                 Spacer()
@@ -45,13 +48,14 @@ struct SettingsView: View {
             try? store.storeSecret(data, for: "OPENAI_API_KEY")
         }
         #endif
+        let gw = useGateway ? URL(string: gatewayURLString) : nil
         let cfg = MemChatConfiguration(
             memoryCorpusId: memoryCorpusId,
             model: model.isEmpty ? "gpt-4o-mini" : model,
             openAIAPIKey: openAIKey.isEmpty ? nil : openAIKey,
             openAIEndpoint: nil,
             localCompatibleEndpoint: nil,
-            gatewayURL: nil,
+            gatewayURL: gw,
             awarenessURL: nil
         )
         apply(cfg)

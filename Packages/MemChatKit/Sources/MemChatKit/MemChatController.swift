@@ -47,6 +47,7 @@ public final class MemChatController: ObservableObject {
         public let awarenessSummary: String?
         public let awarenessHistory: String?
         public let snippets: [String]
+        public let baselines: [String]
     }
 
     public init(
@@ -196,9 +197,10 @@ public final class MemChatController: ObservableObject {
                 }
             }
 
-            // Retrieve memory snippets (with a broad fallback)
+            // Retrieve memory snippets (with a broad fallback) and recent baselines
             var snippets = await self.retrieveMemorySnippets(matching: text, limit: 5)
             if snippets.isEmpty { snippets = await self.retrieveMemorySnippets(matching: "", limit: 5) }
+            let baselines = await self.retrieveRecentBaselines(limit: 3)
 
             var enriched = base
             if !snippets.isEmpty {
@@ -208,13 +210,19 @@ public final class MemChatController: ObservableObject {
             } else {
                 self.logTrail("MEMORY inject • snippets=0 summary=\(self.vm.awarenessSummaryText?.count ?? 0)")
             }
+            if !baselines.isEmpty {
+                let list = baselines.map { "• \($0)" }.joined(separator: "\n")
+                enriched.append("Baselines:\n\(list)")
+                self.logTrail("MEMORY inject • baselines=\(baselines.count)")
+            }
 
             // Publish inspector context
             let ctx = InjectedContext(
                 continuity: self.continuityDigest,
                 awarenessSummary: self.vm.awarenessSummaryText,
                 awarenessHistory: self.vm.awarenessHistorySummary,
-                snippets: snippets
+                snippets: snippets,
+                baselines: baselines
             )
             self.lastInjectedContext = ctx
             self.pendingContext = ctx
@@ -337,6 +345,19 @@ public final class MemChatController: ObservableObject {
         }
     }
 
+    private func retrieveRecentBaselines(limit: Int = 3) async -> [String] {
+        do {
+            let (total, items) = try await store.listBaselines(corpusId: config.memoryCorpusId, limit: 1000, offset: 0)
+            let sorted = items.sorted { $0.ts > $1.ts }
+            let picked = Array(sorted.prefix(limit)).map { trim($0.content, limit: 360) }
+            logTrail("STORE /baselines ok (n=\(total), used=\(picked.count))")
+            return picked
+        } catch {
+            logTrail("store.baselines error • \(error)")
+            return []
+        }
+    }
+
     private func ensureAwarenessContext(timeoutMs: Int = 1800) async {
         await MainActor.run { vm.refreshAwareness() }
         let start = Date()
@@ -441,7 +462,8 @@ public final class MemChatController: ObservableObject {
             let ctx = InjectedContext(continuity: continuityDigest,
                                       awarenessSummary: vm.awarenessSummaryText,
                                       awarenessHistory: vm.awarenessHistorySummary,
-                                      snippets: [])
+                                      snippets: [],
+                                      baselines: [])
             let synthesized = await self.synthesizeBaselineText(ctx)
             if let base {
                 let client = AwarenessClient(baseURL: base)
@@ -482,7 +504,8 @@ public final class MemChatController: ObservableObject {
             let ctx = InjectedContext(continuity: continuityDigest,
                                       awarenessSummary: vm.awarenessSummaryText,
                                       awarenessHistory: vm.awarenessHistorySummary,
-                                      snippets: [])
+                                      snippets: [],
+                                      baselines: [])
             let newBaseline = await synthesizeBaselineText(ctx) ?? vm.awarenessSummaryText ?? ""
             if !newBaseline.isEmpty && lastBaselineText != nil {
                 let drift = await synthesizeDriftText(old: lastBaselineText ?? "", new: newBaseline)
@@ -500,7 +523,8 @@ public final class MemChatController: ObservableObject {
         let ctx = InjectedContext(continuity: continuityDigest,
                                   awarenessSummary: vm.awarenessSummaryText,
                                   awarenessHistory: vm.awarenessHistorySummary,
-                                  snippets: [])
+                                  snippets: [],
+                                  baselines: [])
         // Synthesize baseline snapshot
         let newBaseline = await synthesizeBaselineText(ctx) ?? vm.awarenessSummaryText ?? ""
         if !newBaseline.isEmpty && lastBaselineText != nil {

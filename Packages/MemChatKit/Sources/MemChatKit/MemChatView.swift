@@ -179,6 +179,16 @@ public struct MemChatView: View {
                                         }
                                     }
                                 }
+                                if !ctx.baselines.isEmpty {
+                                    GroupBox(label: Text("Baselines").font(.caption2)) {
+                                        VStack(alignment: .leading, spacing: 6) {
+                                            ForEach(Array(ctx.baselines.enumerated()), id: \.offset) { _, s in
+                                                Text("• \(s)")
+                                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                            }
+                                        }
+                                    }
+                                }
                             } else {
                                 Text("No injected context yet. Send a message to see what’s used.")
                                     .font(.caption)

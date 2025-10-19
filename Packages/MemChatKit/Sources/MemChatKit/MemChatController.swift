@@ -35,6 +35,7 @@ public final class MemChatController: ObservableObject {
     @Published public private(set) var learnProgress: LearnProgress? = nil
     @Published public private(set) var semanticPanel: SemanticPanel? = nil
     @Published public private(set) var recentEvidence: [CitedSegmentEvidence] = []
+    @Published public private(set) var calculusReport: GenerationReport? = nil
 
     private let vm: EngraverChatViewModel
     private let store: FountainStoreClient
@@ -66,6 +67,17 @@ public final class MemChatController: ObservableObject {
     }
     public struct LearnProgress: Sendable, Equatable { public let visited: Int; public let pages: Int; public let segs: Int; public let target: Int }
     public struct CitedSegmentEvidence: Sendable, Equatable, Identifiable { public let id: String; public let title: String; public let url: String; public let text: String }
+    public struct GenerationReport: Sendable, Equatable {
+        public enum Source: String, Sendable { case user, model, deterministic }
+        public let baselineSource: Source
+        public let driftSource: Source
+        public let patternsSource: Source
+        public let reflectionSource: Source
+        public let evidenceCount: Int
+        public let baselineLength: Int
+        public let driftLines: Int
+        public let patternsLines: Int
+    }
 
     public init(
         config: MemChatConfiguration,
@@ -212,6 +224,10 @@ public final class MemChatController: ObservableObject {
             // Delete then recreate
             try? await store.deleteCorpus(config.memoryCorpusId)
             _ = try await store.createCorpus(config.memoryCorpusId)
+            // Also purge Awareness corpus if configured
+            if let base = config.awarenessURL {
+                do { let client = AwarenessClient(baseURL: base); try await client.deleteCorpus(corpusID: config.memoryCorpusId); logTrail("awareness purge ok") } catch { logTrail("awareness purge error • \(error)") }
+            }
             // Reset local state
             await MainActor.run {
                 self.turns = []
@@ -862,23 +878,41 @@ public func send(_ text: String) {
         return ([header] + added + changed + removed).joined(separator: "\n")
     }
 
-    private func synthesizeReflection(drift: String, patterns: String, host: String) async -> String {
-        if let selection = ProviderResolver.selectProvider(apiKey: config.openAIAPIKey,
-                                                          openAIEndpoint: config.openAIEndpoint,
-                                                          localEndpoint: nil) {
-            let client = OpenAICompatibleChatProvider(apiKey: selection.usesAPIKey ? config.openAIAPIKey : nil,
-                                                      endpoint: selection.endpoint)
-            let system = "You write short analytical reflections in crisp sentences using provided drift and patterns. Cite when present."
-            let prompt = """
-            Write 4–7 sentences reflecting on the current state of \(host), based on the drift and patterns below. Be specific. Use citations already in the bullets.
-            Drift:\n\(drift)\n\nPatterns:\n\(patterns)
-            """
-            let req = CoreChatRequest(model: config.model, messages: [ .init(role: .system, content: system), .init(role: .user, content: prompt) ])
-            if let ans = try? await client.complete(request: req).answer.trimmingCharacters(in: .whitespacesAndNewlines), !ans.isEmpty { return ans }
+    private func computePatternsDeterministic(from baseline: String, and drift: String) -> [String] {
+        func tokenize(_ s: String) -> [String] {
+            s.lowercased().replacingOccurrences(of: "[^a-z0-9 ]", with: " ", options: .regularExpression)
+                .split(separator: " ").map(String.init).filter { $0.count > 3 && !$0.allSatisfy({ $0.isNumber }) }
         }
-        // Fallback: simple summary
-        let lines = drift.split(separator: "\n").prefix(6)
-        return (["Reflection on \(host):"] + lines).joined(separator: "\n")
+        let claims = baseline.split(separator: "\n").map(String.init) + drift.split(separator: "\n").map(String.init)
+        var freq: [String: Int] = [:]
+        for c in claims { for t in Set(tokenize(c)) { freq[t, default: 0] += 1 } }
+        let common = freq.sorted { $0.value > $1.value }.prefix(6)
+        return common.map { "Recurring: '\($0.key)' appears across \($0.value) claims." }
+    }
+
+    private func composeReflectionDeterministic(drift: String, patterns: [String], label: String?) -> String {
+        let header: String
+        if let label, !label.isEmpty { header = "Reflection: \(label)" } else { header = "Reflection" }
+        let counts: (Int, Int, Int) = {
+            var add = 0, chg = 0, rem = 0
+            for line in drift.split(separator: "\n") {
+                let l = line.lowercased()
+                if l.hasPrefix("added:") { add += 1 }
+                if l.hasPrefix("changed:") { chg += 1 }
+                if l.hasPrefix("removed:") { rem += 1 }
+            }
+            return (add, chg, rem)
+        }()
+        var out: [String] = []
+        out.append("\(header): Drift summary — added=\(counts.0), changed=\(counts.1), removed=\(counts.2).")
+        if !patterns.isEmpty {
+            let tops = patterns.prefix(3).joined(separator: "; ")
+            out.append("Observed patterns: \(tops).")
+        }
+        if let first = drift.split(separator: "\n").first, first.lowercased().contains("drift since") {
+            out.insert(1, String(first))
+        }
+        return out.prefix(7).joined(separator: "\n")
     }
 
     // Ensure we have at least one baseline and recent artifacts; throttle per host
@@ -950,7 +984,8 @@ public func send(_ text: String) {
         let depth = max(1, min(level, 3))
         let evidence = await fetchCitedEvidence(host: host, depthLevel: depth)
         guard !evidence.isEmpty else { logTrail("baseline: no evidence for host=\(host)"); return false }
-        let baseline = await composeBaseline(from: evidence, host: host, deep: depth >= 2)
+        // Deterministic baseline from evidence (bare, neutral). No implications.
+        let baseline = composeBaselineDeterministic(from: evidence)
         guard !baseline.isEmpty else { logTrail("baseline: compose returned empty") ; return false }
         // Persist baseline
         await persistBaseline(content: baseline)
@@ -962,17 +997,62 @@ public func send(_ text: String) {
         }
         lastBaselineText = baseline
         // Patterns
-        let ctx = InjectedContext(continuity: continuityDigest,
-                                  awarenessSummary: vm.awarenessSummaryText,
-                                  awarenessHistory: vm.awarenessHistorySummary,
-                                  snippets: [], baselines: [], drifts: [], patterns: [])
-        let patterns = await synthesizePatternsText(ctx) ?? ""
+        let patternsList = computePatternsDeterministic(from: baseline, and: driftText)
+        let patterns = patternsList.joined(separator: "\n")
         if !patterns.isEmpty { await persistPatterns(content: patterns) }
         // Reflection
-        let reflection = await synthesizeReflection(drift: driftText, patterns: patterns, host: host)
+        let reflection = composeReflectionDeterministic(drift: driftText, patterns: patternsList, label: host)
         if !reflection.isEmpty { await persistReflection(content: reflection) }
+        await MainActor.run {
+            self.calculusReport = GenerationReport(baselineSource: .deterministic,
+                                                   driftSource: .deterministic,
+                                                   patternsSource: .deterministic,
+                                                   reflectionSource: .deterministic,
+                                                   evidenceCount: evidence.count,
+                                                   baselineLength: baseline.count,
+                                                   driftLines: driftText.split(separator: "\n").count,
+                                                   patternsLines: patternsList.count)
+        }
         logTrail("baseline cycle complete • host=\(host) level=\(level)")
         return true
+    }
+
+    /// Accepts a user-supplied baseline text, computes deterministic Drift/Patterns/Reflection, and persists all.
+    public func submitBaselineFromUser(_ content: String, label: String? = nil) async -> Bool {
+        let baseline = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !baseline.isEmpty else { return false }
+        await persistBaseline(content: baseline)
+        var driftText = ""
+        if let prev = lastBaselineText, !prev.isEmpty { driftText = computeTypedDriftDeterministic(new: baseline, old: prev); await persistDrift(content: driftText) }
+        lastBaselineText = baseline
+        let patternsList = computePatternsDeterministic(from: baseline, and: driftText)
+        let patterns = patternsList.joined(separator: "\n")
+        if !patterns.isEmpty { await persistPatterns(content: patterns) }
+        let reflection = composeReflectionDeterministic(drift: driftText, patterns: patternsList, label: label)
+        if !reflection.isEmpty { await persistReflection(content: reflection) }
+        await MainActor.run {
+            self.calculusReport = GenerationReport(baselineSource: .user,
+                                                   driftSource: .deterministic,
+                                                   patternsSource: .deterministic,
+                                                   reflectionSource: .deterministic,
+                                                   evidenceCount: 0,
+                                                   baselineLength: baseline.count,
+                                                   driftLines: driftText.split(separator: "\n").count,
+                                                   patternsLines: patternsList.count)
+        }
+        return true
+    }
+
+    private func composeBaselineDeterministic(from evidence: [(text: String, title: String, url: String)]) -> String {
+        var seen: Set<String> = []
+        var bullets: [String] = []
+        for e in evidence {
+            let key = e.title.lowercased()
+            if !seen.insert(key).inserted { continue }
+            bullets.append("• " + trim(e.text, limit: 260) + " [" + trim(e.title, limit: 80) + "](\(e.url))")
+            if bullets.count >= 9 { break }
+        }
+        return bullets.joined(separator: "\n")
     }
 
     private func ensureAwarenessContext(timeoutMs: Int = 1800) async {

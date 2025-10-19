@@ -116,6 +116,25 @@ public struct MemChatTeatroView: View {
                                 .fill(Color.secondary.opacity(0.06))
                         )
                     }
+                    if let report = controller.calculusReport {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Calculus Report")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            Text("Baseline: \(report.baselineSource.rawValue)")
+                            Text("Drift: \(report.driftSource.rawValue)")
+                            Text("Patterns: \(report.patternsSource.rawValue)")
+                            Text("Reflection: \(report.reflectionSource.rawValue)")
+                            Text("Evidence: \(report.evidenceCount) • Baseline chars: \(report.baselineLength)")
+                            Text("Drift lines: \(report.driftLines) • Patterns: \(report.patternsLines)")
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(Color.secondary.opacity(0.06))
+                        )
+                    }
                     // Evidence: What we learned (recent cited segments)
                     if !controller.recentEvidence.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {

@@ -111,6 +111,18 @@ public struct MemChatView: View {
                             }
                         }
                     }
+                    if let report = controller.calculusReport {
+                        GroupBox(label: Text("Calculus Report").font(.caption2)) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Baseline: \(report.baselineSource.rawValue)")
+                                Text("Drift: \(report.driftSource.rawValue)")
+                                Text("Patterns: \(report.patternsSource.rawValue)")
+                                Text("Reflection: \(report.reflectionSource.rawValue)")
+                                Text("Evidence: \(report.evidenceCount) • Baseline chars: \(report.baselineLength)")
+                                Text("Drift lines: \(report.driftLines) • Patterns: \(report.patternsLines)")
+                            }
+                        }
+                    }
                     // Evidence: What we learned (recent cited segments)
                     if !controller.recentEvidence.isEmpty {
                         GroupBox(label: Text("What we learned").font(.caption2)) {

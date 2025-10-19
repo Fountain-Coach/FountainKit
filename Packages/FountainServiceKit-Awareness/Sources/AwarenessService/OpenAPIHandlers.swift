@@ -17,6 +17,12 @@ public struct AwarenessOpenAPI: APIProtocol, @unchecked Sendable {
 
     // MARK: - Operations
 
+    public func deleteCorpus(_ input: Operations.deleteCorpus.Input) async throws -> Operations.deleteCorpus.Output {
+        let cid = input.path.corpus_id
+        try await persistence.deleteCorpus(cid)
+        return .ok(.init())
+    }
+
     public func health_health_get(_ input: Operations.health_health_get.Input) async throws -> Operations.health_health_get.Output {
         if let body = okObject(["status": "ok"]) {
             return .ok(.init(body: .json(body)))
@@ -130,4 +136,3 @@ public struct AwarenessOpenAPI: APIProtocol, @unchecked Sendable {
         return .ok(.init(body: .plainText(HTTPBody(body))))
     }
 }
-

@@ -203,6 +203,18 @@ public struct AwarenessClient: Sendable {
         }
     }
 
+    /// Deletes a corpus and all its artifacts.
+    public func deleteCorpus(corpusID: String) async throws {
+        let output = try await client.deleteCorpus(.init(path: .init(corpus_id: corpusID)))
+        switch output {
+        case .ok: return
+        case .unprocessableContent:
+            throw AwarenessClientError.unexpectedStatus(code: 422)
+        case .undocumented(let status, _):
+            throw AwarenessClientError.unexpectedStatus(code: status)
+        }
+    }
+
     /// Returns the semantic arc payload for the given corpus.
     public func semanticArc(corpusID: String) async throws -> SemanticArcPayload {
         let query = Operations.readSemanticArc.Input.Query(corpus_id: corpusID)

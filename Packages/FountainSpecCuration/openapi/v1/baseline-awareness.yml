@@ -15,6 +15,25 @@ servers:
   - url: http://awareness.fountain.coach
 security: []
 paths:
+  /corpus/{corpus_id}:
+    delete:
+      summary: Delete Corpus
+      description: Deletes all artifacts for the given corpus id.
+      operationId: deleteCorpus
+      x-fountain.visibility: public
+      x-fountain.allow-as-tool: true
+      parameters:
+        - name: corpus_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Corpus Id
+      responses:
+        '200':
+          description: Corpus deleted
+        '422':
+          description: Validation Error
   /health:
     get:
       summary: Health

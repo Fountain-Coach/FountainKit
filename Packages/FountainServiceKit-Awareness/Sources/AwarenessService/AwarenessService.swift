@@ -193,6 +193,11 @@ public final class AwarenessRouter: @unchecked Sendable {
             let data = try JSONEncoder().encode(ReflectionSummaryResponse(message: "\(total) reflections"))
             return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: data)
         }
+        if request.method == "DELETE" && segments.count == 2 && segments[0] == "corpus" {
+            let corpusId = segments[1]
+            try await persistence.deleteCorpus(corpusId)
+            return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: Data("{}".utf8))
+        }
         if request.method == "GET" && segments.count == 3 && segments[0] == "corpus" && segments[1] == "history" {
             return try await listHistory(corpusId: segments[2])
         }

@@ -7,6 +7,7 @@ import FountainAIKit
 public struct MemChatView: View {
     @StateObject private var controller: MemChatController
     @State private var input: String = ""
+    @FocusState private var inputFocused: Bool
 
     public init(configuration: MemChatConfiguration) {
         _controller = StateObject(wrappedValue: MemChatController(config: configuration))
@@ -43,20 +44,28 @@ public struct MemChatView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            HStack {
-                TextField("Type a message…", text: $input)
-                    .textFieldStyle(.roundedBorder)
-                Button("Send") {
-                    let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmed.isEmpty else { return }
-                    controller.send(trimmed)
-                    input = ""
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Message").font(.caption).foregroundStyle(.secondary)
+                TextEditor(text: $input)
+                    .focused($inputFocused)
+                    .font(.body)
+                    .frame(minHeight: 140)
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3)))
+                HStack {
+                    Spacer()
+                    Button("Send") {
+                        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !trimmed.isEmpty else { inputFocused = true; return }
+                        controller.send(trimmed)
+                        input = ""
+                        inputFocused = true
+                    }
+                    .keyboardShortcut(.return, modifiers: [.command])
+                    .disabled(controller.state == .streaming)
                 }
-                .keyboardShortcut(.return, modifiers: [])
-                .disabled(controller.state == .streaming)
             }
         }
         .padding(12)
+        .onAppear { inputFocused = true }
     }
 }
-

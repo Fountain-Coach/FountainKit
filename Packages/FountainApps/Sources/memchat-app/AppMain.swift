@@ -68,28 +68,14 @@ struct MemChatRootView: View {
             HStack(spacing: 12) {
                 Text("MemChat").font(.headline)
                 Divider().frame(height: 16)
-                // Corpus quick controls + title
-                HStack(spacing: 8) {
-                    Text(controllerHolder.controller.corpusTitle ?? config.memoryCorpusId)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Menu("Corpus") {
-                        if corpora.isEmpty { Button("Reload…") { Task { await reloadCorpora() } } }
-                        ForEach(corpora.sorted(), id: \.self) { c in
-                            Button("Switch to \(c)") { switchCorpus(to: c) }
-                        }
-                        Divider()
-                        Button("New Corpus") { Task { await createNewCorpus() } }
-                        Button("Merge…") { showMergeSheet = true }
-                        Button("Reload List") { Task { await reloadCorpora() } }
-                    }
-                }
+                Text(controllerHolder.controller.corpusTitle ?? config.memoryCorpusId)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Text(controllerHolder.controller.providerLabel).font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                // Plan/Memory buttons removed; memory is handled automatically.
+                // Plan/Memory controls removed; memory is handled automatically.
                 Button("Test") { Task { await testConnection() } }
                 Button("Live Test") { Task { await testLiveChat() } }
-                Button("Manage Corpus…") { showCorpusManager = true }
                 Button("Settings") { openSettings() }
             }.padding(8)
             if !connectionStatus.isEmpty {
@@ -115,21 +101,7 @@ struct MemChatRootView: View {
             }
             await reloadCorpora()
         }
-        .sheet(isPresented: $showMergeSheet) {
-            MergeSheet(corpora: corpora.filter { $0 != config.memoryCorpusId }, controller: controllerHolder.controller) { target in
-                switchCorpus(to: target)
-                Task { await reloadCorpora() }
-            }
-            .frame(minWidth: 520, minHeight: 420)
-            .padding(12)
-        }
-        .sheet(isPresented: $showCorpusManager) {
-            CorpusManagerSheet(
-                initialCorpusId: config.memoryCorpusId,
-                controller: controllerHolder.controller,
-                onSwitch: { target in switchCorpus(to: target) }
-            )
-        }
+        // Hide corpus management UI from primary surface; Settings still exposes it if needed.
     }
     private func reloadCorpora() async { corpora = await controllerHolder.controller.listCorpora().sorted() }
     private func createNewCorpus() async {

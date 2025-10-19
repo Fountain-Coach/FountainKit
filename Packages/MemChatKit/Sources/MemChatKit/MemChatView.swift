@@ -23,15 +23,12 @@ public struct MemChatView: View {
     public var body: some View {
 #if os(macOS)
         HSplitView {
-            // 1) Trail / Status pane (scrollable)
+            // 1) Chats list (semantic, named sessions)
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 12) {
                         Text(controller.chatTitle ?? "MemChat").font(.title3).bold()
                         Spacer()
-                        Text(controller.chatCorpusId)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                         Button("New Chat") { controller.newChat() }
                             .disabled(controller.state == .streaming)
                     }
@@ -48,19 +45,31 @@ public struct MemChatView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
 
-                    if !controller.memoryTrail.isEmpty {
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(controller.memoryTrail.suffix(10), id: \.self) { line in
-                                Text(line).font(.caption2).foregroundStyle(.tertiary)
-                            }
-                        }
-                        .padding(10)
-                        .background(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.secondary.opacity(0.2)))
-                    } else {
-                        Text("No memory activity yet.")
+                    if controller.sessionOverviews.isEmpty {
+                        Text("No saved chats yet.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .padding(8)
+                    } else {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(controller.sessionOverviews.sorted(by: { $0.updatedAt > $1.updatedAt })) { s in
+                                Button(action: { controller.openChatSession(s.id) }) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(s.title).font(.callout)
+                                        Text(s.lastAnswerPreview)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(8)
+                                }
+                                .buttonStyle(.plain)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(s.isCurrentSession ? Color.accentColor.opacity(0.6) : Color.secondary.opacity(0.2))
+                                )
+                            }
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

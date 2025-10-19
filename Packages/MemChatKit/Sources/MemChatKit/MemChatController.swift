@@ -31,6 +31,7 @@ public final class MemChatController: ObservableObject {
     @Published public private(set) var memoryTrail: [String] = []
     @Published public private(set) var lastInjectedContext: InjectedContext? = nil
     @Published public private(set) var turnContext: [UUID: InjectedContext] = [:]
+    @Published public private(set) var sessionOverviews: [CorpusSessionOverview] = []
 
     private let vm: EngraverChatViewModel
     private let store: FountainStoreClient
@@ -147,6 +148,8 @@ public final class MemChatController: ObservableObject {
             .store(in: &cancellables)
         vm.$state.sink { [weak self] s in self?.state = s }.store(in: &cancellables)
         vm.$lastError.sink { [weak self] e in self?.lastError = e }.store(in: &cancellables)
+        vm.$corpusSessionOverviews.sink { [weak self] list in self?.sessionOverviews = list }.store(in: &cancellables)
+        vm.$sessionName.sink { [weak self] name in self?.chatTitle = name }.store(in: &cancellables)
 
         Task {
             await self.loadContinuityDigest()
@@ -169,6 +172,10 @@ public final class MemChatController: ObservableObject {
     public func newChat() {
         chatCorpusId = Self.makeChatCorpusId()
         vm.startNewSession()
+    }
+
+    public func openChatSession(_ id: UUID) {
+        vm.openPersistedSession(id: id)
     }
 
     public func send(_ text: String) {

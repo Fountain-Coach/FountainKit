@@ -2,9 +2,17 @@
 set -euo pipefail
 
 CONFIGURATION="debug"
-if [[ "${1:-}" == "release" ]]; then CONFIGURATION="release"; fi
+CLEAN_BUILD=0
+for a in "$@"; do
+  if [[ "$a" == "release" ]]; then CONFIGURATION="release"; fi
+  if [[ "$a" == "--fresh" || "$a" == "--clean" ]]; then CLEAN_BUILD=1; fi
+done
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+if [[ "$CLEAN_BUILD" == "1" ]]; then
+  echo "› Cleaning FountainApps build artifacts (${CONFIGURATION})"
+  swift package --package-path "${REPO_ROOT}/Packages/FountainApps" clean || true
+fi
 echo "› Building memchat-app (${CONFIGURATION})"
 swift build --package-path "${REPO_ROOT}/Packages/FountainApps" --configuration "${CONFIGURATION}" --product memchat-app
 BIN_PATH="$(swift build --package-path "${REPO_ROOT}/Packages/FountainApps" --configuration "${CONFIGURATION}" --show-bin-path)"
@@ -92,9 +100,16 @@ cp "${EXECUTABLE}" "${MACOS_DIR}/memchat-app" || true
 chmod +x "${MACOS_DIR}/memchat-app"
 
 if command -v codesign >/dev/null 2>&1; then
-  echo "› Codesigning ${APP_BUNDLE} (ad-hoc)"
+echo "› Codesigning ${APP_BUNDLE} (ad-hoc)"
   codesign --force --deep --sign - "${APP_BUNDLE}" || true
 fi
 
-echo "› Launching ${APP_BUNDLE}"
-open "${APP_BUNDLE}"
+# Stop any existing MemChat instance to avoid stale UI
+if pgrep -f "/memchat-app.app/Contents/MacOS/memchat-app" >/dev/null 2>&1; then
+  echo "› Stopping existing MemChat instances"
+  pkill -f "/memchat-app.app/Contents/MacOS/memchat-app" || true
+  sleep 0.4
+fi
+
+echo "› Launching ${APP_BUNDLE} (new instance)"
+open -n "${APP_BUNDLE}"

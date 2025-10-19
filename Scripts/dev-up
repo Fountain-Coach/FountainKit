@@ -4,10 +4,11 @@ set -euo pipefail
 usage() {
   cat <<USAGE
 Usage:
-  $(basename "$0") [env|--all|--check]
+  $(basename "$0") [env|prebuild] [--all] [--check]
 
 Commands:
   env       Export LAUNCHER_SIGNATURE into current shell (when sourced)
+  prebuild  Compile required server binaries up-front (fast boot)
 
 Options:
   --all     Start optional extras (semantic-browser, tools-factory, tool-server, publishing-frontend)
@@ -39,6 +40,7 @@ fi
 
 ALL=0
 CHECK=0
+CONFIGURATION="${DEV_UP_CONFIGURATION:-debug}"
 for a in "$@"; do
   if [[ "$a" == "--help" || "$a" == "-h" ]]; then
     usage
@@ -156,7 +158,27 @@ DEFAULT_PKG_PATH="$REPO_ROOT/Packages/FountainApps"
 
 bin_dir_for() {
   local pkg_path="$1"
-  echo "$pkg_path/.build/debug"
+  # Use SwiftPM configuration symlink for portability (debug/release)
+  echo "$pkg_path/.build/$CONFIGURATION"
+}
+
+# Build a single product to avoid full-package failures slowing down boot.
+build_product() {
+  local pkg_path="$1"; shift
+  local product="$1"; shift
+  echo "[dev-up] Building product $product (configuration=$CONFIGURATION)…"
+  swift build --package-path "$pkg_path" --configuration "$CONFIGURATION" --product "$product"
+}
+
+# Ensure a specific product exists in .build; if not, compile it only.
+ensure_compiled() {
+  local pkg_path="$1"; shift
+  local product="$1"; shift
+  local bin_dir
+  bin_dir=$(bin_dir_for "$pkg_path")
+  if [[ ! -x "$bin_dir/$product" ]]; then
+    build_product "$pkg_path" "$product" || return 1
+  fi
 }
 
 start_bg() {
@@ -182,8 +204,11 @@ start_bg() {
     local bin_dir
     bin_dir=$(bin_dir_for "$pkg_path")
     if [[ ! -x "$bin_dir/$target" ]]; then
-      echo "[dev-up] Building $target (one-time)…"
-      swift build --package-path "$pkg_path" >/dev/null 2>&1 || true
+      echo "[dev-up] Building $target (one-time, product-only)…"
+      ensure_compiled "$pkg_path" "$target" || {
+        echo "[dev-up] ERROR: failed to build $target" >&2
+        return 1
+      }
     fi
     nohup env LAUNCHER_SIGNATURE="$SIG" \
       "$bin_dir/$target" >>"$log_file" 2>&1 &
@@ -195,6 +220,30 @@ start_bg() {
   echo $! >"$pid_file"
   sleep 0.2
 }
+
+# Prebuild path: compile all standard server products, optionally extras, then exit
+if [[ "${1:-}" == "prebuild" ]]; then
+  shift || true
+  # Parse flags again for --all
+  for a in "$@"; do
+    if [[ "$a" == "--all" ]]; then ALL=1; fi
+  done
+  echo "[dev-up] Prebuilding server binaries (configuration=$CONFIGURATION)…"
+  # Core servers (FountainApps)
+  core_targets=(baseline-awareness-server bootstrap-server planner-server function-caller-server persist-server gateway-server)
+  for t in "${core_targets[@]}"; do
+    build_product "$REPO_ROOT/Packages/FountainApps" "$t" || exit 1
+  done
+  # Optional extras
+  if [[ "$ALL" == "1" ]]; then
+    build_product "$REPO_ROOT/Packages/FountainApps" tools-factory-server || exit 1
+    build_product "$REPO_ROOT/Packages/FountainApps" tool-server || exit 1
+    build_product "$REPO_ROOT/Packages/FountainApps" publishing-frontend || exit 1
+    build_product "$REPO_ROOT/Packages/FountainApps-SemanticBrowser" semantic-browser-server || exit 1
+  fi
+  echo "[dev-up] Prebuild complete. Binaries under Packages/*/.build/$CONFIGURATION"
+  exit 0
+fi
 
 if [[ "${DEV_UP_NO_START_LOCAL_AGENT:-0}" != "1" ]]; then
   echo "[dev-up] Ensuring LocalAgent (see .fountain/logs/launcher.log)"

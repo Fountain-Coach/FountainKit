@@ -204,4 +204,26 @@ extension MemChatController {
         let apiKey = provider.usesAPIKey ? (config.openAIAPIKey ?? "") : nil
         return await ConnectionTester.test(apiKey: apiKey, endpoint: provider.endpoint)
     }
+
+    /// Performs a live chat roundtrip against OpenAI and returns a short status.
+    /// Uses a deterministic prompt and non-streaming call; does not mutate chat state.
+    public func testLiveChatRoundtrip() async -> ConnectionStatus {
+        guard let selection = ProviderResolver.selectProvider(apiKey: config.openAIAPIKey,
+                                                              openAIEndpoint: config.openAIEndpoint,
+                                                              localEndpoint: nil) else {
+            return .fail("OPENAI_API_KEY not configured")
+        }
+        let client = OpenAICompatibleChatProvider(apiKey: config.openAIAPIKey, endpoint: selection.endpoint)
+        let req = ChatRequest(model: config.model, messages: [
+            .init(role: .user, content: "Respond with the single word: ok")
+        ])
+        do {
+            let resp = try await client.complete(request: req)
+            let preview = resp.answer.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !preview.isEmpty else { return .fail("Empty reply from OpenAI") }
+            return .ok(preview.count > 80 ? String(preview.prefix(80)) + "…" : preview)
+        } catch {
+            return .fail(String(describing: error))
+        }
+    }
 }

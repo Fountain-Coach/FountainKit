@@ -70,6 +70,7 @@ struct MemChatRootView: View {
                 Button("Plan") { Task { await openPlan() } }
                 Button("Memory") { Task { await openMemory() } }
                 Button("Test") { Task { await testConnection() } }
+                Button("Live Test") { Task { await testLiveChat() } }
                 Button("Settings") { openSettings() }
             }.padding(8)
             if !connectionStatus.isEmpty {
@@ -108,5 +109,13 @@ struct MemChatRootView: View {
         case .fail(let msg): connectionStatus = "Connection failed: \(msg)";
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) { connectionStatus = "" }
+    }
+    private func testLiveChat() async {
+        connectionStatus = "Running live test…"
+        switch await controllerHolder.controller.testLiveChatRoundtrip() {
+        case .ok(let preview): connectionStatus = "OpenAI chat ok: \(preview)";
+        case .fail(let msg): connectionStatus = "Live test failed: \(msg)";
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { connectionStatus = "" }
     }
 }

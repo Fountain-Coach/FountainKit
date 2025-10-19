@@ -3,6 +3,7 @@ import Combine
 import FountainStoreClient
 import FountainAIKit
 import ProviderOpenAI
+import ProviderGateway
 
 /// Public facade for embedding MemChat in host apps.
 /// Wraps EngraverChatViewModel and enforces per-chat corpus isolation while
@@ -49,14 +50,21 @@ public final class MemChatController: ObservableObject {
             svc = FountainStoreClient(client: EmbeddedFountainStoreClient())
         }
 
-        // Resolve provider
-        let provider = ProviderResolver.selectProvider(apiKey: config.openAIAPIKey,
-                                                       openAIEndpoint: config.openAIEndpoint,
-                                                       localEndpoint: config.localCompatibleEndpoint)
-        let selectedEndpoint = provider?.endpoint ?? ProviderResolver.openAIChatURL
-        let defaultClient = OpenAICompatibleChatProvider(apiKey: provider?.usesAPIKey == true ? config.openAIAPIKey : nil,
-                                                         endpoint: selectedEndpoint)
-        let chatClient = chatClientOverride ?? defaultClient
+        // Resolve chat client: prefer Gateway when configured; else direct OpenAI provider
+        let useGateway = (config.gatewayURL != nil) && (chatClientOverride == nil)
+        let chatClient: ChatStreaming
+        if useGateway, let url = config.gatewayURL {
+            let gateway = GatewayProvider.make(baseURL: url) { nil }
+            chatClient = gateway
+        } else {
+            let provider = ProviderResolver.selectProvider(apiKey: config.openAIAPIKey,
+                                                           openAIEndpoint: config.openAIEndpoint,
+                                                           localEndpoint: config.localCompatibleEndpoint)
+            let selectedEndpoint = provider?.endpoint ?? ProviderResolver.openAIChatURL
+            let defaultClient = OpenAICompatibleChatProvider(apiKey: provider?.usesAPIKey == true ? config.openAIAPIKey : nil,
+                                                             endpoint: selectedEndpoint)
+            chatClient = chatClientOverride ?? defaultClient
+        }
 
         // Seeding/memory config to point at standard collections
         let browser = SeedingConfiguration.Browser(
@@ -88,7 +96,7 @@ public final class MemChatController: ObservableObject {
             environmentController: nil,
             semanticSeeder: SemanticBrowserSeeder(),
             gatewayBaseURL: config.gatewayURL ?? URL(string: "http://127.0.0.1:8010")!,
-            directMode: true
+            directMode: !useGateway
         )
 
         // Bind outputs
@@ -104,8 +112,7 @@ public final class MemChatController: ObservableObject {
 
         Task { await self.loadContinuityDigest() }
         // Provider label
-        // OpenAI is the only supported provider
-        self.providerLabel = "openai"
+        self.providerLabel = useGateway ? "gateway" : "openai"
     }
 
     public func newChat() {
@@ -197,6 +204,15 @@ extension MemChatController {
 
     public enum ConnectionStatus: Equatable, Sendable { case ok(String), fail(String) }
     public func testConnection() async -> ConnectionStatus {
+        if let gw = config.gatewayURL {
+            var req = URLRequest(url: gw.appending(path: "/metrics"))
+            req.httpMethod = "GET"; req.timeoutInterval = 3.0
+            do {
+                let (_, resp) = try await URLSession.shared.data(for: req)
+                if let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) { return .ok("gateway") }
+                return .fail("Gateway HTTP \((resp as? HTTPURLResponse)?.statusCode ?? 0)")
+            } catch { return .fail(error.localizedDescription) }
+        }
         let provider = ProviderResolver.selectProvider(apiKey: config.openAIAPIKey,
                                                        openAIEndpoint: config.openAIEndpoint,
                                                        localEndpoint: config.localCompatibleEndpoint)
@@ -208,22 +224,28 @@ extension MemChatController {
     /// Performs a live chat roundtrip against OpenAI and returns a short status.
     /// Uses a deterministic prompt and non-streaming call; does not mutate chat state.
     public func testLiveChatRoundtrip() async -> ConnectionStatus {
-        guard let selection = ProviderResolver.selectProvider(apiKey: config.openAIAPIKey,
-                                                              openAIEndpoint: config.openAIEndpoint,
-                                                              localEndpoint: nil) else {
-            return .fail("OPENAI_API_KEY not configured")
-        }
-        let client = OpenAICompatibleChatProvider(apiKey: config.openAIAPIKey, endpoint: selection.endpoint)
-        let req = ChatRequest(model: config.model, messages: [
-            .init(role: .user, content: "Respond with the single word: ok")
-        ])
-        do {
-            let resp = try await client.complete(request: req)
-            let preview = resp.answer.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !preview.isEmpty else { return .fail("Empty reply from OpenAI") }
-            return .ok(preview.count > 80 ? String(preview.prefix(80)) + "…" : preview)
-        } catch {
-            return .fail(String(describing: error))
+        let req = ChatRequest(model: config.model, messages: [.init(role: .user, content: "Respond with the single word: ok")])
+        if let gw = config.gatewayURL {
+            let client = GatewayProvider.make(baseURL: gw) { nil }
+            do {
+                let resp = try await client.complete(request: req)
+                let preview = resp.answer.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !preview.isEmpty else { return .fail("Empty reply from gateway") }
+                return .ok(preview)
+            } catch { return .fail(String(describing: error)) }
+        } else {
+            guard let selection = ProviderResolver.selectProvider(apiKey: config.openAIAPIKey,
+                                                                  openAIEndpoint: config.openAIEndpoint,
+                                                                  localEndpoint: nil) else {
+                return .fail("OPENAI_API_KEY not configured")
+            }
+            let client = OpenAICompatibleChatProvider(apiKey: config.openAIAPIKey, endpoint: selection.endpoint)
+            do {
+                let resp = try await client.complete(request: req)
+                let preview = resp.answer.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !preview.isEmpty else { return .fail("Empty reply from OpenAI") }
+                return .ok(preview)
+            } catch { return .fail(String(describing: error)) }
         }
     }
 }

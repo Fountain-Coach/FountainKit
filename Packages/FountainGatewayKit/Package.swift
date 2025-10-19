@@ -43,6 +43,7 @@ let package = Package(
         .target(
             name: "FountainAIAdapters",
             dependencies: [
+                .product(name: "FountainRuntime", package: "FountainCore"),
                 .product(name: "FountainAICore", package: "FountainCore"),
                 .product(name: "LLMGatewayAPI", package: "FountainAPIClients"),
                 .product(name: "SemanticBrowserAPI", package: "FountainAPIClients"),

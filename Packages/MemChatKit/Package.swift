@@ -18,7 +18,8 @@ let package = Package(
             dependencies: [
                 .product(name: "FountainStoreClient", package: "FountainCore"),
                 .product(name: "FountainAIKit", package: "FountainAIKit"),
-                .product(name: "ProviderOpenAI", package: "FountainProviders")
+                .product(name: "ProviderOpenAI", package: "FountainProviders"),
+                .product(name: "ProviderGateway", package: "FountainProviders")
             ]
         ),
         .testTarget(

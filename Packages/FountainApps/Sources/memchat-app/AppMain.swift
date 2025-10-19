@@ -35,7 +35,8 @@ struct MemChatApp: App {
                     openAIKey: config.openAIAPIKey ?? "",
                     model: config.model,
                     useGateway: config.gatewayURL != nil,
-                    gatewayURLString: config.gatewayURL?.absoluteString ?? (ProcessInfo.processInfo.environment["FOUNTAIN_GATEWAY_URL"] ?? "http://127.0.0.1:8010")
+                    gatewayURLString: config.gatewayURL?.absoluteString ?? (ProcessInfo.processInfo.environment["FOUNTAIN_GATEWAY_URL"] ?? "http://127.0.0.1:8010"),
+                    controller: controllerHolder.controller
                 ) { newCfg in
                     self.config = newCfg
                     controllerHolder.recreate(with: newCfg)

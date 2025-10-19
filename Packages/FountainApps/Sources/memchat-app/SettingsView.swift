@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State var model: String
     @State var useGateway: Bool
     @State var gatewayURLString: String
+    var controller: MemChatController
     var apply: (MemChatConfiguration) -> Void
 
     var body: some View {
@@ -16,7 +17,15 @@ struct SettingsView: View {
             HStack { Text("MemChat Settings").font(.title3).bold(); Spacer(); Button("Done") { dismiss() } }
             Divider()
             Form {
-                LabeledContent("Memory Corpus") { TextField("memchat-app", text: $memoryCorpusId).textFieldStyle(.roundedBorder) }
+                LabeledContent("Memory Corpus") {
+                    HStack(spacing: 8) {
+                        TextField("memchat-app", text: $memoryCorpusId)
+                            .textFieldStyle(.roundedBorder)
+                        Menu("Choose") { ForEach(corpora, id: \.self) { c in Button(c) { memoryCorpusId = c } } }
+                        Button("New") { Task { await createNewCorpus() } }
+                        Button("Merge…") { showMerge = true }
+                    }
+                }
                 LabeledContent("Model") { TextField("gpt-4o-mini", text: $model).textFieldStyle(.roundedBorder) }
                 LabeledContent("OpenAI API Key") { SecureField("sk-...", text: $openAIKey).textFieldStyle(.roundedBorder) }
                 Toggle("Use Gateway", isOn: $useGateway)
@@ -29,8 +38,19 @@ struct SettingsView: View {
         }
         .padding(12)
         .frame(minWidth: 520)
-        .onAppear { loadKeychain() }
+        .onAppear { loadKeychain(); Task { await reloadCorpora() } }
+        .sheet(isPresented: $showMerge) {
+            MergeSheet(corpora: corpora.filter { $0 != memoryCorpusId }, controller: controller) { target in
+                memoryCorpusId = target
+                Task { await reloadCorpora() }
+            }
+            .frame(minWidth: 520, minHeight: 420)
+            .padding(12)
+        }
     }
+
+    @State private var corpora: [String] = []
+    @State private var showMerge = false
 
     private func loadKeychain() {
         #if canImport(Security)
@@ -39,6 +59,20 @@ struct SettingsView: View {
             openAIKey = s
         }
         #endif
+    }
+
+    private func reloadCorpora() async {
+        corpora = await controller.listCorpora().sorted()
+    }
+
+    private func createNewCorpus() async {
+        let ts = Int(Date().timeIntervalSince1970)
+        let newId = "memchat-\(ts)"
+        let ok = await controller.createCorpus(id: newId)
+        if ok {
+            memoryCorpusId = newId
+            await reloadCorpora()
+        }
     }
 
     private func onSave() {
@@ -60,5 +94,50 @@ struct SettingsView: View {
         )
         apply(cfg)
         dismiss()
+    }
+}
+
+private struct MergeSheet: View {
+    let corpora: [String]
+    let controller: MemChatController
+    var onMerged: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var selected: Set<String> = []
+    @State private var targetId: String = ""
+    @State private var status: String = ""
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack { Text("Merge Corpora to New").font(.title3).bold(); Spacer(); Button("Close") { dismiss() } }
+            Divider()
+            HStack {
+                Text("Target Corpus ID").frame(width: 140, alignment: .leading)
+                TextField("merged-<timestamp>", text: $targetId).textFieldStyle(.roundedBorder)
+                Button("Suggest") { targetId = "merged-\(Int(Date().timeIntervalSince1970))" }
+            }
+            Text("Select sources:").font(.caption).foregroundStyle(.secondary)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(corpora, id: \.self) { c in
+                        Toggle(isOn: Binding(
+                            get: { selected.contains(c) },
+                            set: { isOn in if isOn { _ = selected.insert(c) } else { _ = selected.remove(c) } }
+                        )) { Text(c) }
+                    }
+                }
+            }
+            if !status.isEmpty { Text(status).font(.caption).foregroundStyle(.secondary) }
+            HStack { Spacer(); Button("Merge") { Task { await performMerge() } }.disabled(selected.isEmpty || targetId.isEmpty) }
+        }
+        .onAppear { if targetId.isEmpty { targetId = "merged-\(Int(Date().timeIntervalSince1970))" } }
+    }
+    private func performMerge() async {
+        status = "Merging…"
+        do {
+            try await controller.mergeCorpora(sources: Array(selected), into: targetId)
+            status = "Merged into \(targetId)"
+            onMerged(targetId)
+        } catch {
+            status = "Merge failed: \(error.localizedDescription)"
+        }
     }
 }

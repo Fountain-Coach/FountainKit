@@ -660,3 +660,162 @@ extension MemChatController {
         }
     }
 }
+
+// MARK: - Corpus management
+extension MemChatController {
+    /// List available corpora from the backing store.
+    public func listCorpora(limit: Int = 10_000) async -> [String] {
+        do { let (_, list) = try await store.listCorpora(limit: limit, offset: 0); return list } catch { return [] }
+    }
+
+    /// Create a new corpus. Returns true on success.
+    public func createCorpus(id: String) async -> Bool {
+        do { _ = try await store.createCorpus(id); return true } catch { return false }
+    }
+
+    /// Merge a set of source corpora into a new or existing target corpus.
+    /// When IDs collide, this method prefixes identifiers with the source corpus ID.
+    public func mergeCorpora(sources: [String], into targetCorpusId: String) async throws {
+        guard !sources.isEmpty else { return }
+        // Ensure target corpus exists
+        _ = try? await store.createCorpus(targetCorpusId)
+
+        // Helper: pageId mapping per source after prefixing
+        func pref(_ src: String, _ id: String) -> String { "\(src):\(id)" }
+
+        // Copy pages and build pageId maps
+        for src in sources {
+            // Pages
+            var offset = 0
+            let pageLimit = 500
+            var pageMap: [String: String] = [:]
+            while true {
+                do {
+                    let (total, pages) = try await store.listPages(corpusId: src, limit: pageLimit, offset: offset)
+                    for p in pages {
+                        let newId = pref(src, p.pageId)
+                        pageMap[p.pageId] = newId
+                        let page = Page(corpusId: targetCorpusId, pageId: newId, url: p.url, host: p.host, title: p.title)
+                        _ = try await store.addPage(page)
+                    }
+                    offset += pages.count
+                    if offset >= total || pages.isEmpty { break }
+                } catch { break }
+            }
+
+            // Segments
+            offset = 0
+            let segLimit = 500
+            while true {
+                do {
+                    let (total, segments) = try await store.listSegments(corpusId: src, limit: segLimit, offset: offset)
+                    for s in segments {
+                        let newSegId = pref(src, s.segmentId)
+                        let newPageId = pageMap[s.pageId] ?? pref(src, s.pageId)
+                        let seg = Segment(corpusId: targetCorpusId, segmentId: newSegId, pageId: newPageId, kind: s.kind, text: s.text)
+                        _ = try await store.addSegment(seg)
+                    }
+                    offset += segments.count
+                    if offset >= total || segments.isEmpty { break }
+                } catch { break }
+            }
+
+            // Entities
+            offset = 0
+            let entLimit = 500
+            while true {
+                do {
+                    let (total, entities) = try await store.listEntities(corpusId: src, limit: entLimit, offset: offset)
+                    for e in entities {
+                        let newId = pref(src, e.entityId)
+                        let ent = Entity(corpusId: targetCorpusId, entityId: newId, name: e.name, type: e.type)
+                        _ = try await store.addEntity(ent)
+                    }
+                    offset += entities.count
+                    if offset >= total || entities.isEmpty { break }
+                } catch { break }
+            }
+
+            // Tables
+            offset = 0
+            let tblLimit = 250
+            while true {
+                do {
+                    let (total, tables) = try await store.listTables(corpusId: src, limit: tblLimit, offset: offset)
+                    for t in tables {
+                        let newId = pref(src, t.tableId)
+                        let newPageId = pageMap[t.pageId] ?? pref(src, t.pageId)
+                        let tbl = Table(corpusId: targetCorpusId, tableId: newId, pageId: newPageId, csv: t.csv)
+                        _ = try await store.addTable(tbl)
+                    }
+                    offset += tables.count
+                    if offset >= total || tables.isEmpty { break }
+                } catch { break }
+            }
+
+            // Baselines
+            offset = 0
+            let baseLimit = 250
+            while true {
+                do {
+                    let (total, baselines) = try await store.listBaselines(corpusId: src, limit: baseLimit, offset: offset)
+                    for b in baselines {
+                        let newId = pref(src, b.baselineId)
+                        let rec = Baseline(corpusId: targetCorpusId, baselineId: newId, content: b.content, ts: b.ts)
+                        _ = try await store.addBaseline(rec)
+                    }
+                    offset += baselines.count
+                    if offset >= total || baselines.isEmpty { break }
+                } catch { break }
+            }
+
+            // Reflections
+            offset = 0
+            let reflLimit = 250
+            while true {
+                do {
+                    let (total, reflections) = try await store.listReflections(corpusId: src, limit: reflLimit, offset: offset)
+                    for r in reflections {
+                        let newId = pref(src, r.reflectionId)
+                        let rec = Reflection(corpusId: targetCorpusId, reflectionId: newId, question: r.question, content: r.content, ts: r.ts)
+                        _ = try await store.addReflection(rec)
+                    }
+                    offset += reflections.count
+                    if offset >= total || reflections.isEmpty { break }
+                } catch { break }
+            }
+
+            // Drifts
+            offset = 0
+            let driftLimit = 250
+            while true {
+                do {
+                    let (total, drifts) = try await store.listDrifts(corpusId: src, limit: driftLimit, offset: offset)
+                    for d in drifts {
+                        let newId = pref(src, d.driftId)
+                        let rec = Drift(corpusId: targetCorpusId, driftId: newId, content: d.content, ts: d.ts)
+                        _ = try await store.addDrift(rec)
+                    }
+                    offset += drifts.count
+                    if offset >= total || drifts.isEmpty { break }
+                } catch { break }
+            }
+
+            // Patterns
+            offset = 0
+            let patLimit = 250
+            while true {
+                do {
+                    let (total, patterns) = try await store.listPatterns(corpusId: src, limit: patLimit, offset: offset)
+                    for p in patterns {
+                        let newId = pref(src, p.patternsId)
+                        let rec = Patterns(corpusId: targetCorpusId, patternsId: newId, content: p.content, ts: p.ts)
+                        _ = try await store.addPatterns(rec)
+                    }
+                    offset += patterns.count
+                    if offset >= total || patterns.isEmpty { break }
+                } catch { break }
+            }
+        }
+    }
+}

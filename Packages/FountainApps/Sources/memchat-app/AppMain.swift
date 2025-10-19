@@ -59,6 +59,7 @@ struct MemChatRootView: View {
     @State private var memoryText: String = ""
     @State private var selectedPage: MemChatController.PageItem?
     @State private var connectionStatus: String = ""
+    @State private var didRunSelfCheck = false
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
@@ -98,6 +99,13 @@ struct MemChatRootView: View {
             }
             .frame(minWidth: 720, minHeight: 500)
             .onChange(of: selectedPage) { newVal in Task { await loadSelectedPage() } }
+        }
+        .task {
+            // Run a one-shot self-check on first appearance
+            if !didRunSelfCheck {
+                didRunSelfCheck = true
+                await testLiveChat()
+            }
         }
     }
     private func openPlan() async { planLoading = true; showPlan = true; defer { planLoading = false }; planText = await controllerHolder.controller.loadPlanText() ?? "(No plan found)" }

@@ -27,7 +27,7 @@ public struct MemChatView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 12) {
-                        Text("MemChat").font(.title3).bold()
+                        Text(controller.chatTitle ?? "MemChat").font(.title3).bold()
                         Spacer()
                         Text(controller.chatCorpusId)
                             .font(.caption)

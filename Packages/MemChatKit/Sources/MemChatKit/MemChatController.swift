@@ -24,6 +24,8 @@ public final class MemChatController: ObservableObject {
     @Published public private(set) var streamingTokens: [String] = []
     @Published public private(set) var state: EngraverChatState = .idle
     @Published public private(set) var chatCorpusId: String
+    @Published public private(set) var corpusTitle: String? = nil
+    @Published public private(set) var chatTitle: String? = nil
     @Published public private(set) var providerLabel: String = ""
     @Published public private(set) var lastError: String? = nil
     @Published public private(set) var memoryTrail: [String] = []
@@ -131,6 +133,7 @@ public final class MemChatController: ObservableObject {
                 Task { await self.tryAutoBaseline(from: last) }
                 analysisCounter += 1
                 if analysisCounter >= 3 { analysisCounter = 0; Task { await self.tryAutoPatternsAndDrift() } }
+                Task { await self.suggestChatTitle(from: last) }
             }
         }.store(in: &cancellables)
         vm.$activeTokens
@@ -147,6 +150,7 @@ public final class MemChatController: ObservableObject {
 
         Task {
             await self.loadContinuityDigest()
+            await self.generateCorpusTitle()
             if self.config.awarenessURL != nil {
                 await self.refreshAwareness(reason: "init")
             }
@@ -219,6 +223,60 @@ public final class MemChatController: ObservableObject {
         let t = s.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
         guard t.count > limit else { return t }
         return String(t.prefix(limit - 1)) + "…"
+    }
+
+    // MARK: - Semantic titles
+    public func generateCorpusTitle() async {
+        do {
+            let (bCount, _) = try await store.listBaselines(corpusId: config.memoryCorpusId, limit: 3, offset: 0)
+            let (rCount, _) = try await store.listReflections(corpusId: config.memoryCorpusId, limit: 5, offset: 0)
+            let (sCount, segs) = try await store.listSegments(corpusId: config.memoryCorpusId, limit: 5, offset: 0)
+            let sample = segs.prefix(3).map { "• \($0.text)" }.joined(separator: "\n")
+            let prompt = """
+            Create a 3–7 word human-readable title for a knowledge corpus.
+            Use neutral language; no punctuation at the end. Prefer nouns.
+            You are given quick stats and up to three sample snippets.
+
+            Stats: baselines=\(bCount), reflections=\(rCount), segments=\(sCount)
+            Snippets:\n\(sample)
+            """
+            if let selection = ProviderResolver.selectProvider(apiKey: config.openAIAPIKey,
+                                                               openAIEndpoint: config.openAIEndpoint,
+                                                               localEndpoint: nil) {
+                let client = OpenAICompatibleChatProvider(apiKey: selection.usesAPIKey ? config.openAIAPIKey : nil,
+                                                          endpoint: selection.endpoint)
+                let req = CoreChatRequest(model: config.model, messages: [
+                    .init(role: .system, content: "You write short, crisp titles."),
+                    .init(role: .user, content: prompt)
+                ])
+                if let title = try? await client.complete(request: req).answer.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
+                    await MainActor.run { self.corpusTitle = String(title.prefix(72)) }
+                    return
+                }
+            }
+        } catch { /* ignore */ }
+        await MainActor.run { self.corpusTitle = nil }
+    }
+
+    private func suggestChatTitle(from turn: EngraverChatTurn) async {
+        guard chatTitle == nil || chatTitle?.isEmpty == true else { return }
+        if let selection = ProviderResolver.selectProvider(apiKey: config.openAIAPIKey,
+                                                           openAIEndpoint: config.openAIEndpoint,
+                                                           localEndpoint: nil) {
+            let client = OpenAICompatibleChatProvider(apiKey: selection.usesAPIKey ? config.openAIAPIKey : nil,
+                                                      endpoint: selection.endpoint)
+            let prompt = """
+            Create a 3–7 word title for a chat based on the user's message and assistant's reply. Neutral, descriptive, no ending punctuation.
+            User: \(turn.prompt)\nAssistant: \(turn.answer)
+            """
+            let req = CoreChatRequest(model: config.model, messages: [
+                .init(role: .system, content: "You write short, crisp titles."),
+                .init(role: .user, content: prompt)
+            ])
+            if let title = try? await client.complete(request: req).answer.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
+                await MainActor.run { self.chatTitle = String(title.prefix(72)) }
+            }
+        }
     }
 
     private func latestContinuityPageId() async throws -> String? {

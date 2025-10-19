@@ -68,9 +68,11 @@ struct MemChatRootView: View {
             HStack(spacing: 12) {
                 Text("MemChat").font(.headline)
                 Divider().frame(height: 16)
-                // Corpus quick controls
-                HStack(spacing: 6) {
-                    Text(config.memoryCorpusId).font(.caption).foregroundStyle(.secondary)
+                // Corpus quick controls + title
+                HStack(spacing: 8) {
+                    Text(controllerHolder.controller.corpusTitle ?? config.memoryCorpusId)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     Menu("Corpus") {
                         if corpora.isEmpty { Button("Reload…") { Task { await reloadCorpora() } } }
                         ForEach(corpora.sorted(), id: \.self) { c in

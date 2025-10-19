@@ -20,7 +20,10 @@ let package = Package(
                 .product(name: "FountainAIKit", package: "FountainAIKit"),
                 .product(name: "ProviderOpenAI", package: "FountainProviders")
             ]
+        ),
+        .testTarget(
+            name: "MemChatKitTests",
+            dependencies: ["MemChatKit", .product(name: "FountainStoreClient", package: "FountainCore")]
         )
     ]
 )
-

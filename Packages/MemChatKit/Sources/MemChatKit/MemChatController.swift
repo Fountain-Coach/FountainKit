@@ -26,7 +26,8 @@ public final class MemChatController: ObservableObject {
 
     public init(
         config: MemChatConfiguration,
-        store: FountainStoreClient? = nil
+        store: FountainStoreClient? = nil,
+        chatClientOverride: ChatStreaming? = nil
     ) {
         self.config = config
         self.chatCorpusId = Self.makeChatCorpusId()
@@ -49,11 +50,13 @@ public final class MemChatController: ObservableObject {
         }
 
         // Resolve provider
-        let apiKey = config.openAIAPIKey
-        let endpoint = config.openAIEndpoint
-            ?? (apiKey == nil ? (config.localCompatibleEndpoint ?? URL(string: "http://127.0.0.1:11434/v1/chat/completions")!)
-                              : URL(string: "https://api.openai.com/v1/chat/completions")!)
-        let chatClient = OpenAICompatibleChatProvider(apiKey: apiKey, endpoint: endpoint)
+        let provider = ProviderResolver.selectProvider(apiKey: config.openAIAPIKey,
+                                                       openAIEndpoint: config.openAIEndpoint,
+                                                       localEndpoint: config.localCompatibleEndpoint)
+        let selectedEndpoint = provider?.endpoint ?? ProviderResolver.openAIChatURL
+        let defaultClient = OpenAICompatibleChatProvider(apiKey: provider?.usesAPIKey == true ? config.openAIAPIKey : nil,
+                                                         endpoint: selectedEndpoint)
+        let chatClient = chatClientOverride ?? defaultClient
 
         // Seeding/memory config to point at standard collections
         let browser = SeedingConfiguration.Browser(
@@ -101,7 +104,7 @@ public final class MemChatController: ObservableObject {
 
         Task { await self.loadContinuityDigest() }
         // Provider label
-        let isOpenAI = (apiKey != nil) && ((endpoint.host ?? "").contains("openai.com"))
+        let isOpenAI = (provider?.label == "openai")
         self.providerLabel = isOpenAI ? "openai" : "local"
     }
 
@@ -126,13 +129,13 @@ public final class MemChatController: ObservableObject {
     }
 
     private func latestContinuityPageId() async throws -> String? {
-        let q = Query(mode: .prefixScan("pageId", "continuity:"), filters: ["corpusId": config.memoryCorpusId], sort: [(field: "pageId", ascending: false)], limit: 1, offset: 0)
+        // Fallback to simple filters-only query and compute prefix match client-side
+        let q = Query(filters: ["corpusId": config.memoryCorpusId], limit: 1000, offset: 0)
         let resp = try await store.query(corpusId: config.memoryCorpusId, collection: "pages", query: q)
         struct PageDoc: Codable { let pageId: String }
-        if let doc = resp.documents.first, let page = try? JSONDecoder().decode(PageDoc.self, from: doc) {
-            return page.pageId
-        }
-        return nil
+        let pages: [PageDoc] = resp.documents.compactMap { try? JSONDecoder().decode(PageDoc.self, from: $0) }
+        let continuity = pages.map { $0.pageId }.filter { $0.hasPrefix("continuity:") }.sorted(by: >)
+        return continuity.first
     }
 
     private func loadContinuityDigest() async {
@@ -150,6 +153,9 @@ public final class MemChatController: ObservableObject {
         }
     }
 
+    // MARK: - Test helpers (internal)
+    func _testContinuityDigest() -> String? { continuityDigest }
+
     private static func makeChatCorpusId() -> String {
         let ts = Int(Date().timeIntervalSince1970)
         let suffix = UUID().uuidString.prefix(6)
@@ -158,6 +164,11 @@ public final class MemChatController: ObservableObject {
 }
 
 // MARK: - Memory helpers and connection test
+@MainActor public protocol HTTPClient {
+    func data(for request: URLRequest) async throws -> (Data, URLResponse)
+}
+extension URLSession: HTTPClient {}
+
 extension MemChatController {
     public struct PageItem: Identifiable, Sendable, Hashable, Equatable { public let id: String; public let title: String }
 
@@ -184,30 +195,13 @@ extension MemChatController {
 
     public func loadPlanText() async -> String? { await fetchPageText(pageId: "plan:memchat-features") }
 
-    public enum ConnectionStatus: Equatable { case ok(String), fail(String) }
+    public enum ConnectionStatus: Equatable, Sendable { case ok(String), fail(String) }
     public func testConnection() async -> ConnectionStatus {
-        let apiKey = config.openAIAPIKey?.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let endpoint = config.openAIEndpoint ?? config.localCompatibleEndpoint else { return .fail("No provider configured") }
-        var modelsURL: URL
-        let path = endpoint.path
-        if path.contains("/chat/completions") {
-            modelsURL = endpoint.deletingLastPathComponent().appendingPathComponent("models")
-        } else if path.contains("/v1/") {
-            modelsURL = endpoint.deletingLastPathComponent().appendingPathComponent("models")
-        } else {
-            modelsURL = endpoint.appendingPathComponent("v1/models")
-        }
-        var req = URLRequest(url: modelsURL)
-        req.httpMethod = "GET"
-        req.timeoutInterval = 3.0
-        if let apiKey, !apiKey.isEmpty { req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization") }
-        do {
-            let (_, resp) = try await URLSession.shared.data(for: req)
-            if let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) {
-                return .ok(modelsURL.host ?? "ok")
-            }
-            let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
-            return .fail("HTTP \(code) at /v1/models")
-        } catch { return .fail(error.localizedDescription) }
+        let provider = ProviderResolver.selectProvider(apiKey: config.openAIAPIKey,
+                                                       openAIEndpoint: config.openAIEndpoint,
+                                                       localEndpoint: config.localCompatibleEndpoint)
+        guard let provider else { return .fail("No provider configured") }
+        let apiKey = provider.usesAPIKey ? (config.openAIAPIKey ?? "") : nil
+        return await ConnectionTester.test(apiKey: apiKey, endpoint: provider.endpoint)
     }
 }

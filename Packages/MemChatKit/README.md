@@ -46,6 +46,18 @@ controller.send("Hello")
 - Observability: `FOUNTAIN_GATEWAY_URL`, `AWARENESS_URL`
 - Persistence: uses on-disk FountainStore by default. Override path with `ENGRAVER_STORE_PATH`.
 
+## MemChat app (quick start)
+
+- Launch the standalone macOS app:
+  - `bash Scripts/launch-memchat-app.sh`
+- Requirements:
+  - `OPENAI_API_KEY` in Keychain (service: `FountainAI`, account: `OPENAI_API_KEY`). The launcher fails fast if missing.
+  - Optional: local services (Awareness/Bootstrap/Gateway) — the launcher invokes `Scripts/dev-up` to ensure they are running.
+- Persistence:
+  - Uses on-disk FountainStore by default; override path with `ENGRAVER_STORE_PATH` (default: `~/.fountain/engraver-store`).
+- Faster boots:
+  - Prebuild and start servers once with checks: `Scripts/dev-servers-up.sh` (add `--no-extras` or `--release` as needed).
+
 ## Continuity
 MemChatKit automatically loads the latest `continuity:*` page from the memory corpus,
 trims it, and injects it as a `ContinuityDigest` line in the system prompts.

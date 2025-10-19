@@ -33,20 +33,11 @@ public final class MemChatController: ObservableObject {
         self.config = config
         self.chatCorpusId = Self.makeChatCorpusId()
 
-        // Resolve store
+        // Resolve store: MemChat uses embedded store by default to avoid disk-store crashes.
+        // Pass an override only for testing.
         let svc: FountainStoreClient
         if let store { svc = store }
-        else if let dir = ProcessInfo.processInfo.environment["FOUNTAINSTORE_DIR"], !dir.isEmpty {
-            let url: URL
-            if dir.hasPrefix("~") {
-                url = URL(fileURLWithPath: FileManager.default.homeDirectoryForCurrentUser.path + String(dir.dropFirst()), isDirectory: true)
-            } else { url = URL(fileURLWithPath: dir, isDirectory: true) }
-            if let disk = try? DiskFountainStoreClient(rootDirectory: url) {
-                svc = FountainStoreClient(client: disk)
-            } else {
-                svc = FountainStoreClient(client: EmbeddedFountainStoreClient())
-            }
-        } else {
+        else {
             svc = FountainStoreClient(client: EmbeddedFountainStoreClient())
         }
 
@@ -125,8 +116,20 @@ public final class MemChatController: ObservableObject {
         if let digest = continuityDigest, !digest.isEmpty {
             base.append("ContinuityDigest: \(digest)")
         }
-        let sys = vm.makeSystemPrompts(base: base)
-        vm.send(prompt: text, systemPrompts: sys, preferStreaming: true, corpusOverride: chatCorpusId)
+        // Lightweight memory retrieval from the selected memory corpus (segments collection)
+        Task { [weak self] in
+            guard let self else { return }
+            let snippets = await self.retrieveMemorySnippets(matching: text, limit: 5)
+            var enriched = base
+            if !snippets.isEmpty {
+                let list = snippets.map { "• \($0)" }.joined(separator: "\n")
+                enriched.append("Memory snippets (from corpus \(self.config.memoryCorpusId)):\n\(list)")
+            }
+            let sys = self.vm.makeSystemPrompts(base: enriched)
+            await MainActor.run {
+                self.vm.send(prompt: text, systemPrompts: sys, preferStreaming: true, corpusOverride: self.chatCorpusId)
+            }
+        }
     }
 
     private func trim(_ s: String, limit: Int = 600) -> String {
@@ -157,6 +160,27 @@ public final class MemChatController: ObservableObject {
             }
         } catch {
             // ignore
+        }
+    }
+
+    // MARK: - Memory retrieval
+    private func retrieveMemorySnippets(matching query: String, limit: Int = 5) async -> [String] {
+        do {
+            let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+            let needle = trimmed.split(separator: " ").prefix(8).joined(separator: " ")
+            var q = Query(filters: ["corpusId": config.memoryCorpusId], limit: limit * 3, offset: 0)
+            if !needle.isEmpty { q.text = String(needle) }
+            // Prefer most recently updated segments if available
+            q.sort = [("updatedAt", false)]
+            let resp = try await store.query(corpusId: config.memoryCorpusId, collection: "segments", query: q)
+            struct SegmentDoc: Codable { let text: String }
+            let texts: [String] = resp.documents.compactMap { data in
+                (try? JSONDecoder().decode(SegmentDoc.self, from: data))?.text
+            }
+            let unique = Array(Set(texts)).prefix(limit)
+            return unique.map { trim($0, limit: 320) }
+        } catch {
+            return []
         }
     }
 

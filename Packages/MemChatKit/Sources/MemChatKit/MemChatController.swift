@@ -678,11 +678,14 @@ public final class MemChatController: ObservableObject {
 
     // MARK: - Store helpers
     private static func makeDiskStoreClient() -> DiskFountainStoreClient? {
-        // Follow Engraver defaults for store location to keep data unified.
+        // Resolve store dir with priority:
+        // 1) FOUNTAINSTORE_DIR (used by dev-up/launcher for shared services)
+        // 2) ENGRAVER_STORE_PATH (legacy override)
+        // 3) ~/.fountain/engraver-store (fallback)
         let env = ProcessInfo.processInfo.environment
-        let path = env["ENGRAVER_STORE_PATH"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let raw = (env["FOUNTAINSTORE_DIR"] ?? env["ENGRAVER_STORE_PATH"])?.trimmingCharacters(in: .whitespacesAndNewlines)
         let url: URL
-        if let raw = path, !raw.isEmpty {
+        if let raw, !raw.isEmpty {
             if raw.hasPrefix("~") {
                 let home = FileManager.default.homeDirectoryForCurrentUser
                 let suffix = raw.dropFirst()

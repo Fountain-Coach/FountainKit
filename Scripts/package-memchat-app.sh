@@ -78,9 +78,11 @@ cat > "${CONTENTS}/Info.plist" <<PLIST
     <key>FOUNTAINSTORE_DIR</key><string>${STORE_DIR}</string>
     <key>MEMORY_CORPUS_ID</key><string>${MEMORY_ID}</string>
     <key>OPENAI_API_URL</key><string>${OPENAI_API_URL:-}</string>
+    <key>SEMANTIC_BROWSER_URL</key><string>${SEMANTIC_BROWSER_URL:-http://127.0.0.1:8003}</string>
     <!-- Local LLM disabled by policy -->
     <key>FOUNTAIN_GATEWAY_URL</key><string>${FOUNTAIN_GATEWAY_URL:-}</string>
-    <key>AWARENESS_URL</key><string>${AWARENESS_URL:-}</string>
+    <key>AWARENESS_URL</key><string>${AWARENESS_URL:-http://127.0.0.1:8001}</string>
+    <key>BOOTSTRAP_URL</key><string>${BOOTSTRAP_URL:-http://127.0.0.1:8002}</string>
     <key>LAUNCHER_SIGNATURE</key><string>${SIG}</string>
   </dict>
 </dict>

@@ -86,7 +86,7 @@ public final class MemChatController: ObservableObject {
             defaultModel: config.model,
             debugEnabled: false,
             awarenessBaseURL: config.awarenessURL,
-            bootstrapBaseURL: nil,
+            bootstrapBaseURL: config.bootstrapURL,
             bearerToken: nil,
             seedingConfiguration: seeding,
             environmentController: nil,
@@ -117,6 +117,10 @@ public final class MemChatController: ObservableObject {
             await self.loadContinuityDigest()
             if self.config.awarenessURL != nil {
                 await self.refreshAwareness(reason: "init")
+            }
+            if self.config.bootstrapURL != nil {
+                // Kick Bootstrap once at startup to ensure corpus roles, defaults, and collections exist.
+                await MainActor.run { self.vm.rerunBootstrap() }
             }
         }
         // Provider label
@@ -183,8 +187,9 @@ public final class MemChatController: ObservableObject {
     // MARK: - Memory retrieval
     private func retrieveMemorySnippets(matching query: String, limit: Int = 5) async -> [String] {
         // Prefer SemanticBrowserAPI when configured via environment; fallback to store query.
-        if let browserBase = ProcessInfo.processInfo.environment["SEMANTIC_BROWSER_URL"],
-           let baseURL = URL(string: browserBase) {
+        let browserBaseEnv = ProcessInfo.processInfo.environment["SEMANTIC_BROWSER_URL"]
+        let browserCandidates: [URL] = [browserBaseEnv, "http://127.0.0.1:8003"].compactMap { $0 }.compactMap(URL.init(string:))
+        for baseURL in browserCandidates {
             do {
                 let rest = RESTClient(baseURL: baseURL, defaultHeaders: ["Accept": "application/json"]) // ApiClientsCore
                 let qString = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -203,10 +208,7 @@ public final class MemChatController: ObservableObject {
                     return unique.map { trim($0, limit: 320) }
                 }
                 logTrail("browser.segments empty • ms=\(ms)")
-            } catch {
-                logTrail("browser.segments error • \(error)")
-                // fall through to store
-            }
+            } catch { logTrail("browser.segments error • \(error)") }
         }
         do {
             let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)

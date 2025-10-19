@@ -4,6 +4,9 @@ import FountainStoreClient
 import FountainAIKit
 import ProviderOpenAI
 import ProviderGateway
+// Avoid importing generator/runtime directly here to reduce package fan-out.
+// We will use a minimal URLSession-based client to call the Semantic Browser's
+// query endpoints according to the curated OpenAPI spec.
 
 /// Public facade for embedding MemChat in host apps.
 /// Wraps EngraverChatViewModel and enforces per-chat corpus isolation while
@@ -165,6 +168,29 @@ public final class MemChatController: ObservableObject {
 
     // MARK: - Memory retrieval
     private func retrieveMemorySnippets(matching query: String, limit: Int = 5) async -> [String] {
+        // Prefer SemanticBrowserAPI when configured via environment; fallback to store query.
+        if let browserBase = ProcessInfo.processInfo.environment["SEMANTIC_BROWSER_URL"],
+           let baseURL = URL(string: browserBase) {
+            do {
+                var comps = URLComponents(url: baseURL.appendingPathComponent("v1/segments"), resolvingAgainstBaseURL: false)!
+                var items: [URLQueryItem] = []
+                let qString = query.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !qString.isEmpty { items.append(.init(name: "q", value: qString)) }
+                items.append(.init(name: "limit", value: String(limit * 3)))
+                comps.queryItems = items
+                var req = URLRequest(url: comps.url!)
+                req.httpMethod = "GET"
+                req.setValue("application/json", forHTTPHeaderField: "Accept")
+                let (data, resp) = try await URLSession.shared.data(for: req)
+                if let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) {
+                    if let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any], let arr = obj["items"] as? [[String: Any]] {
+                        let texts = arr.compactMap { $0["text"] as? String }
+                        let unique = Array(Set(texts)).prefix(limit)
+                        return unique.map { trim($0, limit: 320) }
+                    }
+                }
+            } catch { /* fall through to store */ }
+        }
         do {
             let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
             let needle = trimmed.split(separator: " ").prefix(8).joined(separator: " ")

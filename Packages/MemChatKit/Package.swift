@@ -10,7 +10,8 @@ let package = Package(
     dependencies: [
         .package(path: "../FountainCore"),
         .package(path: "../FountainAIKit"),
-        .package(path: "../FountainProviders")
+        .package(path: "../FountainProviders"),
+        .package(path: "../FountainAPIClients")
     ],
     targets: [
         .target(
@@ -19,7 +20,9 @@ let package = Package(
                 .product(name: "FountainStoreClient", package: "FountainCore"),
                 .product(name: "FountainAIKit", package: "FountainAIKit"),
                 .product(name: "ProviderOpenAI", package: "FountainProviders"),
-                .product(name: "ProviderGateway", package: "FountainProviders")
+                .product(name: "ProviderGateway", package: "FountainProviders"),
+                .product(name: "SemanticBrowserAPI", package: "FountainAPIClients"),
+                .product(name: "ApiClientsCore", package: "FountainAPIClients")
             ]
         ),
         .testTarget(

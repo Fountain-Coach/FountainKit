@@ -29,6 +29,14 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SIG="$(security find-generic-password -s FountainAI -a LAUNCHER_SIGNATURE -w 2>/dev/null || true)"
 if [[ -z "${SIG}" ]]; then SIG="B86D7CEE-24C4-4C4C-A107-8D0542D1965B"; fi
 
+# Resolve OpenAI API key from Keychain only; fail fast if missing
+OPENAI_KEY="$(security find-generic-password -s FountainAI -a OPENAI_API_KEY -w 2>/dev/null || true)"
+if [[ -z "${OPENAI_KEY}" ]]; then
+  echo "[launch-memchat] ERROR: No OPENAI_API_KEY found in Keychain (service=FountainAI, account=OPENAI_API_KEY) or environment."
+  echo "Set it in Keychain or export OPENAI_API_KEY and re-run."
+  exit 1
+fi
+
 # Default store dir
 STORE_DIR="${FOUNTAINSTORE_DIR:-${REPO_ROOT}/.fountain/store}"
 

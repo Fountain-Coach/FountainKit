@@ -35,6 +35,13 @@ mkdir -p "${MACOS_DIR}" "${RESOURCES_DIR}"
 SIG="$(security find-generic-password -s FountainAI -a LAUNCHER_SIGNATURE -w 2>/dev/null || true)"
 if [[ -z "${SIG}" ]]; then SIG="B86D7CEE-24C4-4C4C-A107-8D0542D1965B"; fi
 
+# Resolve OpenAI API key from Keychain only; fail if missing
+OPENAI_KEY="$(security find-generic-password -s FountainAI -a OPENAI_API_KEY -w 2>/dev/null || true)"
+if [[ -z "${OPENAI_KEY}" ]]; then
+  echo "[package-memchat] ERROR: No OPENAI_API_KEY found in Keychain (service=FountainAI, account=OPENAI_API_KEY)."
+  exit 1
+fi
+
 # Defaults; override by exporting env before running
 STORE_DIR="${FOUNTAINSTORE_DIR:-${REPO_ROOT}/.fountain/store}"
 MEMORY_ID="${MEMORY_CORPUS_ID:-memchat-app}"
@@ -60,7 +67,7 @@ cat > "${CONTENTS}/Info.plist" <<PLIST
     <key>FOUNTAINSTORE_DIR</key><string>${STORE_DIR}</string>
     <key>MEMORY_CORPUS_ID</key><string>${MEMORY_ID}</string>
     <key>OPENAI_API_URL</key><string>${OPENAI_API_URL:-}</string>
-    <key>ENGRAVER_LOCAL_LLM_URL</key><string>${ENGRAVER_LOCAL_LLM_URL:-}</string>
+    <!-- Local LLM disabled by policy -->
     <key>FOUNTAIN_GATEWAY_URL</key><string>${FOUNTAIN_GATEWAY_URL:-}</string>
     <key>AWARENESS_URL</key><string>${AWARENESS_URL:-}</string>
     <key>LAUNCHER_SIGNATURE</key><string>${SIG}</string>
@@ -76,4 +83,3 @@ fi
 
 echo "Packaged: ${DIST_DIR}/${APP_NAME}"
 echo "You can now drag it into /Applications and double‑click to run."
-

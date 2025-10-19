@@ -19,6 +19,7 @@ public final class MemChatController: ObservableObject {
     // Expose a subset of EngraverChatViewModel for host apps.
     @Published public private(set) var turns: [EngraverChatTurn] = []
     @Published public private(set) var streamingText: String = ""
+    @Published public private(set) var streamingTokens: [String] = []
     @Published public private(set) var state: EngraverChatState = .idle
     @Published public private(set) var chatCorpusId: String
     @Published public private(set) var providerLabel: String = ""
@@ -105,10 +106,13 @@ public final class MemChatController: ObservableObject {
             }
         }.store(in: &cancellables)
         vm.$activeTokens
-            .map { $0.joined() }
             .removeDuplicates()
             .debounce(for: .milliseconds(60), scheduler: DispatchQueue.main)
-            .sink { [weak self] text in self?.streamingText = text }
+            .sink { [weak self] tokens in
+                guard let self else { return }
+                self.streamingTokens = tokens
+                self.streamingText = tokens.joined()
+            }
             .store(in: &cancellables)
         vm.$state.sink { [weak self] s in self?.state = s }.store(in: &cancellables)
         vm.$lastError.sink { [weak self] e in self?.lastError = e }.store(in: &cancellables)

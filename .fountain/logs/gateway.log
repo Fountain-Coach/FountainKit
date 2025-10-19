@@ -91,3 +91,63 @@
 [curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x600001950120 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 2ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <AE31EA43-5775-4742-AEDA-3B894B11BF71>.<31>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
     "LocalDataTask <AE31EA43-5775-4742-AEDA-3B894B11BF71>.<31>"
 ), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T10:57:40.239Z","ttlSeconds":86400}
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T11:13:40.203Z","ttlSeconds":86400}
+-> GET /metrics
+-> GET /metrics
+-> GET /metrics
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T11:28:53.960Z","ttlSeconds":86400}
+-> GET /metrics
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T11:44:53.948Z","ttlSeconds":86400}
+-> GET /metrics
+-> GET /metrics
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T12:00:53.948Z","ttlSeconds":86400}
+-> GET /metrics
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T12:16:53.945Z","ttlSeconds":86400}
+-> GET /metrics
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T12:32:53.942Z","ttlSeconds":86400}
+-> GET /metrics
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T12:48:53.942Z","ttlSeconds":86400}
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T13:04:53.882Z","ttlSeconds":86400}
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T13:20:53.875Z","ttlSeconds":86400}
+-> GET /metrics
+-> GET /metrics
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T13:35:59.748Z","ttlSeconds":86400}
+-> GET /metrics
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T13:51:59.684Z","ttlSeconds":86400}
+-> GET /metrics
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T14:07:59.680Z","ttlSeconds":86400}
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T14:23:59.664Z","ttlSeconds":86400}
+-> GET /metrics
+-> GET /metrics
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T14:39:59.659Z","ttlSeconds":86400}
+-> GET /metrics
+-> GET /metrics
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T14:55:10.264Z","ttlSeconds":86400}
+-> GET /metrics
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T15:11:10.264Z","ttlSeconds":86400}
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T15:27:10.135Z","ttlSeconds":86400}
+-> GET /metrics
+-> GET /metrics
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T15:43:10.126Z","ttlSeconds":86400}
+-> GET /metrics
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T15:59:10.119Z","ttlSeconds":86400}
+-> GET /metrics
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T16:15:10.108Z","ttlSeconds":86400}
+-> GET /metrics
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T16:31:10.103Z","ttlSeconds":86400}
+-> GET /metrics
+-> GET /metrics
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T16:47:10.109Z","ttlSeconds":86400}
+-> GET /metrics
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T17:03:10.110Z","ttlSeconds":86400}
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T17:19:10.108Z","ttlSeconds":86400}
+-> GET /metrics
+{"deleted":0,"kind":"attachmentCleanup","level":"info","scanned":0,"skipped":0,"timestamp":"2025-10-19T17:35:10.103Z","ttlSeconds":86400}
+{"deleted":0[curator] warning: failed to warm truth table (Error Domain=NSURLErrorDomain Code=-1003 "A server with the specified hostname could not be found." UserInfo={_kCFStreamErrorCodeKey=8, NSUnderlyingError=0x6000019692c0 {Error Domain=kCFErrorDomainCFNetwork Code=-1003 "(null)" UserInfo={_kCFStreamErrorDomainKey=12, _kCFStreamErrorCodeKey=8, _NSURLErrorNWResolutionReportKey=Resolved 0 endpoints in 1ms using unknown from cache, _NSURLErrorNWPathKey=satisfied (Path is satisfied), viable, interface: en0[802.11], ipv4, ipv6, dns, uses wifi}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <1A514824-F6A8-4DD5-8E19-5E8AB31E4800>.<32>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <1A514824-F6A8-4DD5-8E19-5E8AB31E4800>.<32>"
+), NSLocalizedDescription=A server with the specified hostname could not be found., NSErrorFailingURLStringKey=http://curator.fountain.coach/api/v1/truth-table, NSErrorFailingURLKey=http://curator.fountain.coach/api/v1/truth-table, _kCFStreamErrorDomainKey=12})

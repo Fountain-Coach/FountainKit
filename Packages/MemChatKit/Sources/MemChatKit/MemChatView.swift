@@ -35,6 +35,8 @@ public struct MemChatView: View {
                             .toggleStyle(.switch)
                             .help("Strict Memory Mode: answer strictly from stored site memory with citations")
                             .onChange(of: strictOn) { on in controller.setStrictMemoryMode(on) }
+                        Button("Reset") { Task { _ = await controller.resetMemoryCorpus() } }
+                            .disabled(controller.state == .streaming)
                         Button("New Chat") { controller.newChat() }
                             .disabled(controller.state == .streaming)
                     }

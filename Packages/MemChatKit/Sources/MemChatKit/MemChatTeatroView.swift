@@ -72,6 +72,8 @@ public struct MemChatTeatroView: View {
             }
             .toggleStyle(.switch)
             .help("Strict Memory Mode: answer strictly from stored site memory with citations")
+            Button("Reset") { Task { _ = await controller.resetMemoryCorpus() } }
+                .disabled(controller.state == .streaming)
             Text(providerLabel)
                 .font(.caption)
                 .foregroundStyle(.secondary)

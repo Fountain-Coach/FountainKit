@@ -205,6 +205,39 @@ public final class MemChatController: ObservableObject {
         self.config.depthLevel = max(1, min(level, 3))
     }
 
+    /// Purge and recreate the configured memory corpus, clearing all pages, chats, and artifacts.
+    /// Returns true on success.
+    public func resetMemoryCorpus() async -> Bool {
+        do {
+            // Delete then recreate
+            try? await store.deleteCorpus(config.memoryCorpusId)
+            _ = try await store.createCorpus(config.memoryCorpusId)
+            // Reset local state
+            await MainActor.run {
+                self.turns = []
+                self.streamingText = ""
+                self.streamingTokens = []
+                self.sessionOverviews = []
+                self.memoryTrail.removeAll(keepingCapacity: false)
+                self.lastInjectedContext = nil
+                self.turnContext = [:]
+                self.corpusTitle = nil
+                self.chatTitle = nil
+                self.recentEvidence = []
+                self.didAutoBaseline = false
+                self.lastBaselineText = nil
+                self.chatCorpusId = Self.makeChatCorpusId()
+                self.vm.startNewSession()
+            }
+            logTrail("corpus reset ok • id=\(config.memoryCorpusId)")
+            return true
+        } catch {
+            await MainActor.run { self.lastError = "Reset failed: \(error)" }
+            logTrail("corpus reset error • \(error)")
+            return false
+        }
+    }
+
 public func openChatSession(_ id: UUID) {
     vm.openPersistedSession(id: id)
 }

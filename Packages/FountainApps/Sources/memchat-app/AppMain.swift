@@ -56,14 +56,7 @@ struct MemChatRootView: View {
     @Binding var config: MemChatConfiguration
     @ObservedObject var controllerHolder: ControllerHolder
     var openSettings: () -> Void
-    @State private var showPlan = false
-    @State private var planLoading = false
-    @State private var planText: String = ""
-    @State private var showMemory = false
-    @State private var memoryLoading = false
-    @State private var pages: [MemChatController.PageItem] = []
-    @State private var memoryText: String = ""
-    @State private var selectedPage: MemChatController.PageItem?
+    // Plan/Memory views removed; memory is now automatic and audited in the trail.
     @State private var connectionStatus: String = ""
     @State private var didRunSelfCheck = false
     var body: some View {
@@ -74,8 +67,7 @@ struct MemChatRootView: View {
                 Text(config.memoryCorpusId).font(.caption).foregroundStyle(.secondary)
                 Text(controllerHolder.controller.providerLabel).font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Button("Plan") { Task { await openPlan() } }
-                Button("Memory") { Task { await openMemory() } }
+                // Plan/Memory buttons removed; memory is handled automatically.
                 Button("Test") { Task { await testConnection() } }
                 Button("Live Test") { Task { await testLiveChat() } }
                 Button("Settings") { openSettings() }
@@ -95,26 +87,6 @@ struct MemChatRootView: View {
             Divider()
             MemChatView(controller: controllerHolder.controller)
         }
-        .sheet(isPresented: $showPlan) {
-            ZStack {
-                ScrollView { Text(planText).frame(maxWidth: .infinity, alignment: .leading).padding() }
-                if planLoading { ProgressView("Loading plan…").controlSize(.large) }
-            }
-            .frame(minWidth: 560, minHeight: 420)
-        }
-        .sheet(isPresented: $showMemory) {
-            ZStack {
-                HStack(spacing: 0) {
-                    List(pages, selection: $selectedPage) { p in Text(p.title).tag(p as MemChatController.PageItem?) }
-                        .frame(minWidth: 220)
-                    Divider()
-                    ScrollView { Text(memoryText).frame(maxWidth: .infinity, alignment: .leading).padding() }
-                }
-                if memoryLoading { ProgressView("Loading memory…").controlSize(.large) }
-            }
-            .frame(minWidth: 720, minHeight: 500)
-            .onChange(of: selectedPage) { newVal in Task { await loadSelectedPage() } }
-        }
         .task {
             // Run a one-shot self-check on first appearance
             if !didRunSelfCheck {
@@ -123,9 +95,6 @@ struct MemChatRootView: View {
             }
         }
     }
-    private func openPlan() async { planLoading = true; showPlan = true; defer { planLoading = false }; planText = await controllerHolder.controller.loadPlanText() ?? "(No plan found)" }
-    private func openMemory() async { memoryLoading = true; showMemory = true; defer { memoryLoading = false }; pages = await controllerHolder.controller.listMemoryPages(limit: 200); selectedPage = pages.first; await loadSelectedPage() }
-    private func loadSelectedPage() async { if let pid = selectedPage?.id { memoryText = await controllerHolder.controller.fetchPageText(pageId: pid) ?? "(No content)" } }
     private func testConnection() async {
         switch await controllerHolder.controller.testConnection() {
         case .ok(let host): connectionStatus = "Connected: \(host)";

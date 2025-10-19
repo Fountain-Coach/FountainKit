@@ -18,6 +18,8 @@ public final class MemChatController: ObservableObject {
     @Published public private(set) var chatCorpusId: String
 
     private let vm: EngraverChatViewModel
+    private let store: FountainStoreClient
+    private var continuityDigest: String? = nil
     private var cancellables: Set<AnyCancellable> = []
 
     public init(
@@ -65,6 +67,7 @@ public final class MemChatController: ObservableObject {
         )
         let seeding = SeedingConfiguration(sources: [], browser: browser)
 
+        self.store = svc
         vm = EngraverChatViewModel(
             chatClient: chatClient,
             persistenceStore: svc,
@@ -87,6 +90,8 @@ public final class MemChatController: ObservableObject {
         vm.$turns.sink { [weak self] in self?.turns = $0 }.store(in: &cancellables)
         vm.$activeTokens.sink { [weak self] tokens in self?.streamingText = tokens.joined() }.store(in: &cancellables)
         vm.$state.sink { [weak self] s in self?.state = s }.store(in: &cancellables)
+
+        Task { await self.loadContinuityDigest() }
     }
 
     public func newChat() {
@@ -95,8 +100,43 @@ public final class MemChatController: ObservableObject {
     }
 
     public func send(_ text: String) {
-        let sys = vm.makeSystemPrompts(base: [])
+        var base: [String] = []
+        if let digest = continuityDigest, !digest.isEmpty {
+            base.append("ContinuityDigest: \(digest)")
+        }
+        let sys = vm.makeSystemPrompts(base: base)
         vm.send(prompt: text, systemPrompts: sys, preferStreaming: true, corpusOverride: chatCorpusId)
+    }
+
+    private func trim(_ s: String, limit: Int = 600) -> String {
+        let t = s.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.count > limit else { return t }
+        return String(t.prefix(limit - 1)) + "…"
+    }
+
+    private func latestContinuityPageId() async throws -> String? {
+        let q = Query(mode: .prefixScan("pageId", "continuity:"), filters: ["corpusId": config.memoryCorpusId], sort: [(field: "pageId", ascending: false)], limit: 1, offset: 0)
+        let resp = try await store.query(corpusId: config.memoryCorpusId, collection: "pages", query: q)
+        struct PageDoc: Codable { let pageId: String }
+        if let doc = resp.documents.first, let page = try? JSONDecoder().decode(PageDoc.self, from: doc) {
+            return page.pageId
+        }
+        return nil
+    }
+
+    private func loadContinuityDigest() async {
+        do {
+            guard let pageId = try await latestContinuityPageId() else { return }
+            let q = Query(filters: ["corpusId": config.memoryCorpusId, "pageId": pageId], limit: 5, offset: 0)
+            let resp = try await store.query(corpusId: config.memoryCorpusId, collection: "segments", query: q)
+            // Use the first segment's text as digest (trimmed)
+            struct SegmentDoc: Codable { let text: String }
+            if let data = resp.documents.first, let seg = try? JSONDecoder().decode(SegmentDoc.self, from: data) {
+                await MainActor.run { self.continuityDigest = trim(seg.text, limit: 600) }
+            }
+        } catch {
+            // ignore
+        }
     }
 
     private static func makeChatCorpusId() -> String {
@@ -105,4 +145,3 @@ public final class MemChatController: ObservableObject {
         return "chat-\(ts)-\(suffix)"
     }
 }
-

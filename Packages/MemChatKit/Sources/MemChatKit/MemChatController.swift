@@ -48,6 +48,8 @@ public final class MemChatController: ObservableObject {
         public let awarenessHistory: String?
         public let snippets: [String]
         public let baselines: [String]
+        public let drifts: [String]
+        public let patterns: [String]
     }
 
     public init(
@@ -197,10 +199,12 @@ public final class MemChatController: ObservableObject {
                 }
             }
 
-            // Retrieve memory snippets (with a broad fallback) and recent baselines
+            // Retrieve memory snippets (with a broad fallback) and recent baselines/drifts/patterns
             var snippets = await self.retrieveMemorySnippets(matching: text, limit: 5)
             if snippets.isEmpty { snippets = await self.retrieveMemorySnippets(matching: "", limit: 5) }
             let baselines = await self.retrieveRecentBaselines(limit: 3)
+            let drifts = await self.retrieveRecentDrifts(limit: 3)
+            let patterns = await self.retrieveRecentPatterns(limit: 2)
 
             var enriched = base
             if !snippets.isEmpty {
@@ -211,9 +215,19 @@ public final class MemChatController: ObservableObject {
                 self.logTrail("MEMORY inject • snippets=0 summary=\(self.vm.awarenessSummaryText?.count ?? 0)")
             }
             if !baselines.isEmpty {
-                let list = baselines.map { "• \($0)" }.joined(separator: "\n")
-                enriched.append("Baselines:\n\(list)")
+                let block = await self.condenseList(header: "Baselines", items: baselines, budget: 2000)
+                enriched.append(block)
                 self.logTrail("MEMORY inject • baselines=\(baselines.count)")
+            }
+            if !drifts.isEmpty {
+                let block = await self.condenseList(header: "Recent Drift", items: drifts, budget: 1600)
+                enriched.append(block)
+                self.logTrail("MEMORY inject • drifts=\(drifts.count)")
+            }
+            if !patterns.isEmpty {
+                let block = await self.condenseList(header: "Patterns", items: patterns, budget: 1600)
+                enriched.append(block)
+                self.logTrail("MEMORY inject • patterns=\(patterns.count)")
             }
 
             // Publish inspector context
@@ -222,7 +236,9 @@ public final class MemChatController: ObservableObject {
                 awarenessSummary: self.vm.awarenessSummaryText,
                 awarenessHistory: self.vm.awarenessHistorySummary,
                 snippets: snippets,
-                baselines: baselines
+                baselines: baselines,
+                drifts: drifts,
+                patterns: patterns
             )
             self.lastInjectedContext = ctx
             self.pendingContext = ctx
@@ -358,6 +374,53 @@ public final class MemChatController: ObservableObject {
         }
     }
 
+    private func retrieveRecentDrifts(limit: Int = 3) async -> [String] {
+        do {
+            let (total, items) = try await store.listDrifts(corpusId: config.memoryCorpusId, limit: 1000, offset: 0)
+            let sorted = items.sorted { $0.ts > $1.ts }
+            let picked = Array(sorted.prefix(limit)).map { trim($0.content, limit: 480) }
+            logTrail("STORE /drifts ok (n=\(total), used=\(picked.count))")
+            return picked
+        } catch { logTrail("store.drifts error • \(error)"); return [] }
+    }
+
+    private func retrieveRecentPatterns(limit: Int = 2) async -> [String] {
+        do {
+            let (total, items) = try await store.listPatterns(corpusId: config.memoryCorpusId, limit: 1000, offset: 0)
+            let sorted = items.sorted { $0.ts > $1.ts }
+            let picked = Array(sorted.prefix(limit)).map { trim($0.content, limit: 640) }
+            logTrail("STORE /patterns ok (n=\(total), used=\(picked.count))")
+            return picked
+        } catch { logTrail("store.patterns error • \(error)"); return [] }
+    }
+
+    // Condense list to within a rough character budget. If material exceeds the
+    // budget and a provider is configured, ask the model to compress into
+    // information-preserving bullets. Falls back to simple bullets if needed.
+    private func condenseList(header: String, items: [String], budget: Int) async -> String {
+        let bullets = items.map { "• \($0)" }.joined(separator: "\n")
+        let raw = "\(header):\n\(bullets)"
+        if raw.count <= budget { return raw }
+        if let selection = ProviderResolver.selectProvider(apiKey: config.openAIAPIKey,
+                                                           openAIEndpoint: config.openAIEndpoint,
+                                                           localEndpoint: nil) {
+            let client = OpenAICompatibleChatProvider(apiKey: selection.usesAPIKey ? config.openAIAPIKey : nil,
+                                                      endpoint: selection.endpoint)
+            let system = "You compress notes into crisp bullet points while preserving key information, names, numbers, and chronology. Avoid hedging."
+            let prompt = "Summarize the following \(header.lowercased()) into 5–9 bullets preserving information value.\n\n\(bullets)"
+            let req = CoreChatRequest(model: config.model, messages: [
+                .init(role: .system, content: system),
+                .init(role: .user, content: prompt)
+            ])
+            if let answer = try? await client.complete(request: req).answer, !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                let compact = answer.trimmingCharacters(in: .whitespacesAndNewlines)
+                return "\(header):\n\(compact)"
+            }
+        }
+        // Fallback: return original bullets (they may be truncated downstream by the model context window)
+        return raw
+    }
+
     private func ensureAwarenessContext(timeoutMs: Int = 1800) async {
         await MainActor.run { vm.refreshAwareness() }
         let start = Date()
@@ -463,7 +526,9 @@ public final class MemChatController: ObservableObject {
                                       awarenessSummary: vm.awarenessSummaryText,
                                       awarenessHistory: vm.awarenessHistorySummary,
                                       snippets: [],
-                                      baselines: [])
+                                      baselines: [],
+                                      drifts: [],
+                                      patterns: [])
             let synthesized = await self.synthesizeBaselineText(ctx)
             if let base {
                 let client = AwarenessClient(baseURL: base)
@@ -505,7 +570,9 @@ public final class MemChatController: ObservableObject {
                                       awarenessSummary: vm.awarenessSummaryText,
                                       awarenessHistory: vm.awarenessHistorySummary,
                                       snippets: [],
-                                      baselines: [])
+                                      baselines: [],
+                                      drifts: [],
+                                      patterns: [])
             let newBaseline = await synthesizeBaselineText(ctx) ?? vm.awarenessSummaryText ?? ""
             if !newBaseline.isEmpty && lastBaselineText != nil {
                 let drift = await synthesizeDriftText(old: lastBaselineText ?? "", new: newBaseline)
@@ -524,7 +591,9 @@ public final class MemChatController: ObservableObject {
                                   awarenessSummary: vm.awarenessSummaryText,
                                   awarenessHistory: vm.awarenessHistorySummary,
                                   snippets: [],
-                                  baselines: [])
+                                  baselines: [],
+                                  drifts: [],
+                                  patterns: [])
         // Synthesize baseline snapshot
         let newBaseline = await synthesizeBaselineText(ctx) ?? vm.awarenessSummaryText ?? ""
         if !newBaseline.isEmpty && lastBaselineText != nil {

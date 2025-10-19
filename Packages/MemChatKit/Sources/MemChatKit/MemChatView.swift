@@ -189,6 +189,26 @@ public struct MemChatView: View {
                                         }
                                     }
                                 }
+                                if !ctx.drifts.isEmpty {
+                                    GroupBox(label: Text("Recent Drift").font(.caption2)) {
+                                        VStack(alignment: .leading, spacing: 6) {
+                                            ForEach(Array(ctx.drifts.enumerated()), id: \.offset) { _, s in
+                                                Text("• \(s)")
+                                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                            }
+                                        }
+                                    }
+                                }
+                                if !ctx.patterns.isEmpty {
+                                    GroupBox(label: Text("Patterns").font(.caption2)) {
+                                        VStack(alignment: .leading, spacing: 6) {
+                                            ForEach(Array(ctx.patterns.enumerated()), id: \.offset) { _, s in
+                                                Text("• \(s)")
+                                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                            }
+                                        }
+                                    }
+                                }
                             } else {
                                 Text("No injected context yet. Send a message to see what’s used.")
                                     .font(.caption)

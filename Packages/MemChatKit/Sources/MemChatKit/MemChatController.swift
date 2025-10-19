@@ -122,6 +122,9 @@ public final class MemChatController: ObservableObject {
                 // Kick Bootstrap once at startup to ensure corpus roles, defaults, and collections exist.
                 await MainActor.run { self.vm.rerunBootstrap() }
             }
+            if self.config.gatewayURL != nil {
+                await self.ensureRolesViaGateway()
+            }
         }
         // Provider label
         self.providerLabel = useGateway ? "gateway" : "openai"
@@ -279,6 +282,33 @@ public final class MemChatController: ObservableObject {
             }
         } catch {
             logTrail("awareness.reflection error • \(error)")
+        }
+    }
+
+    // MARK: - Role Health Check via Gateway
+    private func ensureRolesViaGateway() async {
+        guard let gw = config.gatewayURL else { return }
+        let rest = RESTClient(baseURL: gw, defaultHeaders: ["Accept": "application/json", "Content-Type": "application/json"])
+        let body: [String: Any] = ["corpusId": config.memoryCorpusId]
+        do {
+            // POST /role-health-check/reflect
+            if let url1 = rest.buildURL(path: "/role-health-check/reflect") {
+                let data = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+                let t0 = Date()
+                _ = try await rest.send(APIRequest(method: .POST, url: url1, headers: [:], body: data))
+                let ms = Int(Date().timeIntervalSince(t0) * 1000)
+                logTrail("roles.reflect ok • ms=\(ms)")
+            }
+            // POST /role-health-check/promote
+            if let url2 = rest.buildURL(path: "/role-health-check/promote") {
+                let data = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+                let t1 = Date()
+                _ = try await rest.send(APIRequest(method: .POST, url: url2, headers: [:], body: data))
+                let ms = Int(Date().timeIntervalSince(t1) * 1000)
+                logTrail("roles.promote ok • ms=\(ms)")
+            }
+        } catch {
+            logTrail("roles.health-check error • \(error)")
         }
     }
 }

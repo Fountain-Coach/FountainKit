@@ -16,6 +16,10 @@ public struct MemChatView: View {
         _controller = StateObject(wrappedValue: MemChatController(config: configuration))
     }
 
+    public init(controller: MemChatController) {
+        _controller = StateObject(wrappedValue: controller)
+    }
+
     public var body: some View {
         VStack(spacing: 8) {
             HStack {

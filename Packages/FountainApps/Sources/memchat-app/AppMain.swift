@@ -7,6 +7,7 @@ import LauncherSignature
 @main
 struct MemChatApp: App {
     @State private var config: MemChatConfiguration
+    @StateObject private var controllerHolder = ControllerHolder()
     @State private var showSettings = false
     init() {
         verifyLauncherSignature()
@@ -25,21 +26,80 @@ struct MemChatApp: App {
     }
     var body: some Scene {
         WindowGroup {
-            VStack(spacing: 0) {
-                HStack {
-                    Text("MemChat").font(.headline)
-                    Spacer()
-                    Button("Settings") { showSettings = true }
-                }.padding(8)
-                Divider()
-                MemChatView(configuration: config)
-            }
+            MemChatRootView(config: $config, controllerHolder: controllerHolder) { showSettings = true }
             .frame(minWidth: 640, minHeight: 480)
             .sheet(isPresented: $showSettings) {
                 SettingsView(memoryCorpusId: config.memoryCorpusId, openAIKey: config.openAIAPIKey ?? "", localLLMURL: config.localCompatibleEndpoint?.absoluteString ?? "http://127.0.0.1:11434/v1/chat/completions") { newCfg in
                     self.config = newCfg
+                    controllerHolder.recreate(with: newCfg)
                 }
             }
         }
+    }
+}
+
+@MainActor
+final class ControllerHolder: ObservableObject {
+    @Published var controller: MemChatController
+    init(initial: MemChatConfiguration = MemChatConfiguration(memoryCorpusId: "memchat-app")) {
+        controller = MemChatController(config: initial)
+    }
+    func recreate(with cfg: MemChatConfiguration) { controller = MemChatController(config: cfg) }
+}
+
+struct MemChatRootView: View {
+    @Binding var config: MemChatConfiguration
+    @ObservedObject var controllerHolder: ControllerHolder
+    var openSettings: () -> Void
+    @State private var showPlan = false
+    @State private var planText: String = ""
+    @State private var showMemory = false
+    @State private var pages: [MemChatController.PageItem] = []
+    @State private var memoryText: String = ""
+    @State private var selectedPage: MemChatController.PageItem?
+    @State private var connectionStatus: String = ""
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Text("MemChat").font(.headline)
+                Divider().frame(height: 16)
+                Text(config.memoryCorpusId).font(.caption).foregroundStyle(.secondary)
+                Text(controllerHolder.controller.providerLabel).font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button("Plan") { Task { await openPlan() } }
+                Button("Memory") { Task { await openMemory() } }
+                Button("Test") { Task { await testConnection() } }
+                Button("Settings") { openSettings() }
+            }.padding(8)
+            if !connectionStatus.isEmpty {
+                Text(connectionStatus).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 8)
+            }
+            Divider()
+            MemChatView(controller: controllerHolder.controller)
+        }
+        .sheet(isPresented: $showPlan) {
+            ScrollView { Text(planText).frame(maxWidth: .infinity, alignment: .leading).padding() }
+                .frame(minWidth: 560, minHeight: 420)
+        }
+        .sheet(isPresented: $showMemory) {
+            HStack(spacing: 0) {
+                List(pages, selection: $selectedPage) { p in Text(p.title).tag(p as MemChatController.PageItem?) }
+                    .frame(minWidth: 220)
+                Divider()
+                ScrollView { Text(memoryText).frame(maxWidth: .infinity, alignment: .leading).padding() }
+            }
+            .frame(minWidth: 720, minHeight: 500)
+            .onChange(of: selectedPage) { newVal in Task { await loadSelectedPage() } }
+        }
+    }
+    private func openPlan() async { planText = await controllerHolder.controller.loadPlanText() ?? "(No plan found)"; showPlan = true }
+    private func openMemory() async { pages = await controllerHolder.controller.listMemoryPages(limit: 200); selectedPage = pages.first; await loadSelectedPage(); showMemory = true }
+    private func loadSelectedPage() async { if let pid = selectedPage?.id { memoryText = await controllerHolder.controller.fetchPageText(pageId: pid) ?? "(No content)" } }
+    private func testConnection() async {
+        switch await controllerHolder.controller.testConnection() {
+        case .ok(let host): connectionStatus = "Connected: \(host)";
+        case .fail(let msg): connectionStatus = "Connection failed: \(msg)";
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { connectionStatus = "" }
     }
 }

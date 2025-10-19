@@ -32,6 +32,7 @@ let package = Package(
         .executable(name: "memchat-concept-seed", targets: ["memchat-concept-seed"]),
         .executable(name: "memchat-save-reply", targets: ["memchat-save-reply"]),
         .executable(name: "memchat-save-continuity", targets: ["memchat-save-continuity"]),
+        .executable(name: "memchat-save-plan", targets: ["memchat-save-plan"]),
         .executable(name: "llm-doctor", targets: ["llm-doctor"]),
         .executable(name: "engraver-direct", targets: ["engraver-direct"]),
         .library(name: "EngraverChatCore", targets: ["EngraverChatCore"]),
@@ -107,6 +108,14 @@ let package = Package(
                 .product(name: "LauncherSignature", package: "FountainCore")
             ],
             path: "Sources/memchat-save-continuity"
+        ),
+        .executableTarget(
+            name: "memchat-save-plan",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ],
+            path: "Sources/memchat-save-plan"
         ),
         .executableTarget(
             name: "memchat-save-reply",

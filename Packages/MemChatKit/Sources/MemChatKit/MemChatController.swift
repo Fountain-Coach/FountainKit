@@ -16,6 +16,7 @@ public final class MemChatController: ObservableObject {
     @Published public private(set) var streamingText: String = ""
     @Published public private(set) var state: EngraverChatState = .idle
     @Published public private(set) var chatCorpusId: String
+    @Published public private(set) var providerLabel: String = ""
     @Published public private(set) var lastError: String? = nil
 
     private let vm: EngraverChatViewModel
@@ -99,6 +100,9 @@ public final class MemChatController: ObservableObject {
         vm.$lastError.sink { [weak self] e in self?.lastError = e }.store(in: &cancellables)
 
         Task { await self.loadContinuityDigest() }
+        // Provider label
+        let isOpenAI = (apiKey != nil) && ((endpoint.host ?? "").contains("openai.com"))
+        self.providerLabel = isOpenAI ? "openai" : "local"
     }
 
     public func newChat() {
@@ -150,5 +154,60 @@ public final class MemChatController: ObservableObject {
         let ts = Int(Date().timeIntervalSince1970)
         let suffix = UUID().uuidString.prefix(6)
         return "chat-\(ts)-\(suffix)"
+    }
+}
+
+// MARK: - Memory helpers and connection test
+extension MemChatController {
+    public struct PageItem: Identifiable, Sendable, Hashable, Equatable { public let id: String; public let title: String }
+
+    public func listMemoryPages(limit: Int = 100) async -> [PageItem] {
+        do {
+            let q = Query(filters: ["corpusId": config.memoryCorpusId], limit: limit, offset: 0)
+            let resp = try await store.query(corpusId: config.memoryCorpusId, collection: "pages", query: q)
+            struct PageDoc: Codable { let pageId: String; let title: String }
+            return resp.documents.compactMap { data in
+                (try? JSONDecoder().decode(PageDoc.self, from: data)).map { PageItem(id: $0.pageId, title: $0.title) }
+            }.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        } catch { return [] }
+    }
+
+    public func fetchPageText(pageId: String) async -> String? {
+        do {
+            let q = Query(filters: ["corpusId": config.memoryCorpusId, "pageId": pageId], limit: 50, offset: 0)
+            let resp = try await store.query(corpusId: config.memoryCorpusId, collection: "segments", query: q)
+            struct Segment: Codable { let text: String }
+            if let first = resp.documents.first, let seg = try? JSONDecoder().decode(Segment.self, from: first) { return seg.text }
+            return nil
+        } catch { return nil }
+    }
+
+    public func loadPlanText() async -> String? { await fetchPageText(pageId: "plan:memchat-features") }
+
+    public enum ConnectionStatus: Equatable { case ok(String), fail(String) }
+    public func testConnection() async -> ConnectionStatus {
+        let apiKey = config.openAIAPIKey?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let endpoint = config.openAIEndpoint ?? config.localCompatibleEndpoint else { return .fail("No provider configured") }
+        var modelsURL: URL
+        let path = endpoint.path
+        if path.contains("/chat/completions") {
+            modelsURL = endpoint.deletingLastPathComponent().appendingPathComponent("models")
+        } else if path.contains("/v1/") {
+            modelsURL = endpoint.deletingLastPathComponent().appendingPathComponent("models")
+        } else {
+            modelsURL = endpoint.appendingPathComponent("v1/models")
+        }
+        var req = URLRequest(url: modelsURL)
+        req.httpMethod = "GET"
+        req.timeoutInterval = 3.0
+        if let apiKey, !apiKey.isEmpty { req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization") }
+        do {
+            let (_, resp) = try await URLSession.shared.data(for: req)
+            if let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) {
+                return .ok(modelsURL.host ?? "ok")
+            }
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            return .fail("HTTP \(code) at /v1/models")
+        } catch { return .fail(error.localizedDescription) }
     }
 }

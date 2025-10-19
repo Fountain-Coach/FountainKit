@@ -132,7 +132,7 @@ public struct MemChatTeatroView: View {
             }
 
             TokenStreamView(tokens: controller.streamingTokens, showBeatGrid: true)
-                .frame(width: 220, minHeight: 180)
+                .frame(minWidth: 220, minHeight: 180)
                 .accessibilityLabel("Token stream")
         }
     }

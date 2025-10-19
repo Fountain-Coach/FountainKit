@@ -5,6 +5,8 @@ import FountainAIKit
 import ProviderOpenAI
 import ProviderGateway
 import ApiClientsCore
+import AwarenessAPI
+import FountainAICore
 // Avoid importing generator/runtime directly here to reduce package fan-out.
 // We will use a minimal URLSession-based client to call the Semantic Browser's
 // query endpoints according to the curated OpenAPI spec.
@@ -25,11 +27,24 @@ public final class MemChatController: ObservableObject {
     @Published public private(set) var providerLabel: String = ""
     @Published public private(set) var lastError: String? = nil
     @Published public private(set) var memoryTrail: [String] = []
+    @Published public private(set) var lastInjectedContext: InjectedContext? = nil
+    @Published public private(set) var turnContext: [UUID: InjectedContext] = [:]
 
     private let vm: EngraverChatViewModel
     private let store: FountainStoreClient
     private var continuityDigest: String? = nil
     private var cancellables: Set<AnyCancellable> = []
+    private var didAutoBaseline: Bool = false
+    private var pendingContext: InjectedContext? = nil
+    private var lastBaselineText: String? = nil
+    private var analysisCounter: Int = 0
+
+    public struct InjectedContext: Sendable, Equatable {
+        public let continuity: String?
+        public let awarenessSummary: String?
+        public let awarenessHistory: String?
+        public let snippets: [String]
+    }
 
     public init(
         config: MemChatConfiguration,
@@ -39,12 +54,15 @@ public final class MemChatController: ObservableObject {
         self.config = config
         self.chatCorpusId = Self.makeChatCorpusId()
 
-        // Resolve store: MemChat uses embedded store by default to avoid disk-store crashes.
-        // Pass an override only for testing.
+        // Resolve store: prefer on-disk FountainStore for full persistence.
+        // If disk initialisation fails, fall back to embedded to keep the chat usable.
         let svc: FountainStoreClient
         if let store { svc = store }
-        else {
+        else if let disk = Self.makeDiskStoreClient() {
+            svc = FountainStoreClient(client: disk)
+        } else {
             svc = FountainStoreClient(client: EmbeddedFountainStoreClient())
+            print("[MemChatKit] Warning: DiskFountainStoreClient unavailable; using in-memory store.")
         }
 
         // Resolve chat client: prefer Gateway when configured; else direct OpenAI provider
@@ -75,6 +93,8 @@ public final class MemChatController: ObservableObject {
             tablesCollection: "tables",
             storeOverride: nil
         )
+        // Keep seeding configuration defined (for optional ingestion flows), but runtime snippet retrieval
+        // no longer reaches out to the Semantic Browser; it uses FountainStore exclusively.
         let seeding = SeedingConfiguration(sources: [], browser: browser)
 
         self.store = svc
@@ -102,7 +122,15 @@ public final class MemChatController: ObservableObject {
             let oldCount = self.turns.count
             self.turns = newTurns
             if let last = newTurns.last, newTurns.count > oldCount {
+                if let ctx = self.pendingContext {
+                    self.turnContext[last.id] = ctx
+                    self.lastInjectedContext = ctx
+                    self.pendingContext = nil
+                }
                 Task { await self.persistReflection(from: last) }
+                Task { await self.tryAutoBaseline(from: last) }
+                analysisCounter += 1
+                if analysisCounter >= 3 { analysisCounter = 0; Task { await self.tryAutoPatternsAndDrift() } }
             }
         }.store(in: &cancellables)
         vm.$activeTokens
@@ -144,15 +172,42 @@ public final class MemChatController: ObservableObject {
         if let digest = continuityDigest, !digest.isEmpty {
             base.append("ContinuityDigest: \(digest)")
         }
-        // Lightweight memory retrieval from the selected memory corpus (segments collection)
         Task { [weak self] in
             guard let self else { return }
-            let snippets = await self.retrieveMemorySnippets(matching: text, limit: 5)
+            // Ensure Awareness context is fresh and inject summaries
+            if self.config.awarenessURL != nil {
+                await self.ensureAwarenessContext()
+                if let summary = self.vm.awarenessSummaryText, !summary.isEmpty {
+                    base.append("Awareness Summary: \(self.trim(summary, limit: 600))")
+                }
+                if let history = self.vm.awarenessHistorySummary, !history.isEmpty {
+                    base.append("History Overview: \(self.trim(history, limit: 600))")
+                }
+            }
+
+            // Retrieve memory snippets (with a broad fallback)
+            var snippets = await self.retrieveMemorySnippets(matching: text, limit: 5)
+            if snippets.isEmpty { snippets = await self.retrieveMemorySnippets(matching: "", limit: 5) }
+
             var enriched = base
             if !snippets.isEmpty {
                 let list = snippets.map { "• \($0)" }.joined(separator: "\n")
                 enriched.append("Memory snippets (from corpus \(self.config.memoryCorpusId)):\n\(list)")
+                self.logTrail("MEMORY inject • snippets=\(snippets.count) summary=\(self.vm.awarenessSummaryText?.count ?? 0)")
+            } else {
+                self.logTrail("MEMORY inject • snippets=0 summary=\(self.vm.awarenessSummaryText?.count ?? 0)")
             }
+
+            // Publish inspector context
+            let ctx = InjectedContext(
+                continuity: self.continuityDigest,
+                awarenessSummary: self.vm.awarenessSummaryText,
+                awarenessHistory: self.vm.awarenessHistorySummary,
+                snippets: snippets
+            )
+            self.lastInjectedContext = ctx
+            self.pendingContext = ctx
+
             let sys = self.vm.makeSystemPrompts(base: enriched)
             await MainActor.run {
                 self.vm.send(prompt: text, systemPrompts: sys, preferStreaming: true, corpusOverride: self.chatCorpusId)
@@ -193,30 +248,7 @@ public final class MemChatController: ObservableObject {
 
     // MARK: - Memory retrieval
     private func retrieveMemorySnippets(matching query: String, limit: Int = 5) async -> [String] {
-        // Prefer SemanticBrowserAPI when configured via environment; fallback to store query.
-        let browserBaseEnv = ProcessInfo.processInfo.environment["SEMANTIC_BROWSER_URL"]
-        let browserCandidates: [URL] = [browserBaseEnv, "http://127.0.0.1:8003"].compactMap { $0 }.compactMap(URL.init(string:))
-        for baseURL in browserCandidates {
-            do {
-                let rest = RESTClient(baseURL: baseURL, defaultHeaders: ["Accept": "application/json"]) // ApiClientsCore
-                let qString = query.trimmingCharacters(in: .whitespacesAndNewlines)
-                let url = rest.buildURL(path: "/v1/segments", query: [
-                    "q": qString.isEmpty ? nil : qString,
-                    "limit": String(limit * 3)
-                ])
-                guard let url else { throw APIError.invalidURL }
-                let start = Date()
-                let resp = try await rest.send(APIRequest(method: .GET, url: url))
-                let ms = Int(Date().timeIntervalSince(start) * 1000)
-                if let obj = try JSONSerialization.jsonObject(with: resp.data) as? [String: Any], let arr = obj["items"] as? [[String: Any]] {
-                    let texts = arr.compactMap { $0["text"] as? String }
-                    let unique = Array(Set(texts)).prefix(limit)
-                    logTrail("browser.segments ok • n=\(unique.count) ms=\(ms)")
-                    return unique.map { trim($0, limit: 320) }
-                }
-                logTrail("browser.segments empty • ms=\(ms)")
-            } catch { logTrail("browser.segments error • \(error)") }
-        }
+        // Store-only retrieval for memory snippets (no Semantic Browser dependency at runtime).
         do {
             let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
             let needle = trimmed.split(separator: " ").prefix(8).joined(separator: " ")
@@ -232,11 +264,46 @@ public final class MemChatController: ObservableObject {
             }
             let unique = Array(Set(texts)).prefix(limit)
             let ms = Int(Date().timeIntervalSince(start) * 1000)
-            logTrail("store.segments ok • n=\(unique.count) ms=\(ms)")
+            logTrail("STORE /segments ok in \(ms) ms (n=\(unique.count))")
             return unique.map { trim($0, limit: 320) }
         } catch {
             logTrail("store.segments error • \(error)")
             return []
+        }
+    }
+
+    private func ensureAwarenessContext(timeoutMs: Int = 1800) async {
+        await MainActor.run { vm.refreshAwareness() }
+        let start = Date()
+        while vm.awarenessStatus.isRefreshing {
+            if Int(Date().timeIntervalSince(start) * 1000) > timeoutMs { break }
+            try? await Task.sleep(nanoseconds: 120_000_000)
+        }
+    }
+
+    // MARK: - Synthesis using provider
+    private func synthesizeBaselineText(_ ctx: InjectedContext) async -> String? {
+        let provider = ProviderResolver.selectProvider(apiKey: config.openAIAPIKey,
+                                                       openAIEndpoint: config.openAIEndpoint,
+                                                       localEndpoint: nil)
+        guard let selection = provider else { return nil }
+        let client = OpenAICompatibleChatProvider(apiKey: provider?.usesAPIKey == true ? config.openAIAPIKey : nil,
+                                                  endpoint: selection.endpoint)
+        let summary = ctx.awarenessSummary ?? ""
+        let history = ctx.awarenessHistory ?? ""
+        let snippetsText = ctx.snippets.isEmpty ? "(none)" : ctx.snippets.joined(separator: "\n• ")
+        let materials = "Summary:\n\(summary)\n\nHistory:\n\(history)\n\nSnippets:\n• \(snippetsText)"
+        let system = "You are the Baseline Synthesizer. Produce a concise corpus baseline (3–6 bullets) that captures enduring facts/themes. No speculation."
+        let req = CoreChatRequest(model: config.model, messages: [
+            CoreChatMessage(role: .system, content: system),
+            CoreChatMessage(role: .user, content: materials)
+        ])
+        do {
+            let resp = try await client.complete(request: req)
+            return resp.answer.trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch {
+            logTrail("POST /openai/chat error • \(error)")
+            return nil
         }
     }
 
@@ -263,30 +330,227 @@ public final class MemChatController: ObservableObject {
     }
 
     private func persistReflection(from turn: EngraverChatTurn) async {
-        guard let base = config.awarenessURL else { return }
+        if let base = config.awarenessURL { // primary: delegate to Awareness service
+            do {
+                var req = URLRequest(url: base.appending(path: "/corpus/reflections"))
+                req.httpMethod = "POST"
+                req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                let body: [String: Any] = [
+                    "corpusId": config.memoryCorpusId,
+                    "reflectionId": turn.id.uuidString,
+                    "question": turn.prompt,
+                    "content": turn.answer
+                ]
+                req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+                let t0 = Date()
+                let (data, resp) = try await URLSession.shared.data(for: req)
+                let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+                if (200...299).contains(code) {
+                    logTrail("POST /corpus/reflections \(code) in \(Int(Date().timeIntervalSince(t0)*1000)) ms")
+                    await refreshAwareness(reason: "post-reflection")
+                } else {
+                    let text = String(data: data, encoding: .utf8) ?? ""
+                    logTrail("POST /corpus/reflections \(code) • \(text)")
+                }
+            } catch {
+                logTrail("POST /corpus/reflections error • \(error)")
+            }
+            return
+        }
+        // fallback: persist directly in FountainStore
         do {
-            var req = URLRequest(url: base.appending(path: "/corpus/reflections"))
-            req.httpMethod = "POST"
-            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            let body: [String: Any] = [
-                "corpusId": config.memoryCorpusId,
-                "reflectionId": turn.id.uuidString,
-                "question": turn.prompt,
-                "content": turn.answer
-            ]
-            req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
-            let (data, resp) = try await URLSession.shared.data(for: req)
-            let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
-            if (200...299).contains(code) {
-                logTrail("awareness.reflection ok • id=\(turn.id) \(turn.prompt.prefix(24))…")
-                await refreshAwareness(reason: "post-reflection")
+            let reflection = Reflection(corpusId: config.memoryCorpusId,
+                                        reflectionId: turn.id.uuidString,
+                                        question: turn.prompt,
+                                        content: turn.answer)
+            _ = try await store.addReflection(reflection)
+            logTrail("STORE /reflections ok")
+        } catch { logTrail("STORE /reflections error • \(error)") }
+    }
+
+    private func tryAutoBaseline(from turn: EngraverChatTurn) async {
+        guard !didAutoBaseline else { return }
+        // If Awareness is configured, delegate; else persist directly in store
+        let base = config.awarenessURL
+        // Build a compact baseline payload
+        var lines: [String] = []
+        if let sum = vm.awarenessSummaryText, !sum.isEmpty { lines.append(sum) }
+        if let hist = vm.awarenessHistorySummary, !hist.isEmpty { lines.append(hist) }
+        if let cont = continuityDigest, !cont.isEmpty { lines.append("continuity: " + trim(cont, limit: 320)) }
+        let content: String
+        if !lines.isEmpty { content = lines.joined(separator: "\n\n") }
+        else { content = "auto-baseline: Q=\(trim(turn.prompt, limit: 240))\nA=\(trim(turn.answer, limit: 320))" }
+        do {
+            // Attempt synthesis from context using the model; fallback to assembled content
+            let ctx = InjectedContext(continuity: continuityDigest,
+                                      awarenessSummary: vm.awarenessSummaryText,
+                                      awarenessHistory: vm.awarenessHistorySummary,
+                                      snippets: [])
+            let synthesized = await self.synthesizeBaselineText(ctx)
+            if let base {
+                var req = URLRequest(url: base.appending(path: "/corpus/baseline"))
+                req.httpMethod = "POST"
+                req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                let body: [String: Any] = [
+                    "corpusId": config.memoryCorpusId,
+                    "baselineId": "baseline-\(Int(Date().timeIntervalSince1970))",
+                    "content": synthesized ?? content
+                ]
+                req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+                let t0 = Date()
+                let (data, resp) = try await URLSession.shared.data(for: req)
+                let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+                if (200...299).contains(code) {
+                    didAutoBaseline = true
+                    logTrail("POST /corpus/baseline \(code) in \(Int(Date().timeIntervalSince(t0)*1000)) ms")
+                    lastBaselineText = synthesized ?? content
+                    await refreshAwareness(reason: "post-baseline")
+                } else {
+                    let text = String(data: data, encoding: .utf8) ?? ""
+                    logTrail("POST /corpus/baseline \(code) • \(text)")
+                }
             } else {
-                let text = String(data: data, encoding: .utf8) ?? ""
-                logTrail("awareness.reflection fail • http=\(code) \(text)")
+                // Persist directly to store when Awareness is not configured
+                let baseline = Baseline(corpusId: config.memoryCorpusId,
+                                        baselineId: "baseline-\(Int(Date().timeIntervalSince1970))",
+                                        content: synthesized ?? content)
+                _ = try await store.addBaseline(baseline)
+                didAutoBaseline = true
+                lastBaselineText = baseline.content
+                logTrail("STORE /baselines ok")
             }
         } catch {
-            logTrail("awareness.reflection error • \(error)")
+            logTrail("POST /corpus/baseline error • \(error)")
         }
+    }
+
+    private func tryAutoPatternsAndDrift() async {
+        guard let awareURL = config.awarenessURL else {
+            // Awareness not configured — still synthesise and persist to FountainStore.
+            // Prepare context
+            let ctx = InjectedContext(continuity: continuityDigest,
+                                      awarenessSummary: vm.awarenessSummaryText,
+                                      awarenessHistory: vm.awarenessHistorySummary,
+                                      snippets: [])
+            let newBaseline = await synthesizeBaselineText(ctx) ?? vm.awarenessSummaryText ?? ""
+            if !newBaseline.isEmpty && lastBaselineText != nil {
+                let drift = await synthesizeDriftText(old: lastBaselineText ?? "", new: newBaseline)
+                if let drift, !drift.isEmpty {
+                    do { _ = try await store.addDrift(Drift(corpusId: config.memoryCorpusId, driftId: "drift-\(Int(Date().timeIntervalSince1970))", content: drift)); logTrail("STORE /drifts ok") } catch { logTrail("STORE /drifts error • \(error)") }
+                }
+            }
+            if let patterns = await synthesizePatternsText(ctx), !patterns.isEmpty {
+                do { _ = try await store.addPatterns(Patterns(corpusId: config.memoryCorpusId, patternsId: "patterns-\(Int(Date().timeIntervalSince1970))", content: patterns)); logTrail("STORE /patterns ok") } catch { logTrail("STORE /patterns error • \(error)") }
+            }
+            lastBaselineText = newBaseline
+            return
+        }
+        // Prepare context
+        let ctx = InjectedContext(continuity: continuityDigest,
+                                  awarenessSummary: vm.awarenessSummaryText,
+                                  awarenessHistory: vm.awarenessHistorySummary,
+                                  snippets: [])
+        // Synthesize baseline snapshot
+        let newBaseline = await synthesizeBaselineText(ctx) ?? vm.awarenessSummaryText ?? ""
+        if !newBaseline.isEmpty && lastBaselineText != nil {
+            let drift = await synthesizeDriftText(old: lastBaselineText ?? "", new: newBaseline)
+            if let drift, !drift.isEmpty {
+                await postDrift(to: awareURL, content: drift)
+            }
+        }
+        // Patterns regardless of drift
+        if let patterns = await synthesizePatternsText(ctx), !patterns.isEmpty {
+            await postPatterns(to: awareURL, content: patterns)
+        }
+        lastBaselineText = newBaseline
+        await refreshAwareness(reason: "post-patterns-drift")
+    }
+
+    private func synthesizeDriftText(old: String, new: String) async -> String? {
+        guard let selection = ProviderResolver.selectProvider(apiKey: config.openAIAPIKey,
+                                                              openAIEndpoint: config.openAIEndpoint,
+                                                              localEndpoint: nil) else { return nil }
+        let client = OpenAICompatibleChatProvider(apiKey: selection.usesAPIKey ? config.openAIAPIKey : nil,
+                                                  endpoint: selection.endpoint)
+        let system = "You are Drift Inspector. Compare Baseline A vs Baseline B and output 3–6 concise drift bullets capturing real changes only."
+        let materials = "Baseline A:\n\(old)\n\nBaseline B:\n\(new)"
+        let req = CoreChatRequest(model: config.model, messages: [
+            CoreChatMessage(role: .system, content: system),
+            CoreChatMessage(role: .user, content: materials)
+        ])
+        do {
+            let resp = try await client.complete(request: req)
+            return resp.answer.trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch { logTrail("POST /openai/chat error • \(error)"); return nil }
+    }
+
+    private func synthesizePatternsText(_ ctx: InjectedContext) async -> String? {
+        guard let selection = ProviderResolver.selectProvider(apiKey: config.openAIAPIKey,
+                                                              openAIEndpoint: config.openAIEndpoint,
+                                                              localEndpoint: nil) else { return nil }
+        let client = OpenAICompatibleChatProvider(apiKey: selection.usesAPIKey ? config.openAIAPIKey : nil,
+                                                  endpoint: selection.endpoint)
+        let system = "You are Patterns. From summary/history below, produce 3–6 recurring patterns (bulleted, neutral, source-agnostic)."
+        let materials = "Summary:\n\(ctx.awarenessSummary ?? "")\n\nHistory:\n\(ctx.awarenessHistory ?? "")"
+        let req = CoreChatRequest(model: config.model, messages: [
+            CoreChatMessage(role: .system, content: system),
+            CoreChatMessage(role: .user, content: materials)
+        ])
+        do {
+            let resp = try await client.complete(request: req)
+            return resp.answer.trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch { logTrail("POST /openai/chat error • \(error)"); return nil }
+    }
+
+    private func postDrift(to base: URL, content: String) async {
+        do {
+            let client = AwarenessClient(baseURL: base)
+            let req = Components.Schemas.DriftRequest(corpusId: config.memoryCorpusId,
+                                                      driftId: "drift-\(Int(Date().timeIntervalSince1970))",
+                                                      content: content)
+            _ = try await client.addDrift(req)
+            logTrail("POST /corpus/drift 200")
+        } catch {
+            logTrail("POST /corpus/drift error • \(error)")
+            // Fallback: store directly if Awareness fails
+            do { _ = try await store.addDrift(Drift(corpusId: config.memoryCorpusId, driftId: "drift-\(Int(Date().timeIntervalSince1970))", content: content)); logTrail("STORE /drifts ok") } catch { logTrail("STORE /drifts error • \(error)") }
+        }
+    }
+
+    private func postPatterns(to base: URL, content: String) async {
+        do {
+            let client = AwarenessClient(baseURL: base)
+            let req = Components.Schemas.PatternsRequest(corpusId: config.memoryCorpusId,
+                                                         patternsId: "patterns-\(Int(Date().timeIntervalSince1970))",
+                                                         content: content)
+            _ = try await client.addPatterns(req)
+            logTrail("POST /corpus/patterns 200")
+        } catch {
+            logTrail("POST /corpus/patterns error • \(error)")
+            // Fallback: store directly if Awareness fails
+            do { _ = try await store.addPatterns(Patterns(corpusId: config.memoryCorpusId, patternsId: "patterns-\(Int(Date().timeIntervalSince1970))", content: content)); logTrail("STORE /patterns ok") } catch { logTrail("STORE /patterns error • \(error)") }
+        }
+    }
+
+    // MARK: - Store helpers
+    private static func makeDiskStoreClient() -> DiskFountainStoreClient? {
+        // Follow Engraver defaults for store location to keep data unified.
+        let env = ProcessInfo.processInfo.environment
+        let path = env["ENGRAVER_STORE_PATH"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let url: URL
+        if let raw = path, !raw.isEmpty {
+            if raw.hasPrefix("~") {
+                let home = FileManager.default.homeDirectoryForCurrentUser
+                let suffix = raw.dropFirst()
+                url = home.appendingPathComponent(String(suffix), isDirectory: true)
+            } else {
+                url = URL(fileURLWithPath: raw, isDirectory: true)
+            }
+        } else {
+            let home = FileManager.default.homeDirectoryForCurrentUser
+            url = home.appendingPathComponent(".fountain", isDirectory: true).appendingPathComponent("engraver-store", isDirectory: true)
+        }
+        return try? DiskFountainStoreClient(rootDirectory: url)
     }
 
     // MARK: - Role Health Check via Gateway

@@ -29,6 +29,11 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SIG="$(security find-generic-password -s FountainAI -a LAUNCHER_SIGNATURE -w 2>/dev/null || true)"
 if [[ -z "${SIG}" ]]; then SIG="B86D7CEE-24C4-4C4C-A107-8D0542D1965B"; fi
 
+# Ensure core services are up (Awareness, Bootstrap, Semantic Browser, Gateway)
+echo "› Ensuring local Fountain services (Awareness/Bootstrap/Browser/Gateway)…"
+DEV_UP_USE_BIN=1 DEV_UP_CHECKS=1 DEV_UP_NO_START_LOCAL_AGENT=1 \
+  bash "${REPO_ROOT}/Scripts/dev-up" --all || true
+
 # Resolve OpenAI API key from Keychain only; fail fast if missing
 OPENAI_KEY="$(security find-generic-password -s FountainAI -a OPENAI_API_KEY -w 2>/dev/null || true)"
 if [[ -z "${OPENAI_KEY}" ]]; then

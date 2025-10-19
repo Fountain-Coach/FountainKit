@@ -139,10 +139,7 @@ extension OpenAICompatibleChatProvider: CoreChatStreaming {
             }
         }
 
-        guard let bodyStream = resp.body else {
-            continuation.finish(throwing: ProviderError.invalidResponse)
-            return
-        }
+        let bodyStream = resp.body
 
         for try await chunk in bodyStream {
             pending.append(String(decoding: chunk.readableBytesView, as: UTF8.self))
@@ -212,9 +209,7 @@ extension OpenAICompatibleChatProvider: CoreChatStreaming {
         if let httpError = error as? HTTPClientError {
             return ProviderError.networkError(httpError.localizedDescription)
         }
-        if let nioError = error as? NIOConnectionError {
-            return ProviderError.networkError(nioError.localizedDescription)
-        }
+        // Newer NIO versions may not expose NIOConnectionError directly; fall back to generic mapping.
         let ns = error as NSError
         if ns.domain == NSURLErrorDomain { return ProviderError.networkError(ns.localizedDescription) }
         return error
@@ -223,7 +218,7 @@ extension OpenAICompatibleChatProvider: CoreChatStreaming {
 
 private extension HTTPClientResponse {
     func bodyData() async throws -> Data {
-        guard var stream = body else { return Data() }
+        let stream = body
         var collected = Data()
         collected.reserveCapacity(1024)
         for try await chunk in stream {
@@ -234,4 +229,3 @@ private extension HTTPClientResponse {
 }
 
 extension OpenAICompatibleChatProvider: @unchecked Sendable {}
-

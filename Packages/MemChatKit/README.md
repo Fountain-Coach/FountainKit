@@ -2,7 +2,7 @@
 
 A discreet, context‑aware chat library for Swift projects, built on FountainAI.
 
-- Semantic memory from a selected corpus (e.g., `segments` collection)
+- Semantic memory from a selected corpus (e.g., `segments` collection) via FountainStore (disk by default)
 - Per-chat isolated persistence (each session writes to a new chat corpus)
 - Discreet prompting: compact, factual context (no chain-of-thought)
 - OpenAI provider only (no local endpoints)
@@ -44,10 +44,15 @@ controller.send("Hello")
 - `chatCollection`: Target collection name for chat turns (`chat-turns`)
 - Provider: `model`, `OPENAI_API_KEY`, optional `OPENAI_API_URL` (OpenAI-only)
 - Observability: `FOUNTAIN_GATEWAY_URL`, `AWARENESS_URL`
+- Persistence: uses on-disk FountainStore by default. Override path with `ENGRAVER_STORE_PATH`.
 
 ## Continuity
 MemChatKit automatically loads the latest `continuity:*` page from the memory corpus,
 trims it, and injects it as a `ContinuityDigest` line in the system prompts.
+
+All chat turns, system prompts (including the per‑turn “Context used” summary), and optional
+analysis artifacts (baselines, drift, patterns, reflections) are persisted in FountainStore.
+If the Awareness service is not configured, MemChatKit persists these artifacts directly.
 
 ## Export/Import
 Use `MemChatExporter` to export a chat corpus (turns/attachments/patterns) to JSON

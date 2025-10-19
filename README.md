@@ -8,6 +8,7 @@ Quick dev helpers:
 - `Scripts/dev-up` – start core services (use `--check` for readiness)
 - `Scripts/dev-down` – stop services (use `--force` to clear ports)
 - `Scripts/dev-status` – show service/port/PID status at a glance
+- `Scripts/dev-servers-up.sh` – prebuild all servers, then start with readiness checks (`--no-extras`, `--release`)
 
 Quickstart (fk)
 - `Scripts/fk doctor` — verify swift, docker, jq, curl
@@ -37,6 +38,14 @@ Extras (started by `Scripts/dev-up --all`):
 - tool-server — port 8012 — readiness: GET `/_health` (200) or `/metrics`
 - semantic-browser-server — port 8007 — readiness: GET `/metrics` (or `/v1/health`) — now built in its own package `FountainApps-SemanticBrowser`
 - publishing-frontend — config-driven port — readiness: via upstream gateway plugin
+
+### Fast local servers
+
+- One-shot convenience: `Scripts/dev-servers-up.sh` prebuilds required server binaries and starts them with readiness checks.
+  - Flags: `--no-extras` (core only), `--release` (build/run release configuration).
+- Manual prebuild: `bash Scripts/dev-up prebuild --all` (or set `DEV_UP_CONFIGURATION=release`).
+- Start with checks: `DEV_UP_USE_BIN=1 DEV_UP_CHECKS=1 bash Scripts/dev-up --all`.
+- Launch MemChat app: `bash Scripts/launch-memchat-app.sh`.
 
 ## Repository layout
 

@@ -18,6 +18,7 @@ let package = Package(
             name: "MemChatKit",
             dependencies: [
                 .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "FountainRuntime", package: "FountainCore"),
                 .product(name: "FountainAIKit", package: "FountainAIKit"),
                 .product(name: "ProviderOpenAI", package: "FountainProviders"),
                 .product(name: "ProviderGateway", package: "FountainProviders"),

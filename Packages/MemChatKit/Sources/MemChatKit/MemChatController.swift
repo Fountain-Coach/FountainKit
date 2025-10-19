@@ -4,6 +4,7 @@ import FountainStoreClient
 import FountainAIKit
 import ProviderOpenAI
 import ProviderGateway
+import ApiClientsCore
 // Avoid importing generator/runtime directly here to reduce package fan-out.
 // We will use a minimal URLSession-based client to call the Semantic Browser's
 // query endpoints according to the curated OpenAPI spec.
@@ -185,24 +186,27 @@ public final class MemChatController: ObservableObject {
         if let browserBase = ProcessInfo.processInfo.environment["SEMANTIC_BROWSER_URL"],
            let baseURL = URL(string: browserBase) {
             do {
-                var comps = URLComponents(url: baseURL.appendingPathComponent("v1/segments"), resolvingAgainstBaseURL: false)!
-                var items: [URLQueryItem] = []
+                let rest = RESTClient(baseURL: baseURL, defaultHeaders: ["Accept": "application/json"]) // ApiClientsCore
                 let qString = query.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !qString.isEmpty { items.append(.init(name: "q", value: qString)) }
-                items.append(.init(name: "limit", value: String(limit * 3)))
-                comps.queryItems = items
-                var req = URLRequest(url: comps.url!)
-                req.httpMethod = "GET"
-                req.setValue("application/json", forHTTPHeaderField: "Accept")
-                let (data, resp) = try await URLSession.shared.data(for: req)
-                if let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) {
-                    if let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any], let arr = obj["items"] as? [[String: Any]] {
-                        let texts = arr.compactMap { $0["text"] as? String }
-                        let unique = Array(Set(texts)).prefix(limit)
-                        return unique.map { trim($0, limit: 320) }
-                    }
+                let url = rest.buildURL(path: "/v1/segments", query: [
+                    "q": qString.isEmpty ? nil : qString,
+                    "limit": String(limit * 3)
+                ])
+                guard let url else { throw APIError.invalidURL }
+                let start = Date()
+                let resp = try await rest.send(APIRequest(method: .GET, url: url))
+                let ms = Int(Date().timeIntervalSince(start) * 1000)
+                if let obj = try JSONSerialization.jsonObject(with: resp.data) as? [String: Any], let arr = obj["items"] as? [[String: Any]] {
+                    let texts = arr.compactMap { $0["text"] as? String }
+                    let unique = Array(Set(texts)).prefix(limit)
+                    logTrail("browser.segments ok • n=\(unique.count) ms=\(ms)")
+                    return unique.map { trim($0, limit: 320) }
                 }
-            } catch { /* fall through to store */ }
+                logTrail("browser.segments empty • ms=\(ms)")
+            } catch {
+                logTrail("browser.segments error • \(error)")
+                // fall through to store
+            }
         }
         do {
             let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -211,14 +215,18 @@ public final class MemChatController: ObservableObject {
             if !needle.isEmpty { q.text = String(needle) }
             // Prefer most recently updated segments if available
             q.sort = [("updatedAt", false)]
+            let start = Date()
             let resp = try await store.query(corpusId: config.memoryCorpusId, collection: "segments", query: q)
             struct SegmentDoc: Codable { let text: String }
             let texts: [String] = resp.documents.compactMap { data in
                 (try? JSONDecoder().decode(SegmentDoc.self, from: data))?.text
             }
             let unique = Array(Set(texts)).prefix(limit)
+            let ms = Int(Date().timeIntervalSince(start) * 1000)
+            logTrail("store.segments ok • n=\(unique.count) ms=\(ms)")
             return unique.map { trim($0, limit: 320) }
         } catch {
+            logTrail("store.segments error • \(error)")
             return []
         }
     }

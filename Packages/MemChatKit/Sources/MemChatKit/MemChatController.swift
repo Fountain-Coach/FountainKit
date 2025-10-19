@@ -332,26 +332,17 @@ public final class MemChatController: ObservableObject {
     private func persistReflection(from turn: EngraverChatTurn) async {
         if let base = config.awarenessURL { // primary: delegate to Awareness service
             do {
-                var req = URLRequest(url: base.appending(path: "/corpus/reflections"))
-                req.httpMethod = "POST"
-                req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                let body: [String: Any] = [
-                    "corpusId": config.memoryCorpusId,
-                    "reflectionId": turn.id.uuidString,
-                    "question": turn.prompt,
-                    "content": turn.answer
-                ]
-                req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+                let client = AwarenessClient(baseURL: base)
+                let req = Components.Schemas.ReflectionRequest(
+                    corpusId: config.memoryCorpusId,
+                    reflectionId: turn.id.uuidString,
+                    question: turn.prompt,
+                    content: turn.answer
+                )
                 let t0 = Date()
-                let (data, resp) = try await URLSession.shared.data(for: req)
-                let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
-                if (200...299).contains(code) {
-                    logTrail("POST /corpus/reflections \(code) in \(Int(Date().timeIntervalSince(t0)*1000)) ms")
-                    await refreshAwareness(reason: "post-reflection")
-                } else {
-                    let text = String(data: data, encoding: .utf8) ?? ""
-                    logTrail("POST /corpus/reflections \(code) • \(text)")
-                }
+                _ = try await client.addReflection(req)
+                logTrail("POST /corpus/reflections 200 in \(Int(Date().timeIntervalSince(t0)*1000)) ms")
+                await refreshAwareness(reason: "post-reflection")
             } catch {
                 logTrail("POST /corpus/reflections error • \(error)")
             }
@@ -388,26 +379,21 @@ public final class MemChatController: ObservableObject {
                                       snippets: [])
             let synthesized = await self.synthesizeBaselineText(ctx)
             if let base {
-                var req = URLRequest(url: base.appending(path: "/corpus/baseline"))
-                req.httpMethod = "POST"
-                req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                let body: [String: Any] = [
-                    "corpusId": config.memoryCorpusId,
-                    "baselineId": "baseline-\(Int(Date().timeIntervalSince1970))",
-                    "content": synthesized ?? content
-                ]
-                req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+                let client = AwarenessClient(baseURL: base)
+                let req = Components.Schemas.BaselineRequest(
+                    corpusId: config.memoryCorpusId,
+                    baselineId: "baseline-\(Int(Date().timeIntervalSince1970))",
+                    content: synthesized ?? content
+                )
                 let t0 = Date()
-                let (data, resp) = try await URLSession.shared.data(for: req)
-                let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
-                if (200...299).contains(code) {
+                do {
+                    _ = try await client.addBaseline(req)
                     didAutoBaseline = true
-                    logTrail("POST /corpus/baseline \(code) in \(Int(Date().timeIntervalSince(t0)*1000)) ms")
+                    logTrail("POST /corpus/baseline 200 in \(Int(Date().timeIntervalSince(t0)*1000)) ms")
                     lastBaselineText = synthesized ?? content
                     await refreshAwareness(reason: "post-baseline")
-                } else {
-                    let text = String(data: data, encoding: .utf8) ?? ""
-                    logTrail("POST /corpus/baseline \(code) • \(text)")
+                } catch {
+                    logTrail("POST /corpus/baseline error • \(error)")
                 }
             } else {
                 // Persist directly to store when Awareness is not configured

@@ -21,15 +21,14 @@ struct MemChatApp: App {
         #else
         let key: String? = nil
         #endif
-        let local = env["ENGRAVER_LOCAL_LLM_URL"] ?? "http://127.0.0.1:11434/v1/chat/completions"
-        _config = State(initialValue: MemChatConfiguration(memoryCorpusId: memory, model: "gpt-4o-mini", openAIAPIKey: key, openAIEndpoint: nil, localCompatibleEndpoint: URL(string: local)))
+        _config = State(initialValue: MemChatConfiguration(memoryCorpusId: memory, model: "gpt-4o-mini", openAIAPIKey: key, openAIEndpoint: nil, localCompatibleEndpoint: nil))
     }
     var body: some Scene {
         WindowGroup {
             MemChatRootView(config: $config, controllerHolder: controllerHolder) { showSettings = true }
             .frame(minWidth: 640, minHeight: 480)
             .sheet(isPresented: $showSettings) {
-                SettingsView(memoryCorpusId: config.memoryCorpusId, openAIKey: config.openAIAPIKey ?? "", localLLMURL: config.localCompatibleEndpoint?.absoluteString ?? "http://127.0.0.1:11434/v1/chat/completions", model: config.model) { newCfg in
+                SettingsView(memoryCorpusId: config.memoryCorpusId, openAIKey: config.openAIAPIKey ?? "", model: config.model) { newCfg in
                     self.config = newCfg
                     controllerHolder.recreate(with: newCfg)
                 }

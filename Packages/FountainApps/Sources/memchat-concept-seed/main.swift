@@ -61,7 +61,7 @@ struct MemChatConceptSeed {
         - Grounded answers: Retrieve top semantic snippets from the user’s corpus (e.g., “segments”).
         - Per‑chat isolation: Every chat uses a fresh corpus for transcript + attachments.
         - Optional transparency: Show gateway trace on demand (reason → execute → tools).
-        - Strong defaults: Works offline with local OpenAI‑compatible servers; uses OpenAI when key is set.
+        - Provider policy: OpenAI only. No local endpoints.
 
         Non‑Goals
         - No heavy project dashboards; keep it conversational.
@@ -69,7 +69,7 @@ struct MemChatConceptSeed {
 
         3) Architecture
         - UI: SwiftUI single‑window chat pane with streaming tokens.
-        - Providers: OpenAICompatibleChatProvider (OPENAI_API_KEY or local compat endpoint).
+        - Providers: OpenAICompatibleChatProvider (requires OPENAI_API_KEY).
         - Memory augmentation:
           • Query: text search over segments in the selected memory corpus.
           • Snippets: top N small excerpts, truncated and re‑phrased if needed.
@@ -118,17 +118,16 @@ struct MemChatConceptSeed {
           • Session lifecycle endpoints; CI hooks; sharing flows.
 
         9) Success Metrics
-        - Latency: P50 < 1.0s streaming start (local), < 2.0s (hosted).
+        - Latency: P50 < 2.0s streaming start with OpenAI.
         - Relevance: user‑rated ≥ 4/5 for groundedness.
         - Zero unexpected disclosures: no latent chain‑of‑thought leaks.
 
         10) Environment & Config
         - FOUNTAINSTORE_DIR: repo‑local store path.
-        - OPENAI_API_KEY / OPENAI_API_URL or ENGRAVER_LOCAL_LLM_URL.
+        - OPENAI_API_KEY / OPENAI_API_URL.
         - FOUNTAIN_GATEWAY_URL (trace), AWARENESS_URL (optional counts).
 
         Seeded by memchat-concept-seed into corpus: \(corpusId)
         """
     }
 }
-

@@ -357,7 +357,8 @@ let package = Package(
             name: "memchat-app",
             dependencies: [
                 .product(name: "LauncherSignature", package: "FountainCore"),
-                .product(name: "MemChatKit", package: "MemChatKit")
+                .product(name: "MemChatKit", package: "MemChatKit"),
+                .product(name: "SecretStore", package: "swift-secretstore")
             ],
             path: "Sources/memchat-app"
         ),

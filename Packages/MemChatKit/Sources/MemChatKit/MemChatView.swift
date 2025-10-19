@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(AppKit)
+import AppKit
+#endif
 import FountainAIKit
 
 /// Drop-in SwiftUI view for MemChat.
@@ -24,6 +27,17 @@ public struct MemChatView: View {
                 Button("New Chat") { controller.newChat() }
             }
             .padding(.top, 4)
+
+            if let err = controller.lastError, !err.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
+                    Text(err).font(.caption)
+                    Spacer()
+                }
+                .padding(8)
+                .background(Color.yellow.opacity(0.12))
+                .cornerRadius(6)
+            }
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
@@ -66,6 +80,14 @@ public struct MemChatView: View {
             }
         }
         .padding(12)
-        .onAppear { inputFocused = true }
+        .onAppear {
+            inputFocused = true
+            #if canImport(AppKit)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                NSApplication.shared.activate(ignoringOtherApps: true)
+            }
+            #endif
+        }
+        .onTapGesture { inputFocused = true }
     }
 }

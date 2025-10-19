@@ -16,6 +16,7 @@ public final class MemChatController: ObservableObject {
     @Published public private(set) var streamingText: String = ""
     @Published public private(set) var state: EngraverChatState = .idle
     @Published public private(set) var chatCorpusId: String
+    @Published public private(set) var lastError: String? = nil
 
     private let vm: EngraverChatViewModel
     private let store: FountainStoreClient
@@ -88,8 +89,14 @@ public final class MemChatController: ObservableObject {
 
         // Bind outputs
         vm.$turns.sink { [weak self] in self?.turns = $0 }.store(in: &cancellables)
-        vm.$activeTokens.sink { [weak self] tokens in self?.streamingText = tokens.joined() }.store(in: &cancellables)
+        vm.$activeTokens
+            .map { $0.joined() }
+            .removeDuplicates()
+            .debounce(for: .milliseconds(60), scheduler: DispatchQueue.main)
+            .sink { [weak self] text in self?.streamingText = text }
+            .store(in: &cancellables)
         vm.$state.sink { [weak self] s in self?.state = s }.store(in: &cancellables)
+        vm.$lastError.sink { [weak self] e in self?.lastError = e }.store(in: &cancellables)
 
         Task { await self.loadContinuityDigest() }
     }

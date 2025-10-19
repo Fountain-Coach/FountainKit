@@ -19,6 +19,9 @@ Packages/**/.build/
 .fountain/
 logs/
 
+# App bundles and distribution artifacts
+Dist/
+
 # Local embedded repos (do not track as submodules)
 External/LocalAgent/
 External/swiftcurseskit/

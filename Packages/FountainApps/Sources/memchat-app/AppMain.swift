@@ -29,7 +29,7 @@ struct MemChatApp: App {
             MemChatRootView(config: $config, controllerHolder: controllerHolder) { showSettings = true }
             .frame(minWidth: 640, minHeight: 480)
             .sheet(isPresented: $showSettings) {
-                SettingsView(memoryCorpusId: config.memoryCorpusId, openAIKey: config.openAIAPIKey ?? "", localLLMURL: config.localCompatibleEndpoint?.absoluteString ?? "http://127.0.0.1:11434/v1/chat/completions") { newCfg in
+                SettingsView(memoryCorpusId: config.memoryCorpusId, openAIKey: config.openAIAPIKey ?? "", localLLMURL: config.localCompatibleEndpoint?.absoluteString ?? "http://127.0.0.1:11434/v1/chat/completions", model: config.model) { newCfg in
                     self.config = newCfg
                     controllerHolder.recreate(with: newCfg)
                 }
@@ -52,8 +52,10 @@ struct MemChatRootView: View {
     @ObservedObject var controllerHolder: ControllerHolder
     var openSettings: () -> Void
     @State private var showPlan = false
+    @State private var planLoading = false
     @State private var planText: String = ""
     @State private var showMemory = false
+    @State private var memoryLoading = false
     @State private var pages: [MemChatController.PageItem] = []
     @State private var memoryText: String = ""
     @State private var selectedPage: MemChatController.PageItem?
@@ -78,22 +80,28 @@ struct MemChatRootView: View {
             MemChatView(controller: controllerHolder.controller)
         }
         .sheet(isPresented: $showPlan) {
-            ScrollView { Text(planText).frame(maxWidth: .infinity, alignment: .leading).padding() }
-                .frame(minWidth: 560, minHeight: 420)
+            ZStack {
+                ScrollView { Text(planText).frame(maxWidth: .infinity, alignment: .leading).padding() }
+                if planLoading { ProgressView("Loading plan…").controlSize(.large) }
+            }
+            .frame(minWidth: 560, minHeight: 420)
         }
         .sheet(isPresented: $showMemory) {
-            HStack(spacing: 0) {
-                List(pages, selection: $selectedPage) { p in Text(p.title).tag(p as MemChatController.PageItem?) }
-                    .frame(minWidth: 220)
-                Divider()
-                ScrollView { Text(memoryText).frame(maxWidth: .infinity, alignment: .leading).padding() }
+            ZStack {
+                HStack(spacing: 0) {
+                    List(pages, selection: $selectedPage) { p in Text(p.title).tag(p as MemChatController.PageItem?) }
+                        .frame(minWidth: 220)
+                    Divider()
+                    ScrollView { Text(memoryText).frame(maxWidth: .infinity, alignment: .leading).padding() }
+                }
+                if memoryLoading { ProgressView("Loading memory…").controlSize(.large) }
             }
             .frame(minWidth: 720, minHeight: 500)
             .onChange(of: selectedPage) { newVal in Task { await loadSelectedPage() } }
         }
     }
-    private func openPlan() async { planText = await controllerHolder.controller.loadPlanText() ?? "(No plan found)"; showPlan = true }
-    private func openMemory() async { pages = await controllerHolder.controller.listMemoryPages(limit: 200); selectedPage = pages.first; await loadSelectedPage(); showMemory = true }
+    private func openPlan() async { planLoading = true; showPlan = true; defer { planLoading = false }; planText = await controllerHolder.controller.loadPlanText() ?? "(No plan found)" }
+    private func openMemory() async { memoryLoading = true; showMemory = true; defer { memoryLoading = false }; pages = await controllerHolder.controller.listMemoryPages(limit: 200); selectedPage = pages.first; await loadSelectedPage() }
     private func loadSelectedPage() async { if let pid = selectedPage?.id { memoryText = await controllerHolder.controller.fetchPageText(pageId: pid) ?? "(No content)" } }
     private func testConnection() async {
         switch await controllerHolder.controller.testConnection() {

@@ -7,6 +7,7 @@ struct SettingsView: View {
     @State var memoryCorpusId: String
     @State var openAIKey: String
     @State var localLLMURL: String
+    @State var model: String
     var apply: (MemChatConfiguration) -> Void
 
     var body: some View {
@@ -15,6 +16,7 @@ struct SettingsView: View {
             Divider()
             Form {
                 LabeledContent("Memory Corpus") { TextField("memchat-app", text: $memoryCorpusId).textFieldStyle(.roundedBorder) }
+                LabeledContent("Model") { TextField("gpt-4o-mini or llama3.1", text: $model).textFieldStyle(.roundedBorder) }
                 LabeledContent("OpenAI API Key") { SecureField("sk-...", text: $openAIKey).textFieldStyle(.roundedBorder) }
                 LabeledContent("Local LLM URL") { TextField("http://127.0.0.1:11434/v1/chat/completions", text: $localLLMURL).textFieldStyle(.roundedBorder) }
             }.formStyle(.grouped)
@@ -46,7 +48,7 @@ struct SettingsView: View {
         #endif
         let cfg = MemChatConfiguration(
             memoryCorpusId: memoryCorpusId,
-            model: "gpt-4o-mini",
+            model: model.isEmpty ? (openAIKey.isEmpty ? "llama3.1" : "gpt-4o-mini") : model,
             openAIAPIKey: openAIKey.isEmpty ? nil : openAIKey,
             openAIEndpoint: nil,
             localCompatibleEndpoint: URL(string: localLLMURL),
@@ -57,4 +59,3 @@ struct SettingsView: View {
         dismiss()
     }
 }
-

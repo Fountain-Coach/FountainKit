@@ -23,6 +23,8 @@ public struct MemChatConfiguration: Sendable, Equatable {
     public var showSemanticPanel: Bool
     public var showSources: Bool
     public var strictMemoryMode: Bool
+    public var deepSynthesis: Bool
+    public var depthLevel: Int
     // Semantic Browser defaults
     public var browserDefaultMode: String?
 
@@ -39,6 +41,8 @@ public struct MemChatConfiguration: Sendable, Equatable {
         showSemanticPanel: Bool = true,
         showSources: Bool = false,
         strictMemoryMode: Bool = true,
+        deepSynthesis: Bool = false,
+        depthLevel: Int = 1,
         browserDefaultMode: String? = ProcessInfo.processInfo.environment["SEMANTIC_BROWSER_MODE"]
     ) {
         self.memoryCorpusId = memoryCorpusId
@@ -53,6 +57,8 @@ public struct MemChatConfiguration: Sendable, Equatable {
         self.showSemanticPanel = showSemanticPanel
         self.showSources = showSources
         self.strictMemoryMode = strictMemoryMode
+        self.deepSynthesis = deepSynthesis
+        self.depthLevel = max(1, min(depthLevel, 3))
         self.browserDefaultMode = browserDefaultMode
     }
 }

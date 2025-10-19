@@ -45,6 +45,7 @@ public final class MemChatController: ObservableObject {
     private var lastBaselineText: String? = nil
     private var analysisCounter: Int = 0
     private let browserConfig: SeedingConfiguration.Browser?
+    private var lastArtifactsByHost: [String: Date] = [:]
 
     public struct InjectedContext: Sendable, Equatable {
         public let continuity: String?
@@ -196,6 +197,14 @@ public final class MemChatController: ObservableObject {
         self.config.strictMemoryMode = enabled
     }
 
+    public func setDeepSynthesis(_ enabled: Bool) {
+        self.config.deepSynthesis = enabled
+    }
+
+    public func setDepthLevel(_ level: Int) {
+        self.config.depthLevel = max(1, min(level, 3))
+    }
+
 public func openChatSession(_ id: UUID) {
     vm.openPersistedSession(id: id)
 }
@@ -254,26 +263,42 @@ public func send(_ text: String) {
                 // When we have host coverage, make the directive explicit and include recent page titles for stronger grounding.
                 let cov = await self.fetchHostCoverage(host: h, limit: 8)
                 if cov.pages > 0 {
+                    // Ensure persisted artifacts exist so we have concrete memory payloads
+                    await self.ensureHostMemoryArtifacts(host: h)
                     let recents = cov.recent.map { "• \($0.title) — \($0.url)" }.joined(separator: "\n")
                     if config.strictMemoryMode {
-                        enriched.append("""
+                        if config.deepSynthesis {
+                            enriched.append("""
+                    MemoryCoverage(host=\(h))
+                    - Pages: \(cov.pages)
+                    - Segments: \(cov.segments)
+                    - Recent pages:\n\(recents)
+                    OutputPolicy (Deep):
+                    - Produce a multi-section brief titled "As of our stored snapshot of \(h)".
+                    - 3–5 sections; each section has 2–4 bullets.
+                    - Every bullet MUST end with a citation [Title](URL) from the evidence.
+                    - Prefer specificity over generalities; avoid hedging.
+                    """)
+                        } else {
+                            enriched.append("""
                     MemoryCoverage(host=\(h))
                     - Pages: \(cov.pages)
                     - Segments: \(cov.segments)
                     - Recent pages:\n\(recents)
                     OutputPolicy:
                     - Do NOT say "I don't have that in memory".
-                    - Instead say: "As of our stored snapshot of \(h), here is the current overview:" then give 4–7 bullets.
-                    - Each bullet: Topic — one concise sentence, then cite [Title](URL) of a relevant page.
+                    - Instead say: "As of our stored snapshot of \(h), here is the current overview:" then give 6–9 bullets.
+                    - Every bullet MUST end with a citation [Title](URL) from the evidence.
                     - Prefer specificity over generalities; avoid hedging.
                     """)
+                        }
                     }
                 }
             }
             // If strict mode with host context, prefer explicit evidence packet
             if let h = host, config.strictMemoryMode {
-                let evidence = await self.fetchRecentCitedSegments(host: h, limit: 8)
-                let cited = evidence.map { "• \(self.trim($0.text, limit: 300)) — [\($0.title)](\($0.url))" }
+                let evidence = await self.fetchCitedEvidence(host: h, depthLevel: self.config.depthLevel)
+                let cited = evidence.map { "• \(self.trim($0.text, limit: 300)) — [\(self.trim($0.title, limit: 120))](\($0.url))" }
                 if !cited.isEmpty {
                     enriched.append("Evidence Packet (host=\(h)):\n" + cited.joined(separator: "\n"))
                     await MainActor.run {
@@ -707,6 +732,214 @@ public func send(_ text: String) {
             logTrail("post-index segmentation error • \(error)")
             return 0
         }
+    }
+
+    // MARK: - Evidence and Baseline/Drift/Patterns/Reflection calculus
+
+    // Scale evidence size based on a 1..3 depth level
+    private func fetchCitedEvidence(host: String, depthLevel: Int) async -> [(text: String, title: String, url: String)] {
+        let level = max(1, min(depthLevel, 3))
+        let limits: [Int] = [8, 16, 32]
+        let limit = limits[level - 1]
+        return await fetchRecentCitedSegments(host: host, limit: limit)
+    }
+
+    // Compose a baseline from cited evidence; prefer LLM, fallback to deterministic bullets.
+    private func composeBaseline(from evidence: [(text: String, title: String, url: String)], host: String, deep: Bool) async -> String {
+        guard !evidence.isEmpty else { return "" }
+        if let selection = ProviderResolver.selectProvider(apiKey: config.openAIAPIKey,
+                                                          openAIEndpoint: config.openAIEndpoint,
+                                                          localEndpoint: nil) {
+            let client = OpenAICompatibleChatProvider(apiKey: selection.usesAPIKey ? config.openAIAPIKey : nil,
+                                                      endpoint: selection.endpoint)
+            let header = deep ? "Create a Deep Baseline for \(host)" : "Create a Baseline for \(host)"
+            let system = "You write concise, factual bullets from provided paragraph evidence. Each bullet is a complete sentence and MUST end with a citation [Title](URL). No hedging or generic language."
+            let packet = evidence.map { "• \(trim($0.text, limit: 400)) — [\(trim($0.title, limit: 120))](\($0.url))" }.joined(separator: "\n")
+            let ask = """
+            \(header).
+            Requirements:
+            - 6–9 bullets (if deep: up to 12)
+            - Cover what it is, who it’s for, what it offers, how it works, pricing/plans if present, proof (customers/case studies) if present
+            - Every bullet MUST end with a citation [Title](URL) from the evidence
+            Evidence:\n\(packet)
+            """
+            let req = CoreChatRequest(model: config.model, messages: [
+                .init(role: .system, content: system),
+                .init(role: .user, content: ask)
+            ])
+            if let answer = try? await client.complete(request: req).answer.trimmingCharacters(in: .whitespacesAndNewlines), !answer.isEmpty {
+                return answer
+            }
+        }
+        // Deterministic fallback: pick first N evidence items by diversity of titles
+        var seen: Set<String> = []
+        var bullets: [String] = []
+        for e in evidence {
+            let key = e.title.lowercased()
+            if seen.contains(key) { continue }
+            seen.insert(key)
+            let sentence = trim(e.text, limit: 260)
+            bullets.append("• \(sentence) [\(trim(e.title, limit: 80))](\(e.url))")
+            if bullets.count >= (deep ? 12 : 9) { break }
+        }
+        return bullets.joined(separator: "\n")
+    }
+
+    // Compute a typed drift between two baselines deterministically; uses simple token alignment
+    private func computeTypedDriftDeterministic(new: String, old: String) -> String {
+        func splitBullets(_ s: String) -> [String] {
+            s.split(whereSeparator: { $0 == "\n" || $0 == "\r" }).map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        }
+        func norm(_ s: String) -> Set<String> {
+            let lowered = s.lowercased()
+            let cleaned = lowered.replacingOccurrences(of: "[^a-z0-9 ]", with: " ", options: .regularExpression)
+            let tokens = cleaned.split(separator: " ").map(String.init).filter { $0.count > 2 }
+            return Set(tokens)
+        }
+        let newB = splitBullets(new)
+        let oldB = splitBullets(old)
+        var usedOld = Set<Int>()
+        var added: [String] = []
+        var changed: [String] = []
+        var removed: [String] = []
+        // Match new to old
+        for nb in newB {
+            let nset = norm(nb)
+            var bestIdx: Int? = nil
+            var bestScore = 0
+            for (i, ob) in oldB.enumerated() where !usedOld.contains(i) {
+                let oset = norm(ob)
+                let score = nset.intersection(oset).count
+                if score > bestScore { bestScore = score; bestIdx = i }
+            }
+            if let idx = bestIdx, bestScore > 2 {
+                usedOld.insert(idx)
+                let ob = oldB[idx]
+                if nb != ob {
+                    changed.append("Changed: \(nb)")
+                }
+            } else {
+                added.append("Added: \(nb)")
+            }
+        }
+        for (i, ob) in oldB.enumerated() where !usedOld.contains(i) {
+            removed.append("Removed: \(ob)")
+        }
+        let header = "Drift since last baseline: \(added.count) added, \(changed.count) changed, \(removed.count) removed."
+        return ([header] + added + changed + removed).joined(separator: "\n")
+    }
+
+    private func synthesizeReflection(drift: String, patterns: String, host: String) async -> String {
+        if let selection = ProviderResolver.selectProvider(apiKey: config.openAIAPIKey,
+                                                          openAIEndpoint: config.openAIEndpoint,
+                                                          localEndpoint: nil) {
+            let client = OpenAICompatibleChatProvider(apiKey: selection.usesAPIKey ? config.openAIAPIKey : nil,
+                                                      endpoint: selection.endpoint)
+            let system = "You write short analytical reflections in crisp sentences using provided drift and patterns. Cite when present."
+            let prompt = """
+            Write 4–7 sentences reflecting on the current state of \(host), based on the drift and patterns below. Be specific. Use citations already in the bullets.
+            Drift:\n\(drift)\n\nPatterns:\n\(patterns)
+            """
+            let req = CoreChatRequest(model: config.model, messages: [ .init(role: .system, content: system), .init(role: .user, content: prompt) ])
+            if let ans = try? await client.complete(request: req).answer.trimmingCharacters(in: .whitespacesAndNewlines), !ans.isEmpty { return ans }
+        }
+        // Fallback: simple summary
+        let lines = drift.split(separator: "\n").prefix(6)
+        return (["Reflection on \(host):"] + lines).joined(separator: "\n")
+    }
+
+    // Ensure we have at least one baseline and recent artifacts; throttle per host
+    private func ensureHostMemoryArtifacts(host: String) async {
+        let now = Date()
+        if let last = lastArtifactsByHost[host], now.timeIntervalSince(last) < 120 { return }
+        defer { lastArtifactsByHost[host] = now }
+        do {
+            // Count baselines
+            let (bTotal, _) = try await store.listBaselines(corpusId: config.memoryCorpusId, limit: 2, offset: 0)
+            if bTotal == 0 {
+                let ev = await fetchCitedEvidence(host: host, depthLevel: 1)
+                let baseline = await composeBaseline(from: ev, host: host, deep: false)
+                if !baseline.isEmpty {
+                    await persistBaseline(content: baseline)
+                    lastBaselineText = baseline
+                }
+            }
+        } catch { /* ignore */ }
+    }
+
+    // Persist helpers (Awareness → Store fallback)
+    private func persistBaseline(content: String) async {
+        if let base = config.awarenessURL {
+            do {
+                let client = AwarenessClient(baseURL: base)
+                let req = Components.Schemas.BaselineRequest(corpusId: config.memoryCorpusId,
+                                                             baselineId: "baseline-\(Int(Date().timeIntervalSince1970))",
+                                                             content: content)
+                _ = try await client.addBaseline(req)
+                logTrail("POST /corpus/baseline 200")
+            } catch { logTrail("POST /corpus/baseline error • \(error)") }
+        }
+        do {
+            let rec = Baseline(corpusId: config.memoryCorpusId, baselineId: "baseline-\(Int(Date().timeIntervalSince1970))", content: content)
+            _ = try await store.addBaseline(rec)
+            logTrail("STORE /baselines ok")
+        } catch { logTrail("STORE /baselines error • \(error)") }
+    }
+
+    private func persistDrift(content: String) async {
+        if let base = config.awarenessURL { await postDrift(to: base, content: content) }
+        else { do { _ = try await store.addDrift(Drift(corpusId: config.memoryCorpusId, driftId: "drift-\(Int(Date().timeIntervalSince1970))", content: content)); logTrail("STORE /drifts ok") } catch { logTrail("STORE /drifts error • \(error)") } }
+    }
+
+    private func persistPatterns(content: String) async {
+        if let base = config.awarenessURL { await postPatterns(to: base, content: content) }
+        else { do { _ = try await store.addPatterns(Patterns(corpusId: config.memoryCorpusId, patternsId: "patterns-\(Int(Date().timeIntervalSince1970))", content: content)); logTrail("STORE /patterns ok") } catch { logTrail("STORE /patterns error • \(error)") } }
+    }
+
+    private func persistReflection(content: String) async {
+        if let base = config.awarenessURL {
+            do {
+                let client = AwarenessClient(baseURL: base)
+                let req = Components.Schemas.ReflectionRequest(corpusId: config.memoryCorpusId,
+                                                              reflectionId: "reflection-\(Int(Date().timeIntervalSince1970))",
+                                                              question: "tracking-cycle",
+                                                              content: content)
+                _ = try await client.addReflection(req)
+                logTrail("POST /corpus/reflections 200")
+            } catch { logTrail("POST /corpus/reflections error • \(error)") }
+        } else {
+            do { _ = try await store.addReflection(Reflection(corpusId: config.memoryCorpusId, reflectionId: "reflection-\(Int(Date().timeIntervalSince1970))", question: "tracking-cycle", content: content)); logTrail("STORE /reflections ok") } catch { logTrail("STORE /reflections error • \(error)") }
+        }
+    }
+
+    /// Public entry: build baseline at given level (1..3), then compute drift/patterns/reflection and persist all.
+    public func buildBaselineAndArtifacts(for host: String, level: Int = 3) async -> Bool {
+        let depth = max(1, min(level, 3))
+        let evidence = await fetchCitedEvidence(host: host, depthLevel: depth)
+        guard !evidence.isEmpty else { logTrail("baseline: no evidence for host=\(host)"); return false }
+        let baseline = await composeBaseline(from: evidence, host: host, deep: depth >= 2)
+        guard !baseline.isEmpty else { logTrail("baseline: compose returned empty") ; return false }
+        // Persist baseline
+        await persistBaseline(content: baseline)
+        // Compute drift against last baseline if present
+        var driftText: String = ""
+        if let prev = lastBaselineText, !prev.isEmpty {
+            driftText = computeTypedDriftDeterministic(new: baseline, old: prev)
+            await persistDrift(content: driftText)
+        }
+        lastBaselineText = baseline
+        // Patterns
+        let ctx = InjectedContext(continuity: continuityDigest,
+                                  awarenessSummary: vm.awarenessSummaryText,
+                                  awarenessHistory: vm.awarenessHistorySummary,
+                                  snippets: [], baselines: [], drifts: [], patterns: [])
+        let patterns = await synthesizePatternsText(ctx) ?? ""
+        if !patterns.isEmpty { await persistPatterns(content: patterns) }
+        // Reflection
+        let reflection = await synthesizeReflection(drift: driftText, patterns: patterns, host: host)
+        if !reflection.isEmpty { await persistReflection(content: reflection) }
+        logTrail("baseline cycle complete • host=\(host) level=\(level)")
+        return true
     }
 
     private func ensureAwarenessContext(timeoutMs: Int = 1800) async {

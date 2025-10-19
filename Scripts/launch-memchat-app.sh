@@ -4,9 +4,10 @@ set -euo pipefail
 CONFIGURATION="debug"
 if [[ "${1:-}" == "release" ]]; then CONFIGURATION="release"; fi
 
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 echo "› Building memchat-app (${CONFIGURATION})"
-swift build --configuration "${CONFIGURATION}" --product memchat-app
-BIN_PATH="$(swift build --configuration "${CONFIGURATION}" --show-bin-path)"
+swift build --package-path "${REPO_ROOT}/Packages/FountainApps" --configuration "${CONFIGURATION}" --product memchat-app
+BIN_PATH="$(swift build --package-path "${REPO_ROOT}/Packages/FountainApps" --configuration "${CONFIGURATION}" --show-bin-path)"
 EXECUTABLE="${BIN_PATH}/memchat-app"
 
 if [[ ! -x "${EXECUTABLE}" ]]; then
@@ -52,7 +53,7 @@ cat > "${CONTENTS}/Info.plist" <<PLIST
     <key>FOUNTAINSTORE_DIR</key><string>${STORE_DIR}</string>
     <key>MEMORY_CORPUS_ID</key><string>${MEMORY_CORPUS_ID:-memchat-app}</string>
     <key>OPENAI_API_URL</key><string>${OPENAI_API_URL:-}</string>
-    <key>ENGRAVER_LOCAL_LLM_URL</key><string>${ENGRAVER_LOCAL_LLM_URL:-}</string>
+    <!-- Local LLM disabled by policy -->
     <key>FOUNTAIN_GATEWAY_URL</key><string>${FOUNTAIN_GATEWAY_URL:-}</string>
     <key>AWARENESS_URL</key><string>${AWARENESS_URL:-}</string>
     <key>LAUNCHER_SIGNATURE</key><string>${SIG}</string>
@@ -71,4 +72,3 @@ fi
 
 echo "› Launching ${APP_BUNDLE}"
 open "${APP_BUNDLE}"
-

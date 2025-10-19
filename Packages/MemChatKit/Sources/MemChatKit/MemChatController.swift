@@ -245,7 +245,9 @@ public final class MemChatController: ObservableObject {
 
             let sys = self.vm.makeSystemPrompts(base: enriched)
             await MainActor.run {
-                self.vm.send(prompt: text, systemPrompts: sys, preferStreaming: true, corpusOverride: self.chatCorpusId)
+                // Persist chats into the configured memory corpus so past sessions
+                // are discoverable and listable. No per-chat corpus override.
+                self.vm.send(prompt: text, systemPrompts: sys, preferStreaming: true, corpusOverride: nil)
             }
         }
     }

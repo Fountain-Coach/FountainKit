@@ -64,9 +64,7 @@ public struct MemChatTeatroView: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("MemChat Teatro").font(.title3).bold()
-                Text(controller.chatCorpusId)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if let title = controller.corpusTitle { Text(title).font(.caption).foregroundStyle(.secondary) }
             }
             Spacer()
             Text(providerLabel)

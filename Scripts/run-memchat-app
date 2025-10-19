@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Launches the MemChat macOS app from the FountainApps package.
+# - Builds the product if needed
+# - Wires common environment (OPENAI_API_KEY from Keychain if available)
+# - Logs to .fountain/logs/memchat-app.log
+
+REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)
+LOG_DIR="$REPO_ROOT/.fountain/logs"; PID_DIR="$REPO_ROOT/.fountain/pids"
+mkdir -p "$LOG_DIR" "$PID_DIR"
+
+CONFIGURATION="${CONFIGURATION:-debug}"
+PKG_PATH="$REPO_ROOT/Packages/FountainApps"
+PRODUCT="memchat-app"
+LOG_FILE="$LOG_DIR/$PRODUCT.log"
+PID_FILE="$PID_DIR/$PRODUCT.pid"
+
+# Export launcher signature for guarded binaries
+export LAUNCHER_SIGNATURE="${LAUNCHER_SIGNATURE:-B86D7CEE-24C4-4C4C-A107-8D0542D1965B}"
+
+# Populate OPENAI_API_KEY from Keychain when available (macOS)
+if [[ -z "${OPENAI_API_KEY:-}" ]] && command -v security >/dev/null 2>&1; then
+  if security find-generic-password -s FountainAI -a OPENAI_API_KEY -w >/dev/null 2>&1; then
+    export OPENAI_API_KEY="$(security find-generic-password -s FountainAI -a OPENAI_API_KEY -w 2>/dev/null || true)"
+  fi
+fi
+
+# Optional env knobs
+export MEMORY_CORPUS_ID="${MEMORY_CORPUS_ID:-memchat-app}"
+export FOUNTAIN_GATEWAY_URL="${FOUNTAIN_GATEWAY_URL:-http://127.0.0.1:8010}"
+
+echo "[run-memchat-app] Building $PRODUCT ($CONFIGURATION)…"
+swift build --package-path "$PKG_PATH" --configuration "$CONFIGURATION" --product "$PRODUCT"
+
+BIN_DIR="$PKG_PATH/.build/$CONFIGURATION"
+ALT_BIN_DIR="$PKG_PATH/.build/arm64-apple-macosx/$CONFIGURATION"
+
+if [[ -x "$ALT_BIN_DIR/$PRODUCT" ]]; then BIN="$ALT_BIN_DIR/$PRODUCT"; fi
+if [[ -z "${BIN:-}" && -x "$BIN_DIR/$PRODUCT" ]]; then BIN="$BIN_DIR/$PRODUCT"; fi
+
+if [[ -z "${BIN:-}" ]]; then
+  echo "[run-memchat-app] Could not resolve binary path; falling back to swift run…"
+  : >"$LOG_FILE"
+  nohup env swift run --package-path "$PKG_PATH" --configuration "$CONFIGURATION" "$PRODUCT" >>"$LOG_FILE" 2>&1 &
+  echo $! >"$PID_FILE"
+  echo "[run-memchat-app] Launched via swift run (pid $(cat "$PID_FILE")); logs → $LOG_FILE"
+  exit 0
+fi
+
+: >"$LOG_FILE"
+echo "[run-memchat-app] Launching $BIN → $LOG_FILE"
+nohup "$BIN" >>"$LOG_FILE" 2>&1 &
+echo $! >"$PID_FILE"
+echo "[run-memchat-app] Started (pid $(cat "$PID_FILE"))"
+

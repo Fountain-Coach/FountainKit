@@ -224,9 +224,16 @@ public final class MemChatController: ObservableObject {
             // Delete then recreate
             try? await store.deleteCorpus(config.memoryCorpusId)
             _ = try await store.createCorpus(config.memoryCorpusId)
-            // Also purge Awareness corpus if configured
+            // Also purge Awareness corpus if configured, then re-init
             if let base = config.awarenessURL {
-                do { let client = AwarenessClient(baseURL: base); try await client.deleteCorpus(corpusID: config.memoryCorpusId); logTrail("awareness purge ok") } catch { logTrail("awareness purge error • \(error)") }
+                do {
+                    let client = AwarenessClient(baseURL: base)
+                    try await client.deleteCorpus(corpusID: config.memoryCorpusId)
+                    _ = try? await client.initializeCorpus(.init(corpusId: config.memoryCorpusId))
+                    logTrail("awareness purge ok")
+                } catch {
+                    logTrail("awareness purge error • \(error)")
+                }
             }
             // Reset local state
             await MainActor.run {
@@ -246,6 +253,9 @@ public final class MemChatController: ObservableObject {
                 self.vm.startNewSession()
             }
             logTrail("corpus reset ok • id=\(config.memoryCorpusId)")
+            if self.config.awarenessURL != nil {
+                await self.refreshAwareness(reason: "reset")
+            }
             return true
         } catch {
             await MainActor.run { self.lastError = "Reset failed: \(error)" }
@@ -929,7 +939,7 @@ public func openChatSession(_ id: UUID) {
             out.append("Observed patterns: \(tops).")
         }
         if let first = drift.split(separator: "\n").first, first.lowercased().contains("drift since") {
-            out.insert(1, String(first))
+            out.insert(String(first), at: 1)
         }
         return out.prefix(7).joined(separator: "\n")
     }

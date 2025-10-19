@@ -258,7 +258,7 @@ public func openChatSession(_ id: UUID) {
     vm.openPersistedSession(id: id)
 }
 
-public func send(_ text: String) {
+    public func send(_ text: String) {
         var base: [String] = []
         if let digest = continuityDigest, !digest.isEmpty {
             base.append("ContinuityDigest: \(digest)")
@@ -294,7 +294,7 @@ public func send(_ text: String) {
                 if snippets.isEmpty, let h = host { snippets = await self.retrieveHostSnippets(host: h, limit: 5) }
             }
             if snippets.isEmpty { snippets = await self.retrieveMemorySnippets(matching: "", limit: 5) }
-            let baselines = await self.retrieveRecentBaselines(limit: 3)
+            let baselines = await self.retrieveRecentBaselines(limit: 6)
             let drifts = await self.retrieveRecentDrifts(limit: 3)
             let patterns = await self.retrieveRecentPatterns(limit: 2)
 
@@ -308,6 +308,7 @@ public func send(_ text: String) {
             - Prefer concise, factual responses; no speculation.
             - For time-sensitive topics (e.g., "news today"), summarize what is present in memory without claiming live status; mention that it reflects the stored snapshot.
             """)
+            let asksBaselines = Self._baselineIntent(in: text)
             if let h = host {
                 // When we have host coverage, make the directive explicit and include recent page titles for stronger grounding.
                 let cov = await self.fetchHostCoverage(host: h, limit: 8)
@@ -357,6 +358,16 @@ public func send(_ text: String) {
                     }
                 }
             }
+            // If the user is asking about baselines, make the instruction explicit and inject them verbatim
+            if asksBaselines {
+                let policy = """
+                BaselineAnsweringPolicy:
+                - Enumerate the baselines stored below as complete sentences.
+                - Do NOT say you lack memory; if none, say: "No baselines stored." (exact wording).
+                - Do not invent content; only restate what is listed.
+                """
+                enriched.append(policy)
+            }
             if !snippets.isEmpty && !(config.strictMemoryMode && host != nil) {
                 // If we have richer snippet details with pageIds, prefer a cited list
                 var cited: [String] = []
@@ -380,17 +391,17 @@ public func send(_ text: String) {
             if let h = host, !(config.strictMemoryMode), let hostSummary = await self.buildHostSnapshotIfAvailable(host: h) {
                 enriched.append(hostSummary)
             }
-            if !baselines.isEmpty && !(config.strictMemoryMode && host != nil) {
+            if !baselines.isEmpty {
                 let block = await self.condenseList(header: "Baselines", items: baselines, budget: 2000)
                 enriched.append(block)
                 self.logTrail("MEMORY inject • baselines=\(baselines.count)")
             }
-            if !drifts.isEmpty && !(config.strictMemoryMode && host != nil) {
+            if !drifts.isEmpty && !(config.strictMemoryMode && host != nil) && !asksBaselines {
                 let block = await self.condenseList(header: "Recent Drift", items: drifts, budget: 1600)
                 enriched.append(block)
                 self.logTrail("MEMORY inject • drifts=\(drifts.count)")
             }
-            if !patterns.isEmpty && !(config.strictMemoryMode && host != nil) {
+            if !patterns.isEmpty && !(config.strictMemoryMode && host != nil) && !asksBaselines {
                 let block = await self.condenseList(header: "Patterns", items: patterns, budget: 1600)
                 enriched.append(block)
                 self.logTrail("MEMORY inject • patterns=\(patterns.count)")
@@ -437,6 +448,14 @@ public func send(_ text: String) {
             return URL(string: "https://\(dom)")
         }
         return nil
+    }
+
+    private static func _baselineIntent(in s: String) -> Bool {
+        let q = s.lowercased()
+        if q.contains("baseline") { return true }
+        if q.contains("what do we know") { return true }
+        if q.contains("what are our baselines") { return true }
+        return false
     }
 
     private func trim(_ s: String, limit: Int = 600) -> String {

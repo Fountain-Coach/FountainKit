@@ -1,22 +1,28 @@
 [0/1] Planning build
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'AgentService' complete! (0.41s)
-ggml_metal_library_init: using embedded metal library
-ggml_metal_library_init: loaded in 0.019 sec
-ggml_metal_device_init: GPU name:   Apple M2
-ggml_metal_device_init: GPU family: MTLGPUFamilyApple8  (1008)
-ggml_metal_device_init: GPU family: MTLGPUFamilyCommon3 (3003)
-ggml_metal_device_init: GPU family: MTLGPUFamilyMetal3  (5001)
-ggml_metal_device_init: simdgroup reduction   = true
-ggml_metal_device_init: simdgroup matrix mul. = true
-ggml_metal_device_init: has unified memory    = true
-ggml_metal_device_init: has bfloat            = true
-ggml_metal_device_init: use residency sets    = true
-ggml_metal_device_init: use shared buffers    = true
-ggml_metal_device_init: recommendedMaxWorkingSetSize  =  5726.63 MB
-llama_model_load_from_file_impl: using device Metal (Apple M2) (unknown id) - 5460 MiB free
-llama_model_loader: loaded meta data with 22 key-value pairs and 291 tensors from AgentService/Models/Hermes-2-Pro-Mistral-7B.Q4_K_M.gguf (version GGUF V3 (latest))
+Build of product 'AgentService' complete! (0.39s)
+[AgentService] LlamaCppC module not available. Falling back to 'mock'.
+[AgentService] listening on 127.0.0.1:8080 using backend=llama
+se.swift
+[8/19] Emitting module AgentCore
+[9/19] Compiling AgentCore NIOHTTPServer.swift
+[10/19] Compiling AgentCore ModelBackend.swift
+[11/19] Compiling AgentCore HTTPKernel.swift
+[12/19] Compiling AgentCore Tokenization.swift
+[13/19] Compiling AgentCore CoreMLBackend.swift
+[14/19] Compiling AgentCore LlamaCppBackend.swift
+[15/19] Compiling AgentCore AgentConfig.swift
+[16/19] Compiling AgentCore HTTPModels.swift
+[17/21] Emitting module AgentService
+[18/21] Compiling AgentService main.swift
+[18/21] Write Objects.LinkFileList
+[19/21] Linking AgentService
+[20/21] Applying AgentService
+Build of product 'AgentService' complete! (2.29s)
+[AgentService] LlamaCppC module not available. Falling back to 'mock'.
+[AgentService] listening on 127.0.0.1:8080 using backend=llama
+dels/Hermes-2-Pro-Mistral-7B.Q4_K_M.gguf (version GGUF V3 (latest))
 llama_model_loader: Dumping metadata keys/values. Note: KV overrides do not apply in this output.
 llama_model_loader: - kv   0:                       general.architecture str              = llama
 llama_model_loader: - kv   1:                               general.name str              = jeffq

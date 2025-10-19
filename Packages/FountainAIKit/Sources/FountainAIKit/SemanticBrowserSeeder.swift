@@ -126,6 +126,27 @@ public struct SemanticBrowserSeeder {
         switch output {
         case .ok(let ok):
             let response = try ok.body.json
+            // Some servers may not perform indexing in /v1/browse. If index is missing
+            // but an analysis was returned, perform an explicit /v1/index call.
+            if response.index == nil, let analysis = response.analysis {
+                let indexReq = Components.Schemas.IndexRequest(
+                    analysis: analysis,
+                    options: .init(enabled: true)
+                )
+                let indexOut = try await client.indexAnalysis(.init(body: .json(indexReq)))
+                switch indexOut {
+                case .ok(let ok2):
+                    let m = try ok2.body.json
+                    return Metrics(
+                        pagesUpserted: m.pagesUpserted ?? 0,
+                        segmentsUpserted: m.segmentsUpserted ?? 0,
+                        entitiesUpserted: m.entitiesUpserted ?? 0,
+                        tablesUpserted: m.tablesUpserted ?? 0
+                    )
+                default:
+                    return Metrics(pagesUpserted: 0, segmentsUpserted: 0, entitiesUpserted: 0, tablesUpserted: 0)
+                }
+            }
             let metrics = response.index
             return Metrics(
                 pagesUpserted: metrics?.pagesUpserted ?? 0,

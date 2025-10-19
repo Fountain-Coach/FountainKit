@@ -63,6 +63,14 @@ struct MemChatRootView: View {
     @State private var corpora: [String] = []
     @State private var showMergeSheet = false
     @State private var showCorpusManager = false
+    @State private var showAddURLSheet = false
+    @State private var addURLString: String = ""
+    @State private var addURLStatus: String = ""
+    @State private var addURLDepth: Int = 2
+    @State private var addURLMaxPages: Int = 12
+    @State private var addURLMode: String = "standard"
+    @State private var isLearning: Bool = false
+    @State private var learnStart: Date? = nil
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
@@ -73,6 +81,10 @@ struct MemChatRootView: View {
                     .foregroundStyle(.secondary)
                 Text(controllerHolder.controller.providerLabel).font(.caption).foregroundStyle(.secondary)
                 Spacer()
+                Menu("Add Memory") {
+                    Button("Learn Site…") { showAddURLSheet = true }
+                    Button("Import Files…") { importFiles() }
+                }
                 // Plan/Memory controls removed; memory is handled automatically.
                 Button("Test") { Task { await testConnection() } }
                 Button("Live Test") { Task { await testLiveChat() } }
@@ -102,6 +114,41 @@ struct MemChatRootView: View {
             await reloadCorpora()
         }
         // Hide corpus management UI from primary surface; Settings still exposes it if needed.
+        .sheet(isPresented: $showAddURLSheet) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack { Text("Learn Site").font(.title3).bold(); Spacer(); Button("Close") { showAddURLSheet = false } }
+                TextField("https://…", text: $addURLString).textFieldStyle(.roundedBorder)
+                HStack(spacing: 12) {
+                    Picker("Mode", selection: $addURLMode) {
+                        Text("Quick").tag("quick"); Text("Standard").tag("standard"); Text("Deep").tag("deep")
+                    }.labelsHidden()
+                    Stepper("Depth: \(addURLDepth)", value: $addURLDepth, in: 0...5)
+                    Stepper("Pages: \(addURLMaxPages)", value: $addURLMaxPages, in: 1...50)
+                }
+                if let p = controllerHolder.controller.learnProgress {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ProgressView(value: Double(max(p.visited,1)), total: Double(max(p.target,1)))
+                            .controlSize(.small)
+                        Text("Visited \(p.visited)/\(p.target) • Pages \(p.pages) • Segments \(p.segs)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } else if isLearning {
+                    HStack(spacing: 8) { ProgressView().controlSize(.small); Text(addURLStatus.isEmpty ? "Indexing…" : addURLStatus).font(.caption).foregroundStyle(.secondary) }
+                } else if !addURLStatus.isEmpty {
+                    Text(addURLStatus).font(.caption).foregroundStyle(.secondary)
+                }
+                HStack { Spacer(); Button(isLearning ? "Working…" : "Learn") { Task { await indexURL() } }.disabled(isLearning || addURLString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
+            }
+            .padding(12)
+            .frame(minWidth: 460)
+            .onReceive(controllerHolder.controller.$memoryTrail) { lines in
+                guard isLearning else { return }
+                if let m = lines.last(where: { $0.contains("learn:") || $0.contains("learn complete") || $0.contains("error") }) {
+                    addURLStatus = m
+                }
+            }
+        }
     }
     private func reloadCorpora() async { corpora = await controllerHolder.controller.listCorpora().sorted() }
     private func createNewCorpus() async {
@@ -141,6 +188,46 @@ struct MemChatRootView: View {
         case .fail(let msg): connectionStatus = "Live test failed: \(msg)";
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 6) { connectionStatus = "" }
+    }
+
+    // MARK: - Ingestion
+    private func indexURL() async {
+        guard let url = URL(string: addURLString.trimmingCharacters(in: .whitespacesAndNewlines)) else { addURLStatus = "Invalid URL"; return }
+        isLearning = true
+        learnStart = Date()
+        addURLStatus = "Starting…"
+        // Timeout notifier (does not cancel crawl; just updates UI)
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 30_000_000_000)
+            if isLearning { addURLStatus = "Taking longer than expected… still working" }
+        }
+        let ok = await controllerHolder.controller.learnSite(url: url, modeLabel: addURLMode, depth: addURLDepth, maxPages: addURLMaxPages)
+        isLearning = false
+        if ok {
+            addURLStatus = "Indexed ✓"
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                showAddURLSheet = false
+                addURLStatus = ""
+                addURLString = ""
+                addURLDepth = 2
+                addURLMaxPages = 12
+            }
+        } else {
+            addURLStatus = addURLStatus.isEmpty ? "Failed to index (see Memory Trail for details)" : addURLStatus
+        }
+    }
+
+    private func importFiles() {
+        #if canImport(AppKit)
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        if panel.runModal() == .OK {
+            let urls = panel.urls
+            Task { _ = await controllerHolder.controller.ingestFiles(urls) }
+        }
+        #endif
     }
 }
 

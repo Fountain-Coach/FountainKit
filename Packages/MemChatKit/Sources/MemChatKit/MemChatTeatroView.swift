@@ -67,6 +67,11 @@ public struct MemChatTeatroView: View {
                 if let title = controller.corpusTitle { Text(title).font(.caption).foregroundStyle(.secondary) }
             }
             Spacer()
+            Toggle(isOn: Binding(get: { controller.config.strictMemoryMode }, set: { controller.setStrictMemoryMode($0) })) {
+                Text("Strict")
+            }
+            .toggleStyle(.switch)
+            .help("Strict Memory Mode: answer strictly from stored site memory with citations")
             Text(providerLabel)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -79,6 +84,54 @@ public struct MemChatTeatroView: View {
         HStack(alignment: .top, spacing: 16) {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
+                    if controller.config.showSemanticPanel, let panel = controller.semanticPanel {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Semantic Panel")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            if let t = panel.topicName, !t.isEmpty {
+                                Text("Topic: \(t)").font(.callout.weight(.semibold))
+                            }
+                            if !panel.stepstones.isEmpty {
+                                Text("Stepstones").font(.caption).foregroundStyle(.secondary)
+                                ForEach(Array(panel.stepstones.prefix(7).enumerated()), id: \.offset) { _, s in
+                                    Text("• \(s)")
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }
+                            if controller.config.showSources, !panel.sources.isEmpty {
+                                Text("Sources").font(.caption).foregroundStyle(.secondary)
+                                ForEach(panel.sources) { src in
+                                    Text("• \(src.title)")
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(Color.secondary.opacity(0.06))
+                        )
+                    }
+                    // Evidence: What we learned (recent cited segments)
+                    if !controller.recentEvidence.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("What we learned")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            ForEach(Array(controller.recentEvidence.prefix(8).enumerated()), id: \.offset) { _, e in
+                                Text("• \(e.text) — \(e.title)")
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(Color.secondary.opacity(0.06))
+                        )
+                    }
                     ForEach(controller.turns, id: \.id) { turn in
                         VStack(alignment: .leading, spacing: 6) {
                             Text("You")

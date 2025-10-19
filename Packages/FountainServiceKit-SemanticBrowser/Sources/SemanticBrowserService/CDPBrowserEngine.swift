@@ -47,6 +47,12 @@ public struct CDPBrowserEngine: BrowserEngine {
             } else {
                 try await session.waitForLoadEvent(timeoutMs: wait?.maxWaitMs ?? 5000)
             }
+            // Generic consent clicker (best-effort): look for common accept/agree labels and click once
+            try? await session.evaluate(expression: "(function(){const texts=/(accept|agree|ok|zustimmen|einverstanden|alle.*akzept|ja)/i;const sels=['button','[role\\u003d\"button\"]','input[type\\u003dbutton]'];for(const s of sels){const btns=document.querySelectorAll(s);for(const b of btns){const label=(b.innerText||b.value||b.ariaLabel||'').toLowerCase();if(texts.test(label)){try{b.click();return true;}catch(e){}}}}return false;})()")
+            // Small wait for overlays to dismiss
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            // Gentle scroll to trigger lazy loading
+            try? await session.evaluate(expression: "(function(){let y=0;const step=window.innerHeight;for(let i=0;i<5;i++){y+=step;window.scrollTo(0,y);}return true;})()")
             let loadMs = Int(Date().timeIntervalSince(start) * 1000.0)
             let html = try await session.getOuterHTML()
             let text = html.removingHTMLTags()
@@ -292,6 +298,12 @@ actor CDPSession {
         struct Outer: Decodable { let outerHTML: String }
         let out: Outer = try await sendRecv("DOM.getOuterHTML", params: ["nodeId": doc.root.nodeId], result: Outer.self)
         return out.outerHTML
+    }
+    func evaluate(expression: String) async throws {
+        struct R: Decodable {}
+        _ = try await sendRecv("Runtime.enable", params: [:], result: R.self)
+        struct E: Decodable {}
+        _ = try await sendRecv("Runtime.evaluate", params: ["expression": expression, "returnByValue": true], result: E.self)
     }
     func getResponseBody(requestId: String) async throws -> (String, Bool) {
         struct BodyRes: Decodable { let body: String; let base64Encoded: Bool }

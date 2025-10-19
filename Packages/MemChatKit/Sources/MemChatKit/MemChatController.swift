@@ -16,7 +16,7 @@ import FountainAICore
 /// retrieving memory from a selected corpus.
 @MainActor
 public final class MemChatController: ObservableObject {
-    public let config: MemChatConfiguration
+    public private(set) var config: MemChatConfiguration
 
     // Expose a subset of EngraverChatViewModel for host apps.
     @Published public private(set) var turns: [EngraverChatTurn] = []
@@ -32,6 +32,9 @@ public final class MemChatController: ObservableObject {
     @Published public private(set) var lastInjectedContext: InjectedContext? = nil
     @Published public private(set) var turnContext: [UUID: InjectedContext] = [:]
     @Published public private(set) var sessionOverviews: [CorpusSessionOverview] = []
+    @Published public private(set) var learnProgress: LearnProgress? = nil
+    @Published public private(set) var semanticPanel: SemanticPanel? = nil
+    @Published public private(set) var recentEvidence: [CitedSegmentEvidence] = []
 
     private let vm: EngraverChatViewModel
     private let store: FountainStoreClient
@@ -41,6 +44,7 @@ public final class MemChatController: ObservableObject {
     private var pendingContext: InjectedContext? = nil
     private var lastBaselineText: String? = nil
     private var analysisCounter: Int = 0
+    private let browserConfig: SeedingConfiguration.Browser?
 
     public struct InjectedContext: Sendable, Equatable {
         public let continuity: String?
@@ -51,6 +55,16 @@ public final class MemChatController: ObservableObject {
         public let drifts: [String]
         public let patterns: [String]
     }
+
+    public struct SemanticPanel: Sendable, Equatable {
+        public struct Source: Sendable, Equatable, Identifiable { public let id: String; public let title: String }
+        public let topicName: String?
+        public let topicType: String?
+        public let sources: [Source]
+        public let stepstones: [String]
+    }
+    public struct LearnProgress: Sendable, Equatable { public let visited: Int; public let pages: Int; public let segs: Int; public let target: Int }
+    public struct CitedSegmentEvidence: Sendable, Equatable, Identifiable { public let id: String; public let title: String; public let url: String; public let text: String }
 
     public init(
         config: MemChatConfiguration,
@@ -89,7 +103,7 @@ public final class MemChatController: ObservableObject {
 
         // Seeding/memory config to point at standard collections
         let browser = SeedingConfiguration.Browser(
-            baseURL: URL(string: ProcessInfo.processInfo.environment["SEMANTIC_BROWSER_URL"] ?? "http://127.0.0.1:8003")!,
+            baseURL: URL(string: ProcessInfo.processInfo.environment["SEMANTIC_BROWSER_URL"] ?? "http://127.0.0.1:8007")!,
             apiKey: nil,
             mode: .quick,
             defaultLabels: [],
@@ -102,6 +116,7 @@ public final class MemChatController: ObservableObject {
         // Keep seeding configuration defined (for optional ingestion flows), but runtime snippet retrieval
         // no longer reaches out to the Semantic Browser; it uses FountainStore exclusively.
         let seeding = SeedingConfiguration(sources: [], browser: browser)
+        self.browserConfig = browser
 
         self.store = svc
         vm = EngraverChatViewModel(
@@ -177,11 +192,15 @@ public final class MemChatController: ObservableObject {
         vm.startNewSession()
     }
 
-    public func openChatSession(_ id: UUID) {
-        vm.openPersistedSession(id: id)
+    public func setStrictMemoryMode(_ enabled: Bool) {
+        self.config.strictMemoryMode = enabled
     }
 
-    public func send(_ text: String) {
+public func openChatSession(_ id: UUID) {
+    vm.openPersistedSession(id: id)
+}
+
+public func send(_ text: String) {
         var base: [String] = []
         if let digest = continuityDigest, !digest.isEmpty {
             base.append("ContinuityDigest: \(digest)")
@@ -200,31 +219,104 @@ public final class MemChatController: ObservableObject {
             }
 
             // Retrieve memory snippets (with a broad fallback) and recent baselines/drifts/patterns
+            let requestedURL = self._extractURLOrDomain(from: text)
+            let host = requestedURL?.host
+            let snippetDetails = await self.retrieveMemorySnippetDetails(matching: text, limit: 5)
             var snippets = await self.retrieveMemorySnippets(matching: text, limit: 5)
+            // If asking about a specific host and no matches on plain text search, try host-targeted retrieval
+            if snippets.isEmpty, let h = host {
+                let hostSnips = await self.retrieveHostSnippets(host: h, limit: 5)
+                if !hostSnips.isEmpty { snippets = hostSnips }
+            }
+            // If we appear to be asked about a specific site and nothing is found, try to ingest then re-query.
+            if snippets.isEmpty, let url = requestedURL {
+                self.logTrail("autofetch: \(url.absoluteString)")
+                _ = await self.ingestURLAdvanced(url, modeLabel: "standard", sameDomainDepth: 1)
+                snippets = await self.retrieveMemorySnippets(matching: text, limit: 5)
+                if snippets.isEmpty, let h = host { snippets = await self.retrieveHostSnippets(host: h, limit: 5) }
+            }
             if snippets.isEmpty { snippets = await self.retrieveMemorySnippets(matching: "", limit: 5) }
             let baselines = await self.retrieveRecentBaselines(limit: 3)
             let drifts = await self.retrieveRecentDrifts(limit: 3)
             let patterns = await self.retrieveRecentPatterns(limit: 2)
 
             var enriched = base
-            if !snippets.isEmpty {
-                let list = snippets.map { "• \($0)" }.joined(separator: "\n")
+            // Grounding/answering policy to avoid generic internet disclaimers.
+            enriched.append("""
+            AnsweringPolicy:
+            - Use the provided Memory snippets and context as your knowledge base.
+            - Do not claim that you lack internet or browsing; you are answering from the local memory corpus.
+            - If the requested fact is not present in memory, say "I don’t have that in memory" and offer to refine.
+            - Prefer concise, factual responses; no speculation.
+            - For time-sensitive topics (e.g., "news today"), summarize what is present in memory without claiming live status; mention that it reflects the stored snapshot.
+            """)
+            if let h = host {
+                // When we have host coverage, make the directive explicit and include recent page titles for stronger grounding.
+                let cov = await self.fetchHostCoverage(host: h, limit: 8)
+                if cov.pages > 0 {
+                    let recents = cov.recent.map { "• \($0.title) — \($0.url)" }.joined(separator: "\n")
+                    if config.strictMemoryMode {
+                        enriched.append("""
+                    MemoryCoverage(host=\(h))
+                    - Pages: \(cov.pages)
+                    - Segments: \(cov.segments)
+                    - Recent pages:\n\(recents)
+                    OutputPolicy:
+                    - Do NOT say "I don't have that in memory".
+                    - Instead say: "As of our stored snapshot of \(h), here is the current overview:" then give 4–7 bullets.
+                    - Each bullet: Topic — one concise sentence, then cite [Title](URL) of a relevant page.
+                    - Prefer specificity over generalities; avoid hedging.
+                    """)
+                    }
+                }
+            }
+            // If strict mode with host context, prefer explicit evidence packet
+            if let h = host, config.strictMemoryMode {
+                let evidence = await self.fetchRecentCitedSegments(host: h, limit: 8)
+                let cited = evidence.map { "• \(self.trim($0.text, limit: 300)) — [\($0.title)](\($0.url))" }
+                if !cited.isEmpty {
+                    enriched.append("Evidence Packet (host=\(h)):\n" + cited.joined(separator: "\n"))
+                    await MainActor.run {
+                        self.recentEvidence = evidence.enumerated().map { idx, e in
+                            CitedSegmentEvidence(id: "ev-\(idx)", title: e.title, url: e.url, text: self.trim(e.text, limit: 400))
+                        }
+                    }
+                }
+            }
+            if !snippets.isEmpty && !(config.strictMemoryMode && host != nil) {
+                // If we have richer snippet details with pageIds, prefer a cited list
+                var cited: [String] = []
+                if !snippetDetails.isEmpty {
+                    for d in snippetDetails {
+                        if let pid = d.pageId, let meta = await self.fetchPageMeta(pageId: pid) {
+                            cited.append("• \(d.text) — [\(meta.title)](\(meta.url))")
+                        } else {
+                            cited.append("• \(d.text)")
+                        }
+                    }
+                } else {
+                    cited = snippets.map { "• \($0)" }
+                }
+                let list = cited.joined(separator: "\n")
                 enriched.append("Memory snippets (from corpus \(self.config.memoryCorpusId)):\n\(list)")
                 self.logTrail("MEMORY inject • snippets=\(snippets.count) summary=\(self.vm.awarenessSummaryText?.count ?? 0)")
             } else {
                 self.logTrail("MEMORY inject • snippets=0 summary=\(self.vm.awarenessSummaryText?.count ?? 0)")
             }
-            if !baselines.isEmpty {
+            if let h = host, !(config.strictMemoryMode), let hostSummary = await self.buildHostSnapshotIfAvailable(host: h) {
+                enriched.append(hostSummary)
+            }
+            if !baselines.isEmpty && !(config.strictMemoryMode && host != nil) {
                 let block = await self.condenseList(header: "Baselines", items: baselines, budget: 2000)
                 enriched.append(block)
                 self.logTrail("MEMORY inject • baselines=\(baselines.count)")
             }
-            if !drifts.isEmpty {
+            if !drifts.isEmpty && !(config.strictMemoryMode && host != nil) {
                 let block = await self.condenseList(header: "Recent Drift", items: drifts, budget: 1600)
                 enriched.append(block)
                 self.logTrail("MEMORY inject • drifts=\(drifts.count)")
             }
-            if !patterns.isEmpty {
+            if !patterns.isEmpty && !(config.strictMemoryMode && host != nil) {
                 let block = await self.condenseList(header: "Patterns", items: patterns, budget: 1600)
                 enriched.append(block)
                 self.logTrail("MEMORY inject • patterns=\(patterns.count)")
@@ -243,6 +335,11 @@ public final class MemChatController: ObservableObject {
             self.lastInjectedContext = ctx
             self.pendingContext = ctx
 
+            if self.config.showSemanticPanel {
+                let panel = await self.buildSemanticPanel(from: snippetDetails, baselines: baselines, patterns: patterns)
+                await MainActor.run { self.semanticPanel = panel }
+            }
+
             let sys = self.vm.makeSystemPrompts(base: enriched)
             await MainActor.run {
                 // Persist chats into the configured memory corpus so past sessions
@@ -250,6 +347,22 @@ public final class MemChatController: ObservableObject {
                 self.vm.send(prompt: text, systemPrompts: sys, preferStreaming: true, corpusOverride: nil)
             }
         }
+    }
+
+    // Extract a URL or domain from a prompt. Supports raw domains like example.com
+    private func _extractURLOrDomain(from prompt: String) -> URL? {
+        let s = prompt
+        // 1) Try explicit http(s) URLs
+        if let m = s.range(of: #"https?://[^\s]+"#, options: .regularExpression) {
+            return URL(string: String(s[m]))
+        }
+        // 2) Try bare domain pattern (example.com or sub.example.co.uk)
+        if let m = s.range(of: #"\b([A-Za-z0-9-]+\.)+[A-Za-z]{2,}\b"#, options: .regularExpression) {
+            let dom = String(s[m])
+            if dom.lowercased().hasPrefix("http") { return URL(string: dom) }
+            return URL(string: "https://\(dom)")
+        }
+        return nil
     }
 
     private func trim(_ s: String, limit: Int = 600) -> String {
@@ -338,6 +451,32 @@ public final class MemChatController: ObservableObject {
     }
 
     // MARK: - Memory retrieval
+    private struct SegmentDocDetail: Codable { let text: String; let pageId: String?; let entities: [String]? }
+
+    private struct SemanticSnippet: Sendable, Equatable { let text: String; let pageId: String?; let entities: [String] }
+
+    private func retrieveMemorySnippetDetails(matching query: String, limit: Int = 5) async -> [SemanticSnippet] {
+        do {
+            let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+            let needle = trimmed.split(separator: " ").prefix(8).joined(separator: " ")
+            var q = Query(filters: ["corpusId": config.memoryCorpusId], limit: limit * 3, offset: 0)
+            if !needle.isEmpty { q.text = String(needle) }
+            q.sort = [("updatedAt", false)]
+            let start = Date()
+            let resp = try await store.query(corpusId: config.memoryCorpusId, collection: "segments", query: q)
+            let details: [SemanticSnippet] = resp.documents.compactMap { data in
+                guard let d = try? JSONDecoder().decode(SegmentDocDetail.self, from: data) else { return nil }
+                return SemanticSnippet(text: trim(d.text, limit: 320), pageId: d.pageId, entities: d.entities ?? [])
+            }
+            let unique = Array(details.prefix(limit))
+            let ms = Int(Date().timeIntervalSince(start) * 1000)
+            logTrail("STORE /segments ok in \(ms) ms (n=\(unique.count))")
+            return unique
+        } catch {
+            logTrail("store.segments error • \(error)")
+            return []
+        }
+    }
     private func retrieveMemorySnippets(matching query: String, limit: Int = 5) async -> [String] {
         // Store-only retrieval for memory snippets (no Semantic Browser dependency at runtime).
         do {
@@ -396,6 +535,95 @@ public final class MemChatController: ObservableObject {
         } catch { logTrail("store.patterns error • \(error)"); return [] }
     }
 
+    // MARK: - Semantic Panel builder
+    private func buildSemanticPanel(from snippets: [SemanticSnippet], baselines: [String], patterns: [String]) async -> SemanticPanel? {
+        var entityCounts: [String: Int] = [:]
+        for s in snippets { for e in s.entities { entityCounts[e, default: 0] += 1 } }
+        let topicName = entityCounts.max(by: { $0.value < $1.value })?.key
+        let topicType: String? = nil
+
+        let pageIds = Array(Set(snippets.compactMap { $0.pageId })).prefix(5)
+        var sources: [SemanticPanel.Source] = []
+        for pid in pageIds {
+            if let title = await fetchPageTitle(pageId: pid) {
+                sources.append(.init(id: pid, title: title))
+            } else {
+                sources.append(.init(id: pid, title: pid))
+            }
+        }
+
+        let stepstones: [String]
+        if !patterns.isEmpty { stepstones = patterns }
+        else if !baselines.isEmpty { stepstones = baselines }
+        else { stepstones = [] }
+
+        if topicName == nil && sources.isEmpty && stepstones.isEmpty { return nil }
+        return SemanticPanel(topicName: topicName, topicType: topicType, sources: sources, stepstones: stepstones)
+    }
+
+    private func fetchPageTitle(pageId: String) async -> String? {
+        do {
+            let q = Query(filters: ["corpusId": config.memoryCorpusId, "pageId": pageId], limit: 1, offset: 0)
+            let resp = try await store.query(corpusId: config.memoryCorpusId, collection: "pages", query: q)
+            struct PageDoc: Codable { let title: String }
+            if let first = resp.documents.first, let doc = try? JSONDecoder().decode(PageDoc.self, from: first) { return doc.title }
+            return nil
+        } catch { return nil }
+    }
+
+    private func fetchPageMeta(pageId: String) async -> (title: String, url: String)? {
+        do {
+            let q = Query(filters: ["corpusId": config.memoryCorpusId, "pageId": pageId], limit: 1, offset: 0)
+            let resp = try await store.query(corpusId: config.memoryCorpusId, collection: "pages", query: q)
+            struct PageDoc: Codable { let title: String; let url: String }
+            if let first = resp.documents.first, let doc = try? JSONDecoder().decode(PageDoc.self, from: first) { return (doc.title, doc.url) }
+            return nil
+        } catch { return nil }
+    }
+
+    private func fetchHostCoverage(host: String, limit: Int = 8) async -> (pages: Int, segments: Int, recent: [(title: String, url: String)]) {
+        do {
+            var qp = Query(filters: ["corpusId": config.memoryCorpusId, "host": host], limit: limit, offset: 0)
+            qp.sort = [("fetchedAt", false)]
+            let pagesResp = try await store.query(corpusId: config.memoryCorpusId, collection: "pages", query: qp)
+            struct PageDoc: Codable { let pageId: String; let title: String; let url: String }
+            let pageDocs = pagesResp.documents.compactMap { try? JSONDecoder().decode(PageDoc.self, from: $0) }
+            let recent = pageDocs.map { (title: $0.title, url: $0.url) }
+            var segCount = 0
+            for p in pageDocs {
+                let sq = Query(filters: ["corpusId": config.memoryCorpusId, "pageId": p.pageId], limit: 1, offset: 0)
+                if let r = try? await store.query(corpusId: config.memoryCorpusId, collection: "segments", query: sq) { segCount += r.total }
+            }
+            return (pages: pagesResp.total, segments: segCount, recent: recent)
+        } catch { return (0,0,[]) }
+    }
+
+    // Fetch recent textual segments for a host (for strict memory mode fallback)
+    private func fetchRecentCitedSegments(host: String, limit: Int = 8) async -> [(text: String, title: String, url: String)] {
+        do {
+            // List recent pages for host, then take first segments per page
+            var qp = Query(filters: ["corpusId": config.memoryCorpusId, "host": host], limit: max(limit, 12), offset: 0)
+            qp.sort = [("fetchedAt", false)]
+            let pageResp = try await store.query(corpusId: config.memoryCorpusId, collection: "pages", query: qp)
+            struct PageDoc: Codable { let pageId: String; let title: String; let url: String }
+            let pages = pageResp.documents.compactMap { try? JSONDecoder().decode(PageDoc.self, from: $0) }
+            var out: [(String,String,String)] = []
+            for p in pages {
+                let q = Query(filters: ["corpusId": config.memoryCorpusId, "pageId": p.pageId], limit: 2, offset: 0)
+                if let segResp = try? await store.query(corpusId: config.memoryCorpusId, collection: "segments", query: q) {
+                    struct Seg: Codable { let text: String }
+                    for d in segResp.documents {
+                        if let s = try? JSONDecoder().decode(Seg.self, from: d) {
+                            out.append((s.text, p.title, p.url))
+                            if out.count >= limit { return out }
+                        }
+                    }
+                }
+            }
+            return out
+        } catch { return [] }
+    }
+
     // Condense list to within a rough character budget. If material exceeds the
     // budget and a provider is configured, ask the model to compress into
     // information-preserving bullets. Falls back to simple bullets if needed.
@@ -421,6 +649,64 @@ public final class MemChatController: ObservableObject {
         }
         // Fallback: return original bullets (they may be truncated downstream by the model context window)
         return raw
+    }
+
+    // MARK: - Post-index segmentation (quality pass)
+    /// Re-segment thin/label-like pages into 2–5 paragraph segments per page.
+    /// Returns number of pages re-segmented.
+    public func resegmentThinPages(host: String? = nil, maxPages: Int = 50) async -> Int {
+        do {
+            var filters: [String: String] = ["corpusId": config.memoryCorpusId]
+            if let host, !host.isEmpty { filters["host"] = host }
+            var qp = Query(filters: filters, limit: maxPages, offset: 0)
+            qp.sort = [("fetchedAt", false)]
+            let pagesResp = try await store.query(corpusId: config.memoryCorpusId, collection: "pages", query: qp)
+            struct PageDoc: Codable { let pageId: String; let url: String }
+            let pages = pagesResp.documents.compactMap { try? JSONDecoder().decode(PageDoc.self, from: $0) }
+            var changed = 0
+            for p in pages {
+                let segQ = Query(filters: ["corpusId": config.memoryCorpusId, "pageId": p.pageId], limit: 200, offset: 0)
+                let segResp = try await store.query(corpusId: config.memoryCorpusId, collection: "segments", query: segQ)
+                struct RawSeg: Codable { let id: String?; let segmentId: String?; let text: String }
+                let segs = segResp.documents.compactMap { try? JSONDecoder().decode(RawSeg.self, from: $0) }
+                let count = segResp.total
+                let avgLen = max(1, segs.map { $0.text.count }.reduce(0, +) / max(1, segs.count))
+                let looksThin = (count == 0) || (avgLen < 90)
+                guard looksThin else { continue }
+                // Construct source text: fetch if none, else join
+                var sourceText: String = segs.isEmpty ? "" : segs.map { $0.text }.joined(separator: "\n\n")
+                if sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    if let u = URL(string: p.url) {
+                        var req = URLRequest(url: u); req.httpMethod = "GET"; req.timeoutInterval = 10
+                        if let (data, resp) = try? await URLSession.shared.data(for: req), let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) {
+                            let html = String(data: data, encoding: .utf8) ?? ""
+                            sourceText = Self._stripHTML(html)
+                        }
+                    }
+                }
+                let chunks = Self._chunkText(sourceText, maxSegments: 5, targetChars: 360)
+                guard !chunks.isEmpty else { continue }
+                // Delete existing segments for page (best-effort)
+                for s in segs {
+                    let docId = s.segmentId ?? s.id
+                    if let docId {
+                        try? await store.deleteDoc(corpusId: config.memoryCorpusId, collection: "segments", id: docId)
+                    }
+                }
+                // Insert new segments
+                for (i, text) in chunks.enumerated() {
+                    let segId = "\(p.pageId):\(i)"
+                    let seg = Segment(corpusId: config.memoryCorpusId, segmentId: segId, pageId: p.pageId, kind: "paragraph", text: text)
+                    _ = try? await store.addSegment(seg)
+                }
+                changed += 1
+            }
+            if changed > 0 { logTrail("post-index segmentation updated pages=\(changed)") }
+            return changed
+        } catch {
+            logTrail("post-index segmentation error • \(error)")
+            return 0
+        }
     }
 
     private func ensureAwarenessContext(timeoutMs: Int = 1800) async {
@@ -478,6 +764,345 @@ public final class MemChatController: ObservableObject {
     private func refreshAwareness(reason: String) async {
         logTrail("awareness.refresh (reason=\(reason))")
         await MainActor.run { vm.refreshAwareness() }
+    }
+
+    // MARK: - Ingestion (Semantic Browser / Files)
+    public func learnSite(url: URL, modeLabel: String = "standard", depth: Int = 2, maxPages: Int = 12) async -> Bool {
+        guard let browser = browserConfig else { return false }
+        let mode: SeedingConfiguration.Browser.Mode = {
+            switch modeLabel.lowercased() { case "deep": return .deep; case "quick": return .quick; default: return .standard }
+        }()
+        let opts = LearnSiteCrawler.Options(mode: mode, pagesLimit: maxPages, maxDepth: depth, sameHostOnly: true)
+        let crawler = LearnSiteCrawler()
+        let t0 = Date()
+        do {
+            await MainActor.run { self.learnProgress = LearnProgress(visited: 0, pages: 0, segs: 0, target: maxPages) }
+            let cov = try await crawler.learn(seed: url, semanticBrowserURL: browser.baseURL, corpusId: config.memoryCorpusId, options: opts, log: { msg in
+                Task { @MainActor in self.logTrail(msg) }
+            }, progress: { v, p, s in
+                Task { @MainActor in self.learnProgress = LearnProgress(visited: v, pages: p, segs: s, target: maxPages) }
+            })
+            let ms = Int(Date().timeIntervalSince(t0) * 1000)
+            await MainActor.run { self.logTrail("learn complete • visited=\(cov.visited) pages=\(cov.pagesIndexed) segs=\(cov.segmentsIndexed) • \(ms) ms") }
+            let ok = cov.pagesIndexed > 0 || cov.segmentsIndexed > 0
+            // Run a quick post-index segmentation pass if segments are low
+            if cov.pagesIndexed > 0 && cov.segmentsIndexed == 0 {
+                _ = await self.resegmentThinPages(host: url.host, maxPages: maxPages)
+            }
+            // Update recent evidence for the learned host
+            if let h = url.host {
+                let ev = await self.fetchRecentCitedSegments(host: h, limit: 8)
+                await MainActor.run {
+                    self.recentEvidence = ev.enumerated().map { idx, e in CitedSegmentEvidence(id: "ev-\(idx)", title: e.title, url: e.url, text: self.trim(e.text, limit: 400)) }
+                }
+            }
+            await MainActor.run { self.learnProgress = nil }
+            return ok
+        } catch {
+            await MainActor.run { self.logTrail("learn error • \(error)") }
+            await MainActor.run { self.learnProgress = nil }
+            return false
+        }
+    }
+
+    public func ingestURL(_ url: URL, labels: [String] = []) async -> Bool {
+        guard let browser = browserConfig else { return false }
+        let source = SeedingConfiguration.Source(name: url.host ?? url.absoluteString,
+                                                 url: url,
+                                                 corpusId: config.memoryCorpusId,
+                                                 labels: labels)
+        let seeder = SemanticBrowserSeeder()
+        do {
+            let metrics = try await seeder.run(source: source, browser: browser) { msg in
+                Task { @MainActor in self.logTrail(msg) }
+            }
+            await MainActor.run { self.logTrail("semantic-browser indexed • \(metrics.pagesUpserted) segs=\(metrics.segmentsUpserted)") }
+            // Verify the newly indexed content is visible in our memory corpus. If not, fallback to direct import.
+            if await _verifyIndexed(host: url.host) { return true }
+            await MainActor.run { self.logTrail("semantic-browser verify • no pages for host; attempting direct import") }
+            if await _fallbackFetchAndImport(url: url) {
+                await MainActor.run { self.logTrail("direct import ok • host=\(url.host ?? "?")") }
+                return true
+            }
+            await MainActor.run { self.logTrail("direct import failed • host=\(url.host ?? "?")") }
+            return false
+        } catch {
+            await MainActor.run { self.logTrail("semantic-browser error • \(error)") }
+            // Fallback: try direct fetch/import when the browser is unavailable
+            if await _fallbackFetchAndImport(url: url) {
+                await MainActor.run { self.logTrail("direct import ok • host=\(url.host ?? "?")") }
+                return true
+            }
+            return false
+        }
+    }
+
+    /// Advanced ingestion allowing caller to request a deeper analysis mode and a small same-domain crawl.
+    public func ingestURLAdvanced(_ url: URL, modeLabel: String? = nil, sameDomainDepth: Int = 0) async -> Bool {
+        let chosen: SeedingConfiguration.Browser.Mode? = {
+            switch (modeLabel ?? "").lowercased() {
+            case "quick": return .quick
+            case "deep": return .deep
+            case "standard": return .standard
+            default: return nil
+            }
+        }()
+        // Start with the single page using chosen mode if provided
+        var ok = await _ingestSingle(url, overrideMode: chosen)
+        if !ok {
+            // Single-page ingest failed; already attempted direct import inside.
+            return false
+        }
+        // Optionally follow a few same-domain links
+        if sameDomainDepth > 0, let host = url.host, await _verifyIndexed(host: host) {
+            ok = await ingestSameHostLinks(seed: url, count: sameDomainDepth, mode: chosen ?? .standard) > 0 || ok
+        }
+        if ok, let host = url.host {
+            _ = await self.resegmentThinPages(host: host, maxPages: 24)
+        }
+        return ok
+    }
+
+    private func _ingestSingle(_ url: URL, overrideMode: SeedingConfiguration.Browser.Mode?) async -> Bool {
+        guard let baseBrowser = browserConfig else { return false }
+        let browser: SeedingConfiguration.Browser = {
+            if let m = overrideMode {
+                return SeedingConfiguration.Browser(
+                    baseURL: baseBrowser.baseURL,
+                    apiKey: baseBrowser.apiKey,
+                    mode: m,
+                    defaultLabels: baseBrowser.defaultLabels,
+                    pagesCollection: baseBrowser.pagesCollection,
+                    segmentsCollection: baseBrowser.segmentsCollection,
+                    entitiesCollection: baseBrowser.entitiesCollection,
+                    tablesCollection: baseBrowser.tablesCollection,
+                    storeOverride: baseBrowser.storeOverride
+                )
+            }
+            return baseBrowser
+        }()
+        let source = SeedingConfiguration.Source(name: url.host ?? url.absoluteString,
+                                                 url: url,
+                                                 corpusId: config.memoryCorpusId,
+                                                 labels: [])
+        let seeder = SemanticBrowserSeeder()
+        do {
+            let metrics = try await seeder.run(source: source, browser: browser) { msg in Task { @MainActor in self.logTrail(msg) } }
+            await MainActor.run { self.logTrail("semantic-browser indexed • \(metrics.pagesUpserted) segs=\(metrics.segmentsUpserted)") }
+            if await _verifyIndexed(host: url.host) { return true }
+            await MainActor.run { self.logTrail("semantic-browser verify • no pages for host; attempting direct import") }
+            if await _fallbackFetchAndImport(url: url) { await MainActor.run { self.logTrail("direct import ok • host=\(url.host ?? "?")") }; return true }
+            await MainActor.run { self.logTrail("direct import failed • host=\(url.host ?? "?")") }
+            return false
+        } catch {
+            await MainActor.run { self.logTrail("semantic-browser error • \(error)") }
+            if await _fallbackFetchAndImport(url: url) { await MainActor.run { self.logTrail("direct import ok • host=\(url.host ?? "?")") }; return true }
+            return false
+        }
+    }
+
+    private func ingestSameHostLinks(seed: URL, count: Int, mode: SeedingConfiguration.Browser.Mode) async -> Int {
+        do {
+            var req = URLRequest(url: seed); req.httpMethod = "GET"; req.timeoutInterval = 8
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return 0 }
+            let html = String(data: data, encoding: .utf8) ?? ""
+            let links = Self._filterCrawlable(Self._extractLinks(html: html, base: seed)
+                .filter { $0.host == seed.host })
+            var taken: Set<String> = []
+            var ok = 0
+            for u in links {
+                if ok >= count { break }
+                if !taken.insert(u.absoluteString).inserted { continue }
+                if await _ingestSingle(u, overrideMode: mode) { ok += 1 }
+            }
+            return ok
+        } catch { return 0 }
+    }
+
+    public func ingestFiles(_ urls: [URL], labels: [String] = []) async -> Bool {
+        var anyOK = false
+        for u in urls {
+            do {
+                let pageId = "file:\(u.lastPathComponent)"
+                let title = u.deletingPathExtension().lastPathComponent
+                let content = (try? String(contentsOf: u)) ?? ""
+                let page = Page(corpusId: config.memoryCorpusId, pageId: pageId, url: u.absoluteString, host: "file", title: title)
+                _ = try await store.addPage(page)
+                let seg = Segment(corpusId: config.memoryCorpusId, segmentId: "\(pageId):0", pageId: pageId, kind: "paragraph", text: content)
+                _ = try await store.addSegment(seg)
+                anyOK = true
+                self.logTrail("imported file • \(u.lastPathComponent)")
+            } catch {
+                self.logTrail("file import error • \(error)")
+            }
+        }
+        return anyOK
+    }
+
+    private func _verifyIndexed(host: String?) async -> Bool {
+        guard let host, !host.isEmpty else { return false }
+        do {
+            let q = Query(filters: ["corpusId": config.memoryCorpusId, "host": host], limit: 1, offset: 0)
+            let resp = try await store.query(corpusId: config.memoryCorpusId, collection: "pages", query: q)
+            return resp.total > 0 && !resp.documents.isEmpty
+        } catch { return false }
+    }
+
+    private func _fallbackFetchAndImport(url: URL) async -> Bool {
+        do {
+            var req = URLRequest(url: url)
+            req.httpMethod = "GET"
+            req.timeoutInterval = 10
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return false }
+            let ctype = (http.value(forHTTPHeaderField: "Content-Type") ?? "").lowercased()
+            guard ctype.contains("text/html") || ctype.contains("text/plain") else { return false }
+            let html = String(data: data, encoding: .utf8) ?? ""
+            let text = Self._stripHTML(html)
+            let pageId = url.absoluteString
+            let title = URLComponents(url: url, resolvingAgainstBaseURL: false)?.path.split(separator: "/").last.map(String.init) ?? (url.host ?? "page")
+            let page = Page(corpusId: config.memoryCorpusId, pageId: pageId, url: url.absoluteString, host: url.host ?? "web", title: title)
+            _ = try await store.addPage(page)
+            let seg = Segment(corpusId: config.memoryCorpusId, segmentId: "\(pageId):0", pageId: pageId, kind: "paragraph", text: text)
+            _ = try await store.addSegment(seg)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private static func _stripHTML(_ s: String) -> String {
+        var out = s
+        out = out.replacingOccurrences(of: "(?s)<script.*?>.*?</script>", with: " ", options: .regularExpression)
+        out = out.replacingOccurrences(of: "(?s)<style.*?>.*?</style>", with: " ", options: .regularExpression)
+        out = out.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
+        out = out.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        return out.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func _chunkText(_ text: String, maxSegments: Int = 5, targetChars: Int = 360) -> [String] {
+        let cleaned = text.replacingOccurrences(of: "\r", with: "").replacingOccurrences(of: "\n\n+", with: "\n\n", options: .regularExpression)
+        if cleaned.isEmpty { return [] }
+        let paras = cleaned.components(separatedBy: "\n\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        var chunks: [String] = []
+        if paras.count >= 2 {
+            var current = ""
+            for p in paras {
+                if current.isEmpty { current = p }
+                else if (current.count + 1 + p.count) < (targetChars + targetChars/2) {
+                    current += "\n\n" + p
+                } else {
+                    chunks.append(current)
+                    current = p
+                }
+                if chunks.count >= maxSegments { break }
+            }
+            if !current.isEmpty && chunks.count < maxSegments { chunks.append(current) }
+        } else {
+            let sentences = cleaned.replacingOccurrences(of: "\n", with: " ").components(separatedBy: CharacterSet(charactersIn: ".!?"))
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+            var current = ""
+            for s in sentences {
+                if current.isEmpty { current = s + "." }
+                else if (current.count + 1 + s.count) < (targetChars + targetChars/2) {
+                    current += " " + s + "."
+                } else {
+                    chunks.append(current)
+                    current = s + "."
+                }
+                if chunks.count >= maxSegments { break }
+            }
+            if !current.isEmpty && chunks.count < maxSegments { chunks.append(current) }
+        }
+        return chunks.map { String($0.prefix(targetChars + 160)) }
+    }
+
+    private static func _extractLinks(html: String, base: URL) -> [URL] {
+        var results: [URL] = []
+        let pattern = "href=\\\"([^\\\"]+)\\\"|href='([^']+)'"
+        if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) {
+            let ns = html as NSString
+            for m in regex.matches(in: html, options: [], range: NSRange(location: 0, length: ns.length)) {
+                let r1 = m.range(at: 1)
+                let r2 = m.range(at: 2)
+                let raw: String
+                if r1.location != NSNotFound { raw = ns.substring(with: r1) }
+                else if r2.location != NSNotFound { raw = ns.substring(with: r2) }
+                else { continue }
+                guard !raw.hasPrefix("#") else { continue }
+                if let u = URL(string: raw, relativeTo: base)?.absoluteURL { results.append(u) }
+            }
+        }
+        return results
+    }
+
+    private static func _filterCrawlable(_ links: [URL]) -> [URL] {
+        let badExt: Set<String> = [
+            "css","js","png","jpg","jpeg","gif","svg","ico","webp","mp4","mp3","mov","pdf","zip","tar","gz","7z","rar","woff","woff2","ttf"
+        ]
+        func hasBadExt(_ u: URL) -> Bool {
+            let ext = u.pathExtension.lowercased()
+            return !ext.isEmpty && badExt.contains(ext)
+        }
+        let banned = ["impressum","hilfe","help","support","kontakt","contact","privacy","datenschutz","about","agb","terms","imprint"]
+        return links.filter { u in
+            guard ["http","https"].contains(u.scheme?.lowercased() ?? "") else { return false }
+            if hasBadExt(u) { return false }
+            if u.path.lowercased().contains("/assets/") { return false }
+            let path = u.path.lowercased()
+            if banned.contains(where: { path.contains($0) }) { return false }
+            return true
+        }
+    }
+
+    private func retrieveHostSnippets(host: String, limit: Int = 5) async -> [String] {
+        do {
+            // 1) List pages for the host (most recent first if field available)
+            var qp = Query(filters: ["corpusId": config.memoryCorpusId, "host": host], limit: 30, offset: 0)
+            qp.sort = [("fetchedAt", false)]
+            let pageResp = try await store.query(corpusId: config.memoryCorpusId, collection: "pages", query: qp)
+            struct PageDoc: Codable { let pageId: String; let title: String? }
+            let pages: [PageDoc] = pageResp.documents.compactMap { try? JSONDecoder().decode(PageDoc.self, from: $0) }
+            if pages.isEmpty { return [] }
+            // 2) Pull the first segment for each page to build quick snippets
+            var out: [String] = []
+            for p in pages.prefix(limit * 3) {
+                let q = Query(filters: ["corpusId": config.memoryCorpusId, "pageId": p.pageId], limit: 1, offset: 0)
+                let segResp = try await store.query(corpusId: config.memoryCorpusId, collection: "segments", query: q)
+                struct SegmentDoc: Codable { let text: String }
+                if let first = segResp.documents.first, let s = try? JSONDecoder().decode(SegmentDoc.self, from: first) {
+                    out.append(trim(s.text, limit: 320))
+                }
+                if out.count >= limit { break }
+            }
+            return out
+        } catch { return [] }
+    }
+
+    private func buildHostSnapshotIfAvailable(host: String, limitPages: Int = 6, limitSegmentsPerPage: Int = 2) async -> String? {
+        do {
+            var qp = Query(filters: ["corpusId": config.memoryCorpusId, "host": host], limit: limitPages, offset: 0)
+            qp.sort = [("fetchedAt", false)]
+            let pageResp = try await store.query(corpusId: config.memoryCorpusId, collection: "pages", query: qp)
+            struct PageDoc: Codable { let pageId: String; let title: String? }
+            let pages: [PageDoc] = pageResp.documents.compactMap { try? JSONDecoder().decode(PageDoc.self, from: $0) }
+            guard !pages.isEmpty else { return nil }
+            var bullets: [String] = []
+            for p in pages {
+                let q = Query(filters: ["corpusId": config.memoryCorpusId, "pageId": p.pageId], limit: limitSegmentsPerPage, offset: 0)
+                let segResp = try await store.query(corpusId: config.memoryCorpusId, collection: "segments", query: q)
+                struct SegmentDoc: Codable { let text: String }
+                for d in segResp.documents {
+                    if let s = try? JSONDecoder().decode(SegmentDoc.self, from: d) {
+                        bullets.append("• " + trim(s.text, limit: 240))
+                    }
+                }
+            }
+            guard !bullets.isEmpty else { return nil }
+            let body = bullets.prefix(10).joined(separator: "\n")
+            return "Host snapshot (from memory for \(host)):\n\(body)"
+        } catch { return nil }
     }
 
     private func persistReflection(from turn: EngraverChatTurn) async {

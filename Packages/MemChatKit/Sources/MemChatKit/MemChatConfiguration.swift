@@ -19,6 +19,13 @@ public struct MemChatConfiguration: Sendable, Equatable {
     public var awarenessURL: URL?
     public var bootstrapURL: URL?
 
+    // UI / Transparency
+    public var showSemanticPanel: Bool
+    public var showSources: Bool
+    public var strictMemoryMode: Bool
+    // Semantic Browser defaults
+    public var browserDefaultMode: String?
+
     public init(
         memoryCorpusId: String,
         chatCollection: String = "chat-turns",
@@ -28,7 +35,11 @@ public struct MemChatConfiguration: Sendable, Equatable {
         localCompatibleEndpoint: URL? = ProcessInfo.processInfo.environment["ENGRAVER_LOCAL_LLM_URL"].flatMap(URL.init(string:)),
         gatewayURL: URL? = ProcessInfo.processInfo.environment["FOUNTAIN_GATEWAY_URL"].flatMap(URL.init(string:)),
         awarenessURL: URL? = ProcessInfo.processInfo.environment["AWARENESS_URL"].flatMap(URL.init(string:)),
-        bootstrapURL: URL? = ProcessInfo.processInfo.environment["BOOTSTRAP_URL"].flatMap(URL.init(string:))
+        bootstrapURL: URL? = ProcessInfo.processInfo.environment["BOOTSTRAP_URL"].flatMap(URL.init(string:)),
+        showSemanticPanel: Bool = true,
+        showSources: Bool = false,
+        strictMemoryMode: Bool = true,
+        browserDefaultMode: String? = ProcessInfo.processInfo.environment["SEMANTIC_BROWSER_MODE"]
     ) {
         self.memoryCorpusId = memoryCorpusId
         self.chatCollection = chatCollection
@@ -39,5 +50,9 @@ public struct MemChatConfiguration: Sendable, Equatable {
         self.gatewayURL = gatewayURL
         self.awarenessURL = awarenessURL
         self.bootstrapURL = bootstrapURL
+        self.showSemanticPanel = showSemanticPanel
+        self.showSources = showSources
+        self.strictMemoryMode = strictMemoryMode
+        self.browserDefaultMode = browserDefaultMode
     }
 }

@@ -163,16 +163,27 @@ Task {
         }
         return HTTPResponse(status: 404)
     }
-    // Choose engine based on environment
+    // Choose engine based on environment. Default now REQUIRES a CDP WebSocket URL.
+    // To allow the simplified URLSession fetcher for testing, set SB_ALLOW_URLFETCH=1 explicitly.
     let engine: BrowserEngine = {
-        if let ws = env["SB_CDP_URL"], let u = URL(string: ws) { return CDPBrowserEngine(wsURL: u) }
-        if let bin = env["SB_BROWSER_CLI"] {
+        if let ws = env["SB_CDP_URL"], let u = URL(string: ws), !ws.isEmpty {
+            print("semantic-browser using engine=cdp url=\(ws)")
+            return CDPBrowserEngine(wsURL: u)
+        }
+        if let bin = env["SB_BROWSER_CLI"], !bin.isEmpty {
+            print("semantic-browser using engine=shell bin=\(bin)")
             return ShellBrowserEngine(
                 binary: bin,
                 args: (env["SB_BROWSER_ARGS"] ?? "").split(separator: " ").map(String.init)
             )
         }
-        return URLFetchBrowserEngine()
+        if env["SB_ALLOW_URLFETCH"] == "1" {
+            print("semantic-browser WARNING: falling back to engine=urlfetch (no JS). Set SB_CDP_URL to use headless Chrome.")
+            return URLFetchBrowserEngine()
+        }
+        // Hard fail: no proper engine configured
+        FileHandle.standardError.write(Data("semantic-browser ERROR: No CDP engine configured. Set SB_CDP_URL or SB_BROWSER_CLI.\n".utf8))
+        exit(2)
     }()
     let transport = NIOOpenAPIServerTransport(fallback: fallback)
     let api = SemanticBrowserOpenAPI(service: service, engine: engine)

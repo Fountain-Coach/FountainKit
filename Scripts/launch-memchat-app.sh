@@ -37,9 +37,35 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SIG="$(security find-generic-password -s FountainAI -a LAUNCHER_SIGNATURE -w 2>/dev/null || true)"
 if [[ -z "${SIG}" ]]; then SIG="B86D7CEE-24C4-4C4C-A107-8D0542D1965B"; fi
 
+# Resolve default store dir early so we can wire Semantic Browser to the same store/corpus
+STORE_DIR="${FOUNTAINSTORE_DIR:-${REPO_ROOT}/.fountain/store}"
+
+# Ensure a headless Chrome (CDP) is running and export SB_CDP_URL
+if [[ -z "${SB_CDP_URL:-}" ]]; then
+  CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  if pgrep -f "--remote-debugging-port=9222" >/dev/null 2>&1; then
+    : # already running
+  else
+    if [[ -x "$CHROME" ]]; then
+      echo "› Starting headless Chrome (CDP on :9222)"
+      "$CHROME" --headless=new --disable-gpu --remote-debugging-port=9222 --user-data-dir="/tmp/memchat-chrome" >/dev/null 2>&1 &
+      sleep 0.8
+    fi
+  fi
+  # Discover WS URL
+  SB_CDP_URL=$(curl -sf --max-time 2 http://127.0.0.1:9222/json/version | python3 -c 'import sys,json;print(json.load(sys.stdin).get("webSocketDebuggerUrl",""))' 2>/dev/null || true)
+fi
+if [[ -n "${SB_CDP_URL:-}" ]]; then
+  echo "› CDP: ${SB_CDP_URL}"
+else
+  echo "[launch-memchat] WARNING: No SB_CDP_URL available. Semantic Browser will refuse to start unless SB_ALLOW_URLFETCH=1 is set."
+fi
+
 # Ensure core services are up (Awareness, Bootstrap, Semantic Browser, Gateway)
 echo "› Ensuring local Fountain services (Awareness/Bootstrap/Browser/Gateway)…"
+# Pass SB_STORE_PATH/SB_STORE_CORPUS and SB_CDP_URL so the Semantic Browser indexes into the same store+corpus
 DEV_UP_USE_BIN=1 DEV_UP_CHECKS=1 DEV_UP_NO_START_LOCAL_AGENT=1 \
+  SB_STORE_PATH="${STORE_DIR}" SB_STORE_CORPUS="${MEMORY_CORPUS_ID:-memchat-app}" SB_CDP_URL="${SB_CDP_URL:-}" \
   bash "${REPO_ROOT}/Scripts/dev-up" --all || true
 
 # Resolve OpenAI API key from Keychain only; fail fast if missing
@@ -61,8 +87,7 @@ if [[ "${HTTP_CODE}" != 2* && "${HTTP_CODE}" != 3* && "${HTTP_CODE}" != "200" ]]
   exit 2
 fi
 
-# Default store dir
-STORE_DIR="${FOUNTAINSTORE_DIR:-${REPO_ROOT}/.fountain/store}"
+# STORE_DIR already resolved above
 
 cat > "${CONTENTS}/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -85,7 +110,7 @@ cat > "${CONTENTS}/Info.plist" <<PLIST
     <key>FOUNTAINSTORE_DIR</key><string>${STORE_DIR}</string>
     <key>MEMORY_CORPUS_ID</key><string>${MEMORY_CORPUS_ID:-memchat-app}</string>
     <key>OPENAI_API_URL</key><string>${OPENAI_API_URL:-}</string>
-    <key>SEMANTIC_BROWSER_URL</key><string>${SEMANTIC_BROWSER_URL:-http://127.0.0.1:8003}</string>
+    <key>SEMANTIC_BROWSER_URL</key><string>${SEMANTIC_BROWSER_URL:-http://127.0.0.1:8007}</string>
     <!-- Local LLM disabled by policy -->
     <key>FOUNTAIN_GATEWAY_URL</key><string>${FOUNTAIN_GATEWAY_URL:-}</string>
     <key>AWARENESS_URL</key><string>${AWARENESS_URL:-http://127.0.0.1:8001}</string>

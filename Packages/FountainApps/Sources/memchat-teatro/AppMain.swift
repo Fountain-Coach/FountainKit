@@ -73,6 +73,12 @@ struct MemChatTeatroRootView: View {
 
     @State private var connectionStatus: String = ""
     @State private var didRunSelfCheck = false
+    @State private var showAddURLSheet = false
+    @State private var addURLString: String = ""
+    @State private var addURLStatus: String = ""
+    @State private var addURLDepth: Int = 2
+    @State private var addURLMaxPages: Int = 12
+    @State private var addURLMode: String = "standard"
 
     var body: some View {
         VStack(spacing: 0) {
@@ -86,6 +92,10 @@ struct MemChatTeatroRootView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
+                Menu("Add Memory") {
+                    Button("Learn Site…") { showAddURLSheet = true }
+                    Button("Import Files…") { importFiles() }
+                }
                 Button("Test") { Task { await testConnection() } }
                 Button("Live Test") { Task { await testLiveChat() } }
                 Button("Settings") { openSettings() }
@@ -108,6 +118,30 @@ struct MemChatTeatroRootView: View {
                 didRunSelfCheck = true
                 await testLiveChat()
             }
+        }
+        .sheet(isPresented: $showAddURLSheet) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack { Text("Learn Site").font(.title3).bold(); Spacer(); Button("Close") { showAddURLSheet = false } }
+                TextField("https://…", text: $addURLString).textFieldStyle(.roundedBorder)
+                HStack(spacing: 12) {
+                    Picker("Mode", selection: $addURLMode) {
+                        Text("Quick").tag("quick"); Text("Standard").tag("standard"); Text("Deep").tag("deep")
+                    }.labelsHidden()
+                    Stepper("Depth: \(addURLDepth)", value: $addURLDepth, in: 0...5)
+                    Stepper("Pages: \(addURLMaxPages)", value: $addURLMaxPages, in: 1...50)
+                }
+                if let p = controllerHolder.controller.learnProgress {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ProgressView(value: Double(max(p.visited,1)), total: Double(max(p.target,1))).controlSize(.small)
+                        Text("Visited \(p.visited)/\(p.target) • Pages \(p.pages) • Segments \(p.segs)").font(.caption).foregroundStyle(.secondary)
+                    }
+                } else if !addURLStatus.isEmpty {
+                    Text(addURLStatus).font(.caption).foregroundStyle(.secondary)
+                }
+                HStack { Spacer(); Button("Learn") { Task { await indexURL() } }.disabled(addURLString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
+            }
+            .padding(12)
+            .frame(minWidth: 460)
         }
     }
 
@@ -134,5 +168,35 @@ struct MemChatTeatroRootView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
             connectionStatus = ""
         }
+    }
+
+    // MARK: - Ingestion
+    private func indexURL() async {
+        addURLStatus = "Indexing…"
+        guard let url = URL(string: addURLString.trimmingCharacters(in: .whitespacesAndNewlines)) else { addURLStatus = "Invalid URL"; return }
+        let ok = await controllerHolder.controller.learnSite(url: url, modeLabel: addURLMode, depth: addURLDepth, maxPages: addURLMaxPages)
+        addURLStatus = ok ? "Indexed" : "Failed to index"
+        if ok {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                showAddURLSheet = false
+                addURLStatus = ""
+                addURLString = ""
+                addURLDepth = 0
+                addURLMaxPages = 12
+            }
+        }
+    }
+
+    private func importFiles() {
+        #if canImport(AppKit)
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        if panel.runModal() == .OK {
+            let urls = panel.urls
+            Task { _ = await controllerHolder.controller.ingestFiles(urls) }
+        }
+        #endif
     }
 }

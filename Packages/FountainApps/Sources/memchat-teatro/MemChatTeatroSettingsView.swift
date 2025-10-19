@@ -9,6 +9,8 @@ struct MemChatTeatroSettingsView: View {
     @State var model: String
     @State var useGateway: Bool
     @State var gatewayURLString: String
+    @State private var showSemanticPanel: Bool = true
+    @State private var showSources: Bool = false
     var apply: (MemChatConfiguration) -> Void
 
     var body: some View {
@@ -38,6 +40,8 @@ struct MemChatTeatroSettingsView: View {
                         .textFieldStyle(.roundedBorder)
                         .disabled(!useGateway)
                 }
+                Toggle("Show Semantic Panel", isOn: $showSemanticPanel)
+                Toggle("Show Sources", isOn: $showSources)
             }
             .formStyle(.grouped)
             HStack {
@@ -76,7 +80,9 @@ struct MemChatTeatroSettingsView: View {
             openAIEndpoint: nil,
             localCompatibleEndpoint: nil,
             gatewayURL: gateway,
-            awarenessURL: nil
+            awarenessURL: nil,
+            showSemanticPanel: showSemanticPanel,
+            showSources: showSources
         )
         apply(cfg)
         dismiss()

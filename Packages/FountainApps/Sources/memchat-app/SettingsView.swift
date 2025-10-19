@@ -9,6 +9,8 @@ struct SettingsView: View {
     @State var model: String
     @State var useGateway: Bool
     @State var gatewayURLString: String
+    @State private var showSemanticPanel: Bool = true
+    @State private var showSources: Bool = false
     var controller: MemChatController
     var apply: (MemChatConfiguration) -> Void
 
@@ -30,6 +32,8 @@ struct SettingsView: View {
                 LabeledContent("OpenAI API Key") { SecureField("sk-...", text: $openAIKey).textFieldStyle(.roundedBorder) }
                 Toggle("Use Gateway", isOn: $useGateway)
                 LabeledContent("Gateway URL") { TextField("http://127.0.0.1:8010", text: $gatewayURLString).textFieldStyle(.roundedBorder).disabled(!useGateway) }
+                Toggle("Show Semantic Panel", isOn: $showSemanticPanel)
+                Toggle("Show Sources", isOn: $showSources)
             }.formStyle(.grouped)
             HStack {
                 Spacer()
@@ -38,7 +42,12 @@ struct SettingsView: View {
         }
         .padding(12)
         .frame(minWidth: 520)
-        .onAppear { loadKeychain(); Task { await reloadCorpora() } }
+        .onAppear {
+            loadKeychain()
+            self.showSemanticPanel = controller.config.showSemanticPanel
+            self.showSources = controller.config.showSources
+            Task { await reloadCorpora() }
+        }
         .sheet(isPresented: $showMerge) {
             MergeSheet(corpora: corpora.filter { $0 != memoryCorpusId }, controller: controller) { target in
                 memoryCorpusId = target
@@ -90,7 +99,9 @@ struct SettingsView: View {
             openAIEndpoint: nil,
             localCompatibleEndpoint: nil,
             gatewayURL: gw,
-            awarenessURL: nil
+            awarenessURL: nil,
+            showSemanticPanel: showSemanticPanel,
+            showSources: showSources
         )
         apply(cfg)
         dismiss()

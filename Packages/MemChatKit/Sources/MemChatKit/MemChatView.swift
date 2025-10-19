@@ -10,6 +10,7 @@ import FountainAIKit
 public struct MemChatView: View {
     @StateObject private var controller: MemChatController
     @State private var input: String = ""
+    @State private var strictOn: Bool = false
     @FocusState private var inputFocused: Bool
 
     public init(configuration: MemChatConfiguration) {
@@ -29,6 +30,11 @@ public struct MemChatView: View {
                     HStack(spacing: 12) {
                         Text(controller.chatTitle ?? "MemChat").font(.title3).bold()
                         Spacer()
+                        // Strict Memory Mode toggle
+                        Toggle(isOn: $strictOn) { Text("Strict") }
+                            .toggleStyle(.switch)
+                            .help("Strict Memory Mode: answer strictly from stored site memory with citations")
+                            .onChange(of: strictOn) { on in controller.setStrictMemoryMode(on) }
                         Button("New Chat") { controller.newChat() }
                             .disabled(controller.state == .streaming)
                     }
@@ -80,6 +86,40 @@ public struct MemChatView: View {
             // 2) Transcript pane (scrollable)
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
+                    if controller.config.showSemanticPanel, let panel = controller.semanticPanel {
+                        GroupBox(label: Text("Semantic Panel").font(.caption2)) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                if let t = panel.topicName, !t.isEmpty {
+                                    Text("Topic: \(t)").font(.callout.weight(.semibold))
+                                }
+                                if !panel.stepstones.isEmpty {
+                                    Text("Stepstones").font(.caption).foregroundStyle(.secondary)
+                                    ForEach(Array(panel.stepstones.prefix(7).enumerated()), id: \.offset) { _, s in
+                                        Text("• \(s)")
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                }
+                                if controller.config.showSources, !panel.sources.isEmpty {
+                                    Text("Sources").font(.caption).foregroundStyle(.secondary)
+                                    ForEach(panel.sources) { src in
+                                        Text("• \(src.title)")
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // Evidence: What we learned (recent cited segments)
+                    if !controller.recentEvidence.isEmpty {
+                        GroupBox(label: Text("What we learned").font(.caption2)) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(Array(controller.recentEvidence.prefix(8).enumerated()), id: \.offset) { _, e in
+                                    Text("• \(e.text) — \(e.title)")
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }
+                        }
+                    }
                     ForEach(controller.turns, id: \.id) { t in
                         VStack(alignment: .leading, spacing: 6) {
                             Text("You").font(.caption).foregroundStyle(.secondary)
@@ -252,6 +292,7 @@ public struct MemChatView: View {
         }
         .onAppear {
             inputFocused = true
+            strictOn = controller.config.strictMemoryMode
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                 NSApplication.shared.activate(ignoringOtherApps: true)
             }

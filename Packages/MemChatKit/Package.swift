@@ -25,6 +25,7 @@ let package = Package(
                 .product(name: "ProviderOpenAI", package: "FountainProviders"),
                 .product(name: "ProviderGateway", package: "FountainProviders"),
                 .product(name: "AwarenessAPI", package: "FountainAPIClients"),
+                .product(name: "SemanticBrowserAPI", package: "FountainAPIClients"),
                 .product(name: "ApiClientsCore", package: "FountainAPIClients"),
                 .product(name: "TeatroGUI", package: "TeatroGUI")
             ]

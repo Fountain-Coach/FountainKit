@@ -7,7 +7,7 @@ import LauncherSignature
 @main
 struct MemChatApp: App {
     @State private var config: MemChatConfiguration
-    @StateObject private var controllerHolder = ControllerHolder()
+    @StateObject private var controllerHolder: ControllerHolder
     @State private var showSettings = false
     init() {
         verifyLauncherSignature()
@@ -21,7 +21,9 @@ struct MemChatApp: App {
         #else
         let key: String? = nil
         #endif
-        _config = State(initialValue: MemChatConfiguration(memoryCorpusId: memory, model: "gpt-4o-mini", openAIAPIKey: key, openAIEndpoint: nil, localCompatibleEndpoint: nil))
+        let initial = MemChatConfiguration(memoryCorpusId: memory, model: "gpt-4o-mini", openAIAPIKey: key, openAIEndpoint: nil, localCompatibleEndpoint: nil)
+        _config = State(initialValue: initial)
+        _controllerHolder = StateObject(wrappedValue: ControllerHolder(initial: initial))
     }
     var body: some Scene {
         WindowGroup {
@@ -40,9 +42,7 @@ struct MemChatApp: App {
 @MainActor
 final class ControllerHolder: ObservableObject {
     @Published var controller: MemChatController
-    init(initial: MemChatConfiguration = MemChatConfiguration(memoryCorpusId: "memchat-app")) {
-        controller = MemChatController(config: initial)
-    }
+    init(initial: MemChatConfiguration) { controller = MemChatController(config: initial) }
     func recreate(with cfg: MemChatConfiguration) { controller = MemChatController(config: cfg) }
 }
 

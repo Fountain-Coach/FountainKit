@@ -29,6 +29,8 @@ let package = Package(
         .executable(name: "engraving-app", targets: ["engraving-app"]),
         .executable(name: "engraving-demo-seed", targets: ["engraving-demo-seed"]),
         .executable(name: "memchat-concept-seed", targets: ["memchat-concept-seed"]),
+        .executable(name: "memchat-save-reply", targets: ["memchat-save-reply"]),
+        .executable(name: "memchat-save-continuity", targets: ["memchat-save-continuity"]),
         .executable(name: "llm-doctor", targets: ["llm-doctor"]),
         .executable(name: "engraver-direct", targets: ["engraver-direct"]),
         .library(name: "EngraverChatCore", targets: ["EngraverChatCore"]),
@@ -95,6 +97,22 @@ let package = Package(
                 .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
+        ),
+        .executableTarget(
+            name: "memchat-save-continuity",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ],
+            path: "Sources/memchat-save-continuity"
+        ),
+        .executableTarget(
+            name: "memchat-save-reply",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ],
+            path: "Sources/memchat-save-reply"
         ),
         .executableTarget(
             name: "memchat-concept-seed",

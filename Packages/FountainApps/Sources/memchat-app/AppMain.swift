@@ -60,12 +60,27 @@ struct MemChatRootView: View {
     // Plan/Memory views removed; memory is now automatic and audited in the trail.
     @State private var connectionStatus: String = ""
     @State private var didRunSelfCheck = false
+    @State private var corpora: [String] = []
+    @State private var showMergeSheet = false
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Text("MemChat").font(.headline)
                 Divider().frame(height: 16)
-                Text(config.memoryCorpusId).font(.caption).foregroundStyle(.secondary)
+                // Corpus quick controls
+                HStack(spacing: 6) {
+                    Text(config.memoryCorpusId).font(.caption).foregroundStyle(.secondary)
+                    Menu("Corpus") {
+                        if corpora.isEmpty { Button("Reload…") { Task { await reloadCorpora() } } }
+                        ForEach(corpora.sorted(), id: \.self) { c in
+                            Button("Switch to \(c)") { switchCorpus(to: c) }
+                        }
+                        Divider()
+                        Button("New Corpus") { Task { await createNewCorpus() } }
+                        Button("Merge…") { showMergeSheet = true }
+                        Button("Reload List") { Task { await reloadCorpora() } }
+                    }
+                }
                 Text(controllerHolder.controller.providerLabel).font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 // Plan/Memory buttons removed; memory is handled automatically.
@@ -94,7 +109,40 @@ struct MemChatRootView: View {
                 didRunSelfCheck = true
                 await testLiveChat()
             }
+            await reloadCorpora()
         }
+        .sheet(isPresented: $showMergeSheet) {
+            MergeSheet(corpora: corpora.filter { $0 != config.memoryCorpusId }, controller: controllerHolder.controller) { target in
+                switchCorpus(to: target)
+                Task { await reloadCorpora() }
+            }
+            .frame(minWidth: 520, minHeight: 420)
+            .padding(12)
+        }
+    }
+    private func reloadCorpora() async { corpora = await controllerHolder.controller.listCorpora().sorted() }
+    private func createNewCorpus() async {
+        let ts = Int(Date().timeIntervalSince1970)
+        let newId = "memchat-\(ts)"
+        if await controllerHolder.controller.createCorpus(id: newId) {
+            switchCorpus(to: newId)
+            await reloadCorpora()
+        }
+    }
+    private func switchCorpus(to id: String) {
+        guard !id.isEmpty, id != config.memoryCorpusId else { return }
+        let newCfg = MemChatConfiguration(
+            memoryCorpusId: id,
+            model: config.model,
+            openAIAPIKey: config.openAIAPIKey,
+            openAIEndpoint: config.openAIEndpoint,
+            localCompatibleEndpoint: config.localCompatibleEndpoint,
+            gatewayURL: config.gatewayURL,
+            awarenessURL: config.awarenessURL,
+            bootstrapURL: config.bootstrapURL
+        )
+        self.config = newCfg
+        controllerHolder.recreate(with: newCfg)
     }
     private func testConnection() async {
         switch await controllerHolder.controller.testConnection() {
@@ -110,5 +158,52 @@ struct MemChatRootView: View {
         case .fail(let msg): connectionStatus = "Live test failed: \(msg)";
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 6) { connectionStatus = "" }
+    }
+}
+
+private struct MergeSheet: View {
+    let corpora: [String]
+    let controller: MemChatController
+    var onMerged: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var selected: Set<String> = []
+    @State private var targetId: String = ""
+    @State private var status: String = ""
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack { Text("Merge Corpora to New").font(.title3).bold(); Spacer(); Button("Close") { dismiss() } }
+            Divider()
+            HStack {
+                Text("Target Corpus ID").frame(width: 140, alignment: .leading)
+                TextField("merged-<timestamp>", text: $targetId).textFieldStyle(.roundedBorder)
+                Button("Suggest") { targetId = "merged-\(Int(Date().timeIntervalSince1970))" }
+            }
+            Text("Select sources:").font(.caption).foregroundStyle(.secondary)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(corpora, id: \.self) { c in
+                        Toggle(isOn: Binding(
+                            get: { selected.contains(c) },
+                            set: { isOn in if isOn { _ = selected.insert(c) } else { _ = selected.remove(c) } }
+                        )) { Text(c) }
+                    }
+                }
+            }
+            if !status.isEmpty { Text(status).font(.caption).foregroundStyle(.secondary) }
+            HStack { Spacer(); Button("Merge") { Task { await performMerge() } }.disabled(selected.isEmpty || targetId.isEmpty) }
+        }
+        .onAppear { if targetId.isEmpty { targetId = "merged-\(Int(Date().timeIntervalSince1970))" } }
+        .frame(minWidth: 520, minHeight: 420)
+        .padding(12)
+    }
+    private func performMerge() async {
+        status = "Merging…"
+        do {
+            try await controller.mergeCorpora(sources: Array(selected), into: targetId)
+            status = "Merged into \(targetId)"
+            onMerged(targetId)
+        } catch {
+            status = "Merge failed: \(error.localizedDescription)"
+        }
     }
 }

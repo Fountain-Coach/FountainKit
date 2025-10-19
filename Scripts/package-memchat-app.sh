@@ -42,6 +42,17 @@ if [[ -z "${OPENAI_KEY}" ]]; then
   exit 1
 fi
 
+# Preflight: verify OpenAI connectivity using Keychain key
+HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" \
+  -H "Authorization: Bearer ${OPENAI_KEY}" \
+  -H "Content-Type: application/json" \
+  --max-time 6 \
+  https://api.openai.com/v1/models || true)
+if [[ "${HTTP_CODE}" != 2* && "${HTTP_CODE}" != 3* && "${HTTP_CODE}" != "200" ]]; then
+  echo "[package-memchat] ERROR: OpenAI connectivity check failed (/v1/models), HTTP ${HTTP_CODE:-n/a}."
+  exit 2
+fi
+
 # Defaults; override by exporting env before running
 STORE_DIR="${FOUNTAINSTORE_DIR:-${REPO_ROOT}/.fountain/store}"
 MEMORY_ID="${MEMORY_CORPUS_ID:-memchat-app}"

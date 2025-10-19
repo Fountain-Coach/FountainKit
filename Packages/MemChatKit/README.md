@@ -36,7 +36,7 @@ controller.send("Hello")
 ## Configuration
 - `memoryCorpusId`: Read‑only corpus used for retrieval
 - `chatCollection`: Target collection name for chat turns (`chat-turns`)
-- Provider: `model`, `OPENAI_API_KEY`, `OPENAI_API_URL`, `ENGRAVER_LOCAL_LLM_URL`
+- Provider: `model`, `OPENAI_API_KEY`, optional `OPENAI_API_URL` (OpenAI-only)
 - Observability: `FOUNTAIN_GATEWAY_URL`, `AWARENESS_URL`
 
 ## Continuity

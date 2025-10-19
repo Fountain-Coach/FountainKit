@@ -11,7 +11,8 @@ let package = Package(
         .package(path: "../FountainCore"),
         .package(path: "../FountainAIKit"),
         .package(path: "../FountainProviders"),
-        .package(path: "../FountainAPIClients")
+        .package(path: "../FountainAPIClients"),
+        .package(path: "../../External/Teatro/Packages/TeatroGUI")
     ],
     targets: [
         .target(
@@ -23,7 +24,8 @@ let package = Package(
                 .product(name: "ProviderOpenAI", package: "FountainProviders"),
                 .product(name: "ProviderGateway", package: "FountainProviders"),
                 .product(name: "SemanticBrowserAPI", package: "FountainAPIClients"),
-                .product(name: "ApiClientsCore", package: "FountainAPIClients")
+                .product(name: "ApiClientsCore", package: "FountainAPIClients"),
+                .product(name: "TeatroGUI", package: "TeatroGUI")
             ]
         ),
         .testTarget(

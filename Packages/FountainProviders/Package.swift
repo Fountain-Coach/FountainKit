@@ -10,6 +10,7 @@ let package = Package(
         .library(name: "ProviderGateway", targets: ["ProviderGateway"])
     ],
     dependencies: [
+        .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.21.0"),
         .package(path: "../FountainCore"),
         .package(path: "../FountainGatewayKit")
     ],
@@ -17,6 +18,7 @@ let package = Package(
         .target(
             name: "ProviderOpenAI",
             dependencies: [
+                .product(name: "AsyncHTTPClient", package: "async-http-client"),
                 .product(name: "FountainAICore", package: "FountainCore")
             ]
         ),

@@ -28,6 +28,7 @@ let package = Package(
         .executable(name: "engraver-chat-tui", targets: ["engraver-chat-tui"]),
         .executable(name: "engraving-app", targets: ["engraving-app"]),
         .executable(name: "memchat-app", targets: ["memchat-app"]),
+        .executable(name: "memchat-teatro", targets: ["memchat-teatro"]),
         .executable(name: "engraving-demo-seed", targets: ["engraving-demo-seed"]),
         .executable(name: "memchat-concept-seed", targets: ["memchat-concept-seed"]),
         .executable(name: "memchat-save-reply", targets: ["memchat-save-reply"]),
@@ -370,6 +371,16 @@ let package = Package(
                 .product(name: "SecretStore", package: "swift-secretstore")
             ],
             path: "Sources/memchat-app"
+        ),
+        .executableTarget(
+            name: "memchat-teatro",
+            dependencies: [
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "MemChatKit", package: "MemChatKit"),
+                .product(name: "SecretStore", package: "swift-secretstore"),
+                .product(name: "TeatroGUI", package: "TeatroGUI")
+            ],
+            path: "Sources/memchat-teatro"
         ),
         .executableTarget(
             name: "fk-ops-server",

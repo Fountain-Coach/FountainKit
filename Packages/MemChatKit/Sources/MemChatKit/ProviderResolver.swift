@@ -9,18 +9,13 @@ struct ProviderResolver {
 
     static let openAIChatURL = URL(string: "https://api.openai.com/v1/chat/completions")!
 
+    /// Select OpenAI as the only supported provider.
+    /// - Returns nil when no API key is provided.
     static func selectProvider(apiKey: String?, openAIEndpoint: URL?, localEndpoint: URL?) -> Selection? {
         let trimmedKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Prefer OpenAI when key exists
-        if let trimmedKey, !trimmedKey.isEmpty {
-            let url = openAIEndpoint ?? openAIChatURL
-            return Selection(label: "openai", endpoint: url, usesAPIKey: true)
-        }
-        // Otherwise use local if provided
-        if let local = localEndpoint {
-            return Selection(label: "local", endpoint: local, usesAPIKey: false)
-        }
-        return nil
+        guard let trimmedKey, !trimmedKey.isEmpty else { return nil }
+        let url = openAIEndpoint ?? openAIChatURL
+        return Selection(label: "openai", endpoint: url, usesAPIKey: true)
     }
 
     static func modelsURL(for chatEndpoint: URL) -> URL {

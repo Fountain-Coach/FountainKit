@@ -10,13 +10,10 @@ final class ProviderResolverTests: XCTestCase {
         XCTAssertTrue((sel?.endpoint.host ?? "").contains("openai.com"))
     }
 
-    func testLocalSelectedWhenNoKey() {
+    func testNilWhenNoKeyEvenIfLocalProvided() {
         let url = URL(string: "http://127.0.0.1:11434/v1/chat/completions")!
         let sel = ProviderResolver.selectProvider(apiKey: nil, openAIEndpoint: nil, localEndpoint: url)
-        XCTAssertNotNil(sel)
-        XCTAssertEqual(sel?.label, "local")
-        XCTAssertFalse(sel!.usesAPIKey)
-        XCTAssertEqual(sel?.endpoint, url)
+        XCTAssertNil(sel)
     }
 
     func testOpenAIPreferredWhenKeyAndLocal() {
@@ -37,4 +34,3 @@ final class ProviderResolverTests: XCTestCase {
         XCTAssertEqual(ProviderResolver.modelsURL(for: base).path, "/v1/models")
     }
 }
-

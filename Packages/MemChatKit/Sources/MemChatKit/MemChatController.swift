@@ -104,8 +104,8 @@ public final class MemChatController: ObservableObject {
 
         Task { await self.loadContinuityDigest() }
         // Provider label
-        let isOpenAI = (provider?.label == "openai")
-        self.providerLabel = isOpenAI ? "openai" : "local"
+        // OpenAI is the only supported provider
+        self.providerLabel = "openai"
     }
 
     public func newChat() {

@@ -5,7 +5,7 @@ A discreet, context‑aware chat library for Swift projects, built on FountainAI
 - Semantic memory from a selected corpus (e.g., `segments` collection)
 - Per‑chat isolated persistence (each session writes to a new chat corpus)
 - Discreet prompting: compact, factual context (no chain‑of‑thought)
-- OpenAI‑compatible provider (hosted OpenAI or local compatible endpoints)
+- OpenAI provider only (no local endpoints)
 - Optional gateway/awareness endpoints for observability
 - Drop‑in SwiftUI view (`MemChatView`) or controller API (`MemChatController`)
 

@@ -22,6 +22,7 @@ public final class MemChatController: ObservableObject {
     @Published public private(set) var chatCorpusId: String
     @Published public private(set) var providerLabel: String = ""
     @Published public private(set) var lastError: String? = nil
+    @Published public private(set) var memoryTrail: [String] = []
 
     private let vm: EngraverChatViewModel
     private let store: FountainStoreClient
@@ -94,7 +95,14 @@ public final class MemChatController: ObservableObject {
         )
 
         // Bind outputs
-        vm.$turns.sink { [weak self] in self?.turns = $0 }.store(in: &cancellables)
+        vm.$turns.sink { [weak self] newTurns in
+            guard let self else { return }
+            let oldCount = self.turns.count
+            self.turns = newTurns
+            if let last = newTurns.last, newTurns.count > oldCount {
+                Task { await self.persistReflection(from: last) }
+            }
+        }.store(in: &cancellables)
         vm.$activeTokens
             .map { $0.joined() }
             .removeDuplicates()
@@ -104,7 +112,12 @@ public final class MemChatController: ObservableObject {
         vm.$state.sink { [weak self] s in self?.state = s }.store(in: &cancellables)
         vm.$lastError.sink { [weak self] e in self?.lastError = e }.store(in: &cancellables)
 
-        Task { await self.loadContinuityDigest() }
+        Task {
+            await self.loadContinuityDigest()
+            if self.config.awarenessURL != nil {
+                await self.refreshAwareness(reason: "init")
+            }
+        }
         // Provider label
         self.providerLabel = useGateway ? "gateway" : "openai"
     }
@@ -217,6 +230,46 @@ public final class MemChatController: ObservableObject {
         let ts = Int(Date().timeIntervalSince1970)
         let suffix = UUID().uuidString.prefix(6)
         return "chat-\(ts)-\(suffix)"
+    }
+
+    // MARK: - Awareness integration & reflections
+    private func logTrail(_ event: String) {
+        let stamp = Int(Date().timeIntervalSince1970) % 100000
+        let line = "[\(stamp)] \(event)"
+        if memoryTrail.count > 80 { memoryTrail.removeFirst(memoryTrail.count - 80) }
+        memoryTrail.append(line)
+    }
+
+    private func refreshAwareness(reason: String) async {
+        logTrail("awareness.refresh (reason=\(reason))")
+        await MainActor.run { vm.refreshAwareness() }
+    }
+
+    private func persistReflection(from turn: EngraverChatTurn) async {
+        guard let base = config.awarenessURL else { return }
+        do {
+            var req = URLRequest(url: base.appending(path: "/corpus/reflections"))
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            let body: [String: Any] = [
+                "corpusId": config.memoryCorpusId,
+                "reflectionId": turn.id.uuidString,
+                "question": turn.prompt,
+                "content": turn.answer
+            ]
+            req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            if (200...299).contains(code) {
+                logTrail("awareness.reflection ok • id=\(turn.id) \(turn.prompt.prefix(24))…")
+                await refreshAwareness(reason: "post-reflection")
+            } else {
+                let text = String(data: data, encoding: .utf8) ?? ""
+                logTrail("awareness.reflection fail • http=\(code) \(text)")
+            }
+        } catch {
+            logTrail("awareness.reflection error • \(error)")
+        }
     }
 }
 

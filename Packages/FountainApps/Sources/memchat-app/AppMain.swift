@@ -83,6 +83,15 @@ struct MemChatRootView: View {
             if !connectionStatus.isEmpty {
                 Text(connectionStatus).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 8)
             }
+            // Memory trail (audit of background memory operations)
+            if !controllerHolder.controller.memoryTrail.isEmpty {
+                let lines = controllerHolder.controller.memoryTrail.suffix(4)
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                        Text(line).font(.caption2).foregroundStyle(.tertiary)
+                    }
+                }.padding(.horizontal, 8)
+            }
             Divider()
             MemChatView(controller: controllerHolder.controller)
         }

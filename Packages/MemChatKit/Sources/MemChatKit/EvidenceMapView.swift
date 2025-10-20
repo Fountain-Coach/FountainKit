@@ -17,6 +17,7 @@ public struct EvidenceMapView: View {
     let covered: [Overlay]
     let stale: [Overlay]
     let missing: [Overlay]
+    let onSelect: ((Overlay) -> Void)?
     @State private var showCovered = true
     @State private var showStale = true
     @State private var showMissing = false
@@ -28,15 +29,17 @@ public struct EvidenceMapView: View {
         self.covered = overlays
         self.stale = []
         self.missing = []
+        self.onSelect = nil
     }
 
-    public init(title: String, imageURL: URL?, covered: [Overlay], stale: [Overlay] = [], missing: [Overlay] = [], initialCoverage: Double? = nil) {
+    public init(title: String, imageURL: URL?, covered: [Overlay], stale: [Overlay] = [], missing: [Overlay] = [], initialCoverage: Double? = nil, onSelect: ((Overlay) -> Void)? = nil) {
         self.title = title
         self.imageURL = imageURL
         self.covered = covered
         self.stale = stale
         self.missing = missing
         self._initialCoverage = State(initialValue: initialCoverage)
+        self.onSelect = onSelect
     }
 
     public var body: some View {
@@ -88,6 +91,7 @@ public struct EvidenceMapView: View {
                             .frame(width: r.width, height: r.height)
                             .position(x: r.midX, y: r.midY)
                             .accessibilityLabel(Text(ov.id))
+                            .onTapGesture { onSelect?(ov) }
                     }
                 }
             }

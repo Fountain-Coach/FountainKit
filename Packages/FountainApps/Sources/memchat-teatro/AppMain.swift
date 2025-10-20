@@ -255,7 +255,13 @@ struct MemChatTeatroRootView: View {
                 .padding(12)
         }
         .sheet(isPresented: $showMap) {
-            EvidenceMapView(title: "Visual Evidence — \(evidenceHost)", imageURL: mapImageURL, covered: mapOverlays, initialCoverage: mapCoverage)
+            EvidenceMapView(
+                title: "Visual Evidence — \(evidenceHost)",
+                imageURL: mapImageURL,
+                covered: mapOverlays,
+                initialCoverage: mapCoverage,
+                onSelect: { ov in copyToClipboard(ov.id) }
+            )
                 .frame(minWidth: 720, minHeight: 520)
                 .padding(12)
         }

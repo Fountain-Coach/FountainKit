@@ -2132,18 +2132,7 @@ extension MemChatController {
             let snapshot = body.snapshot
             guard let image = snapshot.rendered.image, let analysis = body.analysis, let imageId = image.imageId else { return nil }
             // Convert rects keyed to this image into overlays
-            var overlays: [EvidenceMapView.Overlay] = []
-            for b in analysis.blocks {
-                if let rects = b.rects {
-                    for (i, r) in rects.enumerated() {
-                        if r.imageId == imageId {
-                            let rect = CGRect(x: CGFloat(r.x ?? 0), y: CGFloat(r.y ?? 0), width: CGFloat(r.w ?? 0), height: CGFloat(r.h ?? 0))
-                            guard rect.width > 0, rect.height > 0 else { continue }
-                            overlays.append(.init(id: "\(b.id)-\(i)", rect: rect, color: .green))
-                        }
-                    }
-                }
-            }
+            let overlays = VisualOverlayBuilder.overlays(from: analysis, imageId: imageId)
             // Build asset fetch URL (dev route)
             let imgURL = browser.baseURL.appendingPathComponent("assets").appendingPathComponent("\(imageId).png")
             let coverage = Double(VisualCoverageUtils.unionAreaNormalized(overlays.map { $0.rect }))

@@ -116,6 +116,24 @@ public func makeSemanticKernel(service: SemanticMemoryService, engine: BrowserEn
             }
         }
         switch (head.method, path) {
+        case (.GET, let p) where p.hasPrefix("/assets/"):
+            // Serve dev asset images by imageId
+            let parts = p.split(separator: "/").map(String.init)
+            if parts.count == 3, let imageName = parts.last, imageName.hasSuffix(".png") {
+                let imageId = String(imageName.dropLast(4))
+                if let ref = await service.loadArtifactRef(ownerId: imageId, kind: "image/png") {
+                    if let data = try? Data(contentsOf: URL(fileURLWithPath: ref)) {
+                        var buf = ByteBufferAllocator().buffer(capacity: data.count)
+                        buf.writeBytes(data)
+                        var headers = HTTPHeaders()
+                        headers.add(name: "Content-Length", value: "\(buf.readableBytes)")
+                        headers.add(name: "Content-Type", value: "image/png")
+                        return (.ok, buf)
+                    }
+                }
+                return error(.notFound, "asset not found")
+            }
+            return error(.badRequest, "invalid asset path")
         case (.POST, "/v1/index"):
             guard let body, let data = body.getData(at: 0, length: body.readableBytes) else {
                 return error(.badRequest, "body required")

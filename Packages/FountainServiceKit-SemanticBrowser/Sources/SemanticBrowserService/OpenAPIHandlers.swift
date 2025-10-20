@@ -90,8 +90,17 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
         guard case let .json(req) = input.body else {
             return .undocumented(statusCode: 400, OpenAPIRuntime.UndocumentedPayload())
         }
-        let snapshot = try await makeSnapshot(url: req.url)
-        let analysis = makeAnalysis(fromHTML: snapshot.rendered.html, text: snapshot.rendered.text, url: snapshot.page.uri, contentType: snapshot.page.contentType)
+        // One engine call to capture snapshot + optional CDP rects
+        let raw = try await engine.snapshot(for: req.url, wait: nil, capture: nil)
+        let snapshot = try await makeSnapshot(from: raw, url: req.url)
+        let analysis = makeAnalysis(
+            fromHTML: snapshot.rendered.html,
+            text: snapshot.rendered.text,
+            url: snapshot.page.uri,
+            contentType: snapshot.page.contentType,
+            imageId: snapshot.rendered.image?.imageId,
+            rectsByBlock: raw.blockRects
+        )
         let resp = Components.Schemas.BrowseResponse(snapshot: snapshot, analysis: analysis, index: nil)
         return .ok(.init(body: .json(resp)))
     }
@@ -99,7 +108,8 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
         guard case let .json(req) = input.body else {
             return .undocumented(statusCode: 400, OpenAPIRuntime.UndocumentedPayload())
         }
-        let snapshot = try await makeSnapshot(url: req.url)
+        let raw = try await engine.snapshot(for: req.url, wait: nil, capture: nil)
+        let snapshot = try await makeSnapshot(from: raw, url: req.url)
         return .ok(.init(body: .json(.init(snapshot: snapshot))))
     }
     public func analyzeSnapshot(_ input: Operations.analyzeSnapshot.Input) async throws -> Operations.analyzeSnapshot.Output {
@@ -118,7 +128,7 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
         } else {
             return .undocumented(statusCode: 400, OpenAPIRuntime.UndocumentedPayload())
         }
-        let analysis = makeAnalysis(fromHTML: html, text: text, url: url, contentType: contentType)
+        let analysis = makeAnalysis(fromHTML: html, text: text, url: url, contentType: contentType, imageId: nil, rectsByBlock: nil)
         return .ok(.init(body: .json(analysis)))
     }
     public func verifyEdition(_ input: Operations.verifyEdition.Input) async throws -> Operations.verifyEdition.Output {
@@ -331,7 +341,7 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
 
     private func fallbackAnalysisFromSnapshot(pageId: String) async -> Components.Schemas.Analysis? {
         guard let s = await resolveSnapshot(pageId: pageId) else { return nil }
-        return makeAnalysis(fromHTML: s.rendered.html, text: s.rendered.text, url: s.page.finalUrl ?? s.page.uri, contentType: s.page.contentType)
+        return makeAnalysis(fromHTML: s.rendered.html, text: s.rendered.text, url: s.page.finalUrl ?? s.page.uri, contentType: s.page.contentType, imageId: nil, rectsByBlock: nil)
     }
 
     // Convert JSONSerialization trees into Sendable JSON compatible trees.
@@ -357,8 +367,7 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
     }
 
     // MARK: - Helpers
-    private func makeSnapshot(url: String) async throws -> Components.Schemas.Snapshot {
-        let r = try await engine.snapshot(for: url, wait: nil, capture: nil)
+    private func makeSnapshot(from r: SnapshotResult, url: String) async throws -> Components.Schemas.Snapshot {
         let page = Components.Schemas.Snapshot.pagePayload(
             uri: url,
             finalUrl: r.finalURL,
@@ -367,10 +376,15 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
             contentType: r.pageContentType ?? "text/html",
             navigation: .init(ttfbMs: nil, loadMs: r.loadMs)
         )
-        let image: Components.Schemas.Snapshot.renderedPayload.imagePayload? = {
-            guard r.screenshotPNG != nil, let w = r.screenshotWidth, let h = r.screenshotHeight else { return nil }
-            // We don't inline the PNG into JSON; rendered.image carries metadata only
-            return .init(imageId: UUID().uuidString, contentType: "image/png", width: w, height: h, scale: r.screenshotScale ?? 1.0)
+        // Attach image metadata and persist asset if available
+        let image: Components.Schemas.Snapshot.renderedPayload.imagePayload? = await {
+            guard let png = r.screenshotPNG, let w = r.screenshotWidth, let h = r.screenshotHeight else { return nil }
+            let id = UUID().uuidString
+            // Persist dev asset to disk path
+            if let path = try? persistImageAsset(imageId: id, data: png) {
+                await service.storeArtifactRef(ownerId: id, kind: "image/png", refPath: path)
+            }
+            return .init(imageId: id, contentType: "image/png", width: w, height: h, scale: r.screenshotScale ?? 1.0)
         }()
         let rendered = Components.Schemas.Snapshot.renderedPayload(html: r.html, text: r.text, image: image, meta: nil)
         let requests: [Components.Schemas.Snapshot.networkPayload.requestsPayloadPayload]? = r.network?.map { req in
@@ -394,7 +408,18 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
         return snapshot
     }
 
-    private func makeAnalysis(fromHTML html: String, text: String, url: String, contentType: String) -> Components.Schemas.Analysis {
+    // Dev-only asset persistence to a predictable local folder
+    private func persistImageAsset(imageId: String, data: Data) throws -> String {
+        let env = ProcessInfo.processInfo.environment
+        let base = env["SB_ASSET_DIR"] ?? (FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".fountain", isDirectory: true).appendingPathComponent("semantic-browser", isDirectory: true).path)
+        let dirURL = URL(fileURLWithPath: base, isDirectory: true).appendingPathComponent("snapshots", isDirectory: true)
+        try FileManager.default.createDirectory(at: dirURL, withIntermediateDirectories: true)
+        let fileURL = dirURL.appendingPathComponent("\(imageId).png", isDirectory: false)
+        try data.write(to: fileURL, options: .atomic)
+        return fileURL.path
+    }
+
+    private func makeAnalysis(fromHTML html: String, text: String, url: String, contentType: String, imageId: String?, rectsByBlock: [String: [NormalizedRect]]?) -> Components.Schemas.Analysis {
         let spans = parser.parseTextAndBlocks(from: html).1
         // Synthetic rects: distribute normalized bands by block index to provide a visual anchor fallback
         func syntheticRects(total: Int, index: Int, text: String) -> Components.Schemas.Block.rectsPayload {
@@ -414,12 +439,27 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
         }
         let total = spans.count
         let blocks: [Components.Schemas.Block] = spans.enumerated().map { idx, s in
-            Components.Schemas.Block(
+            let synthetic = syntheticRects(total: total, index: idx, text: s.text)
+            let real: Components.Schemas.Block.rectsPayload? = {
+                guard let imageId, let rectsByBlock, let rs = rectsByBlock[s.id], !rs.isEmpty else { return nil }
+                return rs.map { r in
+                    Components.Schemas.Block.rectsPayloadPayload(
+                        imageId: imageId,
+                        x: r.x,
+                        y: r.y,
+                        w: r.w,
+                        h: r.h,
+                        excerpt: r.excerpt ?? String(s.text.prefix(120)),
+                        confidence: r.confidence ?? 0.9
+                    )
+                }
+            }()
+            return Components.Schemas.Block(
                 id: s.id,
                 kind: Components.Schemas.Block.kindPayload(rawValue: s.kind) ?? .paragraph,
                 level: s.level,
                 text: s.text,
-                rects: syntheticRects(total: total, index: idx, text: s.text),
+                rects: real ?? synthetic,
                 span: [s.start, s.end],
                 table: s.table.map { Components.Schemas.Table(caption: $0.caption, columns: $0.columns, rows: $0.rows) }
             )

@@ -14,6 +14,24 @@ public struct SnapshotResult: Sendable {
     public let pageStatus: Int?
     public let pageContentType: String?
     public let adminNetwork: [AdminNetworkRequest]?
+    public let screenshotPNG: Data?
+    public let screenshotWidth: Int?
+    public let screenshotHeight: Int?
+    public let screenshotScale: Float?
+    // Optional: normalized block rects keyed by parser IDs (e.g. "h0", "p0")
+    public let blockRects: [String: [NormalizedRect]]?
+}
+
+public struct NormalizedRect: Sendable, Codable, Equatable {
+    public let x: Float
+    public let y: Float
+    public let w: Float
+    public let h: Float
+    public let excerpt: String?
+    public let confidence: Float?
+    public init(x: Float, y: Float, w: Float, h: Float, excerpt: String? = nil, confidence: Float? = nil) {
+        self.x = x; self.y = y; self.w = w; self.h = h; self.excerpt = excerpt; self.confidence = confidence
+    }
 }
 
 public protocol BrowserEngine: Sendable {
@@ -53,7 +71,7 @@ public struct URLFetchBrowserEngine: BrowserEngine {
         let html = String(data: data, encoding: .utf8) ?? ""
         let text = html.removingHTMLTags()
         if let ct = contentType, let semi = ct.firstIndex(of: ";") { contentType = String(ct[..<semi]) }
-        return SnapshotResult(html: html, text: text, finalURL: finalURL, loadMs: elapsed, network: nil, pageStatus: pageStatus, pageContentType: contentType, adminNetwork: nil)
+        return SnapshotResult(html: html, text: text, finalURL: finalURL, loadMs: elapsed, network: nil, pageStatus: pageStatus, pageContentType: contentType, adminNetwork: nil, screenshotPNG: nil, screenshotWidth: nil, screenshotHeight: nil, screenshotScale: nil, blockRects: nil)
     }
 }
 
@@ -79,14 +97,14 @@ public struct ShellBrowserEngine: BrowserEngine {
         let html = String(data: data, encoding: .utf8) ?? ""
         let text = html.removingHTMLTags()
         let elapsed = Int(Date().timeIntervalSince(start) * 1000.0)
-        return SnapshotResult(html: html, text: text, finalURL: url, loadMs: elapsed, network: nil, pageStatus: nil, pageContentType: nil, adminNetwork: nil)
+        return SnapshotResult(html: html, text: text, finalURL: url, loadMs: elapsed, network: nil, pageStatus: nil, pageContentType: nil, adminNetwork: nil, screenshotPNG: nil, screenshotWidth: nil, screenshotHeight: nil, screenshotScale: nil, blockRects: nil)
     }
 }
 
 public extension BrowserEngine {
     func snapshot(for url: String, wait: APIModels.WaitPolicy?, capture: CaptureOptions?) async throws -> SnapshotResult {
         let r = try await snapshotHTML(for: url)
-        return SnapshotResult(html: r.html, text: r.text, finalURL: url, loadMs: nil, network: nil, pageStatus: nil, pageContentType: nil, adminNetwork: nil)
+        return SnapshotResult(html: r.html, text: r.text, finalURL: url, loadMs: nil, network: nil, pageStatus: nil, pageContentType: nil, adminNetwork: nil, screenshotPNG: nil, screenshotWidth: nil, screenshotHeight: nil, screenshotScale: nil, blockRects: nil)
     }
 }
 

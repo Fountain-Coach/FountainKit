@@ -45,7 +45,25 @@ final class CDPVisualAnchorsTests: XCTestCase {
         let hasRects = blocks?.contains(where: { ($0["rects"] as? [[String: Any]])?.isEmpty == false }) ?? false
         XCTAssertTrue(hasRects, "expected rect anchors present in analysis blocks")
 
+        // When CDP runs, prefer non-synthetic rects normalized to 0..1
+        if let img = image, let imageId = img["imageId"] as? String, let blks = blocks {
+            let anyReal = blks.contains { blk in
+                guard let rects = blk["rects"] as? [[String: Any]], !rects.isEmpty else { return false }
+                return rects.contains { ($0["imageId"] as? String) == imageId }
+            }
+            XCTAssertTrue(anyReal, "expected rects to reference actual imageId (non-synthetic)")
+            // Validate normalization
+            for blk in blks {
+                guard let rects = blk["rects"] as? [[String: Any]] else { continue }
+                for r in rects {
+                    guard (r["imageId"] as? String) == imageId else { continue }
+                    let xs: [Double] = ["x","y","w","h"].compactMap { r[$0] as? Double }
+                    XCTAssertEqual(xs.count, 4)
+                    XCTAssertTrue(xs.allSatisfy { $0 >= 0.0 && $0 <= 1.0 }, "rect components must be normalized 0..1")
+                }
+            }
+        }
+
         try await server.stop()
     }
 }
-

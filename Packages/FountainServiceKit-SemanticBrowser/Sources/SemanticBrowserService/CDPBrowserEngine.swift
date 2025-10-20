@@ -108,7 +108,7 @@ public struct CDPBrowserEngine: BrowserEngine {
                 docStatus = main.status
                 docCT = main.mimeType
             }
-            // Best-effort screenshot capture
+            // Best-effort screenshot capture + layout metrics
             var shot: Data? = nil
             var w: Int? = nil
             var h: Int? = nil
@@ -119,16 +119,98 @@ public struct CDPBrowserEngine: BrowserEngine {
                 w = Int(met.contentSize.width)
                 h = Int(met.contentSize.height)
                 struct Shot: Decodable { let data: String }
-                let s: Shot = try await session.sendRecv("Page.captureScreenshot", params: ["format": "png"], result: Shot.self)
+                let s: Shot = try await session.sendRecv(
+                    "Page.captureScreenshot",
+                    params: [
+                        "format": "png",
+                        "captureBeyondViewport": true,
+                        "fromSurface": true
+                    ],
+                    result: Shot.self
+                )
                 shot = Data(base64Encoded: s.data)
             } catch { /* ignore */ }
-            return SnapshotResult(html: html, text: text, finalURL: final, loadMs: loadMs, network: requests, pageStatus: docStatus, pageContentType: docCT, adminNetwork: adminRequests, screenshotPNG: shot, screenshotWidth: w, screenshotHeight: h, screenshotScale: scale)
+            // Extract client rects for headings/paragraphs and normalize to page content size
+            var blockRects: [String: [NormalizedRect]]? = nil
+            do {
+                struct RawRect: Decodable { let x: Double; let y: Double; let w: Double; let h: Double; let excerpt: String? }
+                typealias RawMap = [String: [RawRect]]
+                let js = """
+                (function(){
+                  try {
+                    const out = {};
+                    let hCount = 0, pCount = 0;
+                    const nodes = Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6,p'));
+                    for (const el of nodes) {
+                      let id = (/^H[1-6]$/.test(el.tagName) ? ('h' + (hCount++)) : ('p' + (pCount++)));
+                      const range = document.createRange();
+                      range.selectNodeContents(el);
+                      const rectList = range.getClientRects();
+                      const text = (el.innerText || '').trim();
+                      const rects = [];
+                      for (let i=0;i<rectList.length;i++){
+                        const r = rectList[i];
+                        const x = r.left + window.scrollX;
+                        const y = r.top + window.scrollY;
+                        const w = r.width;
+                        const h = r.height;
+                        if (w > 0 && h > 0) rects.push({x, y, w, h, excerpt: text.slice(0,120)});
+                      }
+                      if (rects.length === 0) {
+                        const b = el.getBoundingClientRect();
+                        const x = b.left + window.scrollX;
+                        const y = b.top + window.scrollY;
+                        const w = b.width;
+                        const h = b.height;
+                        if (w > 0 && h > 0) rects.push({x, y, w, h, excerpt: text.slice(0,120)});
+                      }
+                      out[id] = rects;
+                    }
+                    return out;
+                  } catch (e) { return {}; }
+                })()
+                """
+                if let raw: RawMap = try await session.evalValue(expression: js, as: RawMap.self), let wpx = w, let hpx = h, wpx > 0, hpx > 0 {
+                    var norm: [String: [NormalizedRect]] = [:]
+                    for (k, arr) in raw {
+                        var list: [NormalizedRect] = []
+                        for r in arr {
+                            let nx = max(0.0, min(1.0, Float(r.x / Double(wpx))))
+                            let ny = max(0.0, min(1.0, Float(r.y / Double(hpx))))
+                            let nw = max(0.0, min(1.0, Float(r.w / Double(wpx))))
+                            let nh = max(0.0, min(1.0, Float(r.h / Double(hpx))))
+                            list.append(NormalizedRect(x: nx, y: ny, w: nw, h: nh, excerpt: r.excerpt, confidence: 0.9))
+                        }
+                        if !list.isEmpty { norm[k] = list }
+                    }
+                    if !norm.isEmpty { blockRects = norm }
+                }
+            } catch { /* ignore rects */ }
+            return SnapshotResult(
+                html: html,
+                text: text,
+                finalURL: final,
+                loadMs: loadMs,
+                network: requests,
+                pageStatus: docStatus,
+                pageContentType: docCT,
+                adminNetwork: adminRequests,
+                screenshotPNG: shot,
+                screenshotWidth: w,
+                screenshotHeight: h,
+                screenshotScale: scale,
+                blockRects: blockRects
+            )
         } else {
             throw BrowserError.fetchFailed
         }
     }
 }
 
+@available(macOS 14.0, *)
+private struct CDPRuntimeEnableAck: Decodable {}
+@available(macOS 14.0, *)
+private struct CDPEvalResult<T: Decodable>: Decodable { struct Inner: Decodable { let value: T? }; let result: Inner }
 @available(macOS 14.0, *)
 actor CDPSession {
     let wsURL: URL
@@ -314,10 +396,14 @@ actor CDPSession {
         return out.outerHTML
     }
     func evaluate(expression: String) async throws {
-        struct R: Decodable {}
-        _ = try await sendRecv("Runtime.enable", params: [:], result: R.self)
-        struct E: Decodable {}
-        _ = try await sendRecv("Runtime.evaluate", params: ["expression": expression, "returnByValue": true], result: E.self)
+        _ = try await sendRecv("Runtime.enable", params: [:], result: CDPRuntimeEnableAck.self)
+        struct EvalVoid: Decodable {}
+        _ = try await sendRecv("Runtime.evaluate", params: ["expression": expression, "returnByValue": true], result: EvalVoid.self)
+    }
+    func evalValue<T: Decodable>(expression: String, as: T.Type) async throws -> T? {
+        _ = try await sendRecv("Runtime.enable", params: [:], result: CDPRuntimeEnableAck.self)
+        let r: CDPEvalResult<T> = try await sendRecv("Runtime.evaluate", params: ["expression": expression, "returnByValue": true], result: CDPEvalResult<T>.self)
+        return r.result.value
     }
     func getResponseBody(requestId: String) async throws -> (String, Bool) {
         struct BodyRes: Decodable { let body: String; let base64Encoded: Bool }

@@ -30,14 +30,14 @@ Make MemChat’s memory coverage visual, verifiable, and explorable. Show precis
 - Regenerate types/clients/servers via `swift-openapi-generator` for any targets touching the spec.
 
 ### Phase 2 — Capture + Anchoring
-(In progress)
-- Tests added:
-  - `CDPVisualAnchorsTests` (gated by `SB_CDP_URL`) — verifies `rendered.image` metadata and presence of `blocks[].rects`.
-  - `VisualAnchorsTests` — synthetic fallback rects exist without CDP.
-  - `VisualAssetPersistenceTests` — stubbed (skipped) until asset store + fetch routes land.
-- Implementation to finish:
-  - CDP: DOM clientRects → normalized screenshot coords; prefer over synthetic.
-  - Dev asset store: persist PNG at a predictable path (local) and fetch via a simple route.
+(Progress: CDP rects + dev asset fetch done)
+- Tests:
+  - `CDPVisualAnchorsTests` (gated by `SB_CDP_URL`) — now also asserts rects reference the actual `imageId` and are normalized to 0..1.
+  - `VisualAnchorsTests` — synthetic fallback rects exist without CDP — PASS.
+  - `VisualAssetPersistenceTests` — enabled (gated by `SB_CDP_URL`), browses, then GETs `/assets/<imageId>.png` and asserts `image/png` + body — PASS when CDP is configured.
+- Implementation:
+  - CDP: Extract `getClientRects()` for `h1..h6` and `p`, map to parser IDs (`h0`, `p0`, ...), normalize to full-page content size, and prefer these over synthetic anchors when present.
+  - Dev asset store + route: Persist PNG to `~/.fountain/semantic-browser/snapshots/<imageId>.png` (override with `SB_ASSET_DIR`), serve via `GET /assets/<imageId>.png` in the NIO kernel.
 - Web (Semantic Browser):
   - Use CDP to capture full‑page PNG and DOM clientRects for analysis blocks.
   - Normalize rects to image coordinate space; record `scale`.

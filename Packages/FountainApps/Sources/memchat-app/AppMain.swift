@@ -102,6 +102,11 @@ struct MemChatRootView: View {
     @State private var mapOverlays: [EvidenceMapView.Overlay] = []
     @State private var mapImageURL: URL? = nil
     @State private var mapCoverage: Double = 0
+    @State private var mapCovered: [EvidenceMapView.Overlay] = []
+    @State private var mapMissing: [EvidenceMapView.Overlay] = []
+    @State private var mapStale: [EvidenceMapView.Overlay] = []
+    @State private var mapPageId: String = ""
+    @State private var staleDays: Int = 60
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
@@ -251,12 +256,20 @@ struct MemChatRootView: View {
                               copy: { copyToClipboard(evidenceItems.map { $0.text + " — [\($0.title)](\($0.url))" }.joined(separator: "\n")) },
                               openMap: {
                                   Task {
-                                      if let result = await controllerHolder.controller.buildEvidenceMap(host: evidenceHost) {
-                                          mapImageURL = result.imageURL
-                                          mapOverlays = result.overlays
-                                          mapCoverage = result.coverage
+                                      if let r = await controllerHolder.controller.buildEvidenceMapWithStale(host: evidenceHost, staleThresholdDays: staleDays) {
+                                          mapPageId = r.pageId
+                                          mapImageURL = r.imageURL
+                                          mapCovered = r.covered
+                                          mapMissing = r.missing
+                                          mapStale = r.stale
+                                          mapCoverage = r.coverage
+                                          mapOverlays = r.covered + r.missing
                                       } else {
+                                          mapPageId = ""
                                           mapImageURL = nil
+                                          mapCovered = []
+                                          mapMissing = []
+                                          mapStale = []
                                           mapOverlays = buildMockOverlays(from: evidenceItems)
                                           mapCoverage = Double(VisualCoverageUtils.unionAreaNormalized(mapOverlays.map { $0.rect }))
                                       }
@@ -268,19 +281,32 @@ struct MemChatRootView: View {
             .padding(12)
         }
         .sheet(isPresented: $showMap) {
-            // Split mapOverlays by color into covered vs missing for viewer toggles
-            let covered = mapOverlays.filter { $0.color == .green }
-            let missing = mapOverlays.filter { $0.color == .red }
-            EvidenceMapView(
-                title: "Visual Evidence — \(evidenceHost)",
-                imageURL: mapImageURL,
-                covered: covered,
-                missing: missing,
-                initialCoverage: mapCoverage,
-                onSelect: { ov in copyToClipboard(ov.id) }
-            )
-                .frame(minWidth: 720, minHeight: 520)
-                .padding(12)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Stale Threshold:")
+                    Picker("Stale", selection: $staleDays) {
+                        Text("30d").tag(30); Text("60d").tag(60); Text("90d").tag(90)
+                    }.pickerStyle(.segmented).frame(width: 200)
+                    Spacer()
+                    Button("Refresh Stale") {
+                        Task {
+                            guard !mapPageId.isEmpty, let stale = await controllerHolder.controller.fetchStaleOverlays(pageId: mapPageId, staleThresholdDays: staleDays) else { return }
+                            mapStale = stale
+                        }
+                    }
+                }
+                EvidenceMapView(
+                    title: "Visual Evidence — \(evidenceHost)",
+                    imageURL: mapImageURL,
+                    covered: mapCovered,
+                    stale: mapStale,
+                    missing: mapMissing,
+                    initialCoverage: mapCoverage,
+                    onSelect: { ov in copyToClipboard(ov.id) }
+                )
+            }
+            .frame(minWidth: 720, minHeight: 520)
+            .padding(12)
         }
         .sheet(isPresented: $showHelp) { HelpSheet(onClose: { showHelp = false }, openStore: { openStoreFolder() }, openLogs: { openLogsFolder() }) .frame(minWidth: 640, minHeight: 520).padding(12) }
         .task { await refreshTopHosts() }

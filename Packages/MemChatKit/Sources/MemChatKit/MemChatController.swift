@@ -2144,6 +2144,83 @@ extension MemChatController {
         }
     }
 
+    // Build evidence map with stale classification from the server's persisted visuals.
+    public func buildEvidenceMapWithStale(host: String, staleThresholdDays: Int) async -> (pageId: String, imageURL: URL, covered: [EvidenceMapView.Overlay], missing: [EvidenceMapView.Overlay], stale: [EvidenceMapView.Overlay], coverage: Double)? {
+        // First, perform a browse to obtain analysis, imageId, and the page/analysis id
+        guard let browser = browserConfig else { return nil }
+        var defaultHeaders: [String: String] = [:]
+        if let apiKey = browser.apiKey, !apiKey.isEmpty { defaultHeaders["X-API-Key"] = apiKey }
+        let transport = URLSessionTransport()
+        let middlewares = OpenAPIClientFactory.defaultMiddlewares(defaultHeaders: defaultHeaders)
+        let client = SemanticBrowserAPI.Client(serverURL: browser.baseURL, transport: transport, middlewares: middlewares)
+
+        // Resolve a target URL and perform a /v1/browse for fresh analysis
+        let recent = await fetchHostCoverage(host: host, limit: 1).recent
+        let targetURL: URL = (recent.first.flatMap { URL(string: $0.url) }) ?? URL(string: "https://\(host)")!
+        let wait = SemanticBrowserAPI.Components.Schemas.WaitPolicy(strategy: .networkIdle, networkIdleMs: 500, selector: nil, maxWaitMs: 12000)
+        let browseReq = SemanticBrowserAPI.Components.Schemas.BrowseRequest(url: targetURL.absoluteString, wait: wait, mode: .standard, index: .init(enabled: false), storeArtifacts: false, labels: nil)
+        do {
+            let out = try await client.browseAndDissect(.init(body: .json(browseReq)))
+            guard case .ok(let ok) = out else { return nil }
+            let body = try ok.body.json
+            let snapshot = body.snapshot
+            guard let image = snapshot.rendered.image, let analysis = body.analysis, let imageId = image.imageId else { return nil }
+            let pageId = analysis.envelope.id
+
+            // Covered/missing via token overlap
+            let evidences = await evidencePreview(host: host, depthLevel: config.depthLevel).map { $0.text }
+            let groups = VisualDiffBuilder.classify(analysis: analysis, imageId: imageId, evidenceTexts: evidences, minOverlap: 0.18)
+            let covered = groups.covered
+            let missing = groups.missing
+            let imgURL = browser.baseURL.appendingPathComponent("assets").appendingPathComponent("\(imageId).png")
+            let coverage = Double(VisualCoverageUtils.unionAreaNormalized(covered.map { $0.rect }))
+
+            // Fetch stale overlays via GET /v1/visual?pageId=&staleThresholdDays=
+            var q = SemanticBrowserAPI.Operations.getVisual.Input.Query(pageId: pageId)
+            q.staleThresholdDays = staleThresholdDays
+            let visualOut = try await client.getVisual(.init(query: q))
+            var stale: [EvidenceMapView.Overlay] = []
+            if case .ok(let v) = visualOut {
+                let vr = try v.body.json
+                if let anchors = vr.anchors {
+                    for (i, r) in anchors.enumerated() where (r.stale ?? false) {
+                        let rect = CGRect(x: CGFloat(r.x ?? 0), y: CGFloat(r.y ?? 0), width: CGFloat(r.w ?? 0), height: CGFloat(r.h ?? 0))
+                        guard rect.width > 0, rect.height > 0 else { continue }
+                        stale.append(.init(id: "stale-\(i)", rect: rect, color: .orange))
+                    }
+                }
+            }
+            return (pageId: pageId, imageURL: imgURL, covered: covered, missing: missing, stale: stale, coverage: max(0.0, min(1.0, coverage)))
+        } catch { return nil }
+    }
+
+    // Fetch only stale overlays for an existing pageId using persisted visuals.
+    public func fetchStaleOverlays(pageId: String, staleThresholdDays: Int) async -> [EvidenceMapView.Overlay]? {
+        guard let browser = browserConfig else { return nil }
+        var defaultHeaders: [String: String] = [:]
+        if let apiKey = browser.apiKey, !apiKey.isEmpty { defaultHeaders["X-API-Key"] = apiKey }
+        let transport = URLSessionTransport()
+        let middlewares = OpenAPIClientFactory.defaultMiddlewares(defaultHeaders: defaultHeaders)
+        let client = SemanticBrowserAPI.Client(serverURL: browser.baseURL, transport: transport, middlewares: middlewares)
+        do {
+            var q = SemanticBrowserAPI.Operations.getVisual.Input.Query(pageId: pageId)
+            q.staleThresholdDays = staleThresholdDays
+            let visualOut = try await client.getVisual(.init(query: q))
+            var stale: [EvidenceMapView.Overlay] = []
+            if case .ok(let v) = visualOut {
+                let vr = try v.body.json
+                if let anchors = vr.anchors {
+                    for (i, r) in anchors.enumerated() where (r.stale ?? false) {
+                        let rect = CGRect(x: CGFloat(r.x ?? 0), y: CGFloat(r.y ?? 0), width: CGFloat(r.w ?? 0), height: CGFloat(r.h ?? 0))
+                        guard rect.width > 0, rect.height > 0 else { continue }
+                        stale.append(.init(id: "stale-\(i)", rect: rect, color: .orange))
+                    }
+                }
+            }
+            return stale
+        } catch { return nil }
+    }
+
     /// Learn a few more pages for a host by crawling same-host links starting from the most recent page.
     /// Returns number of pages successfully ingested.
     public func learnMoreForHost(host: String, count: Int = 3, modeLabel: String = "standard") async -> Int {

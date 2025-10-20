@@ -108,7 +108,21 @@ public struct CDPBrowserEngine: BrowserEngine {
                 docStatus = main.status
                 docCT = main.mimeType
             }
-            return SnapshotResult(html: html, text: text, finalURL: final, loadMs: loadMs, network: requests, pageStatus: docStatus, pageContentType: docCT, adminNetwork: adminRequests)
+            // Best-effort screenshot capture
+            var shot: Data? = nil
+            var w: Int? = nil
+            var h: Int? = nil
+            var scale: Float? = 1.0
+            do {
+                struct Metrics: Decodable { struct Size: Decodable { let width: Double; let height: Double }; let contentSize: Size }
+                let met: Metrics = try await session.sendRecv("Page.getLayoutMetrics", params: [:], result: Metrics.self)
+                w = Int(met.contentSize.width)
+                h = Int(met.contentSize.height)
+                struct Shot: Decodable { let data: String }
+                let s: Shot = try await session.sendRecv("Page.captureScreenshot", params: ["format": "png"], result: Shot.self)
+                shot = Data(base64Encoded: s.data)
+            } catch { /* ignore */ }
+            return SnapshotResult(html: html, text: text, finalURL: final, loadMs: loadMs, network: requests, pageStatus: docStatus, pageContentType: docCT, adminNetwork: adminRequests, screenshotPNG: shot, screenshotWidth: w, screenshotHeight: h, screenshotScale: scale)
         } else {
             throw BrowserError.fetchFailed
         }
@@ -173,7 +187,7 @@ actor CDPSession {
         }
     }
 
-    private func sendRecv<T: Decodable>(_ method: String, params: [String: Any]? = nil, result: T.Type) async throws -> T {
+    func sendRecv<T: Decodable>(_ method: String, params: [String: Any]? = nil, result: T.Type) async throws -> T {
         guard let task else { throw BrowserError.fetchFailed }
         let id = nextId; nextId += 1
         var obj: [String: Any] = ["id": id, "method": method]

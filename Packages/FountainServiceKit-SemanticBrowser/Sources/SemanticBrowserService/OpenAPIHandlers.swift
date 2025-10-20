@@ -367,7 +367,12 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
             contentType: r.pageContentType ?? "text/html",
             navigation: .init(ttfbMs: nil, loadMs: r.loadMs)
         )
-        let rendered = Components.Schemas.Snapshot.renderedPayload(html: r.html, text: r.text)
+        let image: Components.Schemas.Snapshot.renderedPayload.imagePayload? = {
+            guard r.screenshotPNG != nil, let w = r.screenshotWidth, let h = r.screenshotHeight else { return nil }
+            // We don't inline the PNG into JSON; rendered.image carries metadata only
+            return .init(imageId: UUID().uuidString, contentType: "image/png", width: w, height: h, scale: r.screenshotScale ?? 1.0)
+        }()
+        let rendered = Components.Schemas.Snapshot.renderedPayload(html: r.html, text: r.text, image: image, meta: nil)
         let requests: [Components.Schemas.Snapshot.networkPayload.requestsPayloadPayload]? = r.network?.map { req in
             Components.Schemas.Snapshot.networkPayload.requestsPayloadPayload(
                 url: req.url,

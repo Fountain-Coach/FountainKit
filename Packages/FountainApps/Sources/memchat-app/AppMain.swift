@@ -94,6 +94,7 @@ struct MemChatRootView: View {
     @State private var hostsCoverage: [MemChatController.HostCoverageItem] = []
     @State private var topHosts: [MemChatController.HostCoverageItem] = []
     @State private var showHelp = false
+    @State private var showVisualBrowser = false
     @State private var showEvidence = false
     @State private var evidenceHost: String = ""
     @State private var evidenceDepth: Int = 2
@@ -122,6 +123,7 @@ struct MemChatRootView: View {
                 Menu("Add Memory") {
                     Button("Learn Site…") { showAddURLSheet = true }
                     Button("Import Files…") { importFiles() }
+                    Button("Open Visual Browser…") { showVisualBrowser = true }
                 }
                 // Plan/Memory controls removed; memory is handled automatically.
                 Button("Test") { Task { await testConnection() } }.help("Check provider/gateway connectivity.")
@@ -357,6 +359,11 @@ struct MemChatRootView: View {
             }
             .frame(minWidth: 720, minHeight: 520)
             .padding(12)
+        }
+        .sheet(isPresented: $showVisualBrowser) {
+            VisualBrowserView(controller: controllerHolder.controller)
+                .frame(minWidth: 920, minHeight: 560)
+                .padding(10)
         }
         .sheet(isPresented: $showHelp) { HelpSheet(onClose: { showHelp = false }, openStore: { openStoreFolder() }, openLogs: { openLogsFolder() }) .frame(minWidth: 640, minHeight: 520).padding(12) }
         .task { await refreshTopHosts() }

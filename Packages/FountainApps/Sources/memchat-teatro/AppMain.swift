@@ -111,6 +111,7 @@ struct MemChatTeatroRootView: View {
     @State private var selectedRect: CGRect? = nil
     @State private var mapImageURL: URL? = nil
     @State private var mapCoverage: Double = 0
+    @State private var showVisualBrowser = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -127,6 +128,7 @@ struct MemChatTeatroRootView: View {
                 Menu("Add Memory") {
                     Button("Learn Site…") { showAddURLSheet = true }
                     Button("Import Files…") { importFiles() }
+                    Button("Open Visual Browser…") { showVisualBrowser = true }
                 }
                 Button("Test") { Task { await testConnection() } }
                 Button("Live Test") { Task { await testLiveChat() } }
@@ -197,6 +199,11 @@ struct MemChatTeatroRootView: View {
             }
             .padding(12)
             .frame(minWidth: 460)
+        }
+        .sheet(isPresented: $showVisualBrowser) {
+            VisualBrowserView(controller: controllerHolder.controller)
+                .frame(minWidth: 920, minHeight: 560)
+                .padding(10)
         }
         .sheet(isPresented: $showBaselines) {
             TeatroBaselinesSheet(items: baselines) { showBaselines = false }

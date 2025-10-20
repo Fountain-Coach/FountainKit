@@ -236,7 +236,10 @@ struct MemChatTeatroRootView: View {
             TeatroHostsSheet(
                 controller: controllerHolder.controller,
                 items: hostsCoverage,
-                openEvidence: { host in Task { await openEvidence(host: host) } },
+                openEvidence: { host in
+                    showHosts = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { Task { await openEvidence(host: host) } }
+                },
                 onClose: { showHosts = false }
             )
                 .frame(minWidth: 620, minHeight: 480)

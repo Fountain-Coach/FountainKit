@@ -544,10 +544,25 @@ extension SemanticBrowserOpenAPI {
             let threshDays = input.query.staleThresholdDays
             var cutoff: Date? = nil
             if let days = threshDays, let fetched = asset?.fetchedAt { cutoff = Calendar.current.date(byAdding: .day, value: -max(1, days), to: fetched) }
+            // Optional coverage classification via token overlap of anchor.excerpt vs stored segment texts for the page
+            let classify = input.query.classify ?? false
+            var segTexts: [String] = []
+            if classify { segTexts = await service.segmentTextsForPage(pageId: pageId) }
             for r in anchors {
                 let stale: Bool? = {
                     guard let c = cutoff, let ts = r.ts else { return nil }
                     return ts < c
+                }()
+                let covered: Bool? = {
+                    guard classify, let excerpt = r.excerpt, !excerpt.isEmpty else { return nil }
+                    func bag(_ s: String) -> [String: Int] {
+                        let tokens = s.lowercased().replacingOccurrences(of: "[^a-z0-9 ]", with: " ", options: .regularExpression).split(separator: " ").map(String.init).filter { $0.count >= 3 }
+                        var b: [String: Int] = [:]; for t in tokens { b[t, default: 0] += 1 }; return b
+                    }
+                    func jacc(_ a: [String:Int], _ b: [String:Int]) -> Double { let keys = Set(a.keys).union(b.keys); var inter=0.0, uni=0.0; for k in keys { let av=Double(a[k] ?? 0), bv=Double(b[k] ?? 0); inter += min(av,bv); uni += max(av,bv) }; return uni == 0 ? 0 : inter/uni }
+                    let eb = bag(excerpt)
+                    let maxJ = segTexts.map { jacc(eb, bag($0)) }.max() ?? 0
+                    return maxJ >= 0.18
                 }()
                 let rr = Components.Schemas.VisualResponse.anchorsPayloadPayload(
                     imageId: r.imageId,
@@ -558,7 +573,8 @@ extension SemanticBrowserOpenAPI {
                     excerpt: r.excerpt,
                     confidence: r.confidence,
                     ts: r.ts.map { Int($0.timeIntervalSince1970 * 1000.0) },
-                    stale: stale
+                    stale: stale,
+                    covered: covered
                 )
                 rects.append(rr)
             }

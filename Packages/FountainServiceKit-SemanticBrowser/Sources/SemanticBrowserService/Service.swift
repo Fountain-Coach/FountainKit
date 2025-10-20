@@ -194,6 +194,10 @@ public actor SemanticMemoryService {
         artifactRefs[ownerId] = m
     }
     public func loadArtifactRef(ownerId: String, kind: String) -> String? { artifactRefs[ownerId]?[kind] }
+    // Query segments for a given page id (in-memory only)
+    public func segmentTextsForPage(pageId: String) -> [String] {
+        return segments.filter { $0.pageId == pageId }.map { $0.text }
+    }
     // Visuals
     public func storeVisual(pageId: String, asset: VisualAsset?, anchors: [VisualAnchor], coveragePercent: Float? = nil) {
         let cur = visualsByPageId[pageId]

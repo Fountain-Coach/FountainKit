@@ -322,6 +322,11 @@ paths:
           required: false
           schema: {type: integer, minimum: 1}
           description: If provided, anchors older than (image.fetchedAt - N days) are marked as stale.
+        - name: classify
+          in: query
+          required: false
+          schema: {type: boolean}
+          description: If true, server attempts to mark anchors as covered by comparing excerpts to stored segment texts for the page.
       responses:
         '200':
           description: Visual asset and anchors
@@ -877,6 +882,7 @@ components:
               confidence: {type: number, format: float}
               ts: {type: integer, description: Anchor timestamp (epoch ms)}
               stale: {type: boolean, description: Server-marked when staleThresholdDays query is given}
+              covered: {type: boolean, description: Server-marked when classify query is given}
 
     # -------- Verify Edition --------
     VerifyRequest:

@@ -121,15 +121,26 @@ public func makeSemanticKernel(service: SemanticMemoryService, engine: BrowserEn
             guard let pageId = qs["pageId"], !pageId.isEmpty else { return error(.badRequest, "pageId required") }
             if let (asset, anchors) = await service.loadVisual(pageId: pageId) {
                 struct Img: Codable { let imageId: String; let contentType: String?; let width: Int?; let height: Int?; let scale: Float? }
-                struct Anchor: Codable { let imageId: String?; let x: Float?; let y: Float?; let w: Float?; let h: Float?; let excerpt: String?; let confidence: Float?; let ts: Double?; let stale: Bool? }
+                struct Anchor: Codable { let imageId: String?; let x: Float?; let y: Float?; let w: Float?; let h: Float?; let excerpt: String?; let confidence: Float?; let ts: Double?; let stale: Bool?; let covered: Bool? }
                 struct Resp: Codable { let image: Img?; let anchors: [Anchor] }
                 let img = asset.map { Img(imageId: $0.imageId, contentType: $0.contentType, width: $0.width, height: $0.height, scale: $0.scale) }
                 let threshDays = Int(qs["staleThresholdDays"] ?? "")
                 var cutoff: Date? = nil
                 if let d = threshDays, let fetched = asset?.fetchedAt { cutoff = Calendar.current.date(byAdding: .day, value: -max(1, d), to: fetched) }
+                let classify = (qs["classify"]?.lowercased() == "true" || qs["classify"] == "1")
+                var segTexts: [String] = []
+                if classify { segTexts = await service.segmentTextsForPage(pageId: pageId) }
+                func bag(_ s: String) -> [String: Int] { let tokens = s.lowercased().replacingOccurrences(of: "[^a-z0-9 ]", with: " ", options: .regularExpression).split(separator: " ").map(String.init).filter { $0.count >= 3 }; var b:[String:Int]=[:]; for t in tokens { b[t, default: 0]+=1 }; return b }
+                func jacc(_ a: [String:Int], _ b: [String:Int]) -> Double { let keys = Set(a.keys).union(b.keys); var inter=0.0, uni=0.0; for k in keys { let av=Double(a[k] ?? 0), bv=Double(b[k] ?? 0); inter += min(av,bv); uni += max(av,bv) }; return uni == 0 ? 0 : inter/uni }
                 let list = anchors.map { a -> Anchor in
                     let stale = (cutoff != nil && a.ts != nil) ? (a.ts! < cutoff!) : nil
-                    return Anchor(imageId: a.imageId, x: a.x, y: a.y, w: a.w, h: a.h, excerpt: a.excerpt, confidence: a.confidence, ts: a.ts?.timeIntervalSince1970, stale: stale)
+                    let covered: Bool? = {
+                        guard classify, let ex = a.excerpt, !ex.isEmpty else { return nil }
+                        let eb = bag(ex)
+                        let maxJ = segTexts.map { jacc(eb, bag($0)) }.max() ?? 0
+                        return maxJ >= 0.18
+                    }()
+                    return Anchor(imageId: a.imageId, x: a.x, y: a.y, w: a.w, h: a.h, excerpt: a.excerpt, confidence: a.confidence, ts: a.ts?.timeIntervalSince1970, stale: stale, covered: covered)
                 }
                 return (.ok, buffer(Resp(image: img, anchors: list)))
             }

@@ -5,8 +5,9 @@ final class VisualAPITests: XCTestCase {
     func testGetVisualReturnsPersistedAnchors() async throws {
         let svc = SemanticMemoryService()
         // Seed a visual record
-        let asset = SemanticMemoryService.VisualAsset(imageId: "img-test", contentType: "image/png", width: 800, height: 600, scale: 1.0)
-        let a = SemanticMemoryService.VisualAnchor(imageId: "img-test", x: 0.1, y: 0.2, w: 0.3, h: 0.4, excerpt: "hello", confidence: 0.9)
+        let now = Date()
+        let asset = SemanticMemoryService.VisualAsset(imageId: "img-test", contentType: "image/png", width: 800, height: 600, scale: 1.0, fetchedAt: now)
+        let a = SemanticMemoryService.VisualAnchor(imageId: "img-test", x: 0.1, y: 0.2, w: 0.3, h: 0.4, excerpt: "hello", confidence: 0.9, ts: now)
         await svc.storeVisual(pageId: "page-1", asset: asset, anchors: [a])
 
         // Serve via NIOHTTPServerCompat kernel
@@ -30,4 +31,3 @@ final class VisualAPITests: XCTestCase {
         try await server.stop()
     }
 }
-

@@ -114,11 +114,11 @@ final class FountainStoreBackend: SemanticMemoryService.Backend, @unchecked Send
         return (response.total, items)
     }
 
-    struct VisualDoc: Codable { let pageId: String; let image: Image?; let anchors: [Anchor]; let coveragePercent: Float?; struct Image: Codable { let imageId: String; let contentType: String; let width: Int; let height: Int; let scale: Float }; struct Anchor: Codable { let imageId: String; let x: Float; let y: Float; let w: Float; let h: Float; let excerpt: String?; let confidence: Float? } }
+    struct VisualDoc: Codable { let pageId: String; let image: Image?; let anchors: [Anchor]; let coveragePercent: Float?; struct Image: Codable { let imageId: String; let contentType: String; let width: Int; let height: Int; let scale: Float; let fetchedAt: Double? }; struct Anchor: Codable { let imageId: String; let x: Float; let y: Float; let w: Float; let h: Float; let excerpt: String?; let confidence: Float?; let ts: Double? } }
     func upsertVisual(pageId: String, visual: SemanticMemoryService.VisualRecord) {
         Task {
-            let image = visual.asset.map { VisualDoc.Image(imageId: $0.imageId, contentType: $0.contentType, width: $0.width, height: $0.height, scale: $0.scale) }
-            let anchors = visual.anchors.map { VisualDoc.Anchor(imageId: $0.imageId, x: $0.x, y: $0.y, w: $0.w, h: $0.h, excerpt: $0.excerpt, confidence: $0.confidence) }
+            let image = visual.asset.map { VisualDoc.Image(imageId: $0.imageId, contentType: $0.contentType, width: $0.width, height: $0.height, scale: $0.scale, fetchedAt: $0.fetchedAt?.timeIntervalSince1970) }
+            let anchors = visual.anchors.map { VisualDoc.Anchor(imageId: $0.imageId, x: $0.x, y: $0.y, w: $0.w, h: $0.h, excerpt: $0.excerpt, confidence: $0.confidence, ts: $0.ts?.timeIntervalSince1970) }
             let doc = VisualDoc(pageId: pageId, image: image, anchors: anchors, coveragePercent: visual.coveragePercent)
             guard let data = try? JSONEncoder().encode(doc) else { return }
             try? await store.putDoc(corpusId: corpusId, collection: visualsCollection, id: pageId, body: data)

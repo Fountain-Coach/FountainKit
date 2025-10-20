@@ -121,10 +121,16 @@ public func makeSemanticKernel(service: SemanticMemoryService, engine: BrowserEn
             guard let pageId = qs["pageId"], !pageId.isEmpty else { return error(.badRequest, "pageId required") }
             if let (asset, anchors) = await service.loadVisual(pageId: pageId) {
                 struct Img: Codable { let imageId: String; let contentType: String?; let width: Int?; let height: Int?; let scale: Float? }
-                struct Anchor: Codable { let imageId: String?; let x: Float?; let y: Float?; let w: Float?; let h: Float?; let excerpt: String?; let confidence: Float? }
+                struct Anchor: Codable { let imageId: String?; let x: Float?; let y: Float?; let w: Float?; let h: Float?; let excerpt: String?; let confidence: Float?; let ts: Double?; let stale: Bool? }
                 struct Resp: Codable { let image: Img?; let anchors: [Anchor] }
                 let img = asset.map { Img(imageId: $0.imageId, contentType: $0.contentType, width: $0.width, height: $0.height, scale: $0.scale) }
-                let list = anchors.map { Anchor(imageId: $0.imageId, x: $0.x, y: $0.y, w: $0.w, h: $0.h, excerpt: $0.excerpt, confidence: $0.confidence) }
+                let threshDays = Int(qs["staleThresholdDays"] ?? "")
+                var cutoff: Date? = nil
+                if let d = threshDays, let fetched = asset?.fetchedAt { cutoff = Calendar.current.date(byAdding: .day, value: -max(1, d), to: fetched) }
+                let list = anchors.map { a -> Anchor in
+                    let stale = (cutoff != nil && a.ts != nil) ? (a.ts! < cutoff!) : nil
+                    return Anchor(imageId: a.imageId, x: a.x, y: a.y, w: a.w, h: a.h, excerpt: a.excerpt, confidence: a.confidence, ts: a.ts?.timeIntervalSince1970, stale: stale)
+                }
                 return (.ok, buffer(Resp(image: img, anchors: list)))
             }
             return error(.notFound, "no visual for pageId")

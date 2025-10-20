@@ -103,11 +103,12 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
         )
         // Persist visuals (best-effort)
         if let image = snapshot.rendered.image {
-            let asset = SemanticMemoryService.VisualAsset(imageId: image.imageId ?? "", contentType: image.contentType ?? "image/png", width: image.width ?? 0, height: image.height ?? 0, scale: Float(image.scale ?? 1.0))
+            let asset = SemanticMemoryService.VisualAsset(imageId: image.imageId ?? "", contentType: image.contentType ?? "image/png", width: image.width ?? 0, height: image.height ?? 0, scale: Float(image.scale ?? 1.0), fetchedAt: snapshot.page.fetchedAt)
             var anchors: [SemanticMemoryService.VisualAnchor] = []
+            let anchorTs = analysis.envelope.source.fetchedAt
             for b in analysis.blocks {
                 for r in (b.rects ?? []) {
-                    anchors.append(SemanticMemoryService.VisualAnchor(imageId: r.imageId ?? "", x: Float(r.x ?? 0), y: Float(r.y ?? 0), w: Float(r.w ?? 0), h: Float(r.h ?? 0), excerpt: r.excerpt, confidence: Float(r.confidence ?? 0)))
+                    anchors.append(SemanticMemoryService.VisualAnchor(imageId: r.imageId ?? "", x: Float(r.x ?? 0), y: Float(r.y ?? 0), w: Float(r.w ?? 0), h: Float(r.h ?? 0), excerpt: r.excerpt, confidence: Float(r.confidence ?? 0), ts: anchorTs))
                 }
             }
             await service.storeVisual(pageId: analysis.envelope.id, asset: asset, anchors: anchors)
@@ -226,9 +227,10 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
         let res = await service.ingest(full: full)
         // Persist visual anchors (without asset metadata if absent)
         var anchors: [SemanticMemoryService.VisualAnchor] = []
+        let anchorTs = req.analysis.envelope.source.fetchedAt
         for b in req.analysis.blocks {
             for r in (b.rects ?? []) {
-                anchors.append(SemanticMemoryService.VisualAnchor(imageId: r.imageId ?? "", x: Float(r.x ?? 0), y: Float(r.y ?? 0), w: Float(r.w ?? 0), h: Float(r.h ?? 0), excerpt: r.excerpt, confidence: Float(r.confidence ?? 0)))
+                anchors.append(SemanticMemoryService.VisualAnchor(imageId: r.imageId ?? "", x: Float(r.x ?? 0), y: Float(r.y ?? 0), w: Float(r.w ?? 0), h: Float(r.h ?? 0), excerpt: r.excerpt, confidence: Float(r.confidence ?? 0), ts: anchorTs))
             }
         }
         await service.storeVisual(pageId: full.envelope.id, asset: nil, anchors: anchors)
@@ -536,10 +538,17 @@ extension SemanticBrowserOpenAPI {
         if let (asset, anchors) = await service.loadVisual(pageId: pageId) {
             let image: Components.Schemas.VisualResponse.imagePayload?
             if let a = asset {
-                image = .init(imageId: a.imageId, contentType: a.contentType, width: a.width, height: a.height, scale: Float(a.scale))
+                image = .init(imageId: a.imageId, contentType: a.contentType, width: a.width, height: a.height, scale: Float(a.scale), fetchedAt: a.fetchedAt)
             } else { image = nil }
             var rects: [Components.Schemas.VisualResponse.anchorsPayloadPayload] = []
+            let threshDays = input.query.staleThresholdDays
+            var cutoff: Date? = nil
+            if let days = threshDays, let fetched = asset?.fetchedAt { cutoff = Calendar.current.date(byAdding: .day, value: -max(1, days), to: fetched) }
             for r in anchors {
+                let stale: Bool? = {
+                    guard let c = cutoff, let ts = r.ts else { return nil }
+                    return ts < c
+                }()
                 let rr = Components.Schemas.VisualResponse.anchorsPayloadPayload(
                     imageId: r.imageId,
                     x: r.x,
@@ -547,7 +556,9 @@ extension SemanticBrowserOpenAPI {
                     w: r.w,
                     h: r.h,
                     excerpt: r.excerpt,
-                    confidence: r.confidence
+                    confidence: r.confidence,
+                    ts: r.ts.map { Int($0.timeIntervalSince1970 * 1000.0) },
+                    stale: stale
                 )
                 rects.append(rr)
             }

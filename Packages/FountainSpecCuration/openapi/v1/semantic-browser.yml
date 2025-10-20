@@ -317,6 +317,11 @@ paths:
           in: query
           required: true
           schema: {type: string}
+        - name: staleThresholdDays
+          in: query
+          required: false
+          schema: {type: integer, minimum: 1}
+          description: If provided, anchors older than (image.fetchedAt - N days) are marked as stale.
       responses:
         '200':
           description: Visual asset and anchors
@@ -857,6 +862,7 @@ components:
             width: {type: integer}
             height: {type: integer}
             scale: {type: number, format: float}
+            fetchedAt: {type: string, format: date-time}
         anchors:
           type: array
           items:
@@ -869,6 +875,8 @@ components:
               h: {type: number, format: float}
               excerpt: {type: string}
               confidence: {type: number, format: float}
+              ts: {type: integer, description: Anchor timestamp (epoch ms)}
+              stale: {type: boolean, description: Server-marked when staleThresholdDays query is given}
 
     # -------- Verify Edition --------
     VerifyRequest:

@@ -30,8 +30,8 @@ public actor SemanticMemoryService {
     private var networks: [String: [AdminNetworkRequest]] = [:]
     private var artifactRefs: [String: [String: String]] = [:] // key: id (snapshotId or analysisId) -> kind -> refPath
     // Visuals by page/analysis id
-    public struct VisualAsset: Codable, Sendable { public let imageId: String; public let contentType: String; public let width: Int; public let height: Int; public let scale: Float }
-    public struct VisualAnchor: Codable, Sendable { public let imageId: String; public let x: Float; public let y: Float; public let w: Float; public let h: Float; public let excerpt: String?; public let confidence: Float? }
+    public struct VisualAsset: Codable, Sendable { public let imageId: String; public let contentType: String; public let width: Int; public let height: Int; public let scale: Float; public let fetchedAt: Date? }
+    public struct VisualAnchor: Codable, Sendable { public let imageId: String; public let x: Float; public let y: Float; public let w: Float; public let h: Float; public let excerpt: String?; public let confidence: Float?; public let ts: Date? }
     public struct VisualRecord: Codable, Sendable { public let asset: VisualAsset?; public let anchors: [VisualAnchor]; public let coveragePercent: Float? }
     private struct VisualMap: Codable, Sendable { let asset: VisualAsset?; let anchors: [VisualAnchor] }
     private var visualsByPageId: [String: VisualMap] = [:]

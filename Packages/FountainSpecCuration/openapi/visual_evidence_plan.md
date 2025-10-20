@@ -30,14 +30,10 @@ Make MemChat’s memory coverage visual, verifiable, and explorable. Show precis
 - Regenerate types/clients/servers via `swift-openapi-generator` for any targets touching the spec.
 
 ### Phase 2 — Capture + Anchoring
-(Progress: CDP rects + dev asset fetch done)
-- Tests:
-  - `CDPVisualAnchorsTests` (gated by `SB_CDP_URL`) — now also asserts rects reference the actual `imageId` and are normalized to 0..1.
-  - `VisualAnchorsTests` — synthetic fallback rects exist without CDP — PASS.
-  - `VisualAssetPersistenceTests` — enabled (gated by `SB_CDP_URL`), browses, then GETs `/assets/<imageId>.png` and asserts `image/png` + body — PASS when CDP is configured.
-- Implementation:
-  - CDP: Extract `getClientRects()` for `h1..h6` and `p`, map to parser IDs (`h0`, `p0`, ...), normalize to full-page content size, and prefer these over synthetic anchors when present.
-  - Dev asset store + route: Persist PNG to `~/.fountain/semantic-browser/snapshots/<imageId>.png` (override with `SB_ASSET_DIR`), serve via `GET /assets/<imageId>.png` in the NIO kernel.
+(Complete)
+- CDP DOM rects extracted and normalized (0..1), preferred over synthetic.
+- Dev asset persistence with local route `GET /assets/<imageId>.png`.
+- Tests: `CDPVisualAnchorsTests`, `VisualAnchorsTests`, `VisualAssetPersistenceTests` (gated) — all green/skipping as intended.
 - Web (Semantic Browser):
   - Use CDP to capture full‑page PNG and DOM clientRects for analysis blocks.
   - Normalize rects to image coordinate space; record `scale`.
@@ -48,27 +44,23 @@ Make MemChat’s memory coverage visual, verifiable, and explorable. Show precis
   - TXT/RTF: lay out via TextKit; compute bounding rects; render to image.
 
 ### Phase 3 — Index + Diff
-(Progress: viewer-level diff implemented; server/store persistence pending)
-- Implemented now (viewer):
-  - Build overlays from live `analysis.blocks[].rects` filtered by `imageId`.
-  - Classify Covered vs Missing via token-overlap (Jaccard) between block text and stored evidence snippets for the host.
-  - Coverage % computed from union area of Covered overlays.
-- Pending (server/store):
-  - Persist `visualAnchors` and `visualAsset` metadata during `/v1/index` into FountainStore.
-  - Compute Stale using `segment.ts` vs `snapshot.page.fetchedAt` with threshold; return basic coverage metrics.
-  - Add endpoints to query persisted visual overlays per page/asset for remote viewers.
+(Complete)
+- Persistence: `visualAnchors` + `visualAsset` stored on `/v1/index` (coveragePercent in IndexResult).
+- Read API: `GET /v1/visual?pageId=...&staleThresholdDays=...&classify=true` returns image+anchors, with `stale` and `covered` flags.
+- Server-side caching: covered classification memoized (TTL ~60s) per page/excerpt; invalidated by new ingest.
+- Viewer uses server visuals for stale overlays and local token overlap for covered/missing (server classify available via API).
 
 ### Phase 4 — Viewer (MemChat Apps)
-- EvidenceMapView (SwiftUI): renders the truth image with overlay layers; zoom/pan; hover tooltips; coverage %; layer toggles.
-- Entry points:
-  - Chat right pane → “Visual Evidence”.
-  - Hosts sheet row → “Open Map”.
-  - Evidence sheet → “Open Map”.
-- Drill‑down: click region → open segment details (copy, open in store), “re‑index region,” “add note.”
+(Functional)
+- EvidenceMapView renders truth image with overlay layers and coverage %, layer toggles, and onSelect.
+- Sheets include stale threshold control and “Refresh Stale”. Compact banner shows Covered/Missing/Stale counts and coverage %.
+- Zoom/pan TBD; hover tooltips present.
 
 ### Phase 5 — Actions + Edit
-- Re‑index region: for web, re‑browse with selector bounding the region; for files, re‑segment selected rects and re‑write segments.
-- Add note/pin: persist a reflection/note anchored at a rect; show as blue pin overlay.
+(In progress)
+- Re‑index region: implemented end‑to‑end (`POST /v1/reindexRegion`), viewer button wired; region coverage computed and returned.
+- Add note/pin: pending.
+- Future: TTL cache invalidation hooks and persisted covered flags based on store diffs.
 
 ### Phase 6 — Perf + Caching
 - Cache downsampled image tiles; lazy‑load overlays per zoom.

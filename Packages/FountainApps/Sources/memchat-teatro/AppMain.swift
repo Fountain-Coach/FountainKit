@@ -298,6 +298,19 @@ struct MemChatTeatroRootView: View {
                         }
                     }
                 }
+                // Compact banner with counts and coverage
+                let coveredCount = mapCovered.count
+                let missingCount = mapMissing.count
+                let staleCount = mapStale.count
+                HStack(spacing: 16) {
+                    Text("Covered: \(coveredCount)").foregroundStyle(.green)
+                    Text("Missing: \(missingCount)").foregroundStyle(.red)
+                    Text("Stale: \(staleCount)").foregroundStyle(.orange)
+                    Spacer()
+                    Text(String(format: "Coverage %.0f%%", mapCoverage * 100))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 EvidenceMapView(
                     title: "Visual Evidence — \(evidenceHost)",
                     imageURL: mapImageURL,

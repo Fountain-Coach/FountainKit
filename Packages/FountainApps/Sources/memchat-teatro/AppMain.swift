@@ -107,6 +107,7 @@ struct MemChatTeatroRootView: View {
     @State private var mapStale: [EvidenceMapView.Overlay] = []
     @State private var mapPageId: String = ""
     @State private var staleDays: Int = 60
+    @State private var serverClassify: Bool = true
     @State private var selectedRect: CGRect? = nil
     @State private var mapImageURL: URL? = nil
     @State private var mapCoverage: Double = 0
@@ -244,7 +245,14 @@ struct MemChatTeatroRootView: View {
                                     copy: { copyToClipboard(evidenceItems.map { $0.text + " — [\($0.title)](\($0.url))" }.joined(separator: "\n")) },
                                     openMap: {
                                         Task {
-                                            if let r = await controllerHolder.controller.buildEvidenceMapWithStale(host: evidenceHost, staleThresholdDays: staleDays) {
+                                            if serverClassify, !mapPageId.isEmpty, let v = await controllerHolder.controller.fetchVisualUsingServer(pageId: mapPageId, staleThresholdDays: staleDays, classify: true) {
+                                                mapImageURL = v.imageURL
+                                                mapCovered = v.covered
+                                                mapMissing = v.missing
+                                                mapStale = v.stale
+                                                mapCoverage = v.coverage
+                                                mapOverlays = v.covered + v.missing
+                                            } else if let r = await controllerHolder.controller.buildEvidenceMapWithStale(host: evidenceHost, staleThresholdDays: staleDays) {
                                                 mapPageId = r.pageId
                                                 mapImageURL = r.imageURL
                                                 mapCovered = r.covered
@@ -276,6 +284,7 @@ struct MemChatTeatroRootView: View {
                         .pickerStyle(.segmented)
                         .frame(width: 200)
                     Spacer()
+                    Toggle("Server Covered", isOn: $serverClassify).toggleStyle(.switch)
                     Button("Reindex Region") {
                         Task {
                             guard !mapPageId.isEmpty, let sel = selectedRect else { return }

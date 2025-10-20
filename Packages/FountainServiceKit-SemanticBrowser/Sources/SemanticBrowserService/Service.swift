@@ -210,6 +210,9 @@ public actor SemanticMemoryService {
             let rec = VisualRecord(asset: mergedAsset, anchors: vm.anchors, coveragePercent: coveragePercent)
             backend.upsertVisual(pageId: pageId, visual: rec)
         }
+        // Invalidate covered classification cache entries for this page
+        let prefix = pageId + "|"
+        coveredCache = coveredCache.filter { !$0.key.hasPrefix(prefix) }
     }
     public func loadVisual(pageId: String) -> (VisualAsset?, [VisualAnchor])? {
         if let v = visualsByPageId[pageId] { return (v.asset, v.anchors) }

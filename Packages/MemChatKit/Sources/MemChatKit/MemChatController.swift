@@ -58,6 +58,10 @@ public final class MemChatController: ObservableObject {
     private var analysisCounter: Int = 0
     private let browserConfig: SeedingConfiguration.Browser?
     private var lastArtifactsByHost: [String: Date] = [:]
+    // Server visuals cache for GET /v1/visual
+    private struct VisualCacheKey: Hashable { let pageId: String; let staleDays: Int; let classify: Bool }
+    private struct VisualCacheValue { let until: Date; let imageURL: URL?; let covered: [EvidenceMapView.Overlay]; let missing: [EvidenceMapView.Overlay]; let stale: [EvidenceMapView.Overlay]; let coverage: Double }
+    private var visualCache: [VisualCacheKey: VisualCacheValue] = [:]
 
     public struct InjectedContext: Sendable, Equatable {
         public let continuity: String?
@@ -2229,7 +2233,7 @@ extension MemChatController {
         let transport = URLSessionTransport()
         let middlewares = OpenAPIClientFactory.defaultMiddlewares(defaultHeaders: defaultHeaders)
         let client = SemanticBrowserAPI.Client(serverURL: browser.baseURL, transport: transport, middlewares: middlewares)
-        let region = SemanticBrowserAPI.Components.Schemas.ReindexRegionRequest.regionPayload(x: Double(rect.origin.x), y: Double(rect.origin.y), w: Double(rect.size.width), h: Double(rect.size.height))
+        let region = SemanticBrowserAPI.Components.Schemas.ReindexRegionRequest.regionPayload(x: Float(rect.origin.x), y: Float(rect.origin.y), w: Float(rect.size.width), h: Float(rect.size.height))
         let body = SemanticBrowserAPI.Components.Schemas.ReindexRegionRequest(pageId: pageId, url: nil, region: region)
         do {
             let out = try await client.reindexRegion(.init(body: .json(body)))
@@ -2238,6 +2242,48 @@ extension MemChatController {
             default: return false
             }
         } catch { return false }
+    }
+
+    // Fetch visuals using server classification (covered/missing from anchor.covered), with optional TTL cache.
+    public func fetchVisualUsingServer(pageId: String, staleThresholdDays: Int, classify: Bool = true, ttlSeconds: Int = 30) async -> (imageURL: URL?, covered: [EvidenceMapView.Overlay], missing: [EvidenceMapView.Overlay], stale: [EvidenceMapView.Overlay], coverage: Double)? {
+        let key = VisualCacheKey(pageId: pageId, staleDays: staleThresholdDays, classify: classify)
+        let now = Date()
+        if let c = visualCache[key], c.until > now { return (c.imageURL, c.covered, c.missing, c.stale, c.coverage) }
+
+        guard let browser = browserConfig else { return nil }
+        var defaultHeaders: [String: String] = [:]
+        if let apiKey = browser.apiKey, !apiKey.isEmpty { defaultHeaders["X-API-Key"] = apiKey }
+        let transport = URLSessionTransport()
+        let middlewares = OpenAPIClientFactory.defaultMiddlewares(defaultHeaders: defaultHeaders)
+        let client = SemanticBrowserAPI.Client(serverURL: browser.baseURL, transport: transport, middlewares: middlewares)
+        do {
+            var q = SemanticBrowserAPI.Operations.getVisual.Input.Query(pageId: pageId)
+            q.staleThresholdDays = staleThresholdDays
+            if classify { q.classify = true }
+            let out = try await client.getVisual(.init(query: q))
+            guard case .ok(let ok) = out else { return nil }
+            let vr = try ok.body.json
+            var imageURL: URL? = nil
+            if let img = vr.image, let imgId = img.imageId { imageURL = browser.baseURL.appendingPathComponent("assets").appendingPathComponent("\(imgId).png") }
+            var covered: [EvidenceMapView.Overlay] = []
+            var missing: [EvidenceMapView.Overlay] = []
+            var stale: [EvidenceMapView.Overlay] = []
+            if let anchors = vr.anchors {
+                for (i, r) in anchors.enumerated() {
+                    let rect = CGRect(x: CGFloat(r.x ?? 0), y: CGFloat(r.y ?? 0), width: CGFloat(r.w ?? 0), height: CGFloat(r.h ?? 0))
+                    guard rect.width > 0, rect.height > 0 else { continue }
+                    if (r.stale ?? false) { stale.append(.init(id: "stale-\(i)", rect: rect, color: .orange)) }
+                    if classify {
+                        if r.covered ?? false { covered.append(.init(id: "cov-\(i)", rect: rect, color: .green)) }
+                        else { missing.append(.init(id: "miss-\(i)", rect: rect, color: .red)) }
+                    }
+                }
+            }
+            let coverage = Double(VisualCoverageUtils.unionAreaNormalized(covered.map { $0.rect }))
+            let value = VisualCacheValue(until: now.addingTimeInterval(TimeInterval(ttlSeconds)), imageURL: imageURL, covered: covered, missing: missing, stale: stale, coverage: coverage)
+            visualCache[key] = value
+            return (imageURL, covered, missing, stale, coverage)
+        } catch { return nil }
     }
 
     /// Learn a few more pages for a host by crawling same-host links starting from the most recent page.

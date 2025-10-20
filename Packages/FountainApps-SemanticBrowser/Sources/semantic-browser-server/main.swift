@@ -35,23 +35,46 @@ final class FountainStoreBackend: SemanticMemoryService.Backend, @unchecked Send
     }
 
     func upsert(page: PageDoc) {
+        // Persist using FountainStoreClient models so documents include corpusId.
         Task {
-            guard let data = try? JSONEncoder().encode(page) else { return }
-            try? await store.putDoc(corpusId: corpusId, collection: pagesCollection, id: page.id, body: data)
+            let mapped = Page(
+                corpusId: corpusId,
+                pageId: page.id,
+                url: page.url,
+                host: page.host,
+                title: page.title ?? page.url
+            )
+            guard let data = try? JSONEncoder().encode(mapped) else { return }
+            try? await store.putDoc(corpusId: corpusId, collection: pagesCollection, id: mapped.pageId, body: data)
         }
     }
 
     func upsert(segment: SegmentDoc) {
+        // Persist using FountainStoreClient models so documents include corpusId.
         Task {
-            guard let data = try? JSONEncoder().encode(segment) else { return }
-            try? await store.putDoc(corpusId: corpusId, collection: segmentsCollection, id: segment.id, body: data)
+            let mapped = Segment(
+                corpusId: corpusId,
+                segmentId: segment.id,
+                pageId: segment.pageId,
+                kind: segment.kind,
+                text: segment.text
+            )
+            guard let data = try? JSONEncoder().encode(mapped) else { return }
+            try? await store.putDoc(corpusId: corpusId, collection: segmentsCollection, id: mapped.segmentId, body: data)
         }
     }
 
     func upsert(entity: EntityDoc) {
+        // Persist using FountainStoreClient models so documents include corpusId.
         Task {
-            guard let data = try? JSONEncoder().encode(entity) else { return }
-            try? await store.putDoc(corpusId: corpusId, collection: entitiesCollection, id: entity.id, body: data)
+            let mapped = Entity(
+                corpusId: corpusId,
+                entityId: entity.id,
+                name: entity.name,
+                type: entity.type
+            )
+            guard let data = try? JSONEncoder().encode(mapped) else { return }
+            try? await store.putDoc(corpusId: corpusId, collection: entitiesCollection, id: mapped.entityId, body: data)
         }
     }
 
@@ -83,7 +106,15 @@ final class FountainStoreBackend: SemanticMemoryService.Backend, @unchecked Send
         }
         guard case .success(let response) = result else { return (0, []) }
         let decoder = JSONDecoder()
-        let items = response.documents.compactMap { try? decoder.decode(PageDoc.self, from: $0) }
+        let items: [PageDoc] = response.documents.compactMap { (data: Data) -> PageDoc? in
+            if let doc = try? decoder.decode(PageDoc.self, from: data) {
+                return doc
+            }
+            if let p = try? decoder.decode(Page.self, from: data) {
+                return PageDoc(id: p.pageId, url: p.url, host: p.host, status: nil, contentType: nil, lang: nil, title: p.title, textSize: nil, fetchedAt: nil, labels: nil)
+            }
+            return nil
+        }
         return (response.total, items)
     }
 
@@ -97,7 +128,13 @@ final class FountainStoreBackend: SemanticMemoryService.Backend, @unchecked Send
         }
         guard case .success(let response) = result else { return (0, []) }
         let decoder = JSONDecoder()
-        let items = response.documents.compactMap { try? decoder.decode(SegmentDoc.self, from: $0) }
+        let items: [SegmentDoc] = response.documents.compactMap { (data: Data) -> SegmentDoc? in
+            if let s = try? decoder.decode(SegmentDoc.self, from: data) { return s }
+            if let s = try? decoder.decode(Segment.self, from: data) {
+                return SegmentDoc(id: s.segmentId, pageId: s.pageId, kind: s.kind, text: s.text)
+            }
+            return nil
+        }
         return (response.total, items)
     }
 
@@ -110,7 +147,13 @@ final class FountainStoreBackend: SemanticMemoryService.Backend, @unchecked Send
         }
         guard case .success(let response) = result else { return (0, []) }
         let decoder = JSONDecoder()
-        let items = response.documents.compactMap { try? decoder.decode(EntityDoc.self, from: $0) }
+        let items: [EntityDoc] = response.documents.compactMap { (data: Data) -> EntityDoc? in
+            if let e = try? decoder.decode(EntityDoc.self, from: data) { return e }
+            if let e = try? decoder.decode(Entity.self, from: data) {
+                return EntityDoc(id: e.entityId, name: e.name, type: e.type)
+            }
+            return nil
+        }
         return (response.total, items)
     }
 

@@ -418,20 +418,7 @@ paths:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              required: [region]
-              properties:
-                pageId: {type: string, description: Page id to resolve the URL}
-                url: {type: string, format: uri, description: Direct URL if pageId not provided}
-                region:
-                  type: object
-                  required: [x,y,w,h]
-                  properties:
-                    x: {type: number, format: float}
-                    y: {type: number, format: float}
-                    w: {type: number, format: float}
-                    h: {type: number, format: float}
+            schema: {$ref: '#/components/schemas/ReindexRegionRequest'}
       responses:
         '200':
           description: Region indexed
@@ -922,6 +909,21 @@ components:
               ts: {type: integer, description: Anchor timestamp (epoch ms)}
               stale: {type: boolean, description: Server-marked when staleThresholdDays query is given}
               covered: {type: boolean, description: Server-marked when classify query is given}
+
+    ReindexRegionRequest:
+      type: object
+      required: [region]
+      properties:
+        pageId: {type: string, description: Page id to resolve the URL}
+        url: {type: string, format: uri, description: Direct URL if pageId not provided}
+        region:
+          type: object
+          required: [x,y,w,h]
+          properties:
+            x: {type: number, format: float}
+            y: {type: number, format: float}
+            w: {type: number, format: float}
+            h: {type: number, format: float}
 
     # -------- Verify Edition --------
     VerifyRequest:

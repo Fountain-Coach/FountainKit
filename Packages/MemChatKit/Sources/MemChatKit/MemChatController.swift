@@ -2131,11 +2131,13 @@ extension MemChatController {
             let body = try ok.body.json
             let snapshot = body.snapshot
             guard let image = snapshot.rendered.image, let analysis = body.analysis, let imageId = image.imageId else { return nil }
-            // Convert rects keyed to this image into overlays
-            let overlays = VisualOverlayBuilder.overlays(from: analysis, imageId: imageId)
+            // Classify overlays by matching block text against stored evidence
+            let evidences = await evidencePreview(host: host, depthLevel: config.depthLevel).map { $0.text }
+            let groups = VisualDiffBuilder.classify(analysis: analysis, imageId: imageId, evidenceTexts: evidences, minOverlap: 0.18)
+            let overlays = groups.covered + groups.missing
             // Build asset fetch URL (dev route)
             let imgURL = browser.baseURL.appendingPathComponent("assets").appendingPathComponent("\(imageId).png")
-            let coverage = Double(VisualCoverageUtils.unionAreaNormalized(overlays.map { $0.rect }))
+            let coverage = Double(VisualCoverageUtils.unionAreaNormalized(groups.covered.map { $0.rect }))
             return (imageURL: imgURL, overlays: overlays, coverage: max(0.0, min(1.0, coverage)))
         } catch {
             return nil

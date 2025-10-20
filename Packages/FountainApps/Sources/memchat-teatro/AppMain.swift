@@ -255,10 +255,13 @@ struct MemChatTeatroRootView: View {
                 .padding(12)
         }
         .sheet(isPresented: $showMap) {
+            let covered = mapOverlays.filter { $0.color == .green }
+            let missing = mapOverlays.filter { $0.color == .red }
             EvidenceMapView(
                 title: "Visual Evidence — \(evidenceHost)",
                 imageURL: mapImageURL,
-                covered: mapOverlays,
+                covered: covered,
+                missing: missing,
                 initialCoverage: mapCoverage,
                 onSelect: { ov in copyToClipboard(ov.id) }
             )

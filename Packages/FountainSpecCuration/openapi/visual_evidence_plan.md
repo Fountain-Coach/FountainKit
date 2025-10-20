@@ -48,12 +48,15 @@ Make MemChat’s memory coverage visual, verifiable, and explorable. Show precis
   - TXT/RTF: lay out via TextKit; compute bounding rects; render to image.
 
 ### Phase 3 — Index + Diff
-- During `/v1/index`, persist segment `visualAnchors` and `visualAsset` metadata.
-- Build a “coverage map” per asset:
-  - Covered = union of segment rects.
-  - Missing = source paragraph rects minus covered.
-  - Stale = covered where `segment.ts < snapshot.ts − threshold`.
-- Fallback matching: fuzzy match segment `excerpt` against snapshot text to repair anchors and mark approximate confidence.
+(Progress: viewer-level diff implemented; server/store persistence pending)
+- Implemented now (viewer):
+  - Build overlays from live `analysis.blocks[].rects` filtered by `imageId`.
+  - Classify Covered vs Missing via token-overlap (Jaccard) between block text and stored evidence snippets for the host.
+  - Coverage % computed from union area of Covered overlays.
+- Pending (server/store):
+  - Persist `visualAnchors` and `visualAsset` metadata during `/v1/index` into FountainStore.
+  - Compute Stale using `segment.ts` vs `snapshot.page.fetchedAt` with threshold; return basic coverage metrics.
+  - Add endpoints to query persisted visual overlays per page/asset for remote viewers.
 
 ### Phase 4 — Viewer (MemChat Apps)
 - EvidenceMapView (SwiftUI): renders the truth image with overlay layers; zoom/pan; hover tooltips; coverage %; layer toggles.

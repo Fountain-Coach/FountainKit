@@ -246,7 +246,12 @@ struct MemChatRootView: View {
                 .padding(12)
         }
         .sheet(isPresented: $showHosts) {
-            HostsSheet(controller: controllerHolder.controller, items: hostsCoverage) { showHosts = false }
+            HostsSheet(
+                controller: controllerHolder.controller,
+                items: hostsCoverage,
+                openEvidence: { host in Task { await openEvidence(host: host) } },
+                onClose: { showHosts = false }
+            )
                 .frame(minWidth: 620, minHeight: 480)
                 .padding(12)
         }
@@ -740,6 +745,7 @@ private func openURL(_ s: String) {}
 private struct HostsSheet: View {
     let controller: MemChatController
     let items: [MemChatController.HostCoverageItem]
+    var openEvidence: (String) -> Void = { _ in }
     var onClose: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var depth: Int = 2
@@ -792,6 +798,7 @@ private struct HostsSheet: View {
                                             status[h.host] = n > 0 ? "Resegmented \(n)" : "No changes"
                                         }
                                     }
+                                    Button("Evidence…") { openEvidence(h.host) }
                                     if let msg = status[h.host], !msg.isEmpty { Text(msg).font(.caption).foregroundStyle(.secondary) }
                                 }
                             }

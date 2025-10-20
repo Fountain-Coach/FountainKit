@@ -391,12 +391,30 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
 
     private func makeAnalysis(fromHTML html: String, text: String, url: String, contentType: String) -> Components.Schemas.Analysis {
         let spans = parser.parseTextAndBlocks(from: html).1
-        let blocks: [Components.Schemas.Block] = spans.map { s in
+        // Synthetic rects: distribute normalized bands by block index to provide a visual anchor fallback
+        func syntheticRects(total: Int, index: Int, text: String) -> Components.Schemas.Block.rectsPayload {
+            let pad: Float = 0.02
+            let bandH: Float = (1.0 - pad * Float(total + 1)) / Float(max(1, total))
+            let y: Float = pad + Float(index) * (bandH + pad)
+            let rect = Components.Schemas.Block.rectsPayloadPayload(
+                imageId: "synthetic",
+                x: 0.05,
+                y: y,
+                w: 0.90,
+                h: max(0.04, bandH * 0.8),
+                excerpt: String(text.prefix(120)),
+                confidence: 0.5
+            )
+            return [rect]
+        }
+        let total = spans.count
+        let blocks: [Components.Schemas.Block] = spans.enumerated().map { idx, s in
             Components.Schemas.Block(
                 id: s.id,
                 kind: Components.Schemas.Block.kindPayload(rawValue: s.kind) ?? .paragraph,
                 level: s.level,
                 text: s.text,
+                rects: syntheticRects(total: total, index: idx, text: s.text),
                 span: [s.start, s.end],
                 table: s.table.map { Components.Schemas.Table(caption: $0.caption, columns: $0.columns, rows: $0.rows) }
             )

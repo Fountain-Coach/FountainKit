@@ -98,6 +98,8 @@ struct MemChatRootView: View {
     @State private var evidenceHost: String = ""
     @State private var evidenceDepth: Int = 2
     @State private var evidenceItems: [(title: String, url: String, text: String)] = []
+    @State private var showMap = false
+    @State private var mapOverlays: [EvidenceMapView.Overlay] = []
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
@@ -245,9 +247,18 @@ struct MemChatRootView: View {
                               items: evidenceItems,
                               ask: { Task { await askFromEvidence(host: evidenceHost) } },
                               copy: { copyToClipboard(evidenceItems.map { $0.text + " — [\($0.title)](\($0.url))" }.joined(separator: "\n")) },
+                              openMap: {
+                                  mapOverlays = buildMockOverlays(from: evidenceItems)
+                                  showMap = true
+                              },
                               close: { showEvidence = false })
             .frame(minWidth: 640, minHeight: 420)
             .padding(12)
+        }
+        .sheet(isPresented: $showMap) {
+            EvidenceMapView(title: "Visual Evidence — \(evidenceHost)", overlays: mapOverlays)
+                .frame(minWidth: 720, minHeight: 520)
+                .padding(12)
         }
         .sheet(isPresented: $showHelp) { HelpSheet(onClose: { showHelp = false }, openStore: { openStoreFolder() }, openLogs: { openLogsFolder() }) .frame(minWidth: 640, minHeight: 520).padding(12) }
         .task { await refreshTopHosts() }
@@ -300,6 +311,25 @@ struct MemChatRootView: View {
         let prompt = "Summarize \(host) based on our stored snapshot. Provide concise sections with cited bullets."
         controllerHolder.controller.send(prompt)
         showEvidence = false
+    }
+    private func buildMockOverlays(from items: [(title: String, url: String, text: String)]) -> [EvidenceMapView.Overlay] {
+        // Arrange items into a simple grid of normalized rectangles
+        let n = max(1, min(items.count, 12))
+        let cols = n <= 4 ? 2 : 3
+        let rows = Int(ceil(Double(n) / Double(cols)))
+        var out: [EvidenceMapView.Overlay] = []
+        let pad: CGFloat = 0.02
+        let cellW: CGFloat = (1.0 - pad * CGFloat(cols + 1)) / CGFloat(cols)
+        let cellH: CGFloat = (1.0 - pad * CGFloat(rows + 1)) / CGFloat(rows)
+        for i in 0..<n {
+            let r = i / cols
+            let c = i % cols
+            let x = pad + CGFloat(c) * (cellW + pad)
+            let y = pad + CGFloat(r) * (cellH + pad)
+            let rect = CGRect(x: x, y: y, width: cellW, height: cellH)
+            out.append(.init(id: "ov-\(i)", rect: rect, color: .green))
+        }
+        return out
     }
     private func switchCorpus(to id: String) {
         guard !id.isEmpty, id != config.memoryCorpusId else { return }
@@ -691,6 +721,7 @@ private struct HostEvidenceSheet: View {
     let items: [(title: String, url: String, text: String)]
     var ask: () -> Void
     var copy: () -> Void
+    var openMap: () -> Void
     var close: () -> Void
     @Environment(\.dismiss) private var dismiss
     var body: some View {
@@ -701,6 +732,7 @@ private struct HostEvidenceSheet: View {
                 Stepper("Depth: \(depth)", value: $depth, in: 1...3).frame(width: 160)
                 Button("Copy All") { copy() }
                 Button("Ask From Evidence") { ask() }
+                Button("Open Map") { openMap() }
                 Button("Close") { dismiss(); close() }
             }
             Divider()

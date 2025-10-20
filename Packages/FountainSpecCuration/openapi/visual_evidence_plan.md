@@ -30,7 +30,14 @@ Make MemChat’s memory coverage visual, verifiable, and explorable. Show precis
 - Regenerate types/clients/servers via `swift-openapi-generator` for any targets touching the spec.
 
 ### Phase 2 — Capture + Anchoring
-(Next) — implement CDP screenshot + DOM rect capture; PDF/WebView file renders.
+(In progress)
+- Tests added:
+  - `CDPVisualAnchorsTests` (gated by `SB_CDP_URL`) — verifies `rendered.image` metadata and presence of `blocks[].rects`.
+  - `VisualAnchorsTests` — synthetic fallback rects exist without CDP.
+  - `VisualAssetPersistenceTests` — stubbed (skipped) until asset store + fetch routes land.
+- Implementation to finish:
+  - CDP: DOM clientRects → normalized screenshot coords; prefer over synthetic.
+  - Dev asset store: persist PNG at a predictable path (local) and fetch via a simple route.
 - Web (Semantic Browser):
   - Use CDP to capture full‑page PNG and DOM clientRects for analysis blocks.
   - Normalize rects to image coordinate space; record `scale`.

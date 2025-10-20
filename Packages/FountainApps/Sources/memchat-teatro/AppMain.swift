@@ -102,6 +102,8 @@ struct MemChatTeatroRootView: View {
     @State private var evidenceItems: [(title: String, url: String, text: String)] = []
     @State private var showMap = false
     @State private var mapOverlays: [EvidenceMapView.Overlay] = []
+    @State private var mapImageURL: URL? = nil
+    @State private var mapCoverage: Double = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -235,15 +237,25 @@ struct MemChatTeatroRootView: View {
                                     ask: { Task { await askFromEvidence(host: evidenceHost) } },
                                     copy: { copyToClipboard(evidenceItems.map { $0.text + " — [\($0.title)](\($0.url))" }.joined(separator: "\n")) },
                                     openMap: {
-                                        mapOverlays = buildMockOverlays(from: evidenceItems)
-                                        showMap = true
+                                        Task {
+                                            if let result = await controllerHolder.controller.buildEvidenceMap(host: evidenceHost) {
+                                                mapImageURL = result.imageURL
+                                                mapOverlays = result.overlays
+                                                mapCoverage = result.coverage
+                                            } else {
+                                                mapImageURL = nil
+                                                mapOverlays = buildMockOverlays(from: evidenceItems)
+                                                mapCoverage = Double(VisualCoverageUtils.unionAreaNormalized(mapOverlays.map { $0.rect }))
+                                            }
+                                            showMap = true
+                                        }
                                     },
                                     close: { showEvidence = false })
                 .frame(minWidth: 640, minHeight: 420)
                 .padding(12)
         }
         .sheet(isPresented: $showMap) {
-            EvidenceMapView(title: "Visual Evidence — \(evidenceHost)", overlays: mapOverlays)
+            EvidenceMapView(title: "Visual Evidence — \(evidenceHost)", imageURL: mapImageURL, covered: mapOverlays, initialCoverage: mapCoverage)
                 .frame(minWidth: 720, minHeight: 520)
                 .padding(12)
         }

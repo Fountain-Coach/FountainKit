@@ -2,26 +2,15 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleDevelopmentRegion</key><string>en</string>
-  <key>CFBundleExecutable</key><string>memchat-app</string>
-  <key>CFBundleIdentifier</key><string>com.fountaincoach.memchat</string>
-  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
   <key>CFBundleName</key><string>MemChat</string>
-  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleDisplayName</key><string>MemChat</string>
+  <key>CFBundleIdentifier</key><string>coach.fountain.memchat</string>
   <key>CFBundleShortVersionString</key><string>1.0</string>
   <key>CFBundleVersion</key><string>1</string>
-  <key>LSMinimumSystemVersion</key><string>13.0</string>
+  <key>CFBundleExecutable</key><string>memchat-app</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
-  <key>NSPrincipalClass</key><string>NSApplication</string>
-  <key>LSEnvironment</key>
-  <dict>
-    <key>FOUNTAINSTORE_DIR</key><string>/Users/benedikteickhoff/Development/Github-Desktop/FountainKit/.fountain/store</string>
-    <key>MEMORY_CORPUS_ID</key><string>memchat-app</string>
-    <key>OPENAI_API_URL</key><string></string>
-    <key>ENGRAVER_LOCAL_LLM_URL</key><string></string>
-    <key>FOUNTAIN_GATEWAY_URL</key><string></string>
-    <key>AWARENESS_URL</key><string></string>
-    <key>LAUNCHER_SIGNATURE</key><string>B86D7CEE-24C4-4C4C-A107-8D0542D1965B</string>
-  </dict>
+  <key>LSUIElement</key><false/>
 </dict>
 </plist>

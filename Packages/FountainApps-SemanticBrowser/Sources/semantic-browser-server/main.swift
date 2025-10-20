@@ -161,6 +161,17 @@ Task {
                 return HTTPResponse(status: 200, headers: ["Content-Type": "application/yaml"], body: data)
             }
         }
+        if req.method == "GET" && req.path.hasPrefix("/assets/") {
+            let parts = req.path.split(separator: "/").map(String.init)
+            if parts.count == 3, let imageName = parts.last, imageName.hasSuffix(".png") {
+                let imageId = String(imageName.dropLast(4))
+                if let ref = await service.loadArtifactRef(ownerId: imageId, kind: "image/png"), let data = try? Data(contentsOf: URL(fileURLWithPath: ref)) {
+                    return HTTPResponse(status: 200, headers: ["Content-Type": "image/png", "Content-Length": "\(data.count)", "Cache-Control": "no-cache"], body: data)
+                }
+                return HTTPResponse(status: 404, headers: ["Content-Type": "application/json"], body: Data("{\"error\":\"not found\"}".utf8))
+            }
+            return HTTPResponse(status: 400, headers: ["Content-Type": "application/json"], body: Data("{\"error\":\"invalid asset path\"}".utf8))
+        }
         return HTTPResponse(status: 404)
     }
     // Choose engine based on environment. Default now REQUIRES a CDP WebSocket URL.

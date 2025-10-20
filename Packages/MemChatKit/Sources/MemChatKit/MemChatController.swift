@@ -16,6 +16,11 @@ import FountainAICore
 // Avoid importing generator/runtime directly here to reduce package fan-out.
 // We will use a minimal URLSession-based client to call the Semantic Browser's
 // query endpoints according to the curated OpenAPI spec.
+import SemanticBrowserAPI
+import OpenAPIURLSession
+import ApiClientsCore
+import OpenAPIRuntime
+import FountainRuntime
 
 /// Public facade for embedding MemChat in host apps.
 /// Wraps EngraverChatViewModel and enforces per-chat corpus isolation while
@@ -2100,6 +2105,52 @@ extension MemChatController {
         let cov = await fetchHostCoverage(host: host, limit: limit)
         let sources = cov.recent.map { HostCoverageItem.Source(title: $0.title, url: $0.url) }
         return HostCoverageItem(host: host, pages: cov.pages, segments: cov.segments, recent: sources)
+    }
+
+    /// Build a visual evidence map by browsing a recent page for the host via the Semantic Browser.
+    /// Returns the dev asset URL and normalized overlays with an approximate coverage percent in 0..1.
+    public func buildEvidenceMap(host: String) async -> (imageURL: URL, overlays: [EvidenceMapView.Overlay], coverage: Double)? {
+        // Resolve a representative URL: prefer most recent stored page for host; fallback to https://<host>
+        let recent = await fetchHostCoverage(host: host, limit: 1).recent
+        let targetURL: URL = (recent.first.flatMap { URL(string: $0.url) }) ?? URL(string: "https://\(host)")!
+
+        // Configure SemanticBrowserAPI client
+        guard let browser = browserConfig else { return nil }
+        var defaultHeaders: [String: String] = [:]
+        if let apiKey = browser.apiKey, !apiKey.isEmpty { defaultHeaders["X-API-Key"] = apiKey }
+        let transport = URLSessionTransport()
+        let middlewares = OpenAPIClientFactory.defaultMiddlewares(defaultHeaders: defaultHeaders)
+        let client = SemanticBrowserAPI.Client(serverURL: browser.baseURL, transport: transport, middlewares: middlewares)
+
+        // Compose request with dev-friendly options (no indexing; artifacts not required)
+        let wait = SemanticBrowserAPI.Components.Schemas.WaitPolicy(strategy: .networkIdle, networkIdleMs: 500, selector: nil, maxWaitMs: 12000)
+        let req = SemanticBrowserAPI.Components.Schemas.BrowseRequest(url: targetURL.absoluteString, wait: wait, mode: .standard, index: .init(enabled: false), storeArtifacts: false, labels: nil)
+        do {
+            let out = try await client.browseAndDissect(.init(body: .json(req)))
+            guard case .ok(let ok) = out else { return nil }
+            let body = try ok.body.json
+            let snapshot = body.snapshot
+            guard let image = snapshot.rendered.image, let analysis = body.analysis, let imageId = image.imageId else { return nil }
+            // Convert rects keyed to this image into overlays
+            var overlays: [EvidenceMapView.Overlay] = []
+            for b in analysis.blocks {
+                if let rects = b.rects {
+                    for (i, r) in rects.enumerated() {
+                        if r.imageId == imageId {
+                            let rect = CGRect(x: CGFloat(r.x ?? 0), y: CGFloat(r.y ?? 0), width: CGFloat(r.w ?? 0), height: CGFloat(r.h ?? 0))
+                            guard rect.width > 0, rect.height > 0 else { continue }
+                            overlays.append(.init(id: "\(b.id)-\(i)", rect: rect, color: .green))
+                        }
+                    }
+                }
+            }
+            // Build asset fetch URL (dev route)
+            let imgURL = browser.baseURL.appendingPathComponent("assets").appendingPathComponent("\(imageId).png")
+            let coverage = Double(VisualCoverageUtils.unionAreaNormalized(overlays.map { $0.rect }))
+            return (imageURL: imgURL, overlays: overlays, coverage: max(0.0, min(1.0, coverage)))
+        } catch {
+            return nil
+        }
     }
 
     /// Learn a few more pages for a host by crawling same-host links starting from the most recent page.

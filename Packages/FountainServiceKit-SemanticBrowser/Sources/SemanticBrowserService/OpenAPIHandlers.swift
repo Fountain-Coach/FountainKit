@@ -103,10 +103,11 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
         )
         // Persist visuals (best-effort)
         if let image = snapshot.rendered.image {
-            let asset = SemanticMemoryService.VisualAsset(imageId: image.imageId ?? "", contentType: image.contentType ?? "image/png", width: image.width ?? 0, height: image.height ?? 0, scale: image.scale ?? 1.0)
-            let anchors: [SemanticMemoryService.VisualAnchor] = analysis.blocks.flatMap { b in
-                (b.rects ?? []).map { r in
-                    SemanticMemoryService.VisualAnchor(imageId: r.imageId ?? "", x: r.x ?? 0, y: r.y ?? 0, w: r.w ?? 0, h: r.h ?? 0, excerpt: r.excerpt, confidence: r.confidence)
+            let asset = SemanticMemoryService.VisualAsset(imageId: image.imageId ?? "", contentType: image.contentType ?? "image/png", width: image.width ?? 0, height: image.height ?? 0, scale: Float(image.scale ?? 1.0))
+            var anchors: [SemanticMemoryService.VisualAnchor] = []
+            for b in analysis.blocks {
+                for r in (b.rects ?? []) {
+                    anchors.append(SemanticMemoryService.VisualAnchor(imageId: r.imageId ?? "", x: Float(r.x ?? 0), y: Float(r.y ?? 0), w: Float(r.w ?? 0), h: Float(r.h ?? 0), excerpt: r.excerpt, confidence: Float(r.confidence ?? 0)))
                 }
             }
             await service.storeVisual(pageId: analysis.envelope.id, asset: asset, anchors: anchors)
@@ -224,9 +225,10 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
         let full = fromGeneratedAnalysis(req.analysis)
         let res = await service.ingest(full: full)
         // Persist visual anchors (without asset metadata if absent)
-        let anchors: [SemanticMemoryService.VisualAnchor] = req.analysis.blocks.flatMap { b in
-            (b.rects ?? []).map { r in
-                SemanticMemoryService.VisualAnchor(imageId: r.imageId ?? "", x: r.x ?? 0, y: r.y ?? 0, w: r.w ?? 0, h: r.h ?? 0, excerpt: r.excerpt, confidence: r.confidence)
+        var anchors: [SemanticMemoryService.VisualAnchor] = []
+        for b in req.analysis.blocks {
+            for r in (b.rects ?? []) {
+                anchors.append(SemanticMemoryService.VisualAnchor(imageId: r.imageId ?? "", x: Float(r.x ?? 0), y: Float(r.y ?? 0), w: Float(r.w ?? 0), h: Float(r.h ?? 0), excerpt: r.excerpt, confidence: Float(r.confidence ?? 0)))
             }
         }
         await service.storeVisual(pageId: full.envelope.id, asset: nil, anchors: anchors)

@@ -17,13 +17,15 @@ final class FountainStoreBackend: SemanticMemoryService.Backend, @unchecked Send
     private let pagesCollection: String
     private let segmentsCollection: String
     private let entitiesCollection: String
+    private let visualsCollection: String
 
-    init(store: FountainStoreClient, corpusId: String, pagesCollection: String = "pages", segmentsCollection: String = "segments", entitiesCollection: String = "entities") {
+    init(store: FountainStoreClient, corpusId: String, pagesCollection: String = "pages", segmentsCollection: String = "segments", entitiesCollection: String = "entities", visualsCollection: String = "visuals") {
         self.store = store
         self.corpusId = corpusId
         self.pagesCollection = pagesCollection
         self.segmentsCollection = segmentsCollection
         self.entitiesCollection = entitiesCollection
+        self.visualsCollection = visualsCollection
 
         Task {
             if (try? await store.getCorpus(corpusId)) == nil {
@@ -111,6 +113,17 @@ final class FountainStoreBackend: SemanticMemoryService.Backend, @unchecked Send
         let items = response.documents.compactMap { try? decoder.decode(EntityDoc.self, from: $0) }
         return (response.total, items)
     }
+
+    struct VisualDoc: Codable { let pageId: String; let image: Image?; let anchors: [Anchor]; let coveragePercent: Float?; struct Image: Codable { let imageId: String; let contentType: String; let width: Int; let height: Int; let scale: Float }; struct Anchor: Codable { let imageId: String; let x: Float; let y: Float; let w: Float; let h: Float; let excerpt: String?; let confidence: Float? } }
+    func upsertVisual(pageId: String, visual: SemanticMemoryService.VisualRecord) {
+        Task {
+            let image = visual.asset.map { VisualDoc.Image(imageId: $0.imageId, contentType: $0.contentType, width: $0.width, height: $0.height, scale: $0.scale) }
+            let anchors = visual.anchors.map { VisualDoc.Anchor(imageId: $0.imageId, x: $0.x, y: $0.y, w: $0.w, h: $0.h, excerpt: $0.excerpt, confidence: $0.confidence) }
+            let doc = VisualDoc(pageId: pageId, image: image, anchors: anchors, coveragePercent: visual.coveragePercent)
+            guard let data = try? JSONEncoder().encode(doc) else { return }
+            try? await store.putDoc(corpusId: corpusId, collection: visualsCollection, id: pageId, body: data)
+        }
+    }
 }
 
 func buildService(backend: SemanticMemoryService.Backend? = nil) -> SemanticMemoryService {
@@ -138,7 +151,8 @@ func makeFountainStoreBackend(from env: [String: String]) -> SemanticMemoryServi
             corpusId: corpus,
             pagesCollection: pagesCollection,
             segmentsCollection: segmentsCollection,
-            entitiesCollection: entitiesCollection
+            entitiesCollection: entitiesCollection,
+            visualsCollection: env["SB_VISUALS_COLLECTION"] ?? "visuals"
         )
     } catch {
         print("semantic-browser: failed to configure FountainStore backend (\\(error))")

@@ -8,6 +8,7 @@ public actor SemanticMemoryService {
         func searchPages(q: String?, host: String?, lang: String?, limit: Int, offset: Int) -> (Int, [PageDoc])
         func searchSegments(q: String?, kind: String?, entity: String?, limit: Int, offset: Int) -> (Int, [SegmentDoc])
         func searchEntities(q: String?, type: String?, limit: Int, offset: Int) -> (Int, [EntityDoc])
+        func upsertVisual(pageId: String, visual: SemanticMemoryService.VisualRecord)
     }
 
     private var pages: [PageDoc] = []
@@ -31,6 +32,7 @@ public actor SemanticMemoryService {
     // Visuals by page/analysis id
     public struct VisualAsset: Codable, Sendable { public let imageId: String; public let contentType: String; public let width: Int; public let height: Int; public let scale: Float }
     public struct VisualAnchor: Codable, Sendable { public let imageId: String; public let x: Float; public let y: Float; public let w: Float; public let h: Float; public let excerpt: String?; public let confidence: Float? }
+    public struct VisualRecord: Codable, Sendable { public let asset: VisualAsset?; public let anchors: [VisualAnchor]; public let coveragePercent: Float? }
     private struct VisualMap: Codable, Sendable { let asset: VisualAsset?; let anchors: [VisualAnchor] }
     private var visualsByPageId: [String: VisualMap] = [:]
 
@@ -193,11 +195,15 @@ public actor SemanticMemoryService {
     }
     public func loadArtifactRef(ownerId: String, kind: String) -> String? { artifactRefs[ownerId]?[kind] }
     // Visuals
-    public func storeVisual(pageId: String, asset: VisualAsset?, anchors: [VisualAnchor]) {
+    public func storeVisual(pageId: String, asset: VisualAsset?, anchors: [VisualAnchor], coveragePercent: Float? = nil) {
         let cur = visualsByPageId[pageId]
         let mergedAsset = asset ?? cur?.asset
         let vm = VisualMap(asset: mergedAsset, anchors: anchors.isEmpty ? (cur?.anchors ?? []) : anchors)
         visualsByPageId[pageId] = vm
+        if let backend {
+            let rec = VisualRecord(asset: mergedAsset, anchors: vm.anchors, coveragePercent: coveragePercent)
+            backend.upsertVisual(pageId: pageId, visual: rec)
+        }
     }
     public func loadVisual(pageId: String) -> (VisualAsset?, [VisualAnchor])? {
         if let v = visualsByPageId[pageId] { return (v.asset, v.anchors) }

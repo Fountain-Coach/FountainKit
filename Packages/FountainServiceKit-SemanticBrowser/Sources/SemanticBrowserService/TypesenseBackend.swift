@@ -57,5 +57,9 @@ public final class TypesenseSemanticBackend: SemanticMemoryService.Backend, @unc
     public func searchEntities(q: String?, type: String?, limit: Int, offset: Int) -> (Int, [EntityDoc]) {
         (0, [])
     }
+
+    public func upsertVisual(pageId: String, visual: SemanticMemoryService.VisualRecord) {
+        // No-op in Typesense backend (search-only). Visuals persisted via FountainStore backend.
+    }
 }
 #endif

@@ -25,7 +25,8 @@ struct MemChatTeatroApp: App {
             model: "gpt-4o-mini",
             openAIAPIKey: key,
             openAIEndpoint: nil,
-            localCompatibleEndpoint: nil
+            localCompatibleEndpoint: nil,
+            deepSynthesis: true
         )
         _config = State(initialValue: initial)
         _controllerHolder = StateObject(wrappedValue: ControllerHolder(initial: initial))
@@ -45,7 +46,8 @@ struct MemChatTeatroApp: App {
                     openAIKey: config.openAIAPIKey ?? "",
                     model: config.model,
                     useGateway: config.gatewayURL != nil,
-                    gatewayURLString: config.gatewayURL?.absoluteString ?? (ProcessInfo.processInfo.environment["FOUNTAIN_GATEWAY_URL"] ?? "http://127.0.0.1:8010")
+                    gatewayURLString: config.gatewayURL?.absoluteString ?? (ProcessInfo.processInfo.environment["FOUNTAIN_GATEWAY_URL"] ?? "http://127.0.0.1:8010"),
+                    evidenceDepth: config.depthLevel
                 ) { newCfg in
                     config = newCfg
                     controllerHolder.recreate(with: newCfg)
@@ -79,6 +81,25 @@ struct MemChatTeatroRootView: View {
     @State private var addURLDepth: Int = 2
     @State private var addURLMaxPages: Int = 12
     @State private var addURLMode: String = "standard"
+    @State private var showBaselines = false
+    @State private var baselines: [MemChatController.BaselineItem] = []
+    @State private var showDrifts = false
+    @State private var drifts: [MemChatController.DriftItem] = []
+    @State private var showPatterns = false
+    @State private var patterns: [MemChatController.PatternsItem] = []
+    @State private var showBuildBaseline = false
+    @State private var hosts: [String] = []
+    @State private var selectedHost: String = ""
+    @State private var buildLevel: Int = 2
+    @State private var buildStatus: String = ""
+    @State private var buildWorking: Bool = false
+    @State private var showHosts = false
+    @State private var hostsCoverage: [MemChatController.HostCoverageItem] = []
+    @State private var topHosts: [MemChatController.HostCoverageItem] = []
+    @State private var showEvidence = false
+    @State private var evidenceHost: String = ""
+    @State private var evidenceDepth: Int = 2
+    @State private var evidenceItems: [(title: String, url: String, text: String)] = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -98,6 +119,11 @@ struct MemChatTeatroRootView: View {
                 }
                 Button("Test") { Task { await testConnection() } }
                 Button("Live Test") { Task { await testLiveChat() } }
+                Button("Baselines") { Task { await openBaselines() } }
+                Button("Drifts") { Task { await openDrifts() } }
+                Button("Patterns") { Task { await openPatterns() } }
+                Button("Build Baseline") { Task { await openBuildBaseline() } }
+                Button("Hosts") { Task { await openHosts() } }
                 Button("Settings") { openSettings() }
             }
             .padding(12)
@@ -111,6 +137,23 @@ struct MemChatTeatroRootView: View {
 
             Divider()
 
+            // Mini host coverage summary (top 3)
+            if !topHosts.isEmpty {
+                HStack(spacing: 10) {
+                    Text("Top hosts:").font(.caption).foregroundStyle(.secondary)
+                    ForEach(topHosts.prefix(3)) { h in
+                        Button(action: { Task { await openEvidence(host: h.host) } }) {
+                            Text("\(h.host) [p:\(h.pages) s:\(h.segments)]").font(.caption2)
+                                .padding(.horizontal, 6).padding(.vertical, 3)
+                                .background(RoundedRectangle(cornerRadius: 6).fill(Color.secondary.opacity(0.12)))
+                        }.buttonStyle(.plain)
+                    }
+                    Spacer()
+                    Button("Refresh") { Task { await refreshTopHosts() } }.font(.caption)
+                }
+                .padding(.horizontal, 12)
+            }
+
             MemChatTeatroView(controller: controllerHolder.controller)
         }
         .task {
@@ -118,6 +161,7 @@ struct MemChatTeatroRootView: View {
                 didRunSelfCheck = true
                 await testLiveChat()
             }
+            await refreshTopHosts()
         }
         .sheet(isPresented: $showAddURLSheet) {
             VStack(alignment: .leading, spacing: 10) {
@@ -143,6 +187,55 @@ struct MemChatTeatroRootView: View {
             .padding(12)
             .frame(minWidth: 460)
         }
+        .sheet(isPresented: $showBaselines) {
+            TeatroBaselinesSheet(items: baselines) { showBaselines = false }
+                .frame(minWidth: 560, minHeight: 420)
+                .padding(12)
+        }
+        .sheet(isPresented: $showDrifts) {
+            TeatroDriftsSheet(items: drifts) { showDrifts = false }
+                .frame(minWidth: 560, minHeight: 420)
+                .padding(12)
+        }
+        .sheet(isPresented: $showPatterns) {
+            TeatroPatternsSheet(items: patterns) { showPatterns = false }
+                .frame(minWidth: 560, minHeight: 420)
+                .padding(12)
+        }
+        .sheet(isPresented: $showBuildBaseline) {
+            TeatroBuildBaselineSheet(hosts: hosts,
+                                     selectedHost: $selectedHost,
+                                     level: $buildLevel,
+                                     status: $buildStatus,
+                                     working: $buildWorking,
+                                     onBuild: {
+                                        Task {
+                                            buildWorking = true
+                                            buildStatus = "Building…"
+                                            let ok = await controllerHolder.controller.buildBaselineAndArtifacts(for: selectedHost, level: buildLevel)
+                                            buildWorking = false
+                                            buildStatus = ok ? "Baseline built." : "No evidence yet for host."
+                                        }
+                                     },
+                                     onClose: { showBuildBaseline = false })
+                .frame(minWidth: 560, minHeight: 340)
+                .padding(12)
+        }
+        .sheet(isPresented: $showHosts) {
+            TeatroHostsSheet(controller: controllerHolder.controller, items: hostsCoverage) { showHosts = false }
+                .frame(minWidth: 620, minHeight: 480)
+                .padding(12)
+        }
+        .sheet(isPresented: $showEvidence) {
+            TeatroHostEvidenceSheet(host: evidenceHost,
+                                    depth: $evidenceDepth,
+                                    items: evidenceItems,
+                                    ask: { Task { await askFromEvidence(host: evidenceHost) } },
+                                    copy: { copyToClipboard(evidenceItems.map { $0.text + " — [\($0.title)](\($0.url))" }.joined(separator: "\n")) },
+                                    close: { showEvidence = false })
+                .frame(minWidth: 640, minHeight: 420)
+                .padding(12)
+        }
     }
 
     private func testConnection() async {
@@ -155,6 +248,46 @@ struct MemChatTeatroRootView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
             connectionStatus = ""
         }
+    }
+    private func openBaselines() async {
+        baselines = await controllerHolder.controller.loadBaselines(limit: 200)
+        showBaselines = true
+    }
+    private func openDrifts() async {
+        drifts = await controllerHolder.controller.loadDrifts(limit: 200)
+        showDrifts = true
+    }
+    private func openPatterns() async {
+        patterns = await controllerHolder.controller.loadPatterns(limit: 200)
+        showPatterns = true
+    }
+    private func openBuildBaseline() async {
+        hosts = await controllerHolder.controller.listHosts()
+        selectedHost = hosts.first ?? ""
+        buildLevel = 2
+        buildStatus = hosts.isEmpty ? "No hosts in corpus. Ingest pages first or include a URL in your question." : ""
+        showBuildBaseline = true
+    }
+    private func openHosts() async {
+        hostsCoverage = await controllerHolder.controller.loadHostCoverage(limitPerHost: 6)
+        showHosts = true
+    }
+    private func refreshTopHosts() async {
+        let cov = await controllerHolder.controller.loadHostCoverage(limitPerHost: 3)
+        topHosts = Array(cov.prefix(3))
+    }
+    private func openEvidence(host: String) async {
+        evidenceHost = host
+        evidenceDepth = controllerHolder.controller.config.depthLevel
+        evidenceItems = await controllerHolder.controller.evidencePreview(host: host, depthLevel: evidenceDepth)
+        showEvidence = true
+    }
+    private func askFromEvidence(host: String) async {
+        controllerHolder.controller.setStrictMemoryMode(true)
+        controllerHolder.controller.newChat()
+        let prompt = "Summarize \(host) based on our stored snapshot. Provide concise sections with cited bullets."
+        controllerHolder.controller.send(prompt)
+        showEvidence = false
     }
 
     private func testLiveChat() async {
@@ -198,5 +331,209 @@ struct MemChatTeatroRootView: View {
             Task { _ = await controllerHolder.controller.ingestFiles(urls) }
         }
         #endif
+    }
+}
+
+private struct TeatroBaselinesSheet: View {
+    let items: [MemChatController.BaselineItem]
+    var onClose: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Baselines (\(items.count))").font(.title3).bold()
+                Spacer()
+                Button("Copy All") { copyToClipboard(items.map { $0.content }.joined(separator: "\n\n")) }
+                Button("Close") { dismiss(); onClose() }
+            }
+            Divider()
+            if items.isEmpty {
+                Text("No baselines stored.").font(.caption).foregroundStyle(.secondary)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(items) { b in
+                            GroupBox(label: Text(Date(timeIntervalSince1970: b.ts), style: .date)) {
+                                Text(b.content).frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct TeatroDriftsSheet: View {
+    let items: [MemChatController.DriftItem]
+    var onClose: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Drifts (\(items.count))").font(.title3).bold()
+                Spacer()
+                Button("Copy All") { copyToClipboard(items.map { $0.content }.joined(separator: "\n\n")) }
+                Button("Close") { dismiss(); onClose() }
+            }
+            Divider()
+            if items.isEmpty {
+                Text("No drift records stored.").font(.caption).foregroundStyle(.secondary)
+            } else {
+                ScrollView { VStack(alignment: .leading, spacing: 12) { ForEach(items) { b in GroupBox(label: Text(Date(timeIntervalSince1970: b.ts), style: .date)) { Text(b.content).frame(maxWidth: .infinity, alignment: .leading) } } } }
+            }
+        }
+    }
+}
+
+private struct TeatroPatternsSheet: View {
+    let items: [MemChatController.PatternsItem]
+    var onClose: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Patterns (\(items.count))").font(.title3).bold()
+                Spacer()
+                Button("Copy All") { copyToClipboard(items.map { $0.content }.joined(separator: "\n\n")) }
+                Button("Close") { dismiss(); onClose() }
+            }
+            Divider()
+            if items.isEmpty {
+                Text("No patterns stored.").font(.caption).foregroundStyle(.secondary)
+            } else {
+                ScrollView { VStack(alignment: .leading, spacing: 12) { ForEach(items) { b in GroupBox(label: Text(Date(timeIntervalSince1970: b.ts), style: .date)) { Text(b.content).frame(maxWidth: .infinity, alignment: .leading) } } } }
+            }
+        }
+    }
+}
+
+private struct TeatroBuildBaselineSheet: View {
+    let hosts: [String]
+    @Binding var selectedHost: String
+    @Binding var level: Int
+    @Binding var status: String
+    @Binding var working: Bool
+    var onBuild: () -> Void
+    var onClose: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack { Text("Build Baseline").font(.title3).bold(); Spacer(); Button("Close") { dismiss(); onClose() } }
+            Divider()
+            if hosts.isEmpty {
+                Text("No hosts found in this corpus.").font(.caption).foregroundStyle(.secondary)
+            } else {
+                Picker("Host", selection: $selectedHost) { ForEach(hosts, id: \.self) { Text($0).tag($0) } }
+                    .labelsHidden()
+                Stepper("Depth: \(level)", value: $level, in: 1...3)
+                HStack { Spacer(); Button(working ? "Working…" : "Build") { onBuild() }.disabled(working || selectedHost.isEmpty) }
+            }
+            if !status.isEmpty { Text(status).font(.caption).foregroundStyle(.secondary) }
+        }
+    }
+}
+
+#if canImport(AppKit)
+import AppKit
+private func copyToClipboard(_ s: String) {
+    let pb = NSPasteboard.general
+    pb.clearContents()
+    pb.setString(s, forType: .string)
+}
+#else
+private func copyToClipboard(_ s: String) {}
+#endif
+
+private struct TeatroHostEvidenceSheet: View {
+    let host: String
+    @Binding var depth: Int
+    let items: [(title: String, url: String, text: String)]
+    var ask: () -> Void
+    var copy: () -> Void
+    var close: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Evidence — \(host)").font(.title3).bold()
+                Spacer()
+                Stepper("Depth: \(depth)", value: $depth, in: 1...3).frame(width: 160)
+                Button("Copy All") { copy() }
+                Button("Ask From Evidence") { ask() }
+                Button("Close") { dismiss(); close() }
+            }
+            Divider()
+            if items.isEmpty { Text("No evidence available for this host.").font(.caption).foregroundStyle(.secondary) }
+            else {
+                ScrollView { VStack(alignment: .leading, spacing: 8) { ForEach(Array(items.enumerated()), id: \.offset) { _, it in Text("• \(it.text) — [\(it.title)](\(it.url))").frame(maxWidth: .infinity, alignment: .leading) } } }
+            }
+        }
+    }
+}
+private struct TeatroHostsSheet: View {
+    let controller: MemChatController
+    let items: [MemChatController.HostCoverageItem]
+    var onClose: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var depth: Int = 2
+    @State private var maxPages: Int = 30
+    @State private var status: [String: String] = [:]
+    @State private var learnCount: Int = 3
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Hosts (\(items.count))").font(.title3).bold()
+                Spacer()
+                Stepper("Depth: \(depth)", value: $depth, in: 1...3).frame(width: 160)
+                Stepper("Max: \(maxPages)", value: $maxPages, in: 10...200).frame(width: 160)
+                Stepper("Learn: \(learnCount)", value: $learnCount, in: 1...10).frame(width: 160)
+                Button("Close") { dismiss(); onClose() }
+            }
+            Divider()
+            if items.isEmpty { Text("No hosts found in this corpus.").font(.caption).foregroundStyle(.secondary) }
+            else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(items) { h in
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack { Text(h.host).font(.headline); Spacer(); Text("pages: \(h.pages) • segments: \(h.segments)").font(.caption).foregroundStyle(.secondary) }
+                                if !h.recent.isEmpty {
+                                    ForEach(Array(h.recent.prefix(5).enumerated()), id: \.offset) { _, p in
+                                        Text("• \(p.title)").font(.caption)
+                                    }
+                                }
+                                HStack(spacing: 8) {
+                                    Button("Build Baseline") {
+                                        Task {
+                                            status[h.host] = "Building…"
+                                            let ok = await controller.buildBaselineAndArtifacts(for: h.host, level: depth)
+                                            status[h.host] = ok ? "Baseline ✓" : "No evidence"
+                                        }
+                                    }
+                                    Button("Learn +\(learnCount)") {
+                                        Task {
+                                            status[h.host] = "Learning…"
+                                            let n = await controller.learnMoreForHost(host: h.host, count: learnCount, modeLabel: "standard")
+                                            status[h.host] = n > 0 ? "Learned \(n)" : "No links"
+                                        }
+                                    }
+                                    Button("Resegment") {
+                                        Task {
+                                            status[h.host] = "Resegmenting…"
+                                            let n = await controller.resegmentThinPages(host: h.host, maxPages: maxPages)
+                                            status[h.host] = n > 0 ? "Resegmented \(n)" : "No changes"
+                                        }
+                                    }
+                                    if let msg = status[h.host], !msg.isEmpty { Text(msg).font(.caption).foregroundStyle(.secondary) }
+                                }
+                            }
+                            .padding(8)
+                            .background(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.2)))
+                        }
+                    }
+                }
+            }
+        }
     }
 }

@@ -11,6 +11,8 @@ struct SettingsView: View {
     @State var gatewayURLString: String
     @State private var showSemanticPanel: Bool = true
     @State private var showSources: Bool = false
+    @State private var deepAnswerMode: Bool = true
+    @State private var evidenceDepth: Int = 2
     var controller: MemChatController
     var apply: (MemChatConfiguration) -> Void
 
@@ -23,17 +25,20 @@ struct SettingsView: View {
                     HStack(spacing: 8) {
                         TextField("memchat-app", text: $memoryCorpusId)
                             .textFieldStyle(.roundedBorder)
+                            .help("The corpus to read memory from and persist chat artifacts to.")
                         Menu("Choose") { ForEach(corpora, id: \.self) { c in Button(c) { memoryCorpusId = c } } }
-                        Button("New") { Task { await createNewCorpus() } }
-                        Button("Merge…") { showMerge = true }
+                        Button("New") { Task { await createNewCorpus() } }.help("Create a fresh corpus and switch to it.")
+                        Button("Merge…") { showMerge = true }.help("Merge multiple corpora into a new target corpus.")
                     }
                 }
-                LabeledContent("Model") { TextField("gpt-4o-mini", text: $model).textFieldStyle(.roundedBorder) }
-                LabeledContent("OpenAI API Key") { SecureField("sk-...", text: $openAIKey).textFieldStyle(.roundedBorder) }
-                Toggle("Use Gateway", isOn: $useGateway)
-                LabeledContent("Gateway URL") { TextField("http://127.0.0.1:8010", text: $gatewayURLString).textFieldStyle(.roundedBorder).disabled(!useGateway) }
-                Toggle("Show Semantic Panel", isOn: $showSemanticPanel)
-                Toggle("Show Sources", isOn: $showSources)
+                LabeledContent("Model") { TextField("gpt-4o-mini", text: $model).textFieldStyle(.roundedBorder).help("Provider model name used for chat calls.") }
+                LabeledContent("OpenAI API Key") { SecureField("sk-...", text: $openAIKey).textFieldStyle(.roundedBorder).help("Resolved from Keychain when present.") }
+                Toggle("Use Gateway", isOn: $useGateway).help("Route chat calls through the local Gateway (recommended for deep reasoning routes).")
+                LabeledContent("Gateway URL") { TextField("http://127.0.0.1:8010", text: $gatewayURLString).textFieldStyle(.roundedBorder).disabled(!useGateway).help("Gateway base URL hosting the /chat endpoint.") }
+                Toggle("Show Semantic Panel", isOn: $showSemanticPanel).help("Show lightweight context in the UI (sources, stepstones).")
+                Toggle("Show Sources", isOn: $showSources).help("Display linked sources where applicable.")
+                Toggle("Deep Answer Mode", isOn: $deepAnswerMode).help("Build a FactPack from memory and compose strictly with citations. More grounded; slightly slower.")
+                Stepper("Evidence Depth: \(evidenceDepth)", value: $evidenceDepth, in: 1...3).help("How many evidence lines to include in the FactPack (1=~8, 2=~16, 3=~32).")
             }.formStyle(.grouped)
             HStack {
                 Spacer()
@@ -46,6 +51,8 @@ struct SettingsView: View {
             loadKeychain()
             self.showSemanticPanel = controller.config.showSemanticPanel
             self.showSources = controller.config.showSources
+            self.deepAnswerMode = controller.config.deepSynthesis
+            self.evidenceDepth = controller.config.depthLevel
             Task { await reloadCorpora() }
         }
         .sheet(isPresented: $showMerge) {
@@ -101,7 +108,9 @@ struct SettingsView: View {
             gatewayURL: gw,
             awarenessURL: nil,
             showSemanticPanel: showSemanticPanel,
-            showSources: showSources
+            showSources: showSources,
+            deepSynthesis: deepAnswerMode,
+            depthLevel: evidenceDepth
         )
         apply(cfg)
         dismiss()

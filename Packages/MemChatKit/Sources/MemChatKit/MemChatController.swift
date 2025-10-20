@@ -1,4 +1,10 @@
 import Foundation
+#if canImport(AppKit)
+import AppKit
+#endif
+#if canImport(PDFKit)
+import PDFKit
+#endif
 import Combine
 import FountainStoreClient
 import FountainAIKit
@@ -77,6 +83,33 @@ public final class MemChatController: ObservableObject {
         public let baselineLength: Int
         public let driftLines: Int
         public let patternsLines: Int
+    }
+
+    public struct BaselineItem: Sendable, Identifiable, Equatable {
+        public let id: String
+        public let content: String
+        public let ts: Double
+    }
+
+    public struct DriftItem: Sendable, Identifiable, Equatable {
+        public let id: String
+        public let content: String
+        public let ts: Double
+    }
+
+    public struct PatternsItem: Sendable, Identifiable, Equatable {
+        public let id: String
+        public let content: String
+        public let ts: Double
+    }
+
+    public struct HostCoverageItem: Sendable, Identifiable, Equatable {
+        public var id: String { host }
+        public let host: String
+        public let pages: Int
+        public let segments: Int
+        public struct Source: Sendable, Equatable { public let title: String; public let url: String }
+        public let recent: [Source]
     }
 
     public init(
@@ -269,6 +302,13 @@ public func openChatSession(_ id: UUID) {
 }
 
     public func send(_ text: String) {
+        // Deep Answer Mode: build a compact FactPack and compose strictly from it
+        if config.deepSynthesis {
+            Task { [weak self] in
+                await self?.sendDeep(text)
+            }
+            return
+        }
         var base: [String] = []
         if let digest = continuityDigest, !digest.isEmpty {
             base.append("ContinuityDigest: \(digest)")
@@ -370,13 +410,21 @@ public func openChatSession(_ id: UUID) {
             }
             // If the user is asking about baselines, make the instruction explicit and inject them verbatim
             if asksBaselines {
+                // For explicit baseline requests, force a verbatim response.
+                // Build a numbered block locally and require exact reproduction.
+                let verbatim: String = {
+                    if baselines.isEmpty { return "No baselines stored." }
+                    return baselines.enumerated().map { "\($0.offset+1). \($0.element)" }.joined(separator: "\n")
+                }()
                 let policy = """
-                BaselineAnsweringPolicy:
-                - Enumerate the baselines stored below as complete sentences.
-                - Do NOT say you lack memory; if none, say: "No baselines stored." (exact wording).
-                - Do not invent content; only restate what is listed.
+                BaselineAnsweringPolicy (VERBATIM):
+                - Your entire reply MUST be exactly the Baselines block below, nothing else.
+                - Do not paraphrase or add introductions; keep numbering and text unchanged.
+                - If the block reads "No baselines stored.", reply exactly that.
                 """
                 enriched.append(policy)
+                enriched.append("Baselines:\n" + verbatim)
+                logTrail("baseline.verbatim • count=\(baselines.count)")
             }
             if !snippets.isEmpty && !(config.strictMemoryMode && host != nil) {
                 // If we have richer snippet details with pageIds, prefer a cited list
@@ -401,7 +449,7 @@ public func openChatSession(_ id: UUID) {
             if let h = host, !(config.strictMemoryMode), let hostSummary = await self.buildHostSnapshotIfAvailable(host: h) {
                 enriched.append(hostSummary)
             }
-            if !baselines.isEmpty {
+            if !baselines.isEmpty && !asksBaselines {
                 let block = await self.condenseList(header: "Baselines", items: baselines, budget: 2000)
                 enriched.append(block)
                 self.logTrail("MEMORY inject • baselines=\(baselines.count)")
@@ -441,6 +489,113 @@ public func openChatSession(_ id: UUID) {
                 // are discoverable and listable. No per-chat corpus override.
                 self.vm.send(prompt: text, systemPrompts: sys, preferStreaming: true, corpusOverride: nil)
             }
+        }
+    }
+
+    /// Deep Answer Mode: build a compact FactPack from the memory corpus and
+    /// compose the final answer strictly from those facts. Prefer the Gateway
+    /// provider when configured; fall back to direct provider otherwise via the
+    /// existing EngraverChatViewModel routing. This keeps streaming/persistence intact.
+    private func sendDeep(_ text: String) async {
+        logTrail("deep-mode: assembling factpack")
+        var policy: [String] = []
+        if let digest = continuityDigest, !digest.isEmpty {
+            policy.append("ContinuityDigest: \(digest)")
+        }
+
+        // Ensure Awareness context is fresh (best-effort)
+        if config.awarenessURL != nil { await ensureAwarenessContext() }
+
+        // Derive host intent and collect evidence/facts
+        let requestedURL = _extractURLOrDomain(from: text)
+        let host = requestedURL?.host
+
+        // Fetch snippets/evidence and recent artifacts deterministically
+        var snippetDetails = await retrieveMemorySnippetDetails(matching: text, limit: 8)
+        if snippetDetails.isEmpty, let url = requestedURL {
+            // Auto-ingest a small slice if nothing is present yet for this host
+            logTrail("autofetch(deep): \(url.absoluteString)")
+            _ = await ingestURLAdvanced(url, modeLabel: "standard", sameDomainDepth: 1)
+            snippetDetails = await retrieveMemorySnippetDetails(matching: text, limit: 8)
+        }
+        if let h = host { await ensureHostMemoryArtifacts(host: h) }
+        var evidenceLines: [String] = []
+        if let h = host {
+            let evidence = await fetchCitedEvidence(host: h, depthLevel: config.depthLevel)
+            evidenceLines = evidence.map { "• " + trim($0.text, limit: 280) + " — [" + trim($0.title, limit: 80) + "](\($0.url))" }
+            await MainActor.run {
+                self.recentEvidence = evidence.enumerated().map { idx, e in
+                    CitedSegmentEvidence(id: "ev-\(idx)", title: e.title, url: e.url, text: self.trim(e.text, limit: 400))
+                }
+            }
+        } else if !snippetDetails.isEmpty {
+            for d in snippetDetails {
+                if let pid = d.pageId, let meta = await fetchPageMeta(pageId: pid) {
+                    evidenceLines.append("• \(d.text) — [\(meta.title)](\(meta.url))")
+                } else {
+                    evidenceLines.append("• \(d.text)")
+                }
+            }
+        }
+
+        let baselines = await retrieveRecentBaselines(limit: 6)
+        let drifts = await retrieveRecentDrifts(limit: 3)
+        let patterns = await retrieveRecentPatterns(limit: 2)
+        logTrail("deep-mode: facts baselines=\(baselines.count) drift=\(drifts.count) patterns=\(patterns.count) evidence=\(evidenceLines.count)")
+        let baselinesBlock = await condenseList(header: "Baselines", items: baselines, budget: 1400)
+        let driftBlock = await condenseList(header: "Recent Drift", items: drifts, budget: 1000)
+        let patternsBlock = await condenseList(header: "Patterns", items: patterns, budget: 1000)
+
+        // Build FactPack
+        var factPack: [String] = []
+        if let h = host, !h.isEmpty {
+            factPack.append("Subject: \(h)")
+        }
+        if !evidenceLines.isEmpty {
+            factPack.append("Evidence:\n" + evidenceLines.joined(separator: "\n"))
+        }
+        if !baselines.isEmpty { factPack.append(baselinesBlock) }
+        if !drifts.isEmpty { factPack.append(driftBlock) }
+        if !patterns.isEmpty { factPack.append(patternsBlock) }
+
+        // Enforce strict composition rules to avoid superficial answers
+        var instructions = [
+            "Compose strictly from the FactPack. Do not invent.",
+            "Prefer specificity and include citations in bullets as [Title](URL) when available.",
+            "If a requested fact is not present, state: 'Not in memory' and suggest refinement.",
+        ]
+        if host != nil {
+            instructions.append("Title your answer: 'As of our stored snapshot'.")
+            instructions.append("Write 3–5 sections; each with 2–4 bullets.")
+        } else {
+            instructions.append("Write 6–9 concise bullets.")
+        }
+
+        let sys = vm.makeSystemPrompts(base: policy + [
+            "AnsweringPolicy:\n- " + instructions.joined(separator: "\n- "),
+            "FactPack:\n" + factPack.joined(separator: "\n\n")
+        ])
+
+        // Track injected context for inspector
+        let ctx = InjectedContext(
+            continuity: continuityDigest,
+            awarenessSummary: vm.awarenessSummaryText,
+            awarenessHistory: vm.awarenessHistorySummary,
+            snippets: snippetDetails.map { $0.text },
+            baselines: baselines,
+            drifts: drifts,
+            patterns: patterns
+        )
+        lastInjectedContext = ctx
+        pendingContext = ctx
+
+        if config.showSemanticPanel {
+            let panel = await buildSemanticPanel(from: snippetDetails, baselines: baselines, patterns: patterns)
+            await MainActor.run { self.semanticPanel = panel }
+        }
+
+        await MainActor.run {
+            self.vm.send(prompt: text, systemPrompts: sys, preferStreaming: true, corpusOverride: nil)
         }
     }
 
@@ -1299,20 +1454,75 @@ public func openChatSession(_ id: UUID) {
         var anyOK = false
         for u in urls {
             do {
+                guard let content = Self._readText(from: u) else {
+                    self.logTrail("file import • unsupported or empty: \(u.lastPathComponent)")
+                    continue
+                }
                 let pageId = "file:\(u.lastPathComponent)"
                 let title = u.deletingPathExtension().lastPathComponent
-                let content = (try? String(contentsOf: u)) ?? ""
                 let page = Page(corpusId: config.memoryCorpusId, pageId: pageId, url: u.absoluteString, host: "file", title: title)
                 _ = try await store.addPage(page)
-                let seg = Segment(corpusId: config.memoryCorpusId, segmentId: "\(pageId):0", pageId: pageId, kind: "paragraph", text: content)
-                _ = try await store.addSegment(seg)
+                // Chunk large texts into multiple segments to improve retrieval
+                let chunks = Self._chunkText(content, maxSegments: 8, targetChars: 420)
+                if chunks.isEmpty {
+                    let seg = Segment(corpusId: config.memoryCorpusId, segmentId: "\(pageId):0", pageId: pageId, kind: "paragraph", text: content)
+                    _ = try await store.addSegment(seg)
+                } else {
+                    var idx = 0
+                    for c in chunks {
+                        let seg = Segment(corpusId: config.memoryCorpusId, segmentId: "\(pageId):\(idx)", pageId: pageId, kind: "paragraph", text: c)
+                        _ = try await store.addSegment(seg)
+                        idx += 1
+                    }
+                }
                 anyOK = true
-                self.logTrail("imported file • \(u.lastPathComponent)")
+                self.logTrail("imported file • \(u.lastPathComponent) segs=\(max(1, content.isEmpty ? 0 : Self._chunkText(content, maxSegments: 8, targetChars: 420).count))")
             } catch {
                 self.logTrail("file import error • \(error)")
             }
         }
         return anyOK
+    }
+
+    // MARK: - File text readers
+    private static func _readText(from url: URL) -> String? {
+        let ext = url.pathExtension.lowercased()
+        switch ext {
+        case "txt", "md", "markdown", "csv", "json", "yaml", "yml", "log":
+            return try? String(contentsOf: url)
+        case "html", "htm":
+            if let html = try? String(contentsOf: url) { return _stripHTML(html) }
+            return nil
+        case "rtf":
+            #if canImport(AppKit)
+            if let attr = try? NSAttributedString(url: url, options: [.documentType: NSAttributedString.DocumentType.rtf], documentAttributes: nil) {
+                return attr.string
+            }
+            #endif
+            return nil
+        case "rtfd":
+            #if canImport(AppKit)
+            if let data = try? Data(contentsOf: url),
+               let attr = try? NSAttributedString(data: data, options: [.documentType: NSAttributedString.DocumentType.rtfd], documentAttributes: nil) {
+                return attr.string
+            }
+            #endif
+            return nil
+        case "pdf":
+            #if canImport(PDFKit)
+            if let doc = PDFDocument(url: url) {
+                var out = ""
+                for i in 0..<(doc.pageCount) {
+                    if let page = doc.page(at: i), let s = page.string { out += s + "\n\n" }
+                }
+                return out.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            #endif
+            return nil
+        default:
+            // Last resort: try to read as UTF-8 text
+            return try? String(contentsOf: url)
+        }
     }
 
     private func _verifyIndexed(host: String?) async -> Bool {
@@ -1820,6 +2030,96 @@ extension MemChatController {
     /// Create a new corpus. Returns true on success.
     public func createCorpus(id: String) async -> Bool {
         do { _ = try await store.createCorpus(id); return true } catch { return false }
+    }
+
+    /// Load baselines directly from the store (no model involved).
+    public func loadBaselines(limit: Int = 100) async -> [BaselineItem] {
+        do {
+            let (_, items) = try await store.listBaselines(corpusId: config.memoryCorpusId, limit: 1000, offset: 0)
+            let sorted = items.sorted { $0.ts > $1.ts }
+            return Array(sorted.prefix(limit)).map { BaselineItem(id: $0.baselineId, content: $0.content, ts: $0.ts) }
+        } catch {
+            return []
+        }
+    }
+
+    /// Load drifts directly from the store.
+    public func loadDrifts(limit: Int = 100) async -> [DriftItem] {
+        do {
+            let (_, items) = try await store.listDrifts(corpusId: config.memoryCorpusId, limit: 1000, offset: 0)
+            let sorted = items.sorted { $0.ts > $1.ts }
+            return Array(sorted.prefix(limit)).map { DriftItem(id: $0.driftId, content: $0.content, ts: $0.ts) }
+        } catch { return [] }
+    }
+
+    /// Load patterns directly from the store.
+    public func loadPatterns(limit: Int = 100) async -> [PatternsItem] {
+        do {
+            let (_, items) = try await store.listPatterns(corpusId: config.memoryCorpusId, limit: 1000, offset: 0)
+            let sorted = items.sorted { $0.ts > $1.ts }
+            return Array(sorted.prefix(limit)).map { PatternsItem(id: $0.patternsId, content: $0.content, ts: $0.ts) }
+        } catch { return [] }
+    }
+
+    /// List distinct hosts present in the pages collection for the current corpus.
+    public func listHosts(limit: Int = 2000) async -> [String] {
+        do {
+            var offset = 0
+            var found = Set<String>()
+            while true {
+                let (total, pages) = try await store.listPages(corpusId: config.memoryCorpusId, limit: 500, offset: offset)
+                for p in pages { if !p.host.isEmpty { found.insert(p.host) } }
+                offset += pages.count
+                if offset >= total || pages.isEmpty { break }
+                if found.count >= limit { break }
+            }
+            return found.sorted()
+        } catch { return [] }
+    }
+
+    /// Load coverage (pages/segments and recent titles) per host.
+    public func loadHostCoverage(limitPerHost: Int = 8) async -> [HostCoverageItem] {
+        let hosts = await listHosts()
+        var out: [HostCoverageItem] = []
+        for h in hosts {
+            let cov = await fetchHostCoverage(host: h, limit: limitPerHost)
+            let sources = cov.recent.map { HostCoverageItem.Source(title: $0.title, url: $0.url) }
+            out.append(HostCoverageItem(host: h, pages: cov.pages, segments: cov.segments, recent: sources))
+        }
+        return out.sorted { $0.pages > $1.pages }
+    }
+
+    /// Evidence preview for a host (text + citations) for inspector UI.
+    public func evidencePreview(host: String, depthLevel: Int = 2) async -> [(title: String, url: String, text: String)] {
+        let ev = await fetchCitedEvidence(host: host, depthLevel: depthLevel)
+        return ev.map { (title: $0.title, url: $0.url, text: $0.text) }
+    }
+
+    /// Coverage summary for a single host.
+    public func coverageForHost(host: String, limit: Int = 8) async -> HostCoverageItem {
+        let cov = await fetchHostCoverage(host: host, limit: limit)
+        let sources = cov.recent.map { HostCoverageItem.Source(title: $0.title, url: $0.url) }
+        return HostCoverageItem(host: host, pages: cov.pages, segments: cov.segments, recent: sources)
+    }
+
+    /// Learn a few more pages for a host by crawling same-host links starting from the most recent page.
+    /// Returns number of pages successfully ingested.
+    public func learnMoreForHost(host: String, count: Int = 3, modeLabel: String = "standard") async -> Int {
+        do {
+            var qp = Query(filters: ["corpusId": config.memoryCorpusId, "host": host], limit: 1, offset: 0)
+            qp.sort = [("fetchedAt", false)]
+            let pagesResp = try await store.query(corpusId: config.memoryCorpusId, collection: "pages", query: qp)
+            struct PageDoc: Codable { let url: String }
+            guard let first = pagesResp.documents.first,
+                  let page = try? JSONDecoder().decode(PageDoc.self, from: first),
+                  let seed = URL(string: page.url) else { return 0 }
+            let mode: SeedingConfiguration.Browser.Mode = {
+                switch modeLabel.lowercased() { case "quick": return .quick; case "deep": return .deep; default: return .standard }
+            }()
+            let n = await ingestSameHostLinks(seed: seed, count: max(1, count), mode: mode)
+            if n > 0 { await ensureHostMemoryArtifacts(host: host) }
+            return n
+        } catch { return 0 }
     }
 
     /// Merge a set of source corpora into a new or existing target corpus.

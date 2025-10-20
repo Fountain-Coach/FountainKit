@@ -586,6 +586,15 @@ components:
           properties:
             html: {type: string}
             text: {type: string}
+            image:
+              type: object
+              description: Full-page screenshot of the rendered source (when available)
+              properties:
+                imageId: {type: string}
+                contentType: {type: string, default: image/png}
+                width: {type: integer}
+                height: {type: integer}
+                scale: {type: number, format: float}
             meta:
               type: object
               additionalProperties: {type: string}
@@ -683,6 +692,19 @@ components:
           description: Heading level (1..6) when kind=heading.
         text:
           type: string
+        rects:
+          type: array
+          description: One or more visual anchors mapping this block into the screenshot image coordinate space
+          items:
+            type: object
+            properties:
+              imageId: {type: string}
+              x: {type: number, format: float}
+              y: {type: number, format: float}
+              w: {type: number, format: float}
+              h: {type: number, format: float}
+              excerpt: {type: string}
+              confidence: {type: number, format: float}
         span:
           type: array
           items: {type: integer}

@@ -19,6 +19,7 @@ Make MemChat’s memory coverage visual, verifiable, and explorable. Show precis
 ## OpenAPI‑First Plan
 
 ### Phase 1 — Specs + Data
+(Status: in-progress) — Snapshot.image + Block.rects added to `v1/semantic-browser.yml`.
 - Update `v1/semantic-browser.yml` (Snapshot/Analysis):
   - Snapshot: add `image` (PNG, full‑page), `width`, `height`, `scale`, `viewport`, `scrollHeight`.
   - `Analysis.blocks[]`: add `rects[]` (x,y,w,h in screenshot coords) and `excerpt`.
@@ -29,6 +30,7 @@ Make MemChat’s memory coverage visual, verifiable, and explorable. Show precis
 - Regenerate types/clients/servers via `swift-openapi-generator` for any targets touching the spec.
 
 ### Phase 2 — Capture + Anchoring
+(Next) — implement CDP screenshot + DOM rect capture; PDF/WebView file renders.
 - Web (Semantic Browser):
   - Use CDP to capture full‑page PNG and DOM clientRects for analysis blocks.
   - Normalize rects to image coordinate space; record `scale`.
@@ -87,4 +89,3 @@ Make MemChat’s memory coverage visual, verifiable, and explorable. Show precis
 4) Missing/stale layers + “open segment” drill‑down.
 5) File pipelines (PDF/HTML/MD/RTF/TXT).
 6) Actions: re‑index region; add note; polish.
-

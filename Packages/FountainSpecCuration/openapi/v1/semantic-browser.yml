@@ -402,6 +402,45 @@ paths:
         '400': {$ref: '#/components/responses/BadRequest'}
         '500': {$ref: '#/components/responses/ServerError'}
 
+  /v1/reindexRegion:
+    post:
+      operationId: reindexRegion
+      x-fountain.visibility: public
+      x-fountain.allow-as-tool: true
+      tags: [Index]
+      summary: Re-index only blocks intersecting a normalized region.
+      description: >
+        Performs a fresh snapshot (CDP when available), computes analysis with visual anchors,
+        filters blocks whose rects intersect the provided normalized region (0..1 axes),
+        and indexes only those blocks/entities. Returns an IndexResult with anchorsPersisted
+        and coveragePercent for the selected region.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [region]
+              properties:
+                pageId: {type: string, description: Page id to resolve the URL}
+                url: {type: string, format: uri, description: Direct URL if pageId not provided}
+                region:
+                  type: object
+                  required: [x,y,w,h]
+                  properties:
+                    x: {type: number, format: float}
+                    y: {type: number, format: float}
+                    w: {type: number, format: float}
+                    h: {type: number, format: float}
+      responses:
+        '200':
+          description: Region indexed
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IndexResult'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '500': {$ref: '#/components/responses/ServerError'}
+
 components:
   securitySchemes:
     ApiKeyAuth:

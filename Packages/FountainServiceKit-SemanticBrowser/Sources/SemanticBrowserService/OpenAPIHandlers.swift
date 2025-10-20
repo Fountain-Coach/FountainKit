@@ -269,6 +269,70 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
         )
         return .ok(.init(body: .json(out)))
     }
+    public func reindexRegion(_ input: Operations.reindexRegion.Input) async throws -> Operations.reindexRegion.Output {
+        guard case let .json(req) = input.body else {
+            return .undocumented(statusCode: 400, OpenAPIRuntime.UndocumentedPayload())
+        }
+        // Resolve URL either from pageId or direct field
+        let url: String
+        if let pid = req.pageId, !pid.isEmpty, let page = await service.getPage(id: pid) { url = page.url }
+        else if let u = req.url, !u.isEmpty { url = u }
+        else { return .undocumented(statusCode: 400, OpenAPIRuntime.UndocumentedPayload()) }
+
+        // Snapshot + analysis with rects when available
+        let raw = try await engine.snapshot(for: url, wait: nil, capture: nil)
+        let snapshot = try await makeSnapshot(from: raw, url: url)
+        let analysisFull = makeAnalysis(
+            fromHTML: snapshot.rendered.html,
+            text: snapshot.rendered.text,
+            url: snapshot.page.uri,
+            contentType: snapshot.page.contentType,
+            imageId: snapshot.rendered.image?.imageId,
+            rectsByBlock: raw.blockRects
+        )
+        // Filter blocks by intersection with region
+        let region = req.region
+        func intersects(_ b: Components.Schemas.Block.rectsPayload?) -> Bool {
+            guard let rs = b else { return false }
+            for r in rs {
+                let x1 = r.x ?? 0, y1 = r.y ?? 0, w1 = r.w ?? 0, h1 = r.h ?? 0
+                let x2 = region.x, y2 = region.y, w2 = region.w, h2 = region.h
+                if x1 < x2 + w2 && x1 + w1 > x2 && y1 < y2 + h2 && y1 + h1 > y2 { return true }
+            }
+            return false
+        }
+        let filteredBlocks = analysisFull.blocks.filter { intersects($0.rects) }
+        let filtered = Components.Schemas.Analysis(
+            envelope: analysisFull.envelope,
+            blocks: filteredBlocks,
+            semantics: analysisFull.semantics,
+            summaries: analysisFull.summaries,
+            provenance: analysisFull.provenance
+        )
+        // Map to FullAnalysis and ingest
+        let full = fromGeneratedAnalysis(filtered)
+        let res = await service.ingest(full: full)
+        // Persist visual anchors for region (best-effort)
+        var anchors: [SemanticMemoryService.VisualAnchor] = []
+        for b in filtered.blocks {
+            for r in (b.rects ?? []) {
+                anchors.append(SemanticMemoryService.VisualAnchor(imageId: r.imageId ?? "", x: Float(r.x ?? 0), y: Float(r.y ?? 0), w: Float(r.w ?? 0), h: Float(r.h ?? 0), excerpt: r.excerpt, confidence: Float(r.confidence ?? 0), ts: filtered.envelope.source.fetchedAt))
+            }
+        }
+        await service.storeVisual(pageId: filtered.envelope.id, asset: snapshot.rendered.image.map { SemanticMemoryService.VisualAsset(imageId: $0.imageId ?? "", contentType: $0.contentType ?? "image/png", width: $0.width ?? 0, height: $0.height ?? 0, scale: Float($0.scale ?? 1.0), fetchedAt: snapshot.page.fetchedAt) }, anchors: anchors)
+        // Compute coverage of region
+        func areaUnion(_ rects: [SemanticMemoryService.VisualAnchor]) -> Float { let xs = Array(Set(rects.flatMap { [$0.x, $0.x + $0.w] })).sorted(); var total: Float = 0; for i in 0..<(max(0, xs.count - 1)) { let x1 = xs[i], x2 = xs[i+1], w = x2-x1; if w<=0 { continue }; var iv: [(Float,Float)] = []; for r in rects where r.x < x2 && (r.x + r.w) > x1 { iv.append((r.y, r.y + r.h)) }; if iv.isEmpty { continue }; iv.sort { $0.0 < $1.0 }; var covered: Float = 0; var cur = iv[0]; for s in iv.dropFirst() { if s.0 <= cur.1 { cur.1 = max(cur.1, s.1) } else { covered += max(0, cur.1 - cur.0); cur = s } }; covered += max(0, cur.1 - cur.0); total += w * covered }; return max(0, min(1, total)) }
+        let cov = areaUnion(anchors)
+        let out = Components.Schemas.IndexResult(
+            pagesUpserted: res.pagesUpserted,
+            segmentsUpserted: res.segmentsUpserted,
+            entitiesUpserted: res.entitiesUpserted,
+            tablesUpserted: res.tablesUpserted,
+            anchorsPersisted: anchors.count,
+            coveragePercent: Double(cov)
+        )
+        return .ok(.init(body: .json(out)))
+    }
     public func getPage(_ input: Operations.getPage.Input) async throws -> Operations.getPage.Output {
         let id = input.path.id
         if let p = await service.getPage(id: id) {

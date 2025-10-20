@@ -107,6 +107,7 @@ struct MemChatTeatroRootView: View {
     @State private var mapStale: [EvidenceMapView.Overlay] = []
     @State private var mapPageId: String = ""
     @State private var staleDays: Int = 60
+    @State private var selectedRect: CGRect? = nil
     @State private var mapImageURL: URL? = nil
     @State private var mapCoverage: Double = 0
 
@@ -275,6 +276,21 @@ struct MemChatTeatroRootView: View {
                         .pickerStyle(.segmented)
                         .frame(width: 200)
                     Spacer()
+                    Button("Reindex Region") {
+                        Task {
+                            guard !mapPageId.isEmpty, let sel = selectedRect else { return }
+                            let ok = await controllerHolder.controller.reindexRegion(pageId: mapPageId, rect: sel)
+                            if ok, let r = await controllerHolder.controller.buildEvidenceMapWithStale(host: evidenceHost, staleThresholdDays: staleDays) {
+                                mapPageId = r.pageId
+                                mapImageURL = r.imageURL
+                                mapCovered = r.covered
+                                mapMissing = r.missing
+                                mapStale = r.stale
+                                mapCoverage = r.coverage
+                                mapOverlays = r.covered + r.missing
+                            }
+                        }
+                    }.disabled(mapPageId.isEmpty || selectedRect == nil)
                     Button("Refresh Stale") {
                         Task {
                             guard !mapPageId.isEmpty, let stale = await controllerHolder.controller.fetchStaleOverlays(pageId: mapPageId, staleThresholdDays: staleDays) else { return }
@@ -289,7 +305,7 @@ struct MemChatTeatroRootView: View {
                     stale: mapStale,
                     missing: mapMissing,
                     initialCoverage: mapCoverage,
-                    onSelect: { ov in copyToClipboard(ov.id) }
+                    onSelect: { ov in selectedRect = ov.rect; copyToClipboard(ov.id) }
                 )
             }
                 .frame(minWidth: 720, minHeight: 520)

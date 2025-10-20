@@ -617,17 +617,7 @@ extension SemanticBrowserOpenAPI {
                     guard let c = cutoff, let ts = r.ts else { return nil }
                     return ts < c
                 }()
-                let covered: Bool? = {
-                    guard classify, let excerpt = r.excerpt, !excerpt.isEmpty else { return nil }
-                    func bag(_ s: String) -> [String: Int] {
-                        let tokens = s.lowercased().replacingOccurrences(of: "[^a-z0-9 ]", with: " ", options: .regularExpression).split(separator: " ").map(String.init).filter { $0.count >= 3 }
-                        var b: [String: Int] = [:]; for t in tokens { b[t, default: 0] += 1 }; return b
-                    }
-                    func jacc(_ a: [String:Int], _ b: [String:Int]) -> Double { let keys = Set(a.keys).union(b.keys); var inter=0.0, uni=0.0; for k in keys { let av=Double(a[k] ?? 0), bv=Double(b[k] ?? 0); inter += min(av,bv); uni += max(av,bv) }; return uni == 0 ? 0 : inter/uni }
-                    let eb = bag(excerpt)
-                    let maxJ = segTexts.map { jacc(eb, bag($0)) }.max() ?? 0
-                    return maxJ >= 0.18
-                }()
+                let covered: Bool? = classify && (r.excerpt != nil && !(r.excerpt!.isEmpty)) ? await service.classifyCoveredCached(pageId: pageId, excerpt: r.excerpt!, segTexts: segTexts) : nil
                 let rr = Components.Schemas.VisualResponse.anchorsPayloadPayload(
                     imageId: r.imageId,
                     x: r.x,

@@ -35,6 +35,8 @@ public actor SemanticMemoryService {
     public struct VisualRecord: Codable, Sendable { public let asset: VisualAsset?; public let anchors: [VisualAnchor]; public let coveragePercent: Float? }
     private struct VisualMap: Codable, Sendable { let asset: VisualAsset?; let anchors: [VisualAnchor] }
     private var visualsByPageId: [String: VisualMap] = [:]
+    // Simple TTL cache for coverage classification (excerpt→covered) per page
+    private var coveredCache: [String: (until: Date, covered: Bool)] = [:]
 
     public init(backend: Backend? = nil) { self.backend = backend }
 
@@ -212,6 +214,18 @@ public actor SemanticMemoryService {
     public func loadVisual(pageId: String) -> (VisualAsset?, [VisualAnchor])? {
         if let v = visualsByPageId[pageId] { return (v.asset, v.anchors) }
         return nil
+    }
+    public func classifyCoveredCached(pageId: String, excerpt: String, segTexts: [String], ttlSeconds: Int = 60) -> Bool {
+        let key = pageId + "|" + excerpt.prefix(120)
+        let now = Date()
+        if let e = coveredCache[key], e.until > now { return e.covered }
+        func bag(_ s: String) -> [String: Int] { let tokens = s.lowercased().replacingOccurrences(of: "[^a-z0-9 ]", with: " ", options: .regularExpression).split(separator: " ").map(String.init).filter { $0.count >= 3 }; var b:[String:Int]=[:]; for t in tokens { b[t, default: 0]+=1 }; return b }
+        func jacc(_ a: [String:Int], _ b: [String:Int]) -> Double { let keys = Set(a.keys).union(b.keys); var inter=0.0, uni=0.0; for k in keys { let av=Double(a[k] ?? 0), bv=Double(b[k] ?? 0); inter += min(av,bv); uni += max(av,bv) }; return uni == 0 ? 0 : inter/uni }
+        let eb = bag(excerpt)
+        let maxJ = segTexts.map { jacc(eb, bag($0)) }.max() ?? 0
+        let covered = maxJ >= 0.18
+        coveredCache[key] = (until: now.addingTimeInterval(TimeInterval(ttlSeconds)), covered: covered)
+        return covered
     }
     public func getPage(id: String) -> PageDoc? {
         if let p = pages.first(where: { $0.id == id }) { return p }

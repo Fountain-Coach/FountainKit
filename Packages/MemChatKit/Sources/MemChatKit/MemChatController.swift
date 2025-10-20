@@ -2221,6 +2221,25 @@ extension MemChatController {
         } catch { return nil }
     }
 
+    // Reindex a focused region for a given page id using the server's region API.
+    public func reindexRegion(pageId: String, rect: CGRect) async -> Bool {
+        guard let browser = browserConfig else { return false }
+        var defaultHeaders: [String: String] = [:]
+        if let apiKey = browser.apiKey, !apiKey.isEmpty { defaultHeaders["X-API-Key"] = apiKey }
+        let transport = URLSessionTransport()
+        let middlewares = OpenAPIClientFactory.defaultMiddlewares(defaultHeaders: defaultHeaders)
+        let client = SemanticBrowserAPI.Client(serverURL: browser.baseURL, transport: transport, middlewares: middlewares)
+        let region = SemanticBrowserAPI.Components.Schemas.ReindexRegionRequest.regionPayload(x: Double(rect.origin.x), y: Double(rect.origin.y), w: Double(rect.size.width), h: Double(rect.size.height))
+        let body = SemanticBrowserAPI.Components.Schemas.ReindexRegionRequest(pageId: pageId, url: nil, region: region)
+        do {
+            let out = try await client.reindexRegion(.init(body: .json(body)))
+            switch out {
+            case .ok: return true
+            default: return false
+            }
+        } catch { return false }
+    }
+
     /// Learn a few more pages for a host by crawling same-host links starting from the most recent page.
     /// Returns number of pages successfully ingested.
     public func learnMoreForHost(host: String, count: Int = 3, modeLabel: String = "standard") async -> Int {

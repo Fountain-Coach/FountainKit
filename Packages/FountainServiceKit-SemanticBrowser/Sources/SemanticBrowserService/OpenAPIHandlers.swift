@@ -101,6 +101,16 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
             imageId: snapshot.rendered.image?.imageId,
             rectsByBlock: raw.blockRects
         )
+        // Persist visuals (best-effort)
+        if let image = snapshot.rendered.image {
+            let asset = SemanticMemoryService.VisualAsset(imageId: image.imageId ?? "", contentType: image.contentType ?? "image/png", width: image.width ?? 0, height: image.height ?? 0, scale: image.scale ?? 1.0)
+            let anchors: [SemanticMemoryService.VisualAnchor] = analysis.blocks.flatMap { b in
+                (b.rects ?? []).map { r in
+                    SemanticMemoryService.VisualAnchor(imageId: r.imageId ?? "", x: r.x ?? 0, y: r.y ?? 0, w: r.w ?? 0, h: r.h ?? 0, excerpt: r.excerpt, confidence: r.confidence)
+                }
+            }
+            await service.storeVisual(pageId: analysis.envelope.id, asset: asset, anchors: anchors)
+        }
         let resp = Components.Schemas.BrowseResponse(snapshot: snapshot, analysis: analysis, index: nil)
         return .ok(.init(body: .json(resp)))
     }
@@ -213,11 +223,45 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
         // Map generated Analysis -> service.FullAnalysis
         let full = fromGeneratedAnalysis(req.analysis)
         let res = await service.ingest(full: full)
+        // Persist visual anchors (without asset metadata if absent)
+        let anchors: [SemanticMemoryService.VisualAnchor] = req.analysis.blocks.flatMap { b in
+            (b.rects ?? []).map { r in
+                SemanticMemoryService.VisualAnchor(imageId: r.imageId ?? "", x: r.x ?? 0, y: r.y ?? 0, w: r.w ?? 0, h: r.h ?? 0, excerpt: r.excerpt, confidence: r.confidence)
+            }
+        }
+        await service.storeVisual(pageId: full.envelope.id, asset: nil, anchors: anchors)
+        // Compute coverage percent
+        func areaUnion(_ rects: [SemanticMemoryService.VisualAnchor]) -> Float {
+            // Simple sweep over unique x; rects are normalized
+            let rects = rects.map { (x: $0.x, y: $0.y, w: $0.w, h: $0.h) }.filter { $0.w > 0 && $0.h > 0 }
+            let xs = Array(Set(rects.flatMap { [$0.x, $0.x + $0.w] })).sorted()
+            var total: Float = 0
+            for i in 0..<(max(0, xs.count - 1)) {
+                let x1 = xs[i], x2 = xs[i+1]
+                let w = x2 - x1; if w <= 0 { continue }
+                var intervals: [(Float, Float)] = []
+                for r in rects where r.x < x2 && (r.x + r.w) > x1 { intervals.append((r.y, r.y + r.h)) }
+                if intervals.isEmpty { continue }
+                intervals.sort { $0.0 < $1.0 }
+                var covered: Float = 0
+                var cur = intervals[0]
+                for seg in intervals.dropFirst() {
+                    if seg.0 <= cur.1 { cur.1 = max(cur.1, seg.1) }
+                    else { covered += max(0, cur.1 - cur.0); cur = seg }
+                }
+                covered += max(0, cur.1 - cur.0)
+                total += w * covered
+            }
+            return max(0, min(1, total))
+        }
+        let coverage = areaUnion(anchors)
         let out = Components.Schemas.IndexResult(
             pagesUpserted: res.pagesUpserted,
             segmentsUpserted: res.segmentsUpserted,
             entitiesUpserted: res.entitiesUpserted,
-            tablesUpserted: res.tablesUpserted
+            tablesUpserted: res.tablesUpserted,
+            anchorsPersisted: anchors.count,
+            coveragePercent: Double(coverage)
         )
         return .ok(.init(body: .json(out)))
     }
@@ -480,5 +524,34 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
         let summaries = Components.Schemas.Analysis.summariesPayload(abstract: String(text.prefix(280)), keyPoints: nil, tl_semi_dr: nil)
         let provenance = Components.Schemas.Analysis.provenancePayload(pipeline: "html-parser", model: nil)
         return Components.Schemas.Analysis(envelope: envelope, blocks: blocks, semantics: semantics, summaries: summaries, provenance: provenance)
+    }
+}
+
+// MARK: - Visuals Query
+extension SemanticBrowserOpenAPI {
+    public func getVisual(_ input: Operations.getVisual.Input) async throws -> Operations.getVisual.Output {
+        let pageId = input.query.pageId
+        if let (asset, anchors) = await service.loadVisual(pageId: pageId) {
+            let image: Components.Schemas.VisualResponse.imagePayload?
+            if let a = asset {
+                image = .init(imageId: a.imageId, contentType: a.contentType, width: a.width, height: a.height, scale: Float(a.scale))
+            } else { image = nil }
+            var rects: [Components.Schemas.VisualResponse.anchorsPayloadPayload] = []
+            for r in anchors {
+                let rr = Components.Schemas.VisualResponse.anchorsPayloadPayload(
+                    imageId: r.imageId,
+                    x: r.x,
+                    y: r.y,
+                    w: r.w,
+                    h: r.h,
+                    excerpt: r.excerpt,
+                    confidence: r.confidence
+                )
+                rects.append(rr)
+            }
+            let body = Components.Schemas.VisualResponse(image: image, anchors: rects)
+            return .ok(.init(body: .json(body)))
+        }
+        return .undocumented(statusCode: 404, OpenAPIRuntime.UndocumentedPayload())
     }
 }

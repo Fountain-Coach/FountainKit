@@ -305,6 +305,26 @@ paths:
             text/csv: {schema: {type: string}}
         '404': {description: Not found}
 
+  /v1/visual:
+    get:
+      operationId: getVisual
+      x-fountain.visibility: public
+      x-fountain.allow-as-tool: true
+      tags: [Export]
+      summary: Fetch persisted visual asset metadata and anchors for a page.
+      parameters:
+        - name: pageId
+          in: query
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Visual asset and anchors
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VisualResponse'}
+        '404': {description: Not found}
+
   /v1/health:
     get:
       operationId: health
@@ -822,6 +842,33 @@ components:
         segmentsUpserted: {type: integer}
         entitiesUpserted: {type: integer}
         tablesUpserted: {type: integer}
+        anchorsPersisted: {type: integer, description: "Visual anchors persisted for this page"}
+        coveragePercent: {type: number, description: "Approximate covered area [0..1] based on visual anchors"}
+
+    VisualResponse:
+      type: object
+      properties:
+        image:
+          type: object
+          description: Full-page screenshot metadata for the visual truth image
+          properties:
+            imageId: {type: string}
+            contentType: {type: string, default: image/png}
+            width: {type: integer}
+            height: {type: integer}
+            scale: {type: number, format: float}
+        anchors:
+          type: array
+          items:
+            type: object
+            properties:
+              imageId: {type: string}
+              x: {type: number, format: float}
+              y: {type: number, format: float}
+              w: {type: number, format: float}
+              h: {type: number, format: float}
+              excerpt: {type: string}
+              confidence: {type: number, format: float}
 
     # -------- Verify Edition --------
     VerifyRequest:

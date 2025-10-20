@@ -28,6 +28,11 @@ public actor SemanticMemoryService {
     private var snapshotToAnalysis: [String: String] = [:]
     private var networks: [String: [AdminNetworkRequest]] = [:]
     private var artifactRefs: [String: [String: String]] = [:] // key: id (snapshotId or analysisId) -> kind -> refPath
+    // Visuals by page/analysis id
+    public struct VisualAsset: Codable, Sendable { public let imageId: String; public let contentType: String; public let width: Int; public let height: Int; public let scale: Float }
+    public struct VisualAnchor: Codable, Sendable { public let imageId: String; public let x: Float; public let y: Float; public let w: Float; public let h: Float; public let excerpt: String?; public let confidence: Float? }
+    private struct VisualMap: Codable, Sendable { let asset: VisualAsset?; let anchors: [VisualAnchor] }
+    private var visualsByPageId: [String: VisualMap] = [:]
 
     public init(backend: Backend? = nil) { self.backend = backend }
 
@@ -187,6 +192,17 @@ public actor SemanticMemoryService {
         artifactRefs[ownerId] = m
     }
     public func loadArtifactRef(ownerId: String, kind: String) -> String? { artifactRefs[ownerId]?[kind] }
+    // Visuals
+    public func storeVisual(pageId: String, asset: VisualAsset?, anchors: [VisualAnchor]) {
+        let cur = visualsByPageId[pageId]
+        let mergedAsset = asset ?? cur?.asset
+        let vm = VisualMap(asset: mergedAsset, anchors: anchors.isEmpty ? (cur?.anchors ?? []) : anchors)
+        visualsByPageId[pageId] = vm
+    }
+    public func loadVisual(pageId: String) -> (VisualAsset?, [VisualAnchor])? {
+        if let v = visualsByPageId[pageId] { return (v.asset, v.anchors) }
+        return nil
+    }
     public func getPage(id: String) -> PageDoc? {
         if let p = pages.first(where: { $0.id == id }) { return p }
         // Backend fallback: naive search and filter by id

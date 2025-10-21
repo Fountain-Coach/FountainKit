@@ -437,6 +437,224 @@ paths:
           description: Accepted for playback
         '400': { $ref: '#/components/responses/BadRequest' }
 
+  # Screenplay/Fountain endpoints
+  /audiotalk/screenplay/sessions:
+    post:
+      summary: Create screenplay session
+      description: Initializes a screenplay parsing context.
+      operationId: createScreenplaySession
+      tags: [Screenplay]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Screenplay session created
+          headers:
+            ETag:
+              description: Version tag for the screenplay source.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreenplaySession'
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /audiotalk/screenplay/{id}/source:
+    put:
+      summary: Upload or replace Fountain screenplay source
+      operationId: putScreenplaySource
+      tags: [Screenplay]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: If-Match
+          in: header
+          required: false
+          description: ETag of current screenplay source for optimistic concurrency.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+              description: Fountain (.fountain) screenplay text.
+      responses:
+        '200':
+          description: Updated
+          headers:
+            ETag:
+              description: New ETag for the updated screenplay source.
+              schema: { type: string }
+        '412':
+          description: Precondition failed (ETag mismatch)
+    get:
+      summary: Fetch Fountain screenplay source
+      operationId: getScreenplaySource
+      tags: [Screenplay]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Fountain source
+          headers:
+            ETag:
+              description: Version tag for the current screenplay source.
+              schema: { type: string }
+          content:
+            text/plain:
+              schema:
+                type: string
+        '404':
+          description: Screenplay session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /audiotalk/screenplay/{id}/parse:
+    post:
+      summary: Parse Fountain screenplay into a structured model
+      description: Returns scenes, beats, notes, and characters.
+      operationId: parseScreenplay
+      tags: [Screenplay]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/RequestID'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScreenplayParseRequest'
+      responses:
+        '200':
+          description: Parsed model
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreenplayParseResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404':
+          description: Screenplay session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /audiotalk/screenplay/{id}/parse/stream:
+    post:
+      summary: Stream screenplay parsing (SSE)
+      description: Emits token, scene, beat, note, and completion events.
+      operationId: parseScreenplayStream
+      tags: [Screenplay]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/RequestID'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScreenplayParseRequest'
+      responses:
+        '202':
+          description: Streaming response
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/ScreenplayStreamEvent'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404':
+          description: Screenplay session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /audiotalk/screenplay/{id}/map-cues:
+    post:
+      summary: Map screenplay structure to musical cue plans
+      description: Produces CuePlan items mapping scenes/beats to AudioTalk Plans.
+      operationId: mapScreenplayCues
+      tags: [Screenplay]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MapCuesRequest'
+      responses:
+        '200':
+          description: Cue plans
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cues:
+                    type: array
+                    items: { $ref: '#/components/schemas/CuePlan' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404':
+          description: Screenplay session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /audiotalk/screenplay/{id}/cue-sheet:
+    get:
+      summary: Fetch cue sheet
+      description: Returns cue sheet in JSON (optionally CSV/PDF).
+      operationId: getCueSheet
+      tags: [Screenplay]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [json, csv, pdf]
+          description: Response format (default json).
+      responses:
+        '200':
+          description: Cue sheet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CueSheetResponse'
+        '404':
+          description: Screenplay session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   parameters:
     IdempotencyKey:
@@ -640,6 +858,8 @@ components:
         pitch:
           type: string
           description: Scientific pitch notation (e.g., C4, F#3) when applicable.
+        script:
+          $ref: '#/components/schemas/ScriptAnchor'
     Plan:
       type: object
       required: [ops]
@@ -765,6 +985,159 @@ components:
         event:
           type: string
           enum: [token, plan, critique, apply_progress, snapshot, error, completion]
+        data:
+          type: object
+          description: Event payload dependent on `event` type.
+
+    # Screenplay models
+    ScreenplaySession:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string }
+        created_at:
+          type: string
+          format: date-time
+        capabilities:
+          $ref: '#/components/schemas/Capabilities'
+    ScriptAnchor:
+      type: object
+      properties:
+        scene_number:
+          type: integer
+          minimum: 1
+        page:
+          type: number
+          minimum: 1
+        line:
+          type: integer
+          minimum: 1
+        character:
+          type: string
+    ScreenplayParseRequest:
+      type: object
+      properties:
+        extract_inline_tags:
+          type: boolean
+          default: true
+          description: 'Extract [[AudioTalk: ...]] tags as notes.'
+        include_synopses:
+          type: boolean
+          default: true
+        include_beats:
+          type: boolean
+          default: true
+    ScreenplayModel:
+      type: object
+      properties:
+        scenes:
+          type: array
+          items:
+            type: object
+            required: [id, number, heading]
+            properties:
+              id: { type: string }
+              number: { type: integer }
+              heading: { type: string }
+              page_start: { type: number }
+              page_end: { type: number }
+        beats:
+          type: array
+          items:
+            type: object
+            required: [id, scene_id, summary]
+            properties:
+              id: { type: string }
+              scene_id: { type: string }
+              summary: { type: string }
+              page: { type: number }
+              line: { type: integer }
+        notes:
+          type: array
+          items:
+            type: object
+            required: [id, kind, content]
+            properties:
+              id: { type: string }
+              kind:
+                type: string
+                enum: [note, tag, synopsis]
+              content: { type: string }
+              anchor: { $ref: '#/components/schemas/ScriptAnchor' }
+        characters:
+          type: array
+          items:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string }
+              aliases:
+                type: array
+                items: { type: string }
+        arcs:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              label: { type: string }
+              scenes:
+                type: array
+                items: { type: string }
+
+    ScreenplayParseResponse:
+      type: object
+      required: [model]
+      properties:
+        model:
+          $ref: '#/components/schemas/ScreenplayModel'
+        warnings:
+          type: array
+          items: { type: string }
+
+    MapCuesRequest:
+      type: object
+      properties:
+        theme_table:
+          type: object
+          additionalProperties:
+            type: string
+          description: Map of character/scene labels to macro/plan labels.
+        hints:
+          type: object
+          additionalProperties:
+            type: string
+    CuePlan:
+      type: object
+      required: [cue_id, plan]
+      properties:
+        cue_id: { type: string }
+        label: { type: string }
+        anchor:
+          $ref: '#/components/schemas/ScriptAnchor'
+        plan:
+          $ref: '#/components/schemas/Plan'
+        links:
+          type: object
+          properties:
+            scene_id: { type: string }
+            beat_id: { type: string }
+
+    CueSheetResponse:
+      type: object
+      properties:
+        cues:
+          type: array
+          items: { $ref: '#/components/schemas/CuePlan' }
+
+    ScreenplayStreamEvent:
+      type: object
+      required: [event]
+      properties:
+        id: { type: string }
+        event:
+          type: string
+          enum: [token, scene, beat, note, completion, error]
         data:
           type: object
           description: Event payload dependent on `event` type.

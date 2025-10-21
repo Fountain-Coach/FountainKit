@@ -153,7 +153,7 @@ struct AudioTalkCLI: ParsableCommand {
     }
 
     struct Screenplay: ParsableCommand {
-        static var configuration = CommandConfiguration(abstract: ".fountain operations", subcommands: [NewSession.self, GetSource.self, PutSource.self])
+        static var configuration = CommandConfiguration(abstract: ".fountain operations", subcommands: [NewSession.self, GetSource.self, PutSource.self, Parse.self, MapCues.self, CueSheet.self])
         struct NewSession: ParsableCommand {
             @OptionGroup var globals: GlobalOptions
             mutating func run() throws {
@@ -206,6 +206,71 @@ struct AudioTalkCLI: ParsableCommand {
                 dispatchMain()
             }
         }
+        struct Parse: ParsableCommand {
+            @OptionGroup var globals: GlobalOptions
+            @Argument var id: String
+            mutating func run() throws {
+                Task {
+                    let client = try AudioTalkCLI.makeClient(globals.baseURL)
+                    let out = try await client.parseScreenplay(.init(path: .init(id: id)))
+                    guard case .ok(let ok) = out, case .json(let body) = ok.body else { print("{}"); Foundation.exit(2); return }
+                    let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted]
+                    let data = try enc.encode(body)
+                    FileHandle.standardOutput.write(data)
+                }
+                dispatchMain()
+            }
+        }
+        struct MapCues: ParsableCommand {
+            @OptionGroup var globals: GlobalOptions
+            @Argument var id: String
+            mutating func run() throws {
+                Task {
+                    let client = try AudioTalkCLI.makeClient(globals.baseURL)
+                    let out = try await client.mapScreenplayCues(.init(path: .init(id: id), body: .json(.init(theme_table: nil, hints: nil))))
+                    guard case .ok(let ok) = out else { print("{}"); Foundation.exit(2); return }
+                    switch ok.body {
+                    case .json(let payload):
+                        print(payload.cues?.count ?? 0)
+                    }
+                }
+                dispatchMain()
+            }
+        }
+        struct CueSheet: ParsableCommand {
+            @OptionGroup var globals: GlobalOptions
+            @Argument var id: String
+            mutating func run() throws {
+                Task {
+                    let client = try AudioTalkCLI.makeClient(globals.baseURL)
+                    let input = Operations.getCueSheet.Input(path: .init(id: id), query: .init(format: nil))
+                    let out = try await client.getCueSheet(input)
+                    guard case .ok(let ok) = out, case .json(let body) = ok.body else { print("{}"); Foundation.exit(2); return }
+                    let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted]
+                    let data = try enc.encode(body)
+                    FileHandle.standardOutput.write(data)
+                }
+                dispatchMain()
+            }
+        }
+    }
+
+    struct Journal: ParsableCommand {
+        static var configuration = CommandConfiguration(abstract: "Journal ops", subcommands: [List.self])
+        struct List: ParsableCommand {
+            @OptionGroup var globals: GlobalOptions
+            mutating func run() throws {
+                Task {
+                    let client = try AudioTalkCLI.makeClient(globals.baseURL)
+                    let out = try await client.listJournal(.init())
+                    guard case .ok(let ok) = out, case .json(let body) = ok.body else { print("{}"); Foundation.exit(2); return }
+                    let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted]
+                    let data = try enc.encode(body)
+                    FileHandle.standardOutput.write(data)
+                }
+                dispatchMain()
+            }
+        }
     }
 
     struct UMP: ParsableCommand {
@@ -235,4 +300,3 @@ struct AudioTalkCLI: ParsableCommand {
         }
     }
 }
-

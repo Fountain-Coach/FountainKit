@@ -64,6 +64,18 @@ swift run --package-path Packages/FountainApps audiotalk-cli screenplay get-sour
 ```
 swift run --package-path Packages/FountainApps audiotalk-cli screenplay put-source <id> --if-match <etag> "INT. ROOM - DAY"
 ```
+- Parse screenplay
+```
+swift run --package-path Packages/FountainApps audiotalk-cli screenplay parse <id> | jq
+```
+- Map cues (persisted)
+```
+swift run --package-path Packages/FountainApps audiotalk-cli screenplay map-cues <id>
+```
+- Cue sheet (JSON)
+```
+swift run --package-path Packages/FountainApps audiotalk-cli screenplay cue-sheet <id> | jq
+```
 
 ### UMP (MIDI 2.0)
 
@@ -73,3 +85,9 @@ swift run --package-path Packages/FountainApps audiotalk-cli ump send <session> 
 
 The CLI prints basic outputs (JSON, IDs, or tags). Use with `jq` for pretty output.
 
+### Journal
+
+- List
+```
+swift run --package-path Packages/FountainApps audiotalk-cli journal list | jq
+```

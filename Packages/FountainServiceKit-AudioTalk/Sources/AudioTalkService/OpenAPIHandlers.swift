@@ -1,100 +1,299 @@
 import Foundation
 import OpenAPIRuntime
+import FountainStoreClient
 import MIDI2Transports
 
 actor AudioTalkState {
-    struct NotationEntry { var source: String; var eTag: String; var createdAt: Date }
-    struct ScreenplayEntry { var source: String; var eTag: String; var createdAt: Date }
+    struct NotationEntry: Codable { var source: String; var eTag: String; var createdAt: Date }
+    struct ScreenplayEntry: Codable { var source: String; var eTag: String; var createdAt: Date }
 
-    private var dictionary: [String: Components.Schemas.DictionaryItem] = [:]
-    private var macros: [String: Components.Schemas.Macro] = [:]
-    private var notation: [String: NotationEntry] = [:]
-    private var screenplay: [String: ScreenplayEntry] = [:]
+    // Optional persistence; when nil, falls back to in-memory maps.
+    private let store: FountainStoreClient?
+    private let corpusId: String
+
+    private var dictionaryMem: [String: Components.Schemas.DictionaryItem] = [:]
+    private var macrosMem: [String: Components.Schemas.Macro] = [:]
+    private var notationMem: [String: NotationEntry] = [:]
+    private var screenplayMem: [String: ScreenplayEntry] = [:]
+
+    // Additional collections for derived data
+    private var screenplayIndexColl: String { "audiotalk_screenplay_index" }
+    private var cuesColl: String { "audiotalk_cues" }
+    private var journalColl: String { "audiotalk_journal" }
+
+    init(store: FountainStoreClient? = nil, corpusId: String = "audiotalk") {
+        self.store = store
+        self.corpusId = corpusId
+    }
 
     private func newETag() -> String { UUID().uuidString }
 
-    // Dictionary
-    func listDictionary(limit: Int = 50, after: String? = nil) -> Components.Schemas.DictionaryList {
-        let sorted = dictionary.keys.sorted()
+    // MARK: Collections
+    private var dictColl: String { "audiotalk_dictionary" }
+    private var macroColl: String { "audiotalk_macros" }
+    private var notationColl: String { "audiotalk_notation" }
+    private var screenplayColl: String { "audiotalk_screenplay" }
+
+    // MARK: Dictionary
+    func listDictionary(limit: Int = 50, after: String? = nil) async -> Components.Schemas.DictionaryList {
+        if let store {
+            do {
+                let resp = try await store.query(corpusId: corpusId, collection: dictColl, query: .init(limit: limit, offset: 0))
+                let items = try resp.documents.map { try JSONDecoder().decode(Components.Schemas.DictionaryItem.self, from: $0) }
+                return .init(items: items, nextPage: nil)
+            } catch { /* fall back */ }
+        }
+        let sorted = dictionaryMem.keys.sorted()
         let startIndex = after.flatMap { sorted.firstIndex(of: $0) }.map { sorted.index(after: $0) } ?? sorted.startIndex
         let slice = sorted[startIndex...].prefix(limit)
-        let items = slice.compactMap { dictionary[$0] }
+        let items = slice.compactMap { dictionaryMem[$0] }
         let next = slice.count == limit ? slice.last : nil
         return .init(items: items, nextPage: next)
     }
-    func upsertDictionary(_ req: Components.Schemas.DictionaryUpsertRequest) -> Components.Schemas.DictionaryUpsertResponse {
+    func upsertDictionary(_ req: Components.Schemas.DictionaryUpsertRequest) async -> Components.Schemas.DictionaryUpsertResponse {
         var updated = 0
-        if let items = req.items {
-            for it in items {
-                dictionary[it.token] = it
-                updated += 1
-            }
+        guard let items = req.items, !items.isEmpty else { return .init(updated: 0) }
+        if let store {
+            do {
+                for it in items {
+                    let data = try JSONEncoder().encode(it)
+                    try await store.putDoc(corpusId: corpusId, collection: dictColl, id: it.token, body: data)
+                    updated += 1
+                }
+                return .init(updated: updated)
+            } catch { /* fall back */ updated = 0 }
         }
+        for it in items { dictionaryMem[it.token] = it; updated += 1 }
         return .init(updated: updated)
     }
 
-    // Macros
-    func listMacros(limit: Int = 50, after: String? = nil) -> Components.Schemas.MacroList {
-        let sorted = macros.keys.sorted()
+    // MARK: Macros
+    func listMacros(limit: Int = 50, after: String? = nil) async -> Components.Schemas.MacroList {
+        if let store {
+            do {
+                let resp = try await store.query(corpusId: corpusId, collection: macroColl, query: .init(limit: limit, offset: 0))
+                let items = try resp.documents.map { try JSONDecoder().decode(Components.Schemas.Macro.self, from: $0) }
+                return .init(items: items, nextPage: nil)
+            } catch { /* fall back */ }
+        }
+        let sorted = macrosMem.keys.sorted()
         let startIndex = after.flatMap { sorted.firstIndex(of: $0) }.map { sorted.index(after: $0) } ?? sorted.startIndex
         let slice = sorted[startIndex...].prefix(limit)
-        let items = slice.compactMap { macros[$0] }
+        let items = slice.compactMap { macrosMem[$0] }
         let next = slice.count == limit ? slice.last : nil
         return .init(items: items, nextPage: next)
     }
-    func createMacro(id: String, plan: Components.Schemas.Plan) -> Components.Schemas.Macro {
-        let m = Components.Schemas.Macro(id: id, state: .proposed, plan: plan, created_at: Date())
-        macros[id] = m
+    func createMacro(id: String, plan: Components.Schemas.Plan) async -> Components.Schemas.Macro {
+        var m = Components.Schemas.Macro(id: id, state: .proposed, plan: plan, created_at: Date())
+        if let store {
+            do {
+                let data = try JSONEncoder().encode(m)
+                try await store.putDoc(corpusId: corpusId, collection: macroColl, id: id, body: data)
+                return m
+            } catch { /* fall back */ }
+        }
+        macrosMem[id] = m
         return m
     }
-    func promoteMacro(id: String) -> Components.Schemas.Macro? {
-        guard var m = macros[id] else { return nil }
+    func promoteMacro(id: String) async -> Components.Schemas.Macro? {
+        if let store {
+            do {
+                if let data = try await store.getDoc(corpusId: corpusId, collection: macroColl, id: id) {
+                    var m = try JSONDecoder().decode(Components.Schemas.Macro.self, from: data)
+                    m.state = .approved
+                    let out = try JSONEncoder().encode(m)
+                    try await store.putDoc(corpusId: corpusId, collection: macroColl, id: id, body: out)
+                    return m
+                }
+            } catch { return nil }
+        }
+        guard var m = macrosMem[id] else { return nil }
         m.state = .approved
-        macros[id] = m
+        macrosMem[id] = m
         return m
     }
 
-    // Notation
-    func createNotationSession() -> Components.Schemas.NotationSession {
+    // MARK: Notation
+    func createNotationSession() async -> Components.Schemas.NotationSession {
         let id = UUID().uuidString
-        notation[id] = .init(source: "", eTag: newETag(), createdAt: Date())
-        return .init(id: id, created_at: notation[id]!.createdAt)
+        let entry = NotationEntry(source: "", eTag: newETag(), createdAt: Date())
+        if let store {
+            do {
+                let data = try JSONEncoder().encode(entry)
+                try await store.putDoc(corpusId: corpusId, collection: notationColl, id: id, body: data)
+                return .init(id: id, created_at: entry.createdAt)
+            } catch { /* fall back */ }
+        }
+        notationMem[id] = entry
+        return .init(id: id, created_at: entry.createdAt)
     }
-    func getNotationSession(id: String) -> Components.Schemas.NotationSession? {
-        guard let e = notation[id] else { return nil }
+    func getNotationSession(id: String) async -> Components.Schemas.NotationSession? {
+        if let store {
+            do {
+                if let data = try await store.getDoc(corpusId: corpusId, collection: notationColl, id: id) {
+                    let e = try JSONDecoder().decode(NotationEntry.self, from: data)
+                    return .init(id: id, created_at: e.createdAt)
+                }
+                return nil
+            } catch { return nil }
+        }
+        guard let e = notationMem[id] else { return nil }
         return .init(id: id, created_at: e.createdAt)
     }
-    func getLilySource(id: String) -> (etag: String, body: String)? {
-        guard let e = notation[id] else { return nil }
+    func getLilySource(id: String) async -> (etag: String, body: String)? {
+        if let store {
+            do {
+                if let data = try await store.getDoc(corpusId: corpusId, collection: notationColl, id: id) {
+                    let e = try JSONDecoder().decode(NotationEntry.self, from: data)
+                    return (e.eTag, e.source)
+                }
+                return nil
+            } catch { return nil }
+        }
+        guard let e = notationMem[id] else { return nil }
         return (e.eTag, e.source)
     }
-    func putLilySource(id: String, ifMatch: String?, body: String) -> (ok: Bool, newETag: String)? {
-        guard var e = notation[id] else { return nil }
+    func putLilySource(id: String, ifMatch: String?, body: String) async -> (ok: Bool, newETag: String)? {
+        if let store {
+            do {
+                guard let data = try await store.getDoc(corpusId: corpusId, collection: notationColl, id: id) else { return nil }
+                var e = try JSONDecoder().decode(NotationEntry.self, from: data)
+                if let ifm = ifMatch, ifm != e.eTag { return (false, e.eTag) }
+                e.source = body
+                e.eTag = newETag()
+                try await store.putDoc(corpusId: corpusId, collection: notationColl, id: id, body: try JSONEncoder().encode(e))
+                return (true, e.eTag)
+            } catch { return nil }
+        }
+        guard var e = notationMem[id] else { return nil }
         if let ifm = ifMatch, ifm != e.eTag { return (false, e.eTag) }
-        e.source = body
-        e.eTag = newETag()
-        notation[id] = e
+        e.source = body; e.eTag = newETag(); notationMem[id] = e
         return (true, e.eTag)
     }
 
-    // Screenplay
-    func createScreenplaySession() -> Components.Schemas.ScreenplaySession {
+    // MARK: Screenplay
+    func createScreenplaySession() async -> Components.Schemas.ScreenplaySession {
         let id = UUID().uuidString
-        screenplay[id] = .init(source: "", eTag: newETag(), createdAt: Date())
+        let entry = ScreenplayEntry(source: "", eTag: newETag(), createdAt: Date())
         let caps = Components.Schemas.Capabilities(rendering: false, ump_streaming: true, reflection: false)
-        return .init(id: id, created_at: screenplay[id]!.createdAt, capabilities: caps)
+        if let store {
+            do {
+                try await store.putDoc(corpusId: corpusId, collection: screenplayColl, id: id, body: try JSONEncoder().encode(entry))
+                return .init(id: id, created_at: entry.createdAt, capabilities: caps)
+            } catch { /* fall back */ }
+        }
+        screenplayMem[id] = entry
+        return .init(id: id, created_at: entry.createdAt, capabilities: caps)
     }
-    func getScreenplaySource(id: String) -> (etag: String, body: String)? {
-        guard let e = screenplay[id] else { return nil }
+    func getScreenplaySource(id: String) async -> (etag: String, body: String)? {
+        if let store {
+            do {
+                if let data = try await store.getDoc(corpusId: corpusId, collection: screenplayColl, id: id) {
+                    let e = try JSONDecoder().decode(ScreenplayEntry.self, from: data)
+                    return (e.eTag, e.source)
+                }
+                return nil
+            } catch { return nil }
+        }
+        guard let e = screenplayMem[id] else { return nil }
         return (e.eTag, e.source)
     }
-    func putScreenplaySource(id: String, ifMatch: String?, body: String) -> (ok: Bool, newETag: String)? {
-        guard var e = screenplay[id] else { return nil }
+    func putScreenplaySource(id: String, ifMatch: String?, body: String) async -> (ok: Bool, newETag: String)? {
+        if let store {
+            do {
+                guard let data = try await store.getDoc(corpusId: corpusId, collection: screenplayColl, id: id) else { return nil }
+                var e = try JSONDecoder().decode(ScreenplayEntry.self, from: data)
+                if let ifm = ifMatch, ifm != e.eTag { return (false, e.eTag) }
+                e.source = body
+                e.eTag = newETag()
+                try await store.putDoc(corpusId: corpusId, collection: screenplayColl, id: id, body: try JSONEncoder().encode(e))
+                return (true, e.eTag)
+            } catch { return nil }
+        }
+        guard var e = screenplayMem[id] else { return nil }
         if let ifm = ifMatch, ifm != e.eTag { return (false, e.eTag) }
-        e.source = body
-        e.eTag = newETag()
-        screenplay[id] = e
+        e.source = body; e.eTag = newETag(); screenplayMem[id] = e
         return (true, e.eTag)
+    }
+
+    // MARK: Parsed Model Persistence
+    struct PersistedScreenplayModel: Codable {
+        var id: String
+        var etag: String
+        var model: Components.Schemas.ScreenplayModel
+        var updatedAt: Date
+    }
+    func persistParsedScreenplayModel(id: String, etag: String, model: Components.Schemas.ScreenplayModel) async {
+        guard let store else { return }
+        do {
+            let payload = PersistedScreenplayModel(id: id, etag: etag, model: model, updatedAt: Date())
+            try await store.putDoc(corpusId: corpusId, collection: screenplayIndexColl, id: id, body: try JSONEncoder().encode(payload))
+        } catch { }
+    }
+    func loadParsedScreenplayModel(id: String) async -> PersistedScreenplayModel? {
+        guard let store else { return nil }
+        do {
+            if let data = try await store.getDoc(corpusId: corpusId, collection: screenplayIndexColl, id: id) {
+                return try JSONDecoder().decode(PersistedScreenplayModel.self, from: data)
+            }
+            return nil
+        } catch { return nil }
+    }
+
+    // MARK: Cue Plans Persistence
+    struct PersistedCues: Codable { var id: String; var cues: [Components.Schemas.CuePlan] }
+    func persistCues(id: String, cues: [Components.Schemas.CuePlan]) async {
+        guard let store else { return }
+        do {
+            let payload = PersistedCues(id: id, cues: cues)
+            try await store.putDoc(corpusId: corpusId, collection: cuesColl, id: id, body: try JSONEncoder().encode(payload))
+        } catch { }
+    }
+    func loadCues(id: String) async -> [Components.Schemas.CuePlan]? {
+        guard let store else { return nil }
+        do {
+            if let data = try await store.getDoc(corpusId: corpusId, collection: cuesColl, id: id) {
+                let payload = try JSONDecoder().decode(PersistedCues.self, from: data)
+                return payload.cues
+            }
+            return nil
+        } catch { return nil }
+    }
+
+    // MARK: Journal Persistence
+    struct PersistedJournalEvent: Codable {
+        var id: String
+        var type: String
+        var ts: Date
+        var correlationId: String?
+        var details: [String:String]
+    }
+    func appendJournal(type: String, correlationId: String? = nil, details: [String:String] = [:]) async {
+        guard let store else { return }
+        let ev = PersistedJournalEvent(id: UUID().uuidString, type: type, ts: Date(), correlationId: correlationId, details: details)
+        do {
+            let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601
+            try await store.putDoc(corpusId: corpusId, collection: journalColl, id: ev.id, body: try enc.encode(ev))
+        } catch { }
+    }
+    func listJournal(limit: Int = 50, offset: Int = 0) async -> [Components.Schemas.JournalEvent] {
+        guard let store else { return [] }
+        do {
+            let resp = try await store.query(corpusId: corpusId, collection: journalColl, query: .init(limit: limit, offset: offset))
+            let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
+            let decoded: [PersistedJournalEvent] = try resp.documents.map { try dec.decode(PersistedJournalEvent.self, from: $0) }
+            return decoded.map { d in
+                Components.Schemas.JournalEvent(
+                    id: d.id,
+                    _type: .init(rawValue: d.type) ?? .received,
+                    ts: d.ts,
+                    correlationId: d.correlationId,
+                    details: .init(additionalProperties: d.details)
+                )
+            }
+        } catch {
+            return []
+        }
     }
 }
 
@@ -105,7 +304,16 @@ actor AudioTalkState {
 public struct AudioTalkOpenAPI: APIProtocol, @unchecked Sendable {
     let state: AudioTalkState
 
+    // Internal designated initializer for dependency injection in tests.
     init(state: AudioTalkState) { self.state = state }
+
+    // Public convenience initializer for external modules (servers).
+    public init() { self.state = AudioTalkState() }
+
+    // Public initializer with persistence backing.
+    public init(store: FountainStoreClient, corpusId: String = "audiotalk") {
+        self.state = AudioTalkState(store: store, corpusId: corpusId)
+    }
 
     // Helper to build generic JSON objects without generated schema types.
     private func jsonObject(_ dict: [String: (any Sendable)?]) -> OpenAPIObjectContainer? {
@@ -196,19 +404,43 @@ public struct AudioTalkOpenAPI: APIProtocol, @unchecked Sendable {
     }
 
     public func applyPlan(_ input: Operations.applyPlan.Input) async throws -> Operations.applyPlan.Output {
+        // Placeholder apply; journal the intent for session recording purposes.
+        guard case let .json(req) = input.body else {
+            let err = Components.Schemas.ErrorResponse(error: "Bad Request", code: "bad_request", correlationId: nil)
+            return .badRequest(.init(body: .json(err)))
+        }
         let etag = UUID().uuidString
         let body = Components.Schemas.ApplyPlanResponse(appliedOps: [], conflicts: [], scoreETag: etag)
+        await state.appendJournal(type: "plan_applied", details: [
+            "session_id": req.session_id,
+            "ops": String(req.plan.ops.count)
+        ])
         let headers = Operations.applyPlan.Output.Ok.Headers(ETag: etag)
         return .ok(.init(headers: headers, body: .json(body)))
     }
 
     // MARK: - Journal
     public func listJournal(_ input: Operations.listJournal.Input) async throws -> Operations.listJournal.Output {
-        let out = Components.Schemas.JournalList(items: [], nextPage: nil)
+        let items = await state.listJournal(limit: 50, offset: 0)
+        let out = Components.Schemas.JournalList(items: items, nextPage: nil)
         return .ok(.init(body: .json(out)))
     }
     public func streamJournal(_ input: Operations.streamJournal.Input) async throws -> Operations.streamJournal.Output {
-        let sse = "event: completion\ndata: {}\n\n"
+        let items = await state.listJournal(limit: 50, offset: 0)
+        var sse = ""
+        for ev in items {
+            let id = ev.id ?? UUID().uuidString
+            sse += "id: \(id)\n"
+            sse += "event: \(ev._type.rawValue)\n"
+            let dataObj: [String: String] = ev.details?.additionalProperties ?? [:]
+            if let data = try? JSONSerialization.data(withJSONObject: dataObj), let str = String(data: data, encoding: .utf8) {
+                sse += "data: \(str)\n\n"
+            } else {
+                sse += "data: {}\n\n"
+            }
+        }
+        sse += "event: completion\n"
+        sse += "data: {}\n\n"
         return .ok(.init(body: .text_event_hyphen_stream(HTTPBody(sse))))
     }
 
@@ -317,19 +549,67 @@ public struct AudioTalkOpenAPI: APIProtocol, @unchecked Sendable {
         return .notFound(.init(body: .json(err)))
     }
     public func parseScreenplay(_ input: Operations.parseScreenplay.Input) async throws -> Operations.parseScreenplay.Output {
-        let model = Components.Schemas.ScreenplayModel(scenes: [], beats: [], notes: [], characters: [], arcs: [])
-        let out = Components.Schemas.ScreenplayParseResponse(model: model, warnings: [])
+        let id = input.path.id
+        guard let (etag, source) = await state.getScreenplaySource(id: id) else {
+            let err = Components.Schemas.ErrorResponse(error: "Not Found", code: "not_found", correlationId: nil)
+            return .notFound(.init(body: .json(err)))
+        }
+        // If a cached parse exists for the same ETag, reuse it.
+        if let cached = await state.loadParsedScreenplayModel(id: id), cached.etag == etag {
+            await state.appendJournal(type: "parsed", details: ["screenplay_id": id, "cache": "hit"]) // lightweight trace
+            let out = Components.Schemas.ScreenplayParseResponse(model: cached.model, warnings: [])
+            return .ok(.init(body: .json(out)))
+        }
+        // Parse, persist with ETag, and return.
+        let parsed = ScreenplayParser.parse(id: id, text: source)
+        await state.persistParsedScreenplayModel(id: id, etag: etag, model: parsed.model)
+        await state.appendJournal(type: "parsed", details: [
+            "screenplay_id": id,
+            "scenes": String(parsed.model.scenes?.count ?? 0),
+            "tags": String(parsed.model.notes?.filter { $0.kind == .tag }.count ?? 0)
+        ])
+        let out = Components.Schemas.ScreenplayParseResponse(model: parsed.model, warnings: parsed.warnings)
         return .ok(.init(body: .json(out)))
     }
     public func parseScreenplayStream(_ input: Operations.parseScreenplayStream.Input) async throws -> Operations.parseScreenplayStream.Output {
         return .undocumented(statusCode: 202, OpenAPIRuntime.UndocumentedPayload())
     }
     public func mapScreenplayCues(_ input: Operations.mapScreenplayCues.Input) async throws -> Operations.mapScreenplayCues.Output {
-        let payload = Operations.mapScreenplayCues.Output.Ok.Body.jsonPayload(cues: [])
+        let id = input.path.id
+        // Load source and parse model (prefer cached model when ETag unchanged)
+        guard let (etag, source) = await state.getScreenplaySource(id: id) else {
+            let err = Components.Schemas.ErrorResponse(error: "Not Found", code: "not_found", correlationId: nil)
+            return .notFound(.init(body: .json(err)))
+        }
+        let parsedModel: Components.Schemas.ScreenplayModel
+        if let cached = await state.loadParsedScreenplayModel(id: id), cached.etag == etag {
+            parsedModel = cached.model
+        } else {
+            let parsed = ScreenplayParser.parse(id: id, text: source)
+            parsedModel = parsed.model
+            await state.persistParsedScreenplayModel(id: id, etag: etag, model: parsedModel)
+        }
+        // Map notes(kind: tag) => CuePlan with single token op
+        var cues: [Components.Schemas.CuePlan] = []
+        for n in parsedModel.notes ?? [] {
+            if n.kind == .tag {
+                let plan = Components.Schemas.Plan(ops: [
+                    .init(id: UUID().uuidString, kind: .token, value: n.content, anchor: nil)
+                ], meta: .init(origin: .user, confidence: 1.0, source: "screenplay"))
+                let cue = Components.Schemas.CuePlan(cue_id: UUID().uuidString, label: n.content, anchor: n.anchor, plan: plan, links: .init(scene_id: nil, beat_id: nil))
+                cues.append(cue)
+            }
+        }
+        await state.persistCues(id: id, cues: cues)
+        await state.appendJournal(type: "cue_mapped", details: ["screenplay_id": id, "cues": String(cues.count)])
+        let payload = Operations.mapScreenplayCues.Output.Ok.Body.jsonPayload(cues: cues)
         return .ok(.init(body: .json(payload)))
     }
     public func getCueSheet(_ input: Operations.getCueSheet.Input) async throws -> Operations.getCueSheet.Output {
-        let out = Components.Schemas.CueSheetResponse(cues: [])
+        // Prefer persisted cues when available.
+        let id = input.path.id
+        let cues = await state.loadCues(id: id) ?? []
+        let out = Components.Schemas.CueSheetResponse(cues: cues)
         return .ok(.init(body: .json(out)))
     }
 }

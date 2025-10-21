@@ -3,8 +3,8 @@ import XCTest
 
 final class ServerStubsTests: XCTestCase {
     func testHealthOK() async throws {
-        let api = AudioTalkOpenAPI()
-        let out = try await api.getAudioTalkHealth(.init())
+        let api = AudioTalkOpenAPI(state: AudioTalkState())
+        let out = try await api.getAudioTalkHealth(Operations.getAudioTalkHealth.Input())
         switch out {
         case .ok:
             XCTAssertTrue(true)

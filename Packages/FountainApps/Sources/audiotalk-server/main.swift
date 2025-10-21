@@ -20,7 +20,7 @@ Task {
         return HTTPResponse(status: 404)
     }
     let transport = NIOOpenAPIServerTransport(fallback: fallback)
-    let api = AudioTalkOpenAPI()
+    let api = AudioTalkOpenAPI(state: AudioTalkState())
     try? api.registerHandlers(on: transport, serverURL: URL(string: "/")!)
     let server = NIOHTTPServer(kernel: transport.asKernel())
     do {
@@ -34,4 +34,3 @@ Task {
 dispatchMain()
 
 // © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.
-

@@ -43,5 +43,6 @@ Helpers:
 - `Scripts/run-audiotalk.sh` starts `audiotalk-server` with a default `LAUNCHER_SIGNATURE` and logs to `~/.fountain/audiotalk.log`.
 - `Scripts/run-audiotalk-cli.sh` runs the CLI (uses `AUDIOTALK_BASE_URL` when provided).
 - `Scripts/run-audiotalk-ci-smoke.sh` runs the CI smoke against `AUDIOTALK_BASE_URL` (default `http://127.0.0.1:8080`).
+- `Scripts/audiotalk-oneclick.sh` builds, starts the server (with signature), waits for health, runs smoke, and opens the web console.
 
 Refer to the workspace README for the full service map and development workflow.

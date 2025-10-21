@@ -17,11 +17,13 @@ Core services and readiness (localhost):
 - function-caller: `8004` — `GET /metrics`
 - persist: `8005` — `GET /metrics`
 - gateway: `8010` — `GET /metrics` (JSON)
+ - audiotalk: `8080` — `GET /audiotalk/meta/health`
 
 Extras (with `--all`):
 - tools-factory: `8011` — `GET /metrics`
 - tool-server: `8012` — `GET /_health` (200)
 - semantic-browser: `8007` — `GET /metrics`
+ - audiotalk-cli: `swift run --package-path Packages/FountainApps audiotalk-cli --help`
 
 ## MemChat App
 
@@ -34,7 +36,7 @@ Extras (with `--all`):
 Run a single executable directly from this package:
 - `swift run --package-path Packages/FountainApps gateway-server`
 - `swift run --package-path Packages/FountainApps baseline-awareness-server`
+ - `swift run --package-path Packages/FountainApps audiotalk-server`
 - Replace the product name to target other executables.
 
 Refer to the workspace README for the full service map and development workflow.
-

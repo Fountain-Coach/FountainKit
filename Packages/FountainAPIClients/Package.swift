@@ -12,6 +12,7 @@ let package = Package(
         .library(name: "BootstrapAPI", targets: ["BootstrapAPI"]),
         .library(name: "GatewayAPI", targets: ["GatewayAPI"]),
         .library(name: "FKOpsAPI", targets: ["FKOpsAPI"]),
+        .library(name: "AudioTalkAPI", targets: ["AudioTalkAPI"]),
         .library(name: "FunctionCallerAPI", targets: ["FunctionCallerAPI"]),
         .library(name: "PersistAPI", targets: ["PersistAPI"]),
         .library(name: "SpeechAtlasAPI", targets: ["SpeechAtlasAPI"]),
@@ -37,6 +38,19 @@ let package = Package(
             dependencies: [
                 .product(name: "AsyncHTTPClient", package: "async-http-client"),
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
+            ]
+        ),
+        .target(
+            name: "AudioTalkAPI",
+            dependencies: [
+                "ApiClientsCore",
+                .product(name: "AsyncHTTPClient", package: "async-http-client"),
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
+            ],
+            plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
         ),
         .target(

@@ -957,7 +957,7 @@ components:
         id: { type: string }
         type:
           type: string
-          enum: [received, planned, applying, applied, conflicted, snapshot_ready]
+          enum: [received, planned, applying, applied, conflicted, snapshot_ready, parsed, cue_mapped, plan_applied]
         ts:
           type: string
           format: date-time

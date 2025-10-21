@@ -1,109 +1,112 @@
-# AudioTalk — Implementation Plan (FountainKit)
+# AudioTalk — Implementation Plan (Polish to Product)
 
-This plan adapts the AudioTalk vision (Drift–Pattern–Reflection) and upstream API contract to FountainKit’s modular workspace and OpenAPI‑first workflow.
+This plan takes the current repository state to a polished, chat‑driven AudioTalk product, fully aligned with FountainAI’s OpenAPI‑first, Planner + Tools orchestration, and modular kits.
 
-Sources used:
-- Upstream repo (reference): `External/AudioTalk` — spec/openapi.yaml, engineering guide, dev server
-- Legacy narrative (reference): `External/AudioTalk-LegacyDocs` — vision PDF and status notes
+Scope anchors
+- Specs are authoritative in `Packages/FountainSpecCuration/openapi/v1/audiotalk.yml`.
+- AudioTalk service code lives in `Packages/FountainServiceKit-AudioTalk`.
+- Apps (server/CLI/Studio) live in `Packages/FountainApps`.
+- No generated sources are committed; `swift build` regenerates.
 
-Goals
-- Provide a first‑class, modular AudioTalk service inside FountainKit that exposes a curated OpenAPI surface, streams MIDI 2.0, and integrates with Score/Engraving where available.
-- Preserve “contract first” discipline: specs live in `FountainSpecCuration` and drive codegen via Swift OpenAPI Generator.
+Current status (baseline)
+- Persistence wired via `FountainStoreClient` with corpus `audiotalk` and collections for screenplay, notation, dictionary, macros, cues, and journal.
+- Screenplay API backed by real data: GET/PUT source (ETag), parse (model), map‑cues, cue‑sheet (JSON/CSV/PDF), SSE parse stream.
+- Bridge implemented: apply screenplay cues → notation (ETag‑aware) with Lily mapping; journaling of `parsed`, `cue_mapped`, `plan_applied`.
+- CLI covers screenplay/notation/journal; one‑click scripts boot server and smoke.
+- Tools integration: ToolsFactory registers OpenAPI as tools; FunctionCaller supports templated paths + base prefix.
 
-## Architecture Mapping (Drift–Pattern–Reflection)
-- Drift (intent → plan)
-  - Service parses phrases to a typed plan and maintains a vocabulary/macro dictionary.
-  - Inputs may originate from LLMs or rule macros; representation lives in `FountainCore` shared types.
-- Pattern (rules → authority)
-  - Engraving/Score rules provide authoritative grouping/spacing/notation transforms (consumed via adapters).
-  - Keep rule evaluation outside service target; import via `FountainCore` abstractions or dedicated adapters.
-- Reflection (verify → improve)
-  - Close the loop with visual snapshots (via ScoreKit bridges when available), UMP traces, and plan diffs.
+Product goals
+- Chat‑first studio (“AudioTalk Studio”): users instruct verbally; Fountain + Lily update live with visible anchors and previews.
+- Deterministic, resumable sessions with ETags and a durable Journal.
+- OpenAPI‑first across all surfaces and tool orchestration (Planner + Tools).
 
-## Deliverables (by phase)
+Milestones (M1 → GA)
 
-Phase 0 — Spec curation and parity (P0)
-- Add curated spec `Packages/FountainSpecCuration/openapi/v1/audiotalk.yml` seeded from upstream `External/AudioTalk/spec/openapi.yaml`.
-- Expand with schemas for: `DictionaryItem`, `MacroItem`, `Plan`, `Token`, `NotationSession`, `RenderResponse`, and `UMPBatch`.
-- Add `lint-matrix` entries; CI must lint and validate schemas. No generated sources committed.
+M1 — Core polish (API, persistence, cues)
+- Finalize spec enums and content types; ensure `JournalEvent` types (parsed, cue_mapped, plan_applied) are complete.
+- Persist parsed model keyed by ETag; prefer cached results across parse/map.
+- Cue sheet CSV/PDF parity (headers, pagination, simple styling).
+- Acceptance: Endpoints green; CLI flows stable; CI smoke passes.
 
-Phase 1 — Service package scaffold (P0)
-- New package `Packages/FountainServiceKit-AudioTalk` with target `AudioTalkService`.
-- Include `Sources/AudioTalkService/openapi.yaml` as a symlink to curated spec and `openapi-generator-config.yaml` with `generate: [types, server]`.
-- Add minimal handler shims conforming to generated server protocol (return stubs) and register transport via `FountainCore` server glue.
+M2 — Tools catalog + Planner orchestration
+- Register AudioTalk OpenAPI via ToolsFactory (`Scripts/register-audiotalk-tools.sh`); corpus `audiotalk`.
+- Configure FunctionCaller with `FUNCTION_CALLER_BASE_URL` (local: `http://127.0.0.1:8080/audiotalk/v1`).
+- Author Planner prompt/profile for AudioTalk tasks; verify `reason → execute` calls tools deterministically.
+- Acceptance: Given “map cues and apply to notation”, Planner returns function steps and FunctionCaller mutates Lily (ETag respected).
 
-Phase 2 — Telemetry + MIDI streaming (P0)
-- Integrate `FountainTelemetryKit` to accept/send UMP batches.
-- Provide a streaming transport: SSE over MIDI (`SSEOverMIDI`) for previews; define `/ump/{session}/send` semantics and backpressure.
+M3 — AudioTalk Studio (chat‑driven GUI)
+- Add Studio tab in `FountainLauncherUI`:
+  - Chat panel (EngraverChatCore) targeting Planner + FunctionCaller.
+  - Fountain editor (syntax, tag helpers) bound to GET/PUT screenplay.
+  - Lily editor + preview (render) bound to GET/PUT/render.
+  - Journal timeline panel consuming `/audiotalk/journal` + stream.
+- Acceptance: Typing “parse screenplay and map cues” updates model/cue list and Lily source; Journal shows events.
 
-Phase 3 — Drift engine (P1)
-- Implement phrase tokenizer + normalizer; produce typed `Plan` with op graph (insert motif, articulation, dynamics, tempo changes).
-- Macro store: CRUD + promotion path; persist via `FountainServiceKit-Persist` (if available) behind `FountainCore` store client.
+M4 — Anchors & selection sync
+- Insert stable Lily anchor markers on apply (e.g., `% AT_ANCHOR id=... sc=3 ln=42`).
+- Add `scan-anchors` endpoint to parse Lily and persist an anchor map (script↔notation).
+- Selection sync: clicking a tag/scene highlights the Lily anchor region and vice versa.
+- Acceptance: Moving Lily content and re‑scanning updates anchor map; UI selection sync remains correct.
 
-Phase 4 — Pattern adapters (P1)
-- Define adapters to Engraving/Score transforms (grouping/spacing/accidental, ties, beam groups) with explicit inputs/outputs.
-- Keep adapters optional; degrade gracefully when renderer not present.
+M5 — Rendering & streaming
+- Improve SSE: expose live Journal stream and parse events in Studio (transport: NIO chunked, no buffering).
+- Rendering polish: SVG default, PDF export from cue sheet.
+- Acceptance: Long‑lived SSE keeps chat + panels in sync without manual refresh.
 
-Phase 5 — Reflection loop (P2)
-- Snapshot API: request preview artifacts (PNG/SVG) and UMP traces; compare A/B and annotate diffs.
-- Plan critique endpoint: return structured improvement hints and affected measure/beat indices.
+M6 — Quality, tests, and CI
+- Unit/golden tests: ScreenplayParser, cue mapping heuristics, Lily mapping, PDF builder, ETag concurrency.
+- Add CI smoke for screenplay flows (health, dictionary, ETag, parse/map/apply, cue‑sheet).
+- Lint OpenAPI; ensure all touched packages compile with `swift build`.
+- Acceptance: All CI jobs green; no generated sources committed.
 
-Phase 6 — Gateway + Apps (P2)
-- Gateway orchestration: add an AudioTalk persona plugin in `FountainGatewayKit` that wires phrase→plan→apply→preview.
-- Executables in `FountainApps`:
-  - `audiotalk-server` — NIO server using generated handlers.
-  - `audiotalk-cli` — local testing client (wraps generated client; prints diffs/snapshots URIs).
+M7 — Beta → GA
+- Docs: user guide (Studio), API reference, CLI examples, tool orchestration notes.
+- Telemetry: metrics for tool invocation latencies, apply success/conflicts, SSE subscribers.
+- Crash/edge handling: robust errors for missing sessions, bad markers, invalid Lily.
+- Acceptance: Trial users complete core tasks via chat without manual CLI.
 
-## OpenAPI Surface (initial)
-- `GET /dictionary` → list tokens/mappings
-- `POST /dictionary` → upsert token(s)
-- `POST /intent` → phrase → `Plan`
-- `POST /intent/apply` → apply `Plan` atomically (idempotent)
-- `GET/POST /macros` → list/create macros from plans
-- `POST /lesson/ab` → A/B ear‑training prompt
-- `POST /notation/sessions` → create session
-- `PUT/GET /notation/{id}/score` → LilyPond source
-- `POST /notation/{id}/render` → render artifacts
-- `POST /ump/{session}/send` → accept UMP batch (MIDI 2.0)
+Detailed backlog (by workstream)
 
-Notes
-- Curate schemas (nullable, enums, bounds) and error models (`Problem+json`).
-- Add tags for `dictionary`, `intent`, `notation`, `midi`, `reflection`.
+Specs
+- Extend `JournalEvent.type` (done) and document values.
+- Add `AnchorMap` schemas and endpoints: `scan-anchors`, `get anchors`, `reanchor`.
+- Document Lily marker format and stability guarantees.
 
-## Package Layout (proposed)
-- `Packages/FountainServiceKit-AudioTalk/`
-  - `Package.swift` (alphabetised deps)
-  - `Sources/AudioTalkService/` — service logic + adapters
-  - `Sources/AudioTalkService/openapi.yaml` (symlink to curated spec)
-  - `Sources/AudioTalkService/openapi-generator-config.yaml`
-  - `Tests/AudioTalkServiceTests/` — unit + golden tests
-- `Packages/FountainApps/Sources/audiotalk-server/` — executable harness
-- `Packages/FountainApps/Sources/audiotalk-cli/` — smoke client
+Service
+- ScreenplayParser warnings coverage; characters heuristics toggleable via request flags.
+- Cue mapping options (`theme_table`, hints) influence plans; persist mapping options alongside cues.
+- Lily mapping: expand beyond comments—dynamics/tempo handled, add articulation/macros as Lily.
+- SSE transport: enable chunked responses in NIO transport for truly live streaming.
 
-## Testing & CI
-- Unit tests: tokenizer, plan builder, UMP batch validation, Lily score CRUD.
-- Golden fixtures: plan JSON, UMP traces, Lily snippets.
-- Snapshot tests (optional): PNG/SVG if renderer available; guarded by feature flags.
-- CI: add to build matrix; ensure OpenAPI lint + full `swift build` green; no generated sources committed.
+Studio (SwiftUI)
+- Chat bound to Planner + FunctionCaller; tool outputs drive editors.
+- Editors: diff highlight on ETag updates; conflict UI when 412/409 occurs (retry flows).
+- Selection sync via `AnchorMap`; highlight both panes.
 
-## Risks & Controls
-- Renderer availability: feature‑flag rendering; make endpoints return 501 when disabled.
-- Schema drift: treat curated spec as authoritative; upstream spec tracked for parity notes.
-- Performance: budget for UMP batching and backpressure (JR timestamps, host‑time mapping in TelemetryKit).
+Tools & Planner
+- ToolsFactory: register AudioTalk spec in `audiotalk` corpus; verify `GET /tools` list.
+- FunctionCaller: path templating + base prefix (done); add simple arg validators (optional).
+- Planner: AudioTalk profile with step patterns for screenplay/notation tasks; execution via FunctionCaller.
 
-## Milestone Checklist (P0 → P2)
-- [ ] Curated spec added and linted
-- [ ] Service package skeleton compiles with generated server stubs
-- [ ] MIDI UMP endpoint wired to TelemetryKit
-- [ ] Drift tokenizer + typed plan v0
-- [ ] Macro CRUD + persistence behind FountainCore store
-- [ ] Reflection endpoints return stubs with structure
-- [ ] Gateway persona and server/CLI executables
+Ops & DX
+- One‑click script: boot AudioTalk, ToolsFactory, FunctionCaller, register tools, run studio.
+- ENV guide: `FOUNTAINSTORE_DIR`, `AUDIOTALK_CORPUS_ID`, `FUNCTION_CALLER_BASE_URL`, ports.
 
-## Next Actions (this repo)
-1) Add curated spec file under `Packages/FountainSpecCuration/openapi/v1/audiotalk.yml` seeded from upstream.
-2) Scaffold `FountainServiceKit-AudioTalk` with generator config and empty handlers.
-3) Add `audiotalk-server` executable stub that exposes health and routes to generated server.
-4) Wire TelemetryKit UMP endpoint; return 202 Accepted and validate payload.
-5) Land basic unit tests and CI lint for the new spec.
+Acceptance criteria (polish)
+- Chat prompt “change the scene 3 finale to forte and add a rallentando” results in:
+  - Updated Fountain tags/notes;
+  - Cues mapped;
+  - Lily with `\f` and a tempo change block near the correct anchor;
+  - Preview updated, events visible in Journal.
+
+Risks & mitigations
+- Anchor drift: re‑scan Lily and reconcile anchor map; prefer idempotent IDs from screenplay notes.
+- SSE buffering: implement chunked write path in NIO transport; keep message sizes small.
+- Planner hallucination: constrain tool set to AudioTalk functions; add tool rejection guardrails.
+
+References
+- Specs: `Packages/FountainSpecCuration/openapi/v1/audiotalk.yml`
+- Service: `Packages/FountainServiceKit-AudioTalk/`
+- Apps: `Packages/FountainApps/Sources/audiotalk-*`, Studio inside `FountainLauncherUI`
+- Tools: ToolsFactory (:8011), FunctionCaller (:8004), registration script `Scripts/register-audiotalk-tools.sh`
 

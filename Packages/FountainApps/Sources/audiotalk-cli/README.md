@@ -81,6 +81,10 @@ swift run --package-path Packages/FountainApps audiotalk-cli screenplay map-cues
 ```
 swift run --package-path Packages/FountainApps audiotalk-cli screenplay cue-sheet <id> | jq
 ```
+- Apply cues to notation session
+```
+swift run --package-path Packages/FountainApps audiotalk-cli screenplay apply-to-notation <screenplay-id> <notation-session-id> --if-match <etag>
+```
 
 ### UMP (MIDI 2.0)
 

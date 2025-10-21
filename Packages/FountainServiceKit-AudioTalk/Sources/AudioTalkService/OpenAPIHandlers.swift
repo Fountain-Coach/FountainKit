@@ -609,7 +609,66 @@ public struct AudioTalkOpenAPI: APIProtocol, @unchecked Sendable {
         return .ok(.init(body: .json(out)))
     }
     public func parseScreenplayStream(_ input: Operations.parseScreenplayStream.Input) async throws -> Operations.parseScreenplayStream.Output {
-        return .undocumented(statusCode: 202, OpenAPIRuntime.UndocumentedPayload())
+        let id = input.path.id
+        guard let (etag, source) = await state.getScreenplaySource(id: id) else {
+            let err = Components.Schemas.ErrorResponse(error: "Not Found", code: "not_found", correlationId: nil)
+            return .notFound(.init(body: .json(err)))
+        }
+        // Parse once and emit SSE frames for discovered items.
+        let parsed = ScreenplayParser.parse(id: id, text: source)
+        var sse = ""
+        // ETag hint
+        sse += "event: meta\n"
+        sse += "data: {\"etag\":\"\(etag)\"}\n\n"
+        for sc in parsed.model.scenes ?? [] {
+            let obj: [String: Any] = [
+                "id": sc.id ?? "",
+                "number": sc.number as Any,
+                "heading": sc.heading ?? ""
+            ]
+            if let data = try? JSONSerialization.data(withJSONObject: obj), let str = String(data: data, encoding: .utf8) {
+                sse += "event: scene\n"
+                sse += "data: \(str)\n\n"
+            }
+        }
+        for bt in parsed.model.beats ?? [] {
+            let obj: [String: Any] = [
+                "id": bt.id ?? "",
+                "scene_id": bt.scene_id ?? "",
+                "summary": bt.summary ?? "",
+                "line": bt.line as Any
+            ]
+            if let data = try? JSONSerialization.data(withJSONObject: obj), let str = String(data: data, encoding: .utf8) {
+                sse += "event: beat\n"
+                sse += "data: \(str)\n\n"
+            }
+        }
+        for nt in parsed.model.notes ?? [] {
+            let anchor: [String: Any] = [
+                "scene_number": nt.anchor?.scene_number as Any,
+                "line": nt.anchor?.line as Any,
+            ].compactMapValues { $0 }
+            let obj: [String: Any] = [
+                "id": nt.id ?? "",
+                "kind": nt.kind.rawValue,
+                "content": nt.content ?? "",
+                "anchor": anchor
+            ]
+            if let data = try? JSONSerialization.data(withJSONObject: obj), let str = String(data: data, encoding: .utf8) {
+                sse += "event: note\n"
+                sse += "data: \(str)\n\n"
+            }
+        }
+        sse += "event: completion\n"
+        sse += "data: {}\n\n"
+        // Persist and journal
+        await state.persistParsedScreenplayModel(id: id, etag: etag, model: parsed.model)
+        await state.appendJournal(type: "parsed", details: [
+            "screenplay_id": id,
+            "scenes": String(parsed.model.scenes?.count ?? 0),
+            "tags": String(parsed.model.notes?.filter { $0.kind == .tag }.count ?? 0)
+        ])
+        return .accepted(.init(body: .text_event_hyphen_stream(HTTPBody(sse))))
     }
     public func mapScreenplayCues(_ input: Operations.mapScreenplayCues.Input) async throws -> Operations.mapScreenplayCues.Output {
         let id = input.path.id

@@ -26,7 +26,8 @@ Task {
         return HTTPResponse(status: 404)
     }
     let transport = NIOOpenAPIServerTransport(fallback: fallback)
-    let api = FunctionCallerOpenAPI(persistence: svc)
+    let basePrefix = env["FUNCTION_CALLER_BASE_URL"]
+    let api = FunctionCallerOpenAPI(persistence: svc, baseURLPrefix: basePrefix)
     try? api.registerHandlers(on: transport, serverURL: URL(string: "/")!)
     let server = NIOHTTPServer(kernel: transport.asKernel())
     do {

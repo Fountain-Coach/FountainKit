@@ -9,10 +9,12 @@ import FountainStoreClient
 public struct FunctionCallerOpenAPI: APIProtocol, @unchecked Sendable {
     let persistence: FountainStoreClient
     let httpClient: HTTPClient
+    let baseURLPrefix: String?
 
-    public init(persistence: FountainStoreClient, httpClient: HTTPClient = HTTPClient(eventLoopGroupProvider: .singleton)) {
+    public init(persistence: FountainStoreClient, httpClient: HTTPClient = HTTPClient(eventLoopGroupProvider: .singleton), baseURLPrefix: String? = nil) {
         self.persistence = persistence
         self.httpClient = httpClient
+        self.baseURLPrefix = baseURLPrefix
     }
 
     private func toSendable(_ value: Any) -> (any Sendable)? {
@@ -98,13 +100,40 @@ public struct FunctionCallerOpenAPI: APIProtocol, @unchecked Sendable {
         guard let fn = try await persistence.getFunctionDetails(functionId: fid) else {
             return .undocumented(statusCode: 404, OpenAPIRuntime.UndocumentedPayload())
         }
-        var req = HTTPClientRequest(url: fn.httpPath)
+        // Build URL with optional templating and base prefix for relative paths.
+        var path = fn.httpPath
+        var argsDict: [String: Any] = [:]
+        if case let .json(container) = input.body {
+            for (k, v) in container.value { argsDict[k] = v ?? NSNull() }
+        }
+        // Substitute {placeholders} from args when present (stringifying values).
+        // e.g., "/audiotalk/screenplay/{id}/parse" with args["id"] = "abc".
+        while let lb = path.range(of: "{"), let rb = path.range(of: "}", range: lb.lowerBound..<path.endIndex) {
+            let key = String(path[path.index(after: lb.lowerBound)..<rb.lowerBound])
+            let val: String = {
+                if let v = argsDict[key] as? String { return v }
+                if let v = argsDict[key] as? NSNumber { return v.stringValue }
+                return ""
+            }()
+            path.replaceSubrange(lb.lowerBound...rb.lowerBound, with: val)
+        }
+        // Prefix relative URLs when configured.
+        let urlString: String = {
+            if path.hasPrefix("http://") || path.hasPrefix("https://") { return path }
+            if let base = baseURLPrefix, path.hasPrefix("/") {
+                let trimmedBase = base.hasSuffix("/") ? String(base.dropLast()) : base
+                return trimmedBase + path
+            }
+            return path
+        }()
+        var req = HTTPClientRequest(url: urlString)
         req.method = .RAW(value: fn.httpMethod)
         if case let .json(container) = input.body {
+            // Pass JSON body only for non-GET methods
             let dict = container.value
             var anyDict: [String: Any] = [:]
             for (k, v) in dict { anyDict[k] = v ?? NSNull() }
-            if let data = try? JSONSerialization.data(withJSONObject: anyDict) {
+            if fn.httpMethod.uppercased() != "GET", let data = try? JSONSerialization.data(withJSONObject: anyDict) {
                 req.body = .bytes(data)
                 req.headers.add(name: "Content-Type", value: "application/json")
             }

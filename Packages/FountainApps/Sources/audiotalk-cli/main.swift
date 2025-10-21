@@ -77,7 +77,7 @@ struct AudioTalkCLI: ParsableCommand {
     }
 
     struct Intent: ParsableCommand {
-        static var configuration = CommandConfiguration(abstract: "Intent operations", subcommands: [Parse.self])
+        static var configuration = CommandConfiguration(abstract: "Intent operations", subcommands: [Parse.self, Apply.self])
         struct Parse: ParsableCommand {
             @OptionGroup var globals: GlobalOptions
             @Argument(help: "Phrase") var phrase: String
@@ -90,6 +90,33 @@ struct AudioTalkCLI: ParsableCommand {
                     let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted]
                     let data = try enc.encode(body)
                     FileHandle.standardOutput.write(data)
+                }
+                dispatchMain()
+            }
+        }
+        struct Apply: ParsableCommand {
+            @OptionGroup var globals: GlobalOptions
+            @Option(name: .long, help: "If-Match ETag") var ifMatch: String?
+            @Argument(help: "Notation session id") var session: String
+            @Argument(help: "Token ops", parsing: .unconditionalRemaining) var tokens: [String]
+            mutating func run() throws {
+                Task {
+                    let client = try AudioTalkCLI.makeClient(globals.baseURL)
+                    let ops = tokens.map { Components.Schemas.PlanOp(id: UUID().uuidString, kind: .token, value: $0, anchor: nil) }
+                    let plan = Components.Schemas.Plan(ops: ops, meta: .init(origin: .user, confidence: 1.0, source: "cli"))
+                    let req = Components.Schemas.ApplyPlanRequest(session_id: session, plan: plan)
+                    let input = Operations.applyPlan.Input(headers: .init(If_hyphen_Match: ifMatch), body: .json(req))
+                    let out = try await client.applyPlan(input)
+                    switch out {
+                    case .ok(let ok):
+                        if let etag = ok.headers.ETag { print(etag) } else { print("") }
+                    case .conflict(let c):
+                        if case .json(let body) = c.body { fputs("conflict: \(body.conflicts?.first?.code ?? "")\n", stderr) }
+                        Foundation.exit(1)
+                    default:
+                        fputs("unexpected: \(out)\n", stderr)
+                        Foundation.exit(2)
+                    }
                 }
                 dispatchMain()
             }

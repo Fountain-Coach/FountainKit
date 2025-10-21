@@ -171,6 +171,35 @@ actor AudioTalkState {
         return (true, e.eTag)
     }
 
+    // Apply plan to notation session by appending annotated LilyPond comments.
+    struct ApplyResult { let ok: Bool; let newETag: String; let appliedOps: [Components.Schemas.PlanOp]; let etagMismatch: Bool }
+    func applyPlanToNotation(sessionId: String, ifMatch: String?, plan: Components.Schemas.Plan) async -> ApplyResult? {
+        let commentLines: String = plan.ops.map { op in
+            let val = op.value ?? ""
+            return "% AudioTalk \(op.kind.rawValue): \(val)"
+        }.joined(separator: "\n")
+        // Disk-backed store
+        if let store {
+            do {
+                guard let data = try await store.getDoc(corpusId: corpusId, collection: notationColl, id: sessionId) else { return nil }
+                var e = try JSONDecoder().decode(NotationEntry.self, from: data)
+                if let ifm = ifMatch, ifm != e.eTag { return .init(ok: false, newETag: e.eTag, appliedOps: [], etagMismatch: true) }
+                let sep = e.source.isEmpty ? "" : "\n"
+                e.source += sep + commentLines + (commentLines.isEmpty ? "" : "\n")
+                e.eTag = newETag()
+                try await store.putDoc(corpusId: corpusId, collection: notationColl, id: sessionId, body: try JSONEncoder().encode(e))
+                return .init(ok: true, newETag: e.eTag, appliedOps: plan.ops, etagMismatch: false)
+            } catch { return nil }
+        }
+        // In-memory fallback
+        guard var e = notationMem[sessionId] else { return nil }
+        if let ifm = ifMatch, ifm != e.eTag { return .init(ok: false, newETag: e.eTag, appliedOps: [], etagMismatch: true) }
+        let sep = e.source.isEmpty ? "" : "\n"
+        e.source += sep + commentLines + (commentLines.isEmpty ? "" : "\n")
+        e.eTag = newETag(); notationMem[sessionId] = e
+        return .init(ok: true, newETag: e.eTag, appliedOps: plan.ops, etagMismatch: false)
+    }
+
     // MARK: Screenplay
     func createScreenplaySession() async -> Components.Schemas.ScreenplaySession {
         let id = UUID().uuidString
@@ -404,18 +433,26 @@ public struct AudioTalkOpenAPI: APIProtocol, @unchecked Sendable {
     }
 
     public func applyPlan(_ input: Operations.applyPlan.Input) async throws -> Operations.applyPlan.Output {
-        // Placeholder apply; journal the intent for session recording purposes.
         guard case let .json(req) = input.body else {
             let err = Components.Schemas.ErrorResponse(error: "Bad Request", code: "bad_request", correlationId: nil)
             return .badRequest(.init(body: .json(err)))
         }
-        let etag = UUID().uuidString
-        let body = Components.Schemas.ApplyPlanResponse(appliedOps: [], conflicts: [], scoreETag: etag)
+        let ifm = input.headers.If_hyphen_Match
+        guard let result = await state.applyPlanToNotation(sessionId: req.session_id, ifMatch: ifm, plan: req.plan) else {
+            let err = Components.Schemas.ErrorResponse(error: "Notation session not found", code: "notation_session_not_found", correlationId: nil)
+            return .badRequest(.init(body: .json(err)))
+        }
+        if result.etagMismatch {
+            let conflict = Components.Schemas.Conflict(code: "etag_mismatch", message: "If-Match does not match current ETag", anchors: [])
+            let body = Components.Schemas.ApplyPlanResponse(appliedOps: [], conflicts: [conflict], scoreETag: result.newETag)
+            return .conflict(.init(body: .json(body)))
+        }
         await state.appendJournal(type: "plan_applied", details: [
             "session_id": req.session_id,
-            "ops": String(req.plan.ops.count)
+            "ops": String(result.appliedOps.count)
         ])
-        let headers = Operations.applyPlan.Output.Ok.Headers(ETag: etag)
+        let body = Components.Schemas.ApplyPlanResponse(appliedOps: result.appliedOps, conflicts: [], scoreETag: result.newETag)
+        let headers = Operations.applyPlan.Output.Ok.Headers(ETag: result.newETag)
         return .ok(.init(headers: headers, body: .json(body)))
     }
 
@@ -609,7 +646,24 @@ public struct AudioTalkOpenAPI: APIProtocol, @unchecked Sendable {
         // Prefer persisted cues when available.
         let id = input.path.id
         let cues = await state.loadCues(id: id) ?? []
-        let out = Components.Schemas.CueSheetResponse(cues: cues)
-        return .ok(.init(body: .json(out)))
+        switch input.query.format {
+        case .some(.csv):
+            var csv = "cue_id,label,scene,line,character,ops\n"
+            for c in cues {
+                let scene = c.anchor?.scene_number.map(String.init) ?? ""
+                let line = c.anchor?.line.map(String.init) ?? ""
+                let character = c.anchor?.character ?? ""
+                let ops = String(c.plan.ops.count)
+                let label = (c.label ?? "").replacingOccurrences(of: ",", with: " ")
+                csv += "\(c.cue_id),\(label),\(scene),\(line),\(character),\(ops)\n"
+            }
+            return .ok(.init(body: .csv(HTTPBody(csv))))
+        case .some(.pdf):
+            // Placeholder PDF (not implemented): return empty body to satisfy content type
+            return .ok(.init(body: .pdf(HTTPBody(Data()))))
+        default:
+            let out = Components.Schemas.CueSheetResponse(cues: cues)
+            return .ok(.init(body: .json(out)))
+        }
     }
 }

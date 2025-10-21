@@ -28,7 +28,10 @@ let package = Package(
                 .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
+        ),
+        .testTarget(
+            name: "AudioTalkServiceTests",
+            dependencies: ["AudioTalkService"]
         )
     ]
 )
-

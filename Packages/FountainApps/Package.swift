@@ -27,6 +27,7 @@ let package = Package(
         .executable(name: "gateway-console", targets: ["gateway-console"]),
         .executable(name: "gateway-console-app", targets: ["gateway-console-app"]),
         .executable(name: "engraver-chat-tui", targets: ["engraver-chat-tui"]),
+        .executable(name: "audiotalk-cli", targets: ["audiotalk-cli"]),
         .executable(name: "engraving-app", targets: ["engraving-app"]),
         .executable(name: "memchat-app", targets: ["memchat-app"]),
         .executable(name: "memchat-teatro", targets: ["memchat-teatro"]),
@@ -54,6 +55,7 @@ let package = Package(
         .package(path: "../FountainServiceKit-Bootstrap"),
         .package(path: "../FountainServiceKit-Awareness"),
         .package(path: "../FountainServiceKit-Persist"),
+        .package(path: "../FountainServiceKit-AudioTalk"),
         .package(path: "../FountainServiceKit-AudioTalk"),
         
         .package(path: "../FountainServiceKit-ToolsFactory"),
@@ -102,6 +104,15 @@ let package = Package(
             plugins: [
                 .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
+        .executableTarget(
+            name: "audiotalk-cli",
+            dependencies: [
+                .product(name: "AudioTalkAPI", package: "FountainAPIClients"),
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
+                .product(name: "ArgumentParser", package: "swift-argument-parser")
             ]
         ),
         .executableTarget(

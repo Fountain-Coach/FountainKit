@@ -1,0 +1,4 @@
+generate:
+  - types
+  # Server handlers to be added in Phase 1 once stubs land
+accessModifier: public

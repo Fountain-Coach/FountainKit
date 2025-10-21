@@ -648,6 +648,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CueSheetResponse'
+            text/csv:
+              schema:
+                type: string
+                description: Comma-separated values representing the cue sheet.
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+                description: PDF document of the cue sheet.
         '404':
           description: Screenplay session not found
           content:

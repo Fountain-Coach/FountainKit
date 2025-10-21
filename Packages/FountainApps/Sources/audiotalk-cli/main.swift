@@ -266,16 +266,34 @@ struct AudioTalkCLI: ParsableCommand {
         }
         struct CueSheet: ParsableCommand {
             @OptionGroup var globals: GlobalOptions
+            @Option(name: .long, help: "Format json|csv|pdf (default json)") var format: String?
             @Argument var id: String
             mutating func run() throws {
                 Task {
                     let client = try AudioTalkCLI.makeClient(globals.baseURL)
-                    let input = Operations.getCueSheet.Input(path: .init(id: id), query: .init(format: nil))
+                    let qFmt: Operations.getCueSheet.Input.Query.formatPayload? = {
+                        switch (format?.lowercased()) {
+                        case .some("csv"): return .csv
+                        case .some("pdf"): return .pdf
+                        case .some("json"): return .json
+                        default: return nil
+                        }
+                    }()
+                    let input = Operations.getCueSheet.Input(path: .init(id: id), query: .init(format: qFmt))
                     let out = try await client.getCueSheet(input)
-                    guard case .ok(let ok) = out, case .json(let body) = ok.body else { print("{}"); Foundation.exit(2); return }
-                    let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted]
-                    let data = try enc.encode(body)
-                    FileHandle.standardOutput.write(data)
+                    guard case .ok(let ok) = out else { print("{}"); Foundation.exit(2); return }
+                    switch ok.body {
+                    case .json(let body):
+                        let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted]
+                        let data = try enc.encode(body)
+                        FileHandle.standardOutput.write(data)
+                    case .csv(let body):
+                        let bytes = try await body.collect(upTo: 1<<20)
+                        FileHandle.standardOutput.write(Data(bytes))
+                    case .pdf(let body):
+                        let bytes = try await body.collect(upTo: 1<<20)
+                        FileHandle.standardOutput.write(Data(bytes))
+                    }
                 }
                 dispatchMain()
             }

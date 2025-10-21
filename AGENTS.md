@@ -16,6 +16,7 @@ Welcome to FountainKit, the modular SwiftPM workspace for the Fountain Coach org
 ### Active Plans
 - `implementation_plan.md` — OpenAPI-first refactor roadmap.
 - `Packages/FountainSpecCuration/openapi/arcspec_studio_plan.md` — ArcSpec → Swift studio rollout.
+ - `Plans/AudioTalk/IMPLEMENTATION_PLAN.md` — AudioTalk service adoption plan (Drift–Pattern–Reflection).
 
 ## OpenAPI-first development
 - Every HTTP surface must have an authoritative OpenAPI document in `Packages/FountainSpecCuration/openapi`. Update specs *before* writing server or client code.

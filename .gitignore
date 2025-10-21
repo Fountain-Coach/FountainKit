@@ -25,4 +25,6 @@ Dist/
 # Local embedded repos (do not track as submodules)
 External/LocalAgent/
 External/swiftcurseskit/
+External/AudioTalk/
+External/AudioTalk-LegacyDocs/
 Workspace/the-four-stars/

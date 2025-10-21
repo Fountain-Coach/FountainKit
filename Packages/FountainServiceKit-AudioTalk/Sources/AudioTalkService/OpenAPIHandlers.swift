@@ -173,8 +173,25 @@ public struct AudioTalkOpenAPI: APIProtocol, @unchecked Sendable {
     }
 
     public func parseIntentStream(_ input: Operations.parseIntentStream.Input) async throws -> Operations.parseIntentStream.Output {
-        // Minimal SSE body
-        let sse = "event: completion\ndata: {}\n\n"
+        // Compose a simple SSE stream with token events and a final plan payload.
+        guard case let .json(req) = input.body else {
+            let sse = "event: error\ndata: {\"error\":\"bad_request\"}\n\n"
+            return .accepted(.init(body: .text_event_hyphen_stream(HTTPBody(sse))))
+        }
+        let tokens = req.phrase.split(separator: " ").map(String.init)
+        var sse = ""
+        for t in tokens {
+            let data = "{\"content\":\"\(t)\"}"
+            sse += "event: token\n"
+            sse += "data: \(data)\n\n"
+        }
+        // Include a final plan snapshot
+        let ops = tokens.map { t in "{\"id\":\"\(UUID().uuidString)\",\"kind\":\"token\",\"value\":\"\(t)\"}" }.joined(separator: ",")
+        let planJSON = "{\"ops\":[\(ops)]}"
+        sse += "event: plan\n"
+        sse += "data: \(planJSON)\n\n"
+        sse += "event: completion\n"
+        sse += "data: {}\n\n"
         return .accepted(.init(body: .text_event_hyphen_stream(HTTPBody(sse))))
     }
 

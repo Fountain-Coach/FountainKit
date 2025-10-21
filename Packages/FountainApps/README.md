@@ -17,7 +17,7 @@ Core services and readiness (localhost):
 - function-caller: `8004` — `GET /metrics`
 - persist: `8005` — `GET /metrics`
 - gateway: `8010` — `GET /metrics` (JSON)
- - audiotalk: `8080` — `GET /audiotalk/meta/health`
+- audiotalk: `8080` — `GET /audiotalk/meta/health`
 
 Extras (with `--all`):
 - tools-factory: `8011` — `GET /metrics`
@@ -36,7 +36,10 @@ Extras (with `--all`):
 Run a single executable directly from this package:
 - `swift run --package-path Packages/FountainApps gateway-server`
 - `swift run --package-path Packages/FountainApps baseline-awareness-server`
- - `swift run --package-path Packages/FountainApps audiotalk-server`
+- `swift run --package-path Packages/FountainApps audiotalk-server`
 - Replace the product name to target other executables.
+
+Helpers:
+- `Scripts/run-audiotalk.sh` starts `audiotalk-server` with a default `LAUNCHER_SIGNATURE` and logs to `~/.fountain/audiotalk.log`.
 
 Refer to the workspace README for the full service map and development workflow.

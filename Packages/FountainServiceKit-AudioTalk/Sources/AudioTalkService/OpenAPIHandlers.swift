@@ -173,11 +173,41 @@ actor AudioTalkState {
 
     // Apply plan to notation session by appending annotated LilyPond comments.
     struct ApplyResult { let ok: Bool; let newETag: String; let appliedOps: [Components.Schemas.PlanOp]; let etagMismatch: Bool }
+    private func mapTokenToLily(_ token: String) -> String {
+        let t = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Heuristic: treat simple lily tokens as-is
+        if let first = t.first, "abcdefgABCDEFG".contains(first) {
+            return t
+        }
+        // Tempo: tempo:120 -> \tempo 4 = 120
+        if t.lowercased().hasPrefix("tempo:") {
+            let num = t.split(separator: ":").last.map(String.init) ?? "120"
+            return "\\tempo 4 = \(num)"
+        }
+        // Dynamics: p, mp, mf, f
+        let dyns: Set<String> = ["pp","p","mp","mf","f","ff"]
+        if dyns.contains(t.lowercased()) { return "\\\(t.lowercased())" }
+        // Default: text markup
+        let escaped = t.replacingOccurrences(of: "(", with: "\\(")
+            .replacingOccurrences(of: ")", with: "\\)")
+            .replacingOccurrences(of: "\\", with: "\\\\")
+        return "\\markup { \"\(escaped)\" }"
+    }
+
+    private func lilyForPlan(_ plan: Components.Schemas.Plan, label: String? = nil, anchor: Components.Schemas.ScriptAnchor? = nil) -> String {
+        var parts: [String] = []
+        if let label { parts.append("Cue: \(label)") }
+        if let s = anchor?.scene_number { parts.append("scene \(s)") }
+        if let l = anchor?.line { parts.append("line \(l)") }
+        let header = parts.isEmpty ? "% AudioTalk Cue" : "% AudioTalk \(parts.joined(separator: ", "))"
+        let tokens = plan.ops.map { op in mapTokenToLily(op.value ?? op.kind.rawValue) }
+        let body = tokens.joined(separator: " ")
+        return [header, "{ \(body) }"].joined(separator: "\n")
+    }
+
     func applyPlanToNotation(sessionId: String, ifMatch: String?, plan: Components.Schemas.Plan) async -> ApplyResult? {
-        let commentLines: String = plan.ops.map { op in
-            let val = op.value ?? ""
-            return "% AudioTalk \(op.kind.rawValue): \(val)"
-        }.joined(separator: "\n")
+        // Build Lily block from the plan tokens.
+        let block = lilyForPlan(plan)
         // Disk-backed store
         if let store {
             do {
@@ -185,7 +215,7 @@ actor AudioTalkState {
                 var e = try JSONDecoder().decode(NotationEntry.self, from: data)
                 if let ifm = ifMatch, ifm != e.eTag { return .init(ok: false, newETag: e.eTag, appliedOps: [], etagMismatch: true) }
                 let sep = e.source.isEmpty ? "" : "\n"
-                e.source += sep + commentLines + (commentLines.isEmpty ? "" : "\n")
+                e.source += sep + block + "\n"
                 e.eTag = newETag()
                 try await store.putDoc(corpusId: corpusId, collection: notationColl, id: sessionId, body: try JSONEncoder().encode(e))
                 return .init(ok: true, newETag: e.eTag, appliedOps: plan.ops, etagMismatch: false)
@@ -195,7 +225,7 @@ actor AudioTalkState {
         guard var e = notationMem[sessionId] else { return nil }
         if let ifm = ifMatch, ifm != e.eTag { return .init(ok: false, newETag: e.eTag, appliedOps: [], etagMismatch: true) }
         let sep = e.source.isEmpty ? "" : "\n"
-        e.source += sep + commentLines + (commentLines.isEmpty ? "" : "\n")
+        e.source += sep + block + "\n"
         e.eTag = newETag(); notationMem[sessionId] = e
         return .init(ok: true, newETag: e.eTag, appliedOps: plan.ops, etagMismatch: false)
     }
@@ -718,11 +748,76 @@ public struct AudioTalkOpenAPI: APIProtocol, @unchecked Sendable {
             }
             return .ok(.init(body: .csv(HTTPBody(csv))))
         case .some(.pdf):
-            // Placeholder PDF (not implemented): return empty body to satisfy content type
-            return .ok(.init(body: .pdf(HTTPBody(Data()))))
+            // Build a simple PDF with monospaced cue table.
+            let pdf = PDFBuilder().makeCueSheetPDF(cues: cues)
+            return .ok(.init(body: .pdf(HTTPBody(pdf))))
         default:
             let out = Components.Schemas.CueSheetResponse(cues: cues)
             return .ok(.init(body: .json(out)))
+        }
+    }
+
+    // MARK: - Minimal PDF builder for cue sheets
+    struct PDFBuilder {
+        func escape(_ s: String) -> String {
+            s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "(", with: "\\(").replacingOccurrences(of: ")", with: "\\)")
+        }
+        func lines(for cues: [Components.Schemas.CuePlan]) -> [String] {
+            var out: [String] = ["Cue Sheet"]
+            out.append("cue_id    scene line character label")
+            for c in cues {
+                let scene = c.anchor?.scene_number.map(String.init) ?? ""
+                let line = c.anchor?.line.map(String.init) ?? ""
+                let ch = c.anchor?.character ?? ""
+                let label = c.label ?? ""
+                out.append("\(c.cue_id.prefix(8))    \(scene)   \(line)   \(ch)   \(label)")
+            }
+            return out
+        }
+        func makeCueSheetPDF(cues: [Components.Schemas.CuePlan]) -> Data {
+            // Page size 612x792 (US Letter)
+            let pageWidth = 612, pageHeight = 792
+            var objects: [Data] = []
+            func obj(_ s: String) -> Data { Data(s.utf8) }
+            // 1: Catalog
+            objects.append(obj("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"))
+            // 2: Pages
+            objects.append(obj("2 0 obj\n<< /Type /Pages /Count 1 /Kids [3 0 R] >>\nendobj\n"))
+            // 5: Font
+            objects.append(obj("5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n"))
+            // 4: Content stream
+            let startY = 720
+            let dy = 16
+            var content = "BT\n/F1 12 Tf\n72 \(startY) Td\n"
+            for (idx, l) in lines(for: cues).enumerated() {
+                if idx > 0 { content += "0 -\(dy) Td\n" }
+                content += "(\(escape(l))) Tj\n"
+            }
+            content += "ET\n"
+            let contentData = Data(content.utf8)
+            objects.append(obj("4 0 obj\n<< /Length \(contentData.count) >>\nstream\n"))
+            objects.append(contentData)
+            objects.append(obj("endstream\nendobj\n"))
+            // 3: Page
+            objects.append(obj("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 \(pageWidth) \(pageHeight)] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n"))
+            // Assemble with xref
+            var output = Data("%PDF-1.4\n".utf8)
+            var offsets: [Int] = [0] // object 0 is free
+            var current = output.count
+            for objData in objects {
+                offsets.append(current)
+                output.append(objData)
+                current = output.count
+            }
+            let xrefStart = output.count
+            var xref = "xref\n0 \(offsets.count)\n0000000000 65535 f \n"
+            for off in offsets.dropFirst() {
+                xref += String(format: "%010d 00000 n \n", off)
+            }
+            output.append(Data(xref.utf8))
+            let trailer = "trailer\n<< /Size \(offsets.count) /Root 1 0 R >>\nstartxref\n\(xrefStart)\n%%EOF\n"
+            output.append(Data(trailer.utf8))
+            return output
         }
     }
 

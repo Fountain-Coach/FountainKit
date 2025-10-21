@@ -666,4 +666,49 @@ public struct AudioTalkOpenAPI: APIProtocol, @unchecked Sendable {
             return .ok(.init(body: .json(out)))
         }
     }
+
+    // MARK: - Screenplay → Notation bridge
+    public func applyScreenplayCuesToNotation(_ input: Operations.applyScreenplayCuesToNotation.Input) async throws -> Operations.applyScreenplayCuesToNotation.Output {
+        let screenplayId = input.path.id
+        guard case let .json(req) = input.body else { fatalError("generator ensured json body") }
+        let session = req.notation_session_id
+        // Load cues (persisted), or map on demand when missing.
+        var cues = await state.loadCues(id: screenplayId)
+        if cues == nil {
+            // Best-effort derive cues from current source.
+            if let (_, source) = await state.getScreenplaySource(id: screenplayId) {
+                let parsed = ScreenplayParser.parse(id: screenplayId, text: source)
+                // Derive simple cues from tags.
+                var derived: [Components.Schemas.CuePlan] = []
+                for n in parsed.model.notes ?? [] where n.kind == .tag {
+                    let plan = Components.Schemas.Plan(ops: [
+                        .init(id: UUID().uuidString, kind: .token, value: n.content, anchor: nil)
+                    ], meta: .init(origin: .user, confidence: 1.0, source: "screenplay"))
+                    let cue = Components.Schemas.CuePlan(cue_id: UUID().uuidString, label: n.content, anchor: n.anchor, plan: plan, links: .init(scene_id: nil, beat_id: nil))
+                    derived.append(cue)
+                }
+                cues = derived
+            }
+        }
+        let allOps: [Components.Schemas.PlanOp] = (cues ?? []).flatMap { $0.plan.ops }
+        let aggPlan = Components.Schemas.Plan(ops: allOps, meta: .init(origin: .user, confidence: 1.0, source: "cue-bridge"))
+        let ifm = input.headers.If_hyphen_Match
+        guard let result = await state.applyPlanToNotation(sessionId: session, ifMatch: ifm, plan: aggPlan) else {
+            let err = Components.Schemas.ErrorResponse(error: "Notation session not found", code: "notation_session_not_found", correlationId: nil)
+            return .notFound(.init(body: .json(err)))
+        }
+        if result.etagMismatch {
+            let conflict = Components.Schemas.Conflict(code: "etag_mismatch", message: "If-Match does not match current ETag", anchors: [])
+            let body = Components.Schemas.ApplyPlanResponse(appliedOps: [], conflicts: [conflict], scoreETag: result.newETag)
+            return .conflict(.init(body: .json(body)))
+        }
+        await state.appendJournal(type: "plan_applied", details: [
+            "screenplay_id": screenplayId,
+            "session_id": session,
+            "ops": String(result.appliedOps.count)
+        ])
+        let body = Components.Schemas.ApplyPlanResponse(appliedOps: result.appliedOps, conflicts: [], scoreETag: result.newETag)
+        let headers = Operations.applyScreenplayCuesToNotation.Output.Ok.Headers(ETag: result.newETag)
+        return .ok(.init(headers: headers, body: .json(body)))
+    }
 }

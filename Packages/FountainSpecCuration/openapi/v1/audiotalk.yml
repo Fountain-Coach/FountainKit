@@ -664,6 +664,52 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /audiotalk/screenplay/{id}/apply-to-notation:
+    post:
+      summary: Apply mapped cues to a notation session
+      description: Loads persisted cues (or maps on demand) and applies their plans to the given notation session atomically.
+      operationId: applyScreenplayCuesToNotation
+      tags: [Screenplay]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: If-Match
+          in: header
+          required: false
+          description: ETag of current notation score for optimistic concurrency.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyCuesRequest'
+      responses:
+        '200':
+          description: Applied to notation
+          headers:
+            ETag:
+              description: New ETag for the updated score state.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplyPlanResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: ETag conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplyPlanResponse'
+
 components:
   parameters:
     IdempotencyKey:
@@ -1152,3 +1198,11 @@ components:
           description: Event payload dependent on `event` type.
 
 # © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.
+    ApplyCuesRequest:
+      type: object
+      required: [notation_session_id]
+      properties:
+        notation_session_id: { type: string }
+        options:
+          type: object
+          additionalProperties: { type: string }

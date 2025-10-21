@@ -39,6 +39,7 @@ For a repository‑wide index of OpenAPI coverage and adoption status, see [../O
 | Semantic Browser & Dissector API | 0.2.1 | Contexter alias Benedikt Eickhoff | [v1/semantic-browser.yml](v1/semantic-browser.yml) |
 | Tool Server | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/tool-server.yml](v1/tool-server.yml) |
 | Tools Factory Service | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/tools-factory.yml](v1/tools-factory.yml) |
+| AudioTalk Service | 0.1.0 | Contexter alias Benedikt Eickhoff | [v1/audiotalk.yml](v1/audiotalk.yml) |
 
 ## Coverage Status
 
@@ -61,6 +62,7 @@ This section tracks ownership and adoption of Apple’s Swift OpenAPI Generator.
 | `v1/dns.yml` | (Gateway DNS management) | Not wired to a Swift target | `FountainAPIClients/DNSAPI` generator enabled |
 | `v1/llm-gateway.yml` | Gateway plugin (no standalone server) | Manual plugin, generator not configured | `FountainAPIClients/LLMGatewayAPI` generator enabled |
 | `v1/openapi-curator.yml` | `FountainTooling/openapi-curator-service` | Pending | Pending |
+| `v1/audiotalk.yml` | `FountainServiceKit-AudioTalk/AudioTalkService` | Pending | Pending |
 
 
 ## Gateway Plugins

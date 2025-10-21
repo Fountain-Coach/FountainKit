@@ -1,0 +1,772 @@
+---
+openapi: 3.1.0
+info:
+  title: FountainAI AudioTalk Service
+  description: >
+    Natural language to symbolic music planning, notation updates, and MIDI 2.0
+    (UMP) preview orchestration. The API follows an OpenAPI‑first contract and
+    applies the Drift–Pattern–Reflection architecture. Contracts adopt proven
+    MemChat patterns for idempotency, streaming, journaling, and consistency.
+  version: 0.1.0
+  license:
+    name: FountainAI Internal
+    url: https://fountain.coach/licenses/internal
+servers:
+  - url: https://audiotalk.fountain.coach/api
+    description: Production AudioTalk
+  - url: http://localhost:8080/audiotalk/v1
+    description: Local development
+security: []
+paths:
+  /audiotalk/meta/health:
+    get:
+      summary: Health check
+      operationId: getAudioTalkHealth
+      tags: [Meta]
+      responses:
+        '200':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /audiotalk/meta/capabilities:
+    get:
+      summary: Enumerate service capabilities
+      operationId: getAudioTalkCapabilities
+      tags: [Meta]
+      responses:
+        '200':
+          description: Capabilities payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Capabilities'
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /audiotalk/sessions:
+    post:
+      summary: Create AudioTalk session
+      description: >
+        Initializes server defaults and returns negotiated capabilities. Clients
+        store the returned `session_id` and use it for subsequent requests.
+      operationId: createAudioTalkSession
+      tags: [Sessions]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionCreateRequest'
+      responses:
+        '201':
+          description: Session created
+          headers:
+            ETag:
+              description: Version tag for the newly created session state.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionCreateResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /audiotalk/dictionary:
+    get:
+      summary: List discoverable tokens and mappings
+      operationId: listDictionary
+      tags: [Dictionary]
+      parameters:
+        - $ref: '#/components/parameters/PageAfter'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Token list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DictionaryList'
+        '400': { $ref: '#/components/responses/BadRequest' }
+    post:
+      summary: Upsert tokens (admin)
+      description: Uses idempotency; safe to retry with the same key.
+      operationId: upsertDictionary
+      tags: [Dictionary]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DictionaryUpsertRequest'
+      responses:
+        '200':
+          description: Upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DictionaryUpsertResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /audiotalk/macros:
+    get:
+      summary: List macros
+      operationId: listMacros
+      tags: [Macros]
+      parameters:
+        - $ref: '#/components/parameters/PageAfter'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Macro list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MacroList'
+        '400': { $ref: '#/components/responses/BadRequest' }
+    post:
+      summary: Create macro from a plan
+      operationId: createMacro
+      tags: [Macros]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MacroCreateRequest'
+      responses:
+        '201':
+          description: Macro created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Macro'
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /audiotalk/macros/{macroId}/promote:
+    post:
+      summary: Promote a macro to approved
+      operationId: promoteMacro
+      tags: [Macros]
+      parameters:
+        - name: macroId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestID'
+      responses:
+        '200':
+          description: Macro promoted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Macro'
+        '404':
+          description: Macro not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /audiotalk/intent:
+    post:
+      summary: Parse a natural phrase into a typed plan
+      description: Returns a deterministic plan with anchors and metadata.
+      operationId: parseIntent
+      tags: [Intent]
+      parameters:
+        - $ref: '#/components/parameters/RequestID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntentRequest'
+      responses:
+        '200':
+          description: Plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntentResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /audiotalk/intent/stream:
+    post:
+      summary: Stream plan construction for a phrase (SSE)
+      description: Emits tokenization, interpretation, critique, and draft plan events.
+      operationId: parseIntentStream
+      tags: [Intent]
+      parameters:
+        - $ref: '#/components/parameters/RequestID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IntentRequest'
+      responses:
+        '202':
+          description: Streaming response
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/AudioTalkStreamEvent'
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /audiotalk/intent/apply:
+    post:
+      summary: Apply a plan atomically
+      description: Uses optimistic concurrency with ETags to avoid clobbering concurrent edits.
+      operationId: applyPlan
+      tags: [Intent]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestID'
+        - name: If-Match
+          in: header
+          required: false
+          description: ETag of the current score state to enforce optimistic concurrency.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplyPlanRequest'
+      responses:
+        '200':
+          description: Plan applied
+          headers:
+            ETag:
+              description: New ETag for the updated score state.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplyPlanResponse'
+        '409':
+          description: Conflicts detected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplyPlanResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /audiotalk/journal:
+    get:
+      summary: List journal events
+      operationId: listJournal
+      tags: [Journal]
+      parameters:
+        - $ref: '#/components/parameters/PageAfter'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Event page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalList'
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /audiotalk/journal/stream:
+    get:
+      summary: Stream journal events (SSE)
+      operationId: streamJournal
+      tags: [Journal]
+      responses:
+        '200':
+          description: Streaming response
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/AudioTalkStreamEvent'
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /audiotalk/notation/sessions:
+    post:
+      summary: Create a notation session
+      operationId: createNotationSession
+      tags: [Notation]
+      responses:
+        '201':
+          description: Notation session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotationSession'
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /audiotalk/notation/{id}:
+    get:
+      summary: Fetch notation metadata
+      operationId: getNotationSession
+      tags: [Notation]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Session metadata
+          headers:
+            ETag:
+              description: Version tag for the current score.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotationSession'
+        '404':
+          description: Notation session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /audiotalk/notation/{id}/score:
+    put:
+      summary: Upload or replace LilyPond source
+      operationId: putLilySource
+      tags: [Notation]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: If-Match
+          in: header
+          required: false
+          description: ETag of the current score state to enforce optimistic concurrency.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema:
+              type: string
+      responses:
+        '200':
+          description: Updated
+          headers:
+            ETag:
+              description: New ETag for the updated score state.
+              schema: { type: string }
+        '412':
+          description: Precondition failed (ETag mismatch)
+    get:
+      summary: Fetch LilyPond source
+      operationId: getLilySource
+      tags: [Notation]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: LilyPond source
+          headers:
+            ETag:
+              description: Version tag for the current score.
+              schema: { type: string }
+          content:
+            text/plain:
+              schema:
+                type: string
+        '404':
+          description: Notation session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /audiotalk/notation/{id}/render:
+    post:
+      summary: Render LilyPond into artifacts
+      operationId: renderNotation
+      tags: [Notation]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenderRequest'
+      responses:
+        '200':
+          description: Rendered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RenderResponse'
+        '404':
+          description: Notation session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /audiotalk/ump/{session}/send:
+    post:
+      summary: Send batch UMP packets (MIDI 2.0)
+      operationId: sendUMPBatch
+      tags: [MIDI]
+      parameters:
+        - name: session
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UMPBatch'
+      responses:
+        '202':
+          description: Accepted for playback
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Unique key used to make POST/PUT requests idempotent.
+      schema:
+        type: string
+    RequestID:
+      name: X-Request-ID
+      in: header
+      required: false
+      description: Correlation identifier echoed by the server.
+      schema:
+        type: string
+    PageAfter:
+      name: page[after]
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Cursor for next page retrieval.
+    PageSize:
+      name: page[size]
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+      description: Maximum number of items per page.
+  responses:
+    BadRequest:
+      description: Malformed request payload.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Human readable error message.
+        code:
+          type: string
+          description: Stable error code for programmatic handling.
+        correlationId:
+          type: string
+          description: Echo of X-Request-ID when provided.
+    Capabilities:
+      type: object
+      properties:
+        rendering:
+          type: boolean
+          description: Whether PNG/SVG rendering is available in the deployment.
+        ump_streaming:
+          type: boolean
+          description: Whether UMP streaming is available.
+        reflection:
+          type: boolean
+          description: Whether critique and snapshot comparison endpoints are enabled.
+    SessionCreateRequest:
+      type: object
+      properties:
+        defaults:
+          type: object
+          additionalProperties:
+            type: string
+          description: Optional default parameters such as instrument or tempo.
+    SessionCreateResponse:
+      type: object
+      required: [session_id, capabilities]
+      properties:
+        session_id:
+          type: string
+        capabilities:
+          $ref: '#/components/schemas/Capabilities'
+    DictionaryItem:
+      type: object
+      required: [token, value]
+      properties:
+        token: { type: string }
+        value: { type: string }
+        description:
+          type: string
+          description: Human description of the token mapping.
+    DictionaryList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DictionaryItem'
+        nextPage:
+          type: [string, 'null']
+    DictionaryUpsertRequest:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DictionaryItem'
+    DictionaryUpsertResponse:
+      type: object
+      properties:
+        updated:
+          type: integer
+    Macro:
+      type: object
+      required: [id, state, plan]
+      properties:
+        id: { type: string }
+        state:
+          type: string
+          enum: [proposed, approved, deprecated]
+        plan:
+          $ref: '#/components/schemas/Plan'
+        created_at:
+          type: string
+          format: date-time
+    MacroList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Macro' }
+        nextPage:
+          type: [string, 'null']
+    MacroCreateRequest:
+      type: object
+      required: [id, plan]
+      properties:
+        id: { type: string }
+        plan: { $ref: '#/components/schemas/Plan' }
+    IntentRequest:
+      type: object
+      required: [phrase]
+      properties:
+        phrase:
+          type: string
+          description: Natural language phrase to interpret.
+        context:
+          type: object
+          additionalProperties:
+            type: string
+          description: Optional context hints.
+    IntentResponse:
+      type: object
+      required: [plan]
+      properties:
+        plan:
+          $ref: '#/components/schemas/Plan'
+        tokens:
+          type: array
+          items: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
+    ApplyPlanRequest:
+      type: object
+      required: [session_id, plan]
+      properties:
+        session_id: { type: string }
+        plan: { $ref: '#/components/schemas/Plan' }
+    ApplyPlanResponse:
+      type: object
+      properties:
+        appliedOps:
+          type: array
+          items: { $ref: '#/components/schemas/PlanOp' }
+        conflicts:
+          type: array
+          items: { $ref: '#/components/schemas/Conflict' }
+        scoreETag:
+          type: string
+          description: New ETag after applying the plan.
+    Anchor:
+      type: object
+      description: Positioning information to locate plan effects.
+      properties:
+        anchorId:
+          type: string
+          description: Stable identifier to correlate across edits.
+        measure:
+          type: integer
+          minimum: 1
+        beat:
+          type: number
+          minimum: 0
+        staff:
+          type: string
+        voice:
+          type: string
+        pitch:
+          type: string
+          description: Scientific pitch notation (e.g., C4, F#3) when applicable.
+    Plan:
+      type: object
+      required: [ops]
+      properties:
+        ops:
+          type: array
+          items: { $ref: '#/components/schemas/PlanOp' }
+        meta:
+          $ref: '#/components/schemas/PlanMeta'
+    PlanMeta:
+      type: object
+      properties:
+        origin:
+          type: string
+          enum: [user, llm, macro]
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        source:
+          type: string
+          description: Optional source identifier (e.g., model name or macro id).
+    PlanOp:
+      type: object
+      required: [kind]
+      properties:
+        id: { type: string }
+        kind:
+          type: string
+          enum: [token, articulation, dynamic, tempo_change, macro_call, tie, beam_group]
+        value:
+          type: string
+          description: Free‑form value for simple operations (e.g., token or macro id).
+        anchor:
+          $ref: '#/components/schemas/Anchor'
+    Conflict:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        anchors:
+          type: array
+          items: { $ref: '#/components/schemas/Anchor' }
+    NotationSession:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string }
+        created_at:
+          type: string
+          format: date-time
+    RenderRequest:
+      type: object
+      properties:
+        formats:
+          type: array
+          items:
+            type: string
+            enum: [png, svg, pdf]
+          default: [png]
+    RenderResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        artifacts:
+          type: array
+          items:
+            type: string
+            description: URI to the rendered artifact.
+    UMPBatch:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [ump]
+            properties:
+              jr_timestamp:
+                type: integer
+                description: JR Clock timestamp, if applicable.
+              host_time_ns:
+                type: integer
+                description: Host time in nanoseconds for scheduling.
+              ump:
+                type: string
+                description: Hex‑encoded UMP packet.
+    JournalEvent:
+      type: object
+      required: [type, ts]
+      properties:
+        id: { type: string }
+        type:
+          type: string
+          enum: [received, planned, applying, applied, conflicted, snapshot_ready]
+        ts:
+          type: string
+          format: date-time
+        correlationId:
+          type: string
+        details:
+          type: object
+          additionalProperties:
+            type: string
+    JournalList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/JournalEvent' }
+        nextPage:
+          type: [string, 'null']
+    AudioTalkStreamEvent:
+      type: object
+      description: Server‑sent event frame for AudioTalk.
+      required: [event]
+      properties:
+        id: { type: string }
+        event:
+          type: string
+          enum: [token, plan, critique, apply_progress, snapshot, error, completion]
+        data:
+          type: object
+          description: Event payload dependent on `event` type.
+
+# © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

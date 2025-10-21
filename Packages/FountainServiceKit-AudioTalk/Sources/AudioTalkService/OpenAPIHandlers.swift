@@ -1,5 +1,6 @@
 import Foundation
 import OpenAPIRuntime
+import MIDI2Transports
 
 actor AudioTalkState {
     struct NotationEntry { var source: String; var eTag: String; var createdAt: Date }
@@ -242,16 +243,28 @@ public struct AudioTalkOpenAPI: APIProtocol, @unchecked Sendable {
             let err = Components.Schemas.ErrorResponse(error: "Bad Request", code: "bad_request", correlationId: nil)
             return .badRequest(.init(body: .json(err)))
         }
-        func isValidHex(_ s: String) -> Bool {
-            if s.isEmpty || (s.count % 2) != 0 { return false }
+        func hexWords(_ s: String) -> [UInt32]? {
             let allowed = CharacterSet(charactersIn: "0123456789abcdefABCDEF")
-            return s.unicodeScalars.allSatisfy { allowed.contains($0) }
+            if s.isEmpty || (s.count % 8) != 0 { return nil }
+            if !s.unicodeScalars.allSatisfy({ allowed.contains($0) }) { return nil }
+            var words: [UInt32] = []
+            var i = s.startIndex
+            while i < s.endIndex {
+                let j = s.index(i, offsetBy: 8)
+                let chunk = String(s[i..<j])
+                guard let val = UInt32(chunk, radix: 16) else { return nil }
+                words.append(val)
+                i = j
+            }
+            return words
         }
+        let transport = LoopbackTransport()
         for item in batch.items {
-            if !isValidHex(item.ump) {
+            guard let words = hexWords(item.ump) else {
                 let err = Components.Schemas.ErrorResponse(error: "Invalid UMP hex", code: "invalid_ump_hex", correlationId: nil)
                 return .badRequest(.init(body: .json(err)))
             }
+            try? transport.send(umpWords: words)
         }
         return .accepted(.init())
     }

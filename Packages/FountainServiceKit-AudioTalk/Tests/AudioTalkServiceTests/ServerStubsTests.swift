@@ -95,4 +95,16 @@ final class ServerStubsTests: XCTestCase {
         let rejected = try await api.sendUMPBatch(.init(path: .init(session: "s1"), body: .json(bad)))
         guard case .badRequest = rejected else { return XCTFail("expected 400 bad request") }
     }
+
+    func testSSEEndpoints() async throws {
+        let api = AudioTalkOpenAPI(state: AudioTalkState())
+        // parseIntentStream returns 202 with text/event-stream body
+        let intentOut = try await api.parseIntentStream(.init(body: .json(.init(phrase: "p", context: nil))))
+        guard case .accepted(let acc) = intentOut else { return XCTFail("expected 202 accepted") }
+        switch acc.body { case .text_event_hyphen_stream: break }
+        // streamJournal returns 200 with text/event-stream body
+        let journalOut = try await api.streamJournal(.init())
+        guard case .ok(let ok) = journalOut else { return XCTFail("expected 200 ok") }
+        switch ok.body { case .text_event_hyphen_stream: break }
+    }
 }

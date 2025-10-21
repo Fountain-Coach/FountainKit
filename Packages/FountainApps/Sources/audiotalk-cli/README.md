@@ -35,6 +35,11 @@ swift run --package-path Packages/FountainApps audiotalk-cli dictionary upsert -
 swift run --package-path Packages/FountainApps audiotalk-cli intent parse "legato crescendo warm"
 ```
 
+- Apply plan to notation session from tokens
+```
+swift run --package-path Packages/FountainApps audiotalk-cli intent apply --if-match <etag> <session-id> legato crescendo warm
+```
+
 ### Notation
 
 - New session

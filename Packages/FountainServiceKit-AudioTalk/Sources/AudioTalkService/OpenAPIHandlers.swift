@@ -16,21 +16,26 @@ public struct AudioTalkOpenAPI: APIProtocol, @unchecked Sendable {
 
     // MARK: - Meta
     public func getAudioTalkHealth(_ input: Operations.getAudioTalkHealth.Input) async throws -> Operations.getAudioTalkHealth.Output {
-        return .undocumented(statusCode: 200, OpenAPIRuntime.UndocumentedPayload())
+        let payload = Operations.getAudioTalkHealth.Output.Ok.Body.jsonPayload(ok: true)
+        return .ok(.init(body: .json(payload)))
     }
 
     public func getAudioTalkCapabilities(_ input: Operations.getAudioTalkCapabilities.Input) async throws -> Operations.getAudioTalkCapabilities.Output {
-        return .undocumented(statusCode: 200, OpenAPIRuntime.UndocumentedPayload())
+        let caps = Components.Schemas.Capabilities(rendering: false, ump_streaming: true, reflection: false)
+        return .ok(.init(body: .json(caps)))
     }
 
     // MARK: - Sessions
     public func createAudioTalkSession(_ input: Operations.createAudioTalkSession.Input) async throws -> Operations.createAudioTalkSession.Output {
-        return .undocumented(statusCode: 201, OpenAPIRuntime.UndocumentedPayload())
+        let caps = Components.Schemas.Capabilities(rendering: false, ump_streaming: true, reflection: false)
+        let out = Components.Schemas.SessionCreateResponse(session_id: UUID().uuidString, capabilities: caps)
+        return .created(.init(body: .json(out)))
     }
 
     // MARK: - Dictionary
     public func listDictionary(_ input: Operations.listDictionary.Input) async throws -> Operations.listDictionary.Output {
-        return .undocumented(statusCode: 200, OpenAPIRuntime.UndocumentedPayload())
+        let out = Components.Schemas.DictionaryList(items: [], nextPage: nil)
+        return .ok(.init(body: .json(out)))
     }
 
     public func upsertDictionary(_ input: Operations.upsertDictionary.Input) async throws -> Operations.upsertDictionary.Output {
@@ -39,7 +44,8 @@ public struct AudioTalkOpenAPI: APIProtocol, @unchecked Sendable {
 
     // MARK: - Macros
     public func listMacros(_ input: Operations.listMacros.Input) async throws -> Operations.listMacros.Output {
-        return .undocumented(statusCode: 200, OpenAPIRuntime.UndocumentedPayload())
+        let out = Components.Schemas.MacroList(items: [], nextPage: nil)
+        return .ok(.init(body: .json(out)))
     }
 
     public func createMacro(_ input: Operations.createMacro.Input) async throws -> Operations.createMacro.Output {
@@ -66,7 +72,8 @@ public struct AudioTalkOpenAPI: APIProtocol, @unchecked Sendable {
 
     // MARK: - Journal
     public func listJournal(_ input: Operations.listJournal.Input) async throws -> Operations.listJournal.Output {
-        return .undocumented(statusCode: 200, OpenAPIRuntime.UndocumentedPayload())
+        let out = Components.Schemas.JournalList(items: [], nextPage: nil)
+        return .ok(.init(body: .json(out)))
     }
     public func streamJournal(_ input: Operations.streamJournal.Input) async throws -> Operations.streamJournal.Output {
         return .undocumented(statusCode: 200, OpenAPIRuntime.UndocumentedPayload())
@@ -74,10 +81,12 @@ public struct AudioTalkOpenAPI: APIProtocol, @unchecked Sendable {
 
     // MARK: - Notation
     public func createNotationSession(_ input: Operations.createNotationSession.Input) async throws -> Operations.createNotationSession.Output {
-        return .undocumented(statusCode: 201, OpenAPIRuntime.UndocumentedPayload())
+        let out = Components.Schemas.NotationSession(id: UUID().uuidString, created_at: Date())
+        return .created(.init(body: .json(out)))
     }
     public func getNotationSession(_ input: Operations.getNotationSession.Input) async throws -> Operations.getNotationSession.Output {
-        return .undocumented(statusCode: 200, OpenAPIRuntime.UndocumentedPayload())
+        let out = Components.Schemas.NotationSession(id: input.path.id, created_at: Date())
+        return .ok(.init(body: .json(out)))
     }
     public func putLilySource(_ input: Operations.putLilySource.Input) async throws -> Operations.putLilySource.Output {
         return .undocumented(statusCode: 200, OpenAPIRuntime.UndocumentedPayload())
@@ -86,7 +95,8 @@ public struct AudioTalkOpenAPI: APIProtocol, @unchecked Sendable {
         return .undocumented(statusCode: 200, OpenAPIRuntime.UndocumentedPayload())
     }
     public func renderNotation(_ input: Operations.renderNotation.Input) async throws -> Operations.renderNotation.Output {
-        return .undocumented(statusCode: 200, OpenAPIRuntime.UndocumentedPayload())
+        let out = Components.Schemas.RenderResponse(ok: true, artifacts: [])
+        return .ok(.init(body: .json(out)))
     }
 
     // MARK: - MIDI (UMP)
@@ -96,7 +106,9 @@ public struct AudioTalkOpenAPI: APIProtocol, @unchecked Sendable {
 
     // MARK: - Screenplay (.fountain)
     public func createScreenplaySession(_ input: Operations.createScreenplaySession.Input) async throws -> Operations.createScreenplaySession.Output {
-        return .undocumented(statusCode: 201, OpenAPIRuntime.UndocumentedPayload())
+        let caps = Components.Schemas.Capabilities(rendering: false, ump_streaming: true, reflection: false)
+        let out = Components.Schemas.ScreenplaySession(id: UUID().uuidString, created_at: Date(), capabilities: caps)
+        return .created(.init(body: .json(out)))
     }
     public func putScreenplaySource(_ input: Operations.putScreenplaySource.Input) async throws -> Operations.putScreenplaySource.Output {
         return .undocumented(statusCode: 200, OpenAPIRuntime.UndocumentedPayload())
@@ -105,15 +117,19 @@ public struct AudioTalkOpenAPI: APIProtocol, @unchecked Sendable {
         return .undocumented(statusCode: 200, OpenAPIRuntime.UndocumentedPayload())
     }
     public func parseScreenplay(_ input: Operations.parseScreenplay.Input) async throws -> Operations.parseScreenplay.Output {
-        return .undocumented(statusCode: 200, OpenAPIRuntime.UndocumentedPayload())
+        let model = Components.Schemas.ScreenplayModel(scenes: [], beats: [], notes: [], characters: [], arcs: [])
+        let out = Components.Schemas.ScreenplayParseResponse(model: model, warnings: [])
+        return .ok(.init(body: .json(out)))
     }
     public func parseScreenplayStream(_ input: Operations.parseScreenplayStream.Input) async throws -> Operations.parseScreenplayStream.Output {
         return .undocumented(statusCode: 202, OpenAPIRuntime.UndocumentedPayload())
     }
     public func mapScreenplayCues(_ input: Operations.mapScreenplayCues.Input) async throws -> Operations.mapScreenplayCues.Output {
-        return .undocumented(statusCode: 200, OpenAPIRuntime.UndocumentedPayload())
+        let payload = Operations.mapScreenplayCues.Output.Ok.Body.jsonPayload(cues: [])
+        return .ok(.init(body: .json(payload)))
     }
     public func getCueSheet(_ input: Operations.getCueSheet.Input) async throws -> Operations.getCueSheet.Output {
-        return .undocumented(statusCode: 200, OpenAPIRuntime.UndocumentedPayload())
+        let out = Components.Schemas.CueSheetResponse(cues: [])
+        return .ok(.init(body: .json(out)))
     }
 }

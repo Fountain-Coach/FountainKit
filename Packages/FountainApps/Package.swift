@@ -20,7 +20,8 @@ let package = Package(
         .executable(name: "tutor-dashboard", targets: ["tutor-dashboard"]),
         .executable(name: "FountainLauncherUI", targets: ["FountainLauncherUI"]),
         .executable(name: "local-agent-manager", targets: ["local-agent-manager"]),
-        .executable(name: "mock-localagent-server", targets: ["mock-localagent-server"])
+        .executable(name: "mock-localagent-server", targets: ["mock-localagent-server"]),
+        .executable(name: "audiotalk-server", targets: ["audiotalk-server"])
         ,
         .executable(name: "engraver-studio-app", targets: ["engraver-studio-app"]),
         .executable(name: "gateway-console", targets: ["gateway-console"]),
@@ -53,6 +54,7 @@ let package = Package(
         .package(path: "../FountainServiceKit-Bootstrap"),
         .package(path: "../FountainServiceKit-Awareness"),
         .package(path: "../FountainServiceKit-Persist"),
+        .package(path: "../FountainServiceKit-AudioTalk"),
         
         .package(path: "../FountainServiceKit-ToolsFactory"),
         .package(path: "../FountainServiceKit-ToolServer"),
@@ -238,6 +240,14 @@ let package = Package(
                 .product(name: "LauncherSignature", package: "FountainCore")
             ],
             exclude: ["README.md"]
+        ),
+        .executableTarget(
+            name: "audiotalk-server",
+            dependencies: [
+                .product(name: "FountainRuntime", package: "FountainCore"),
+                .product(name: "AudioTalkService", package: "FountainServiceKit-AudioTalk"),
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ]
         ),
         .executableTarget(
             name: "publishing-frontend",

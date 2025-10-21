@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AudioTalk — Minimal Console</title>
+  <style>
+    body { font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif; margin: 2rem; }
+    h1 { margin-top: 0; }
+    section { margin-bottom: 1.5rem; }
+    input[type=text], textarea { width: 100%; max-width: 40rem; }
+    pre { background: #111; color: #0f0; padding: .75rem; overflow:auto; max-width: 60rem; }
+    .row { display:flex; gap:.5rem; align-items:center; }
+    small { color:#666 }
+  </style>
+  <script>
+    async function health() {
+      const r = await fetch('/audiotalk/meta/health');
+      document.getElementById('out').textContent = await r.text();
+    }
+    async function parseIntent() {
+      const phrase = document.getElementById('phrase').value;
+      const r = await fetch('/audiotalk/intent', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({phrase})});
+      document.getElementById('out').textContent = await r.text();
+    }
+    async function newNotation() {
+      const r = await fetch('/audiotalk/notation/sessions', {method:'POST'});
+      const t = await r.json();
+      document.getElementById('notationId').value = t.id;
+      document.getElementById('out').textContent = JSON.stringify(t, null, 2);
+    }
+    async function getScore() {
+      const id = document.getElementById('notationId').value;
+      const r = await fetch(`/audiotalk/notation/${id}/score`);
+      const etag = r.headers.get('ETag');
+      document.getElementById('notationETag').value = etag || '';
+      document.getElementById('out').textContent = await r.text();
+    }
+    async function putScore() {
+      const id = document.getElementById('notationId').value;
+      const etag = document.getElementById('notationETag').value;
+      const body = document.getElementById('lily').value;
+      const r = await fetch(`/audiotalk/notation/${id}/score`, { method:'PUT', headers:{'If-Match': etag}, body });
+      document.getElementById('out').textContent = r.status + ' ' + (r.statusText||'');
+    }
+  </script>
+</head>
+<body>
+  <h1>AudioTalk — Minimal Console</h1>
+  <p><small>Spec: <a href="/openapi.yaml">/openapi.yaml</a></small></p>
+  <section>
+    <button onclick="health()">Health</button>
+  </section>
+  <section>
+    <div class="row">
+      <input id="phrase" type="text" placeholder="e.g., legato crescendo" />
+      <button onclick="parseIntent()">Parse Intent</button>
+    </div>
+  </section>
+  <section>
+    <div class="row">
+      <button onclick="newNotation()">New Notation Session</button>
+      <input id="notationId" type="text" placeholder="notation id" />
+      <button onclick="getScore()">Get Score</button>
+      <input id="notationETag" type="text" placeholder="ETag" />
+    </div>
+    <textarea id="lily" rows="6" placeholder="% lily\nc'4"></textarea>
+    <div><button onclick="putScore()">Put Score (If-Match)</button></div>
+  </section>
+  <section>
+    <h3>Output</h3>
+    <pre id="out"></pre>
+  </section>
+</body>
+</html>
+

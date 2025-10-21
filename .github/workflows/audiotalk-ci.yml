@@ -1,0 +1,55 @@
+name: AudioTalk CI Smoke
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  audiotalk-smoke:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Build audiotalk server and cli
+        run: |
+          swift build --product audiotalk-server --package-path Packages/FountainApps
+          swift build --product audiotalk-ci-smoke --package-path Packages/FountainApps
+
+      - name: Start audiotalk-server
+        env:
+          AUDIOTALK_PORT: '8080'
+        run: |
+          nohup swift run --package-path Packages/FountainApps audiotalk-server > server.log 2>&1 &
+          echo $! > server.pid
+          echo "Waiting for health..."
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8080/audiotalk/meta/health >/dev/null; then echo ready; break; fi
+            sleep 1
+          done
+
+      - name: Run audiotalk smoke
+        env:
+          AUDIOTALK_BASE_URL: http://127.0.0.1:8080
+        run: swift run --package-path Packages/FountainApps audiotalk-ci-smoke
+
+      - name: Upload server logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audiotalk-server-logs
+          path: |
+            server.log
+            server.pid
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -f server.pid ]; then kill -9 $(cat server.pid) || true; fi
+

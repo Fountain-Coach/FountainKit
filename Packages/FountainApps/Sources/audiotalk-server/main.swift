@@ -16,6 +16,11 @@ Task {
             if let data = try? Data(contentsOf: url) {
                 return HTTPResponse(status: 200, headers: ["Content-Type": "application/yaml"], body: data)
             }
+        } else if req.path == "/" || req.path == "/index.html" {
+            let url = URL(fileURLWithPath: "Packages/FountainApps/Sources/audiotalk-server/Static/index.html")
+            if let data = try? Data(contentsOf: url) {
+                return HTTPResponse(status: 200, headers: ["Content-Type": "text/html; charset=utf-8"], body: data)
+            }
         }
         return HTTPResponse(status: 404)
     }

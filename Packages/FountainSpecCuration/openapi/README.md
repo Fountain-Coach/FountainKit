@@ -63,6 +63,7 @@ This section tracks ownership and adoption of Apple’s Swift OpenAPI Generator.
 | `v1/llm-gateway.yml` | Gateway plugin (no standalone server) | Manual plugin, generator not configured | `FountainAPIClients/LLMGatewayAPI` generator enabled |
 | `v1/openapi-curator.yml` | `FountainTooling/openapi-curator-service` | Pending | Pending |
 | `v1/audiotalk.yml` | `FountainServiceKit-AudioTalk/AudioTalkService` | Pending | Pending |
+| `v1/audiotalk.yml` | `FountainServiceKit-AudioTalk/AudioTalkService` | Generator configured (types, server stubs pending) | `FountainAPIClients/AudioTalkAPI` generator enabled |
 
 
 ## Gateway Plugins

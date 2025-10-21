@@ -238,7 +238,22 @@ public struct AudioTalkOpenAPI: APIProtocol, @unchecked Sendable {
 
     // MARK: - MIDI (UMP)
     public func sendUMPBatch(_ input: Operations.sendUMPBatch.Input) async throws -> Operations.sendUMPBatch.Output {
-        return .undocumented(statusCode: 202, OpenAPIRuntime.UndocumentedPayload())
+        guard case let .json(batch) = input.body else {
+            let err = Components.Schemas.ErrorResponse(error: "Bad Request", code: "bad_request", correlationId: nil)
+            return .badRequest(.init(body: .json(err)))
+        }
+        func isValidHex(_ s: String) -> Bool {
+            if s.isEmpty || (s.count % 2) != 0 { return false }
+            let allowed = CharacterSet(charactersIn: "0123456789abcdefABCDEF")
+            return s.unicodeScalars.allSatisfy { allowed.contains($0) }
+        }
+        for item in batch.items {
+            if !isValidHex(item.ump) {
+                let err = Components.Schemas.ErrorResponse(error: "Invalid UMP hex", code: "invalid_ump_hex", correlationId: nil)
+                return .badRequest(.init(body: .json(err)))
+            }
+        }
+        return .accepted(.init())
     }
 
     // MARK: - Screenplay (.fountain)

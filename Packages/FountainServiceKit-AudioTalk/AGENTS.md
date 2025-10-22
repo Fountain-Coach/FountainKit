@@ -53,6 +53,19 @@ Observability
 - Journal endpoint lists timeline with anchors/timestamps; stream endpoint mirrors persistence.
 - Minimal metrics: parse/map/apply counters and durations.
 
+Chat alignment (Studio integration)
+- Provide chat‑friendly endpoints already present in spec: `intent` (parseIntent/stream) and `intent/apply` to bridge plan preview → apply.
+- Responses MUST include:
+  - Anchors into the screenplay (scene/line) and any score anchors when available.
+  - Human‑readable summaries for chat preview cards.
+  - ETag of source/score involved so Apply/Undo are idempotent.
+- SSE streaming supported for long analyses; partials must be coherent.
+
+Acceptance (chat path)
+- Given text “soften after Scene 2”, `parseIntent` yields a deterministic plan referencing known anchors.
+- `intent/apply` applies only if ETag unchanged; otherwise returns conflict with guidance.
+- Journal records both preview (non‑mutating) and apply (mutating) events distinctly.
+
 Testing
 - Unit: ScreenplayParser, cue mapping, Lily anchor parsing, PDF builder.
 - Integration: ETag concurrency tests; UMP persistence; SSE streaming.

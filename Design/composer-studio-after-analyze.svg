@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1440" height="900" viewBox="0 0 1440 900" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .label{font: 14px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; fill:#555}
+    .title{font: 16px -apple-system, BlinkMacSystemFont; font-weight:600; fill:#222}
+    .mono{font: 14px Menlo, Consolas, monospace; fill:#111}
+    .hint{font: 12px -apple-system; fill:#888}
+  </style>
+  <!-- Frame -->
+  <rect x="0" y="0" width="1440" height="900" fill="#f4f4f4"/>
+
+  <!-- Left column (editor) -->
+  <rect x="48" y="64" width="360" height="560" rx="8" fill="#ffffff" stroke="#e0e0e0"/>
+  <text class="title" x="56" y="56">Screenplay</text>
+  <text class="mono" x="64" y="96">Title: A New Piece</text>
+  <text class="mono" x="64" y="124">INT. ROOM — DAY</text>
+  <text class="mono" x="64" y="152">The composer sits at the desk.</text>
+  <text class="mono" x="64" y="182">[[AudioTalk: mood gentle]]</text>
+
+  <!-- Journal (below editor) -->
+  <text class="title" x="56" y="650">Journal</text>
+  <rect x="48" y="660" width="360" height="180" rx="8" fill="#ffffff" stroke="#e0e0e0"/>
+  <text class="hint" x="64" y="688">10:24 analyzed • 10:26 applied</text>
+
+  <!-- Right column: Preview card (slides in above chat) -->
+  <text class="title" x="432" y="56">Preview</text>
+  <rect x="432" y="64" width="960" height="140" rx="8" fill="#ffffff" stroke="#e0e0e0"/>
+  <text class="label" x="448" y="92">Analysis</text>
+  <text class="hint" x="448" y="112">scenes=1 beats=0 notes=1 (mood gentle) • 0 warnings</text>
+  <text class="label" x="448" y="138">Cues</text>
+  <text class="hint" x="448" y="158">mood gentle → p, moderato</text>
+  <rect x="1330" y="84" width="46" height="24" rx="6" fill="#0a84ff"/>
+  <text class="label" x="1338" y="101" fill="#fff">Apply</text>
+
+  <!-- Chat area -->
+  <text class="title" x="432" y="240">Chat</text>
+  <rect x="432" y="252" width="960" height="280" rx="8" fill="#ffffff" stroke="#e0e0e0"/>
+  <rect x="432" y="540" width="960" height="40" rx="6" fill="#ffffff" stroke="#dedede"/>
+  <text class="hint" x="448" y="566">Say what should happen…</text>
+
+  <!-- Annotation rulers -->
+  <text class="label" x="48" y="860">Preview card height ~140px; Chat min height 280px; Editor width 360px</text>
+</svg>
+

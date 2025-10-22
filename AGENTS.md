@@ -19,6 +19,7 @@ Welcome to FountainKit, the modular SwiftPM workspace for the Fountain Coach org
 - AudioTalk plan — `Packages/FountainServiceKit-AudioTalk/AGENTS.md` (service track).
 - Spec curation norms — `Packages/FountainSpecCuration/openapi/AGENTS.md`.
 - Scripts lifecycle — `Scripts/AGENTS.md`.
+- Composer Studio design — `Design/COMPOSER_STUDIO_STORY.md` (full story + SVG prompts). SVGs live in `Design/` and are the UI source of truth.
 
 ## OpenAPI-first development
 - Every HTTP surface must have an authoritative OpenAPI document in `Packages/FountainSpecCuration/openapi`. Update specs *before* writing server or client code.

@@ -45,3 +45,19 @@ Acceptance (MVP+Chat)
 Testing
 - Unit: state gating, parse→map coupling, journal rendering.
 - Integration: parse/map/apply round‑trip using local services.
+
+Design via SVG (source of truth)
+- Location: `Design/`.
+  - `Design/composer-studio-first-open.svg` — first‑open layout.
+  - `Design/composer-studio-after-analyze.svg` — layout with preview card visible.
+- Process (no drift):
+  1) Edit the SVG(s) to change layout/spacing/typography. Annotate exact sizes (px) and font sizes (pt). Keep the filenames.
+  2) Implement UI to match SVGs exactly (SwiftUI). No unrequested controls, no extra chrome.
+  3) Acceptance: visual parity within ±4 px spacing and the specified font sizes; chat anchored at bottom; editor mono font as annotated; preview behavior (slide/fade) only if shown in SVG notes.
+  4) Any UI change must be reflected in SVG first; PRs without SVG updates are rejected for layout changes.
+
+Review checklist (UI)
+- Editor width and typography match the SVG annotations.
+- Chat area height and position match; input anchored; bubbles animate subtly.
+- Preview card appears only when content exists; position and action buttons match.
+- Journal present where indicated; empty state text matches.

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1440" height="900" viewBox="0 0 1440 900" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .label{font: 14px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; fill:#555}
+    .title{font: 16px -apple-system, BlinkMacSystemFont; font-weight:600; fill:#222}
+    .mono{font: 14px Menlo, Consolas, monospace; fill:#111}
+    .hint{font: 12px -apple-system; fill:#888}
+  </style>
+  <!-- Frame -->
+  <rect x="0" y="0" width="1440" height="900" fill="#f4f4f4"/>
+
+  <!-- Left column (editor) -->
+  <rect x="48" y="64" width="360" height="560" rx="8" fill="#ffffff" stroke="#e0e0e0"/>
+  <text class="title" x="56" y="56">Screenplay</text>
+  <text class="mono" x="64" y="96">Title: A New Piece</text>
+  <text class="mono" x="64" y="124">INT. ROOM — DAY</text>
+  <text class="mono" x="64" y="152">The composer sits at the desk.</text>
+  <text class="mono" x="64" y="182">[[AudioTalk: mood gentle]]</text>
+
+  <!-- Journal (below editor) -->
+  <text class="title" x="56" y="650">Journal</text>
+  <rect x="48" y="660" width="360" height="180" rx="8" fill="#ffffff" stroke="#e0e0e0"/>
+  <text class="hint" x="64" y="688">(empty)</text>
+
+  <!-- Right column top bar -->
+  <text class="title" x="432" y="56">Ready</text>
+
+  <!-- Right column chat area (bottom-anchored) -->
+  <text class="title" x="432" y="220">Chat</text>
+  <rect x="432" y="232" width="960" height="300" rx="8" fill="#ffffff" stroke="#e0e0e0"/>
+  <rect x="432" y="540" width="960" height="40" rx="6" fill="#ffffff" stroke="#dedede"/>
+  <text class="hint" x="448" y="566">Say what should happen…</text>
+
+  <!-- Annotation rulers -->
+  <text class="label" x="48" y="860">Left column width: 360px • Chat input height: 40px • Chat area min height: 300px</text>
+</svg>
+

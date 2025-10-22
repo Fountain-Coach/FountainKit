@@ -58,6 +58,13 @@ final class LauncherViewModel: ObservableObject {
     @Published var logText: String = ""
     @Published var errorMessage: String? = nil
     @Published var services: [CPServiceStatus] = []
+    // AudioTalk stack runtime metadata (PIDs and ports)
+    @Published var audiotalkPID: String? = nil
+    @Published var functionCallerPID: String? = nil
+    @Published var toolsFactoryPID: String? = nil
+    @Published var audioTalkPort: Int = 8080
+    @Published var functionCallerPort: Int = 8004
+    @Published var toolsFactoryPort: Int = 8011
     enum Tab { case control, environment, engraver, audiotalk }
     @Published var tab: Tab = .control
 
@@ -76,6 +83,12 @@ final class LauncherViewModel: ObservableObject {
         } else if let saved = UserDefaults.standard.string(forKey: Self.repoKey), !saved.isEmpty {
             repoPath = saved
         }
+        // Determine default ports from environment for display
+        let envPorts = processEnv()
+        audioTalkPort = Int(envPorts["AUDIOTALK_PORT"] ?? envPorts["PORT"] ?? "8080") ?? 8080
+        functionCallerPort = Int(envPorts["FUNCTION_CALLER_PORT"] ?? "8004") ?? 8004
+        toolsFactoryPort = Int(envPorts["TOOLS_FACTORY_PORT"] ?? "8011") ?? 8011
+
         startStatusPolling()
         startTailingLogs()
         // Choose status URL: control plane (9090) or AudioTalk health when studio mode
@@ -91,6 +104,7 @@ final class LauncherViewModel: ObservableObject {
             let env = processEnv()
             runStreaming(command: ["bash", "Scripts/audiotalk-dev-up.sh"], cwd: repoPath!, env: env)
         }
+        refreshAudioTalkPIDs()
     }
 
     func chooseRepo() {
@@ -251,6 +265,42 @@ final class LauncherViewModel: ObservableObject {
             }
         }
         try? proc.run()
+    }
+
+    // MARK: - PID helpers and logs
+    private func pidURL(_ name: String) -> URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".fountain", isDirectory: true)
+            .appendingPathComponent("\(name).pid")
+    }
+    private func readPID(_ name: String) -> String? {
+        let url = pidURL(name)
+        guard let data = try? Data(contentsOf: url), let s = String(data: data, encoding: .utf8) else { return nil }
+        let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+    func refreshAudioTalkPIDs() {
+        audiotalkPID = readPID("audiotalk")
+        functionCallerPID = readPID("function-caller")
+        toolsFactoryPID = readPID("tools-factory")
+    }
+    func killAudioTalkAll() {
+        let pids = [toolsFactoryPID, functionCallerPID, audiotalkPID].compactMap { $0 }
+        guard !pids.isEmpty else { return }
+        DispatchQueue.global(qos: .utility).async {
+            func runKill(_ args: [String]) {
+                let p = Process(); p.executableURL = URL(fileURLWithPath: "/bin/kill"); p.arguments = args
+                try? p.run(); p.waitUntilExit()
+            }
+            for pid in pids { runKill(["-TERM", pid]); usleep(200_000); runKill(["-0", pid]); runKill(["-KILL", pid]) }
+            DispatchQueue.main.async { self.refreshAudioTalkPIDs() }
+        }
+    }
+    func openAudioTalkLog(_ name: String) {
+        let url = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".fountain", isDirectory: true)
+            .appendingPathComponent("\(name).log")
+        if FileManager.default.fileExists(atPath: url.path) { NSWorkspace.shared.open(url) }
     }
 
     // Build environment for child processes: secrets from Keychain, URLs from defaults
@@ -543,6 +593,13 @@ struct ControlTab: View {
                         Button("Start Stack") { vm.startAudioTalkStack() }
                         Button("Stop Stack") { vm.stopAudioTalkStack() }
                         Button("Kill All") { vm.killAudioTalkAll() }
+                    }.font(.caption)
+                    HStack(spacing: 12) {
+                        Text("Logs:")
+                        Button("AudioTalk") { vm.openAudioTalkLog("audiotalk") }
+                        Button("FunctionCaller") { vm.openAudioTalkLog("function-caller") }
+                        Button("ToolsFactory") { vm.openAudioTalkLog("tools-factory") }
+                        Spacer()
                     }.font(.caption)
                 }
             }

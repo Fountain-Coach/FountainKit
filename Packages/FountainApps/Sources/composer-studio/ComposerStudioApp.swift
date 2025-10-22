@@ -33,15 +33,15 @@ The composer sits at the desk.
         .init(role: .assistant, text: "Welcome. Type your screenplay, then tell me what you want musically.")
     ]
     @State private var showReadyPulse: Bool = true
-    enum PreviewTab: String, CaseIterable { case analysis = "Analysis", cues = "Cues", apply = "Apply" }
-    @State private var previewTab: PreviewTab = .analysis
+    // Preview card toggles on when a suggestion or analysis is present
+    @State private var showPreview: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                TextField("Project", text: $projectName)
+                TextField("Title", text: $projectName)
                     .textFieldStyle(.roundedBorder)
-                    .frame(width: 240)
+                    .frame(width: 300)
                 readyBadge
                 Spacer()
             }
@@ -51,29 +51,22 @@ The composer sits at the desk.
                 VStack(alignment: .leading) {
                     Text("Screenplay").font(.subheadline)
                     TextEditor(text: $screenplay)
-                        .font(.system(.body, design: .monospaced))
-                        .frame(minHeight: 320)
-                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.gray.opacity(0.2)))
+                        .font(.system(size: 14, weight: .regular, design: .monospaced))
+                        .textEditorStyle(PlainTextEditorStyle())
+                        .frame(minHeight: 360)
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.gray.opacity(0.22)))
+                        .padding(.bottom, 6)
                 }
                 // Right: preview area (top) + chat anchored at bottom
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Text("Preview").font(.subheadline)
-                        Spacer()
-                        Picker("Preview", selection: $previewTab) {
-                            ForEach(PreviewTab.allCases, id: \.self) { t in Text(t.rawValue).tag(t) }
-                        }
-                        .pickerStyle(.segmented)
-                        Button("Analyze") { analyze() }
-                        Button("Apply to Score") { applyToScore() }
+                    if showPreview {
+                        PlanPreviewCard(analysis: parseSummary, cues: cuesSummary, apply: applySummary, onApply: applyToScore)
+                            .transition(.move(edge: .top).combined(with: .opacity))
                     }
-                    previewCard()
-                        .frame(minHeight: 160)
-                        .transition(.opacity)
                     Spacer(minLength: 8)
                     Text("Chat").font(.subheadline)
                     ChatView(messages: $chat, onSend: handleSend)
-                        .frame(minHeight: 220)
+                        .frame(minHeight: 260)
                         .transition(.opacity.combined(with: .move(edge: .trailing)))
                 }
                 .frame(minWidth: 420)
@@ -132,6 +125,7 @@ The composer sits at the desk.
         withAnimation(.spring()) {
             parseSummary = "Parsed screenplay: scenes=1 beats=0 notes=1 (mood gentle)\nWarnings: 0"
             cuesSummary = "Generated cues: 1\n- mood gentle → dynamics:p, tempo:moderato"
+            showPreview = true
         }
         saveDraft()
         journal.insert("analyzed project=\(projectName)", at: 0)
@@ -146,6 +140,7 @@ The composer sits at the desk.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             let preview = "Plan: \(text) → 1 cue\nPreview: mood gentle → p, moderato\n[Apply]"
             withAnimation { chat.append(.init(role: .assistant, text: preview)) }
+            analyze()
         }
     }
     private func saveDraft() {

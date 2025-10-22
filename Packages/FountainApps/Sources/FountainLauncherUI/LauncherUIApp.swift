@@ -65,6 +65,13 @@ final class LauncherViewModel: ObservableObject {
     @Published var audioTalkPort: Int = 8080
     @Published var functionCallerPort: Int = 8004
     @Published var toolsFactoryPort: Int = 8011
+    // Live service logs and toggles
+    @Published var audiotalkLog: String = ""
+    @Published var functionCallerLog: String = ""
+    @Published var toolsFactoryLog: String = ""
+    @Published var showAudioTalkLog: Bool = false
+    @Published var showFunctionCallerLog: Bool = false
+    @Published var showToolsFactoryLog: Bool = false
     enum Tab { case control, environment, engraver, audiotalk }
     @Published var tab: Tab = .control
 
@@ -273,6 +280,11 @@ final class LauncherViewModel: ObservableObject {
             .appendingPathComponent(".fountain", isDirectory: true)
             .appendingPathComponent("\(name).pid")
     }
+    private func serviceLogURL(_ name: String) -> URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".fountain", isDirectory: true)
+            .appendingPathComponent("\(name).log")
+    }
     private func readPID(_ name: String) -> String? {
         let url = pidURL(name)
         guard let data = try? Data(contentsOf: url), let s = String(data: data, encoding: .utf8) else { return nil }
@@ -297,10 +309,17 @@ final class LauncherViewModel: ObservableObject {
         }
     }
     func openAudioTalkLog(_ name: String) {
-        let url = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".fountain", isDirectory: true)
-            .appendingPathComponent("\(name).log")
+        let url = serviceLogURL(name)
         if FileManager.default.fileExists(atPath: url.path) { NSWorkspace.shared.open(url) }
+    }
+    func updateServiceLogs(maxChars: Int = 20_000) {
+        func tail(_ url: URL) -> String {
+            guard let data = try? Data(contentsOf: url), !data.isEmpty, let s = String(data: data, encoding: .utf8) else { return "" }
+            return s.count <= maxChars ? s : String(s.suffix(maxChars))
+        }
+        audiotalkLog = tail(serviceLogURL("audiotalk"))
+        functionCallerLog = tail(serviceLogURL("function-caller"))
+        toolsFactoryLog = tail(serviceLogURL("tools-factory"))
     }
 
     // Build environment for child processes: secrets from Keychain, URLs from defaults
@@ -442,6 +461,7 @@ final class LauncherViewModel: ObservableObject {
                 } catch {
                     await MainActor.run { self.controlPlaneOK = false; self.services = [] }
                 }
+                await MainActor.run { self.refreshAudioTalkPIDs(); self.updateServiceLogs() }
             }
         }
     }
@@ -601,6 +621,45 @@ struct ControlTab: View {
                         Button("ToolsFactory") { vm.openAudioTalkLog("tools-factory") }
                         Spacer()
                     }.font(.caption)
+                }
+            }
+            GroupBox(label: Text("Service Logs")) {
+                VStack(alignment: .leading, spacing: 8) {
+                    DisclosureGroup(isExpanded: Binding(get: { vm.showAudioTalkLog }, set: { vm.showAudioTalkLog = $0 })) {
+                        TextEditor(text: Binding(get: { vm.audiotalkLog }, set: { _ in }))
+                            .font(.system(.footnote, design: .monospaced))
+                            .frame(minHeight: 120)
+                        HStack(spacing: 12) {
+                            Button("Open") { vm.openAudioTalkLog("audiotalk") }
+                            Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(vm.audiotalkLog, forType: .string) }
+                            Button("Refresh") { vm.updateServiceLogs() }
+                            Spacer()
+                        }.font(.caption)
+                    } label: { Text("AudioTalk") }
+
+                    DisclosureGroup(isExpanded: Binding(get: { vm.showFunctionCallerLog }, set: { vm.showFunctionCallerLog = $0 })) {
+                        TextEditor(text: Binding(get: { vm.functionCallerLog }, set: { _ in }))
+                            .font(.system(.footnote, design: .monospaced))
+                            .frame(minHeight: 120)
+                        HStack(spacing: 12) {
+                            Button("Open") { vm.openAudioTalkLog("function-caller") }
+                            Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(vm.functionCallerLog, forType: .string) }
+                            Button("Refresh") { vm.updateServiceLogs() }
+                            Spacer()
+                        }.font(.caption)
+                    } label: { Text("Function Caller") }
+
+                    DisclosureGroup(isExpanded: Binding(get: { vm.showToolsFactoryLog }, set: { vm.showToolsFactoryLog = $0 })) {
+                        TextEditor(text: Binding(get: { vm.toolsFactoryLog }, set: { _ in }))
+                            .font(.system(.footnote, design: .monospaced))
+                            .frame(minHeight: 120)
+                        HStack(spacing: 12) {
+                            Button("Open") { vm.openAudioTalkLog("tools-factory") }
+                            Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(vm.toolsFactoryLog, forType: .string) }
+                            Button("Refresh") { vm.updateServiceLogs() }
+                            Spacer()
+                        }.font(.caption)
+                    } label: { Text("Tools Factory") }
                 }
             }
             GroupBox(label: Text("Services")) {

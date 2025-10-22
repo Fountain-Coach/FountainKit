@@ -180,7 +180,7 @@ struct AudioTalkCLI: ParsableCommand {
     }
 
     struct Screenplay: ParsableCommand {
-        static var configuration = CommandConfiguration(abstract: ".fountain operations", subcommands: [NewSession.self, GetSource.self, PutSource.self, Parse.self, MapCues.self, CueSheet.self])
+        static var configuration = CommandConfiguration(abstract: ".fountain operations", subcommands: [NewSession.self, GetSource.self, PutSource.self, Parse.self, MapCues.self, CueSheet.self, ApplyToNotation.self])
         struct NewSession: ParsableCommand {
             @OptionGroup var globals: GlobalOptions
             mutating func run() throws {
@@ -293,6 +293,38 @@ struct AudioTalkCLI: ParsableCommand {
                     case .pdf(let body):
                         let bytes = try await body.collect(upTo: 1<<20)
                         FileHandle.standardOutput.write(Data(bytes))
+                    }
+                }
+                dispatchMain()
+            }
+        }
+        struct ApplyToNotation: ParsableCommand {
+            @OptionGroup var globals: GlobalOptions
+            @Option(name: .long, help: "If-Match ETag") var ifMatch: String?
+            @Argument var screenplayId: String
+            @Argument(help: "Notation session id") var session: String
+            mutating func run() throws {
+                Task {
+                    let client = try AudioTalkCLI.makeClient(globals.baseURL)
+                    let body = Components.Schemas.ApplyCuesRequest(notation_session_id: session, options: nil)
+                    let input = Operations.applyScreenplayCuesToNotation.Input(
+                        path: .init(id: screenplayId),
+                        headers: .init(If_hyphen_Match: ifMatch),
+                        body: .json(body)
+                    )
+                    let out = try await client.applyScreenplayCuesToNotation(input)
+                    switch out {
+                    case .ok(let ok):
+                        if let etag = ok.headers.ETag { print(etag) } else { print("") }
+                    case .conflict(let c):
+                        if case .json(let body) = c.body { fputs("conflict: \(body.conflicts?.first?.code ?? "")\n", stderr) }
+                        Foundation.exit(1)
+                    case .notFound(let nf):
+                        if case .json(let err) = nf.body { fputs("not found: \(err.code ?? err.error)\n", stderr) }
+                        Foundation.exit(1)
+                    default:
+                        fputs("unexpected: \(out)\n", stderr)
+                        Foundation.exit(2)
                     }
                 }
                 dispatchMain()

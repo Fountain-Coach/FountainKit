@@ -5,8 +5,10 @@ import FoundationNetworking
 #if canImport(SwiftUI) && canImport(AppKit)
 import SwiftUI
 import AppKit
+#if canImport(EngraverStudio)
 import EngraverStudio
 import EngraverChatCore
+#endif
 
 @main
 struct LauncherUIApp: App {
@@ -20,7 +22,9 @@ struct LauncherUIApp: App {
                 Button("Control") { vm.tab = .control }.keyboardShortcut("1")
                 Button("Environment") { vm.tab = .environment }.keyboardShortcut("2")
                 if #available(macOS 13.0, *) {
+                    #if canImport(EngraverStudio)
                     Button("Engraver Studio") { vm.tab = .engraver }.keyboardShortcut("3")
+                    #endif
                     Button("AudioTalk Studio") { vm.tab = .audiotalk }.keyboardShortcut("4")
                 }
             }
@@ -316,6 +320,7 @@ final class LauncherViewModel: ObservableObject {
             presentAlert(title: "Failed to write .env", message: String(describing: error))
         }
     }
+    #if canImport(EngraverStudio)
     func makeEngraverConfiguration() -> EngraverStudioConfiguration {
         var env = processEnv()
         if (env["ENGRAVER_CORPUS_ID"] ?? "").isEmpty {
@@ -333,6 +338,7 @@ final class LauncherViewModel: ObservableObject {
         env["ENGRAVER_DEBUG"] = engraverDebugEnabled ? "1" : "0"
         return EngraverStudioConfiguration(environment: env)
     }
+    #endif
     private func startStatusPolling() {
         statusTimer?.invalidate()
         statusTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
@@ -412,9 +418,11 @@ struct ContentView: View {
                 .tabItem { Label("Environment", systemImage: "key.fill") }
                 .tag(LauncherViewModel.Tab.environment)
             if #available(macOS 13.0, *) {
+                #if canImport(EngraverStudio)
                 EngraverTab(vm: vm)
                     .tabItem { Label("Engraver", systemImage: "wand.and.stars") }
                     .tag(LauncherViewModel.Tab.engraver)
+                #endif
                 AudioTalkTab(vm: vm)
                     .tabItem { Label("AudioTalk", systemImage: "music.quarternote.3") }
                     .tag(LauncherViewModel.Tab.audiotalk)
@@ -583,6 +591,7 @@ ENGRAVER_DEBUG=\(engraverDebug ? "enabled" : "disabled")
     }
 }
 
+#if canImport(EngraverStudio)
 struct EngraverTab: View {
     @ObservedObject var vm: LauncherViewModel
 
@@ -623,6 +632,7 @@ struct EngraverTab: View {
         ].joined(separator: "#")
     }
 }
+#endif
 
 struct AudioTalkTab: View {
     @ObservedObject var vm: LauncherViewModel

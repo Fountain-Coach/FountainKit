@@ -4,9 +4,18 @@ import FountainRuntime
 import AudioTalkService
 import LauncherSignature
 
-verifyLauncherSignature()
-
 let env = ProcessInfo.processInfo.environment
+if env["FOUNTAIN_SKIP_LAUNCHER_SIG"] != "1" { verifyLauncherSignature() }
+
+func resolveStoreRoot(from env: [String: String]) -> URL {
+    if let override = env["FOUNTAINSTORE_DIR"], !override.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        let expanded: String
+        if override.hasPrefix("~") { expanded = FileManager.default.homeDirectoryForCurrentUser.path + String(override.dropFirst()) } else { expanded = override }
+        return URL(fileURLWithPath: expanded, isDirectory: true)
+    }
+    let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+    return cwd.appendingPathComponent(".fountain/store", isDirectory: true)
+}
 
 Task {
     // Serve generated OpenAPI handlers via NIO bridge with fallback that serves the spec
@@ -25,7 +34,20 @@ Task {
         return HTTPResponse(status: 404)
     }
     let transport = NIOOpenAPIServerTransport(fallback: fallback)
-    let api = AudioTalkOpenAPI(state: AudioTalkState())
+    // Resolve persistence (disk-backed when possible; falls back to embedded).
+    let svc: FountainStoreClient = {
+        let root = resolveStoreRoot(from: env)
+        do {
+            let disk = try DiskFountainStoreClient(rootDirectory: root)
+            print("audiotalk: using disk store at \(root.path)")
+            return FountainStoreClient(client: disk)
+        } catch {
+            FileHandle.standardError.write(Data("[audiotalk] WARN: falling back to in-memory store (\(error))\n".utf8))
+            return FountainStoreClient(client: EmbeddedFountainStoreClient())
+        }
+    }()
+    let corpusId = env["AUDIOTALK_CORPUS_ID"] ?? env["DEFAULT_CORPUS_ID"] ?? "audiotalk"
+    let api = AudioTalkOpenAPI(store: svc, corpusId: corpusId)
     try? api.registerHandlers(on: transport, serverURL: URL(string: "/")!)
     let server = NIOHTTPServer(kernel: transport.asKernel())
     do {

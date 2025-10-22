@@ -4,6 +4,7 @@ import SwiftUI
 import AppKit
 import TeatroGUI
 import EngraverChatCore
+import FountainAIKit
 
 @available(macOS 13.0, *)
 struct EngraverStudioView: View {
@@ -63,11 +64,11 @@ struct EngraverStudioView: View {
                 }
             }
         }
-        .onChange(of: viewModel.lastError) { _, newValue in
+        .onChange(of: viewModel.lastError) { newValue in
             showErrorAlert = newValue != nil
             if let msg = newValue { withAnimation { toast = msg } ; DispatchQueue.main.asyncAfter(deadline: .now() + 3) { withAnimation { if toast == msg { toast = nil } } } }
         }
-        .onChange(of: viewModel.state) { _, newState in
+        .onChange(of: viewModel.state) { newState in 
             if newState != .streaming {
                 promptEditorIsFocused = true
             }

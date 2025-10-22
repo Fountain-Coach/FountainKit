@@ -29,6 +29,7 @@ let package = Package(
         .executable(name: "engraver-chat-tui", targets: ["engraver-chat-tui"]),
         .executable(name: "audiotalk-cli", targets: ["audiotalk-cli"]),
         .executable(name: "audiotalk-ci-smoke", targets: ["audiotalk-ci-smoke"]),
+        .executable(name: "m2-smoke", targets: ["m2-smoke"]),
         .executable(name: "engraving-app", targets: ["engraving-app"]),
         .executable(name: "memchat-app", targets: ["memchat-app"]),
         .executable(name: "memchat-teatro", targets: ["memchat-teatro"]),
@@ -104,6 +105,14 @@ let package = Package(
             plugins: [
                 .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
+        .executableTarget(
+            name: "m2-smoke",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "FunctionCallerService", package: "FountainServiceKit-FunctionCaller"),
+                .product(name: "PlannerService", package: "FountainServiceKit-Planner")
             ]
         ),
         .executableTarget(
@@ -288,8 +297,7 @@ let package = Package(
         .executableTarget(
             name: "FountainLauncherUI",
             dependencies: [
-                .product(name: "SecretStore", package: "swift-secretstore"),
-                "EngraverStudio"
+                .product(name: "SecretStore", package: "swift-secretstore")
             ],
             path: "Sources/FountainLauncherUI",
             exclude: ["README.md"]

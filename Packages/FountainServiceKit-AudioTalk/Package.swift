@@ -21,6 +21,7 @@ let package = Package(
             name: "AudioTalkService",
             dependencies: [
                 .product(name: "FountainRuntime", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore"),
                 .product(name: "MIDI2Core", package: "FountainTelemetryKit"),
                 .product(name: "MIDI2Transports", package: "FountainTelemetryKit"),
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")

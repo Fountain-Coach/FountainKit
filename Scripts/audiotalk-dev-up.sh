@@ -34,6 +34,30 @@ LOG_DIR="$HOME/.fountain"
 mkdir -p "$LOG_DIR"
 
 log() { printf "\033[1;34m›\033[0m %s\n" "$*"; }
+is_running() { local pid="$1"; kill -0 "$pid" 2>/dev/null; }
+free_port() {
+  local port="$1"; local label="$2"; local pidfile="$3"
+  # Kill by pidfile if present
+  if [[ -f "$pidfile" ]]; then
+    local pid; pid="$(cat "$pidfile" 2>/dev/null || true)"
+    if [[ -n "$pid" ]] && is_running "$pid"; then
+      log "Stopping $label (pid=$pid)"
+      kill "$pid" 2>/dev/null || true; sleep 1
+      if is_running "$pid"; then kill -KILL "$pid" 2>/dev/null || true; fi
+    fi
+    rm -f "$pidfile" || true
+  fi
+  # Free any process bound to the port (best-effort)
+  local holders
+  holders="$(lsof -ti tcp:"$port" 2>/dev/null || true)"
+  if [[ -n "$holders" ]]; then
+    for p in $holders; do
+      log "Freeing port $port held by pid=$p ($label)"
+      kill "$p" 2>/dev/null || true; sleep 1
+      kill -KILL "$p" 2>/dev/null || true
+    done
+  fi
+}
 wait_for() {
   local url="$1"; local tries="${2:-30}"; local name="${3:-service}"
   for i in $(seq 1 "$tries"); do
@@ -53,16 +77,19 @@ swift build --configuration "$CONFIGURATION" --package-path "$REPO_ROOT/Packages
   --product audiotalk-server --product tools-factory-server --product function-caller-server
 
 log "Starting tools-factory-server on :$TOOLS_FACTORY_PORT"
+free_port "$TOOLS_FACTORY_PORT" tools-factory "$LOG_DIR/tools-factory.pid"
 nohup env TOOLS_FACTORY_PORT="$TOOLS_FACTORY_PORT" FOUNTAINSTORE_DIR="$FOUNTAINSTORE_DIR" \
   swift run --configuration "$CONFIGURATION" --package-path "$REPO_ROOT/Packages/FountainApps" tools-factory-server \
   >"$LOG_DIR/tools-factory.log" 2>&1 & echo $! > "$LOG_DIR/tools-factory.pid"
 
 log "Starting function-caller-server on :$FUNCTION_CALLER_PORT (base=$FUNCTION_CALLER_BASE_URL)"
+free_port "$FUNCTION_CALLER_PORT" function-caller "$LOG_DIR/function-caller.pid"
 nohup env FUNCTION_CALLER_PORT="$FUNCTION_CALLER_PORT" FUNCTION_CALLER_BASE_URL="$FUNCTION_CALLER_BASE_URL" FOUNTAINSTORE_DIR="$FOUNTAINSTORE_DIR" \
   swift run --configuration "$CONFIGURATION" --package-path "$REPO_ROOT/Packages/FountainApps" function-caller-server \
   >"$LOG_DIR/function-caller.log" 2>&1 & echo $! > "$LOG_DIR/function-caller.pid"
 
 log "Starting audiotalk-server on :$AUDIOTALK_PORT"
+free_port "$AUDIOTALK_PORT" audiotalk "$LOG_DIR/audiotalk.pid"
 nohup env AUDIOTALK_PORT="$AUDIOTALK_PORT" FOUNTAIN_SKIP_LAUNCHER_SIG=1 FOUNTAINSTORE_DIR="$FOUNTAINSTORE_DIR" \
   swift run --configuration "$CONFIGURATION" --package-path "$REPO_ROOT/Packages/FountainApps" audiotalk-server \
   >"$LOG_DIR/audiotalk.log" 2>&1 & echo $! > "$LOG_DIR/audiotalk.pid"

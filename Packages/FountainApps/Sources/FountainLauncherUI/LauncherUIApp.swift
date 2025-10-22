@@ -82,11 +82,9 @@ final class LauncherViewModel: ObservableObject {
             tab = .audiotalk
         }
         if let auto = env["AUDIO_TALK_AUTOSTART"], ["1","true","yes"].contains(auto.lowercased()), repoPath != nil {
-            // Fire and forget; these append logs
-            startToolsFactory()
-            startFunctionCaller()
-            startAudioTalkServer()
-            registerAudioTalkTools()
+            // Prefer the consolidated dev-up script to manage build/start/restart and ports
+            let env = processEnv()
+            runStreaming(command: ["bash", "Scripts/audiotalk-dev-up.sh"], cwd: repoPath!, env: env)
         }
     }
 

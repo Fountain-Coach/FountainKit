@@ -28,6 +28,7 @@ export AUDIOTALK_PORT=${AUDIOTALK_PORT:-8080}
 export TOOLS_FACTORY_PORT=${TOOLS_FACTORY_PORT:-8011}
 export FUNCTION_CALLER_PORT=${FUNCTION_CALLER_PORT:-8004}
 export FUNCTION_CALLER_BASE_URL=${FUNCTION_CALLER_BASE_URL:-http://127.0.0.1:${AUDIOTALK_PORT}/audiotalk/v1}
+export FOUNTAINSTORE_DIR=${FOUNTAINSTORE_DIR:-$REPO_ROOT/.fountain/store}
 
 LOG_DIR="$HOME/.fountain"
 mkdir -p "$LOG_DIR"
@@ -52,17 +53,17 @@ swift build --configuration "$CONFIGURATION" --package-path "$REPO_ROOT/Packages
   --product audiotalk-server --product tools-factory-server --product function-caller-server
 
 log "Starting tools-factory-server on :$TOOLS_FACTORY_PORT"
-nohup env TOOLS_FACTORY_PORT="$TOOLS_FACTORY_PORT" \
+nohup env TOOLS_FACTORY_PORT="$TOOLS_FACTORY_PORT" FOUNTAINSTORE_DIR="$FOUNTAINSTORE_DIR" \
   swift run --configuration "$CONFIGURATION" --package-path "$REPO_ROOT/Packages/FountainApps" tools-factory-server \
   >"$LOG_DIR/tools-factory.log" 2>&1 & echo $! > "$LOG_DIR/tools-factory.pid"
 
 log "Starting function-caller-server on :$FUNCTION_CALLER_PORT (base=$FUNCTION_CALLER_BASE_URL)"
-nohup env FUNCTION_CALLER_PORT="$FUNCTION_CALLER_PORT" FUNCTION_CALLER_BASE_URL="$FUNCTION_CALLER_BASE_URL" \
+nohup env FUNCTION_CALLER_PORT="$FUNCTION_CALLER_PORT" FUNCTION_CALLER_BASE_URL="$FUNCTION_CALLER_BASE_URL" FOUNTAINSTORE_DIR="$FOUNTAINSTORE_DIR" \
   swift run --configuration "$CONFIGURATION" --package-path "$REPO_ROOT/Packages/FountainApps" function-caller-server \
   >"$LOG_DIR/function-caller.log" 2>&1 & echo $! > "$LOG_DIR/function-caller.pid"
 
 log "Starting audiotalk-server on :$AUDIOTALK_PORT"
-nohup env AUDIOTALK_PORT="$AUDIOTALK_PORT" FOUNTAIN_SKIP_LAUNCHER_SIG=1 \
+nohup env AUDIOTALK_PORT="$AUDIOTALK_PORT" FOUNTAIN_SKIP_LAUNCHER_SIG=1 FOUNTAINSTORE_DIR="$FOUNTAINSTORE_DIR" \
   swift run --configuration "$CONFIGURATION" --package-path "$REPO_ROOT/Packages/FountainApps" audiotalk-server \
   >"$LOG_DIR/audiotalk.log" 2>&1 & echo $! > "$LOG_DIR/audiotalk.pid"
 
@@ -84,4 +85,3 @@ echo "  • ToolsFactory  http://127.0.0.1:$TOOLS_FACTORY_PORT/tools"
 echo "  • FunctionCall  http://127.0.0.1:$FUNCTION_CALLER_PORT/functions"
 echo "Logs: $LOG_DIR/{audiotalk,function-caller,tools-factory}.log"
 echo "Stop with: kill \$(cat $LOG_DIR/audiotalk.pid) \$(cat $LOG_DIR/function-caller.pid) \$(cat $LOG_DIR/tools-factory.pid)"
-

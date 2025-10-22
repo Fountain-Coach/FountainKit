@@ -8,10 +8,21 @@ verifyLauncherSignature()
 
 let manifestURL = URL(fileURLWithPath: "tools.json")
 let manifest = (try? ToolManifest.load(from: manifestURL)) ?? ToolManifest(image: .init(name: "", tarball: "", sha256: "", qcow2: "", qcow2_sha256: ""), tools: [:], operations: [])
-let corpusId = ProcessInfo.processInfo.environment["TOOLS_FACTORY_CORPUS_ID"] ??
-               ProcessInfo.processInfo.environment["DEFAULT_CORPUS_ID"] ?? "tools-factory"
+let env = ProcessInfo.processInfo.environment
+let corpusId = env["TOOLS_FACTORY_CORPUS_ID"] ?? env["DEFAULT_CORPUS_ID"] ?? "tools-factory"
 
-let svc = FountainStoreClient(client: EmbeddedFountainStoreClient())
+let svc: FountainStoreClient = {
+    if let dir = env["FOUNTAINSTORE_DIR"], !dir.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        let url: URL
+        if dir.hasPrefix("~") {
+            url = URL(fileURLWithPath: FileManager.default.homeDirectoryForCurrentUser.path + String(dir.dropFirst()), isDirectory: true)
+        } else { url = URL(fileURLWithPath: dir, isDirectory: true) }
+        if let disk = try? DiskFountainStoreClient(rootDirectory: url) {
+            return FountainStoreClient(client: disk)
+        }
+    }
+    return FountainStoreClient(client: EmbeddedFountainStoreClient())
+}()
 Task {
     await svc.ensureCollections(corpusId: corpusId)
     try? await publishFunctions(manifest: manifest, corpusId: corpusId, service: svc)

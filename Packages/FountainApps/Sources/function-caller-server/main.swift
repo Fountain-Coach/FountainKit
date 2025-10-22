@@ -9,7 +9,19 @@ verifyLauncherSignature()
 
 let env = ProcessInfo.processInfo.environment
 let corpusId = env["DEFAULT_CORPUS_ID"] ?? "tools-factory"
-let svc = FountainStoreClient(client: EmbeddedFountainStoreClient())
+let svc: FountainStoreClient = {
+    let env = ProcessInfo.processInfo.environment
+    if let dir = env["FOUNTAINSTORE_DIR"], !dir.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        let url: URL
+        if dir.hasPrefix("~") {
+            url = URL(fileURLWithPath: FileManager.default.homeDirectoryForCurrentUser.path + String(dir.dropFirst()), isDirectory: true)
+        } else { url = URL(fileURLWithPath: dir, isDirectory: true) }
+        if let disk = try? DiskFountainStoreClient(rootDirectory: url) {
+            return FountainStoreClient(client: disk)
+        }
+    }
+    return FountainStoreClient(client: EmbeddedFountainStoreClient())
+}()
 
 Task {
     // Serve generated OpenAPI handlers via NIO transport with a simple fallback.

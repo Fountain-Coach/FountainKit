@@ -1141,7 +1141,7 @@ private struct TopBar: View {
     @Binding var showRight: Bool
     var body: some View {
         HStack(spacing: 12) {
-            if envUIEnabled && !directMode {
+            if !directMode {
                 HStack(spacing: 6) {
                     Circle().fill(viewModel.environmentIsRunning ? Color.green : Color.orange)
                         .frame(width: 8, height: 8)
@@ -1155,7 +1155,7 @@ private struct TopBar: View {
                 }
             }
             Spacer()
-            if envUIEnabled && !directMode {
+            if !directMode {
                 Toggle(isOn: $showLeft) { Image(systemName: "sidebar.left") }
                     .toggleStyle(.button)
                     .help(showLeft ? "Hide environment" : "Show environment")

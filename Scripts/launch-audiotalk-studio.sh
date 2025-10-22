@@ -8,11 +8,12 @@ set -euo pipefail
 #   Scripts/launch-audiotalk-studio.sh [--autostart] [--use-keychain]
 
 AUTOSTART=0
-USE_KEYCHAIN=0
+USE_KEYCHAIN=1
 for a in "$@"; do
   case "$a" in
     --autostart) AUTOSTART=1 ;;
     --use-keychain) USE_KEYCHAIN=1 ;;
+    --no-keychain) USE_KEYCHAIN=0 ;;
   esac
 done
 
@@ -26,9 +27,7 @@ if [[ -f "$HOME/.fountain/secrets.env" ]]; then
   . "$HOME/.fountain/secrets.env"
   set +a
 fi
-if [[ "$USE_KEYCHAIN" != "1" ]]; then
-  export FK_NO_KEYCHAIN=1
-fi
+if [[ "$USE_KEYCHAIN" != "1" ]]; then export FK_NO_KEYCHAIN=1; fi
 if [[ "$AUTOSTART" == "1" ]]; then
   export AUDIO_TALK_AUTOSTART=1
   export FOUNTAINSTORE_DIR="${FOUNTAINKIT_ROOT}/.fountain/store"

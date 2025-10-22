@@ -66,7 +66,8 @@ Thank you for helping FountainKit stay modular and healthy!
 ---
 
 ### Agents
-- Studio (Control workspace) agent: `Packages/FountainApps/Sources/FountainLauncherUI/AGENTS.md`.
+- Legacy Studio (deprecated) — learnings only: `Packages/FountainApps/Sources/FountainLauncherUI/AGENTS.md`.
+- Composer Studio (fresh app) — new work: `Packages/FountainApps/Sources/composer-studio/AGENTS.md`.
 
 **Maintenance**: This file embeds the unified master plan below. Keep this plan and
 `Plans/ROADMAP.md` in sync; prefer editing here and letting `Plans/ROADMAP.md` remain
@@ -95,14 +96,14 @@ OpenAPI‑first
   `persist`, `tools‑factory`, `tool‑server`, `semantic‑browser`, `audiotalk`.
 - Edit in UI (Save/Revert) → Lint → Regenerate (swift build) → Reload Routes.
 
-Three‑pane Studio paradigm
+Legacy three‑pane (deprecated)
 - Left (Principal): status, repo/build, Start/Stop/Diagnostics, AudioTalk stack,
   inline Environment (Keychain‑backed secrets).
 - Middle (Editing): main logs (follow tail), later other editors on demand.
 - Right (Optionals): OpenAPI, Routes (viewer + diff), Services tails, Persona,
   Semantic Memory.
 
-Composer‑first story (authoritative)
+Composer‑first story (authoritative for the new app)
 - Model: screenplay text (.fountain) with inline tags → parsed model → mapped cue plans → applied notation → journaled timeline (+ UMP batches).
 - States: No session → Source stored (ETag) → Parsed → Cued → Applied → Journaled.
 - Why: determinism (ETags), reproducibility (journal), separation (idea→structure→actions→artifact), security (Keychain), OpenAPI‑first change control.

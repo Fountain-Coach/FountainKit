@@ -1,19 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Launches the FountainLauncherUI app focused on the AudioTalk Studio tab,
-# and (optionally) auto-starts the AudioTalk dev stack under the hood.
+# DEPRECATED: Legacy Control app launcher (FountainLauncherUI).
+# This script is kept for compatibility but will not launch the legacy app by default.
+# Use `Scripts/launch-composer-studio.sh` for the fresh Composer Studio.
 #
-# Usage:
-#   Scripts/launch-audiotalk-studio.sh [--autostart] [--use-keychain]
+# Usage (legacy only):
+#   Scripts/launch-audiotalk-studio.sh [--autostart] [--use-keychain] [--force-legacy]
 
 AUTOSTART=0
+FORCE_LEGACY=0
 USE_KEYCHAIN=1
 for a in "$@"; do
   case "$a" in
     --autostart) AUTOSTART=1 ;;
     --use-keychain) USE_KEYCHAIN=1 ;;
     --no-keychain) USE_KEYCHAIN=0 ;;
+    --force-legacy) FORCE_LEGACY=1 ;;
   esac
 done
 
@@ -60,4 +63,10 @@ if [[ "$AUTOSTART" == "1" ]]; then
   export FUNCTION_CALLER_BASE_URL="http://127.0.0.1:8080/audiotalk/v1"
 fi
 
-swift run --package-path "$REPO_ROOT/Packages/FountainApps" FountainLauncherUI
+if [[ "$FORCE_LEGACY" == "1" ]]; then
+  echo "[legacy] Launching deprecated FountainLauncherUI (use --force-legacy again to suppress this notice)"
+  swift run --package-path "$REPO_ROOT/Packages/FountainApps" FountainLauncherUI
+else
+  echo "[deprecated] The legacy Studio is deprecated. Use: Scripts/launch-composer-studio.sh"
+  exit 1
+fi

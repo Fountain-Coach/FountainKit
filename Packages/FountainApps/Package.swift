@@ -43,6 +43,8 @@ let package = Package(
         .library(name: "EngraverChatCore", targets: ["EngraverChatCore"]),
         .library(name: "EngraverStudio", targets: ["EngraverStudio"]),
         .executable(name: "fk", targets: ["fk"])
+        ,
+        .executable(name: "composer-studio", targets: ["composer-studio"])
     ],
     dependencies: [
         .package(path: "../FountainCore"),
@@ -105,6 +107,11 @@ let package = Package(
                 .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
+        ),
+        .executableTarget(
+            name: "composer-studio",
+            dependencies: [],
+            path: "Sources/composer-studio"
         ),
         .executableTarget(
             name: "m2-smoke",

@@ -47,7 +47,7 @@ extension LauncherViewModel {
     }
 
     func reloadGatewayRoutes() {
-        let defaultsURL = UserDefaults.standard.string(forKey: "FountainAI.GATEWAY_URL") ?? "http://127.0.0.1:8010"
+        let defaultsURL = defaultsString("FountainAI.GATEWAY_URL", fallback: "http://127.0.0.1:8010")
         guard let base = URL(string: defaultsURL) else { return }
         var url = base; url.append(path: "/admin/reload")
         var req = URLRequest(url: url)

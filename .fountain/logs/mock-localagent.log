@@ -1,6 +1,8 @@
 warning: 'fountainapps': dependency 'swift-log' is not used by any target
 [0/3] Write swift-version--58304C5D6DBC2206.txt
 warning: 'fountainapps': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
+    /Users/benedikteickhoff/Development/Github-Desktop/FountainKit/Packages/FountainApps/Sources/FountainLauncherUI/AGENTS.md
+warning: 'fountainapps': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
     /Users/benedikteickhoff/Development/Github-Desktop/FountainKit/Packages/FountainApps/Sources/llm-doctor/README.md
 warning: 'fountainapps': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
     /Users/benedikteickhoff/Development/Github-Desktop/FountainKit/Packages/FountainApps/Sources/engraver-direct/README.md
@@ -11,11 +13,6 @@ warning: 'fountaintooling': found 1 file(s) which are unhandled; explicitly decl
 [0/1] Planning build
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'mock-localagent-server' complete! (11.95s)
+Build of product 'mock-localagent-server' complete! (12.38s)
 [mock-localagent] Failed to start: bind(descriptor:ptr:bytes:): Address already in use) (errno: 48)
-server
-[5/8] Write Objects.LinkFileList
-[6/8] Linking mock-localagent-server
-[7/8] Applying mock-localagent-server
-Build of product 'mock-localagent-server' complete! (14.63s)
-[mock-localagent] Failed to start: bind(descriptor:ptr:bytes:): Address already in use) (errno: 48)
+ady in use) (errno: 48)

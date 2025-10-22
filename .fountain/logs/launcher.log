@@ -1,21 +1,12 @@
 [launcher] Starting Fountain services from /Users/benedikteickhoff/Development/Github-Desktop/FountainKit
-warning: 'fountainapps': dependency 'swift-log' is not used by any target
-[0/3] Write swift-version--58304C5D6DBC2206.txt
-warning: 'fountainapps': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
-    /Users/benedikteickhoff/Development/Github-Desktop/FountainKit/Packages/FountainApps/Sources/llm-doctor/README.md
-warning: 'fountainapps': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
-    /Users/benedikteickhoff/Development/Github-Desktop/FountainKit/Packages/FountainApps/Sources/engraver-direct/README.md
-warning: 'fountainapps': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
-    /Users/benedikteickhoff/Development/Github-Desktop/FountainKit/Packages/FountainApps/Sources/engraver-studio/README.md
-warning: 'fountaintooling': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
-    /Users/benedikteickhoff/Development/Github-Desktop/FountainKit/Packages/FountainTooling/Sources/openapi-curator-service/README.md
-[0/1] Planning build
-Building for debugging...
-[0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'local-agent-manager' complete! (13.30s)
+[launcher] Options: --force-build
 warning: 'fountainapps': dependency 'swift-log' is not used by any target
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'local-agent-manager' complete! (0.40s)
+Build of product 'local-agent-manager' complete! (0.42s)
+warning: 'fountainapps': dependency 'swift-log' is not used by any target
+Building for debugging...
+[0/3] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'local-agent-manager' complete! (0.42s)
 failed to become healthy after 30s; attempting fallback mock-localagent
-mock-localagent started pid 56658
+mock-localagent started pid 67500

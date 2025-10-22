@@ -437,6 +437,30 @@ paths:
           description: Accepted for playback
         '400': { $ref: '#/components/responses/BadRequest' }
 
+  /audiotalk/ump/{session}/events:
+    get:
+      summary: List persisted UMP events for a session
+      operationId: listUMPEvents
+      tags: [MIDI]
+      parameters:
+        - name: session
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/PageSize'
+        - name: page[offset]
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UMPEventList'
+        '400': { $ref: '#/components/responses/BadRequest' }
+
   # Screenplay/Fountain endpoints
   /audiotalk/screenplay/sessions:
     post:
@@ -1005,6 +1029,27 @@ components:
               ump:
                 type: string
                 description: Hex‑encoded UMP packet.
+    UMPEvent:
+      type: object
+      required: [session, ump, receivedAt]
+      properties:
+        id: { type: string }
+        session: { type: string }
+        jr_timestamp: { type: integer }
+        host_time_ns: { type: integer }
+        ump: { type: string, description: Hex‑encoded UMP packet }
+        receivedAt:
+          type: string
+          format: date-time
+    UMPEventList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/UMPEvent' }
+        nextPage:
+          type: [string, 'null']
     JournalEvent:
       type: object
       required: [type, ts]

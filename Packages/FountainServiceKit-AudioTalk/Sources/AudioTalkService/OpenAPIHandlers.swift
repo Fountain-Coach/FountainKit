@@ -20,6 +20,7 @@ actor AudioTalkState {
     private var screenplayIndexColl: String { "audiotalk_screenplay_index" }
     private var cuesColl: String { "audiotalk_cues" }
     private var journalColl: String { "audiotalk_journal" }
+    private var umpColl: String { "audiotalk_ump" }
 
     init(store: FountainStoreClient? = nil, corpusId: String = "audiotalk") {
         self.store = store
@@ -354,6 +355,41 @@ actor AudioTalkState {
             return []
         }
     }
+
+    // MARK: UMP Persistence
+    struct PersistedUMPEvent: Codable {
+        var id: String
+        var session: String
+        var jr_timestamp: Int?
+        var host_time_ns: Int?
+        var ump: String
+        var receivedAt: Date
+    }
+    private var umpMem: [String: [PersistedUMPEvent]] = [:]
+    func persistUMPEvent(session: String, jr: Int?, host: Int?, ump: String) async {
+        let ev = PersistedUMPEvent(id: UUID().uuidString, session: session, jr_timestamp: jr, host_time_ns: host, ump: ump, receivedAt: Date())
+        if let store {
+            do {
+                try await store.putDoc(corpusId: corpusId, collection: umpColl, id: ev.id, body: try JSONEncoder().encode(ev))
+                return
+            } catch { /* fall back */ }
+        }
+        var arr = umpMem[session] ?? []
+        arr.append(ev)
+        umpMem[session] = arr
+    }
+    func listUMPEvents(session: String, limit: Int = 50, offset: Int = 0) async -> [PersistedUMPEvent] {
+        if let store {
+            do {
+                let resp = try await store.query(corpusId: corpusId, collection: umpColl, query: .init(filters: ["session": session], limit: limit, offset: offset))
+                return try resp.documents.map { try JSONDecoder().decode(PersistedUMPEvent.self, from: $0) }
+            } catch { /* fall back */ }
+        }
+        let arr = umpMem[session] ?? []
+        if offset >= arr.count { return [] }
+        let end = min(offset + limit, arr.count)
+        return Array(arr[offset..<end])
+    }
 }
 
 // Minimal server stubs for the AudioTalk OpenAPI.
@@ -581,7 +617,10 @@ public struct AudioTalkOpenAPI: APIProtocol, @unchecked Sendable {
                 return .badRequest(.init(body: .json(err)))
             }
             try? transport.send(umpWords: words)
+            // Persist each item for diagnostics and session record.
+            await state.persistUMPEvent(session: input.path.session, jr: item.jr_timestamp, host: item.host_time_ns, ump: item.ump)
         }
+        await state.appendJournal(type: "ump_received", details: ["session": input.path.session, "count": String(batch.items.count)])
         return .accepted(.init())
     }
 
@@ -755,6 +794,19 @@ public struct AudioTalkOpenAPI: APIProtocol, @unchecked Sendable {
             let out = Components.Schemas.CueSheetResponse(cues: cues)
             return .ok(.init(body: .json(out)))
         }
+    }
+
+    // MARK: - UMP Events
+    public func listUMPEvents(_ input: Operations.listUMPEvents.Input) async throws -> Operations.listUMPEvents.Output {
+        let session = input.path.session
+        let limit = input.query.page_lbrack_size_rbrack_ ?? 50
+        let offset = input.query.page_lbrack_offset_rbrack_ ?? 0
+        let events = await state.listUMPEvents(session: session, limit: limit, offset: offset)
+        let items = events.map { e in
+            Components.Schemas.UMPEvent(id: e.id, session: e.session, jr_timestamp: e.jr_timestamp, host_time_ns: e.host_time_ns, ump: e.ump, receivedAt: e.receivedAt)
+        }
+        let out = Components.Schemas.UMPEventList(items: items, nextPage: nil)
+        return .ok(.init(body: .json(out)))
     }
 
     // MARK: - Minimal PDF builder for cue sheets

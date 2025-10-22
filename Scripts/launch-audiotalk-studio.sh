@@ -46,7 +46,15 @@ if [[ "$USE_KEYCHAIN" == "1" ]]; then
   }
   ensure_kc GATEWAY_BEARER
   ensure_kc OPENAI_API_KEY
+  # Optional: seed LAUNCHER_SIGNATURE; fall back to embedded default if not set
+  if ! security find-generic-password -s FountainAI -a LAUNCHER_SIGNATURE -w >/dev/null 2>&1; then
+    DEFAULT_SIG="B86D7CEE-24C4-4C4C-A107-8D0542D1965B"
+    security add-generic-password -a LAUNCHER_SIGNATURE -s FountainAI -w "$DEFAULT_SIG" -A -U >/dev/null || true
+  fi
 fi
+
+# Always export a valid launcher signature for signed servers
+export LAUNCHER_SIGNATURE="${LAUNCHER_SIGNATURE:-$(security find-generic-password -s FountainAI -a LAUNCHER_SIGNATURE -w 2>/dev/null || echo B86D7CEE-24C4-4C4C-A107-8D0542D1965B)}"
 if [[ "$AUTOSTART" == "1" ]]; then
   export AUDIO_TALK_AUTOSTART=1
   export FOUNTAINSTORE_DIR="${FOUNTAINKIT_ROOT}/.fountain/store"

@@ -237,6 +237,14 @@ final class LauncherViewModel: ObservableObject {
     // Build environment for child processes: secrets from Keychain, URLs from defaults
     private func processEnv() -> [String: String] {
         var env = ProcessInfo.processInfo.environment
+        // Ensure signed binaries receive a valid launcher signature
+        if env["LAUNCHER_SIGNATURE"] == nil {
+            if let sig = KeychainHelper.read(service: "FountainAI", account: "LAUNCHER_SIGNATURE"), !sig.isEmpty {
+                env["LAUNCHER_SIGNATURE"] = sig
+            } else {
+                env["LAUNCHER_SIGNATURE"] = "B86D7CEE-24C4-4C4C-A107-8D0542D1965B"
+            }
+        }
         if let url = UserDefaults.standard.string(forKey: "FountainAI.FOUNTAINSTORE_URL"), !url.isEmpty { env["FOUNTAINSTORE_URL"] = url }
         if env["OPENAI_API_KEY"] == nil, let openai = KeychainHelper.read(service: "FountainAI", account: "OPENAI_API_KEY") { env["OPENAI_API_KEY"] = openai }
         if env["FOUNTAINSTORE_API_KEY"] == nil, let storeKey = KeychainHelper.read(service: "FountainAI", account: "FOUNTAINSTORE_API_KEY") { env["FOUNTAINSTORE_API_KEY"] = storeKey }

@@ -6,6 +6,20 @@ and diagnostics/merged logs.
 
 Authoritative plan (embedded)
 
+Composer‑first story (authoritative)
+- Storyline: screenplay text (.fountain) → parsed model → mapped cue plans → applied notation → journal (+ UMP).
+- States: No session → Source stored (ETag) → Parsed → Cued → Applied → Journaled.
+- Guardrails: ETags for determinism, one‑click actions per state, visible results (warnings, counts, previews), journal timeline.
+
+Change Now (scope of this agent)
+- Introduce a Screenplay Session flow as default landing:
+  - Create/select session; show current ETag and updated‑at.
+  - Buttons: Parse → Map Cues → Apply, gated by preconditions.
+  - Result cards: parse warnings, cue count, last render status, links to cue sheet/score.
+  - Journal view: stored/parsed/cued/applied with anchors + timestamps.
+- One readiness verdict: Keychain OK + valid Gateway URL + services healthy = Ready.
+- Keep operator (start/stop/logs) and curator (OpenAPI edit) separate from composer flow.
+
 ## Studio System Introspection & Editing Plan (embedded)
 
 M0 — Stabilize & Trim

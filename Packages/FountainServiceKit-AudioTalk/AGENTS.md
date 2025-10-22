@@ -9,12 +9,21 @@ Principles
 - Deterministic ETag flows and durable Journal.
 - Bridge cues → Lily with stable anchors; `scan-anchors` endpoint; selection sync.
 
+Composer‑first framing
+- Source of truth: `.fountain` screenplay with inline tags.
+- States: Source stored (ETag) → Parsed model → Cue plans → Applied notation → Journaled (+ UMP batches).
+- Contracted endpoints map 1:1 to state transitions; responses must carry anchors, counts, and warnings to drive UI result cards.
+
 ## AudioTalk Track Plan (embedded)
 
 M1 — Core polish (API, persistence, cues)
 - Finalize spec enums/content types; JournalEvent types.
 - Persist parsed model keyed by ETag; prefer cached results.
 - Cue sheet CSV/PDF; UMP persistence & list endpoint; Journal events.
+Acceptance (DoD)
+- Parse returns model+warnings+ETag; cache hit path documented.
+- Map‑cues returns deterministic list with anchors; count matches tag notes.
+- Cue‑sheet delivers CSV/PDF; journal persists parse/map/apply events.
 
 M2 — Tools catalog + Planner orchestration
 - Register OpenAPI via ToolsFactory; base prefix; Planner step profiles.
@@ -40,6 +49,9 @@ Deliverables
 - Apply cues → Lily (ETag), anchors, `scan-anchors`, journal events.
 - UMP persistence & list endpoint for diagnostics.
 - Tools + Planner orchestration; tools registered in ToolsFactory.
+Observability
+- Journal endpoint lists timeline with anchors/timestamps; stream endpoint mirrors persistence.
+- Minimal metrics: parse/map/apply counters and durations.
 
 Testing
 - Unit: ScreenplayParser, cue mapping, Lily anchor parsing, PDF builder.

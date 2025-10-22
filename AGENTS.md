@@ -102,6 +102,20 @@ Three‑pane Studio paradigm
 - Right (Optionals): OpenAPI, Routes (viewer + diff), Services tails, Persona,
   Semantic Memory.
 
+Composer‑first story (authoritative)
+- Model: screenplay text (.fountain) with inline tags → parsed model → mapped cue plans → applied notation → journaled timeline (+ UMP batches).
+- States: No session → Source stored (ETag) → Parsed → Cued → Applied → Journaled.
+- Why: determinism (ETags), reproducibility (journal), separation (idea→structure→actions→artifact), security (Keychain), OpenAPI‑first change control.
+
+Change Now (must converge UI to story)
+- Introduce “Screenplay Session” flow as the default storyline:
+  - Create/select session; show current ETag.
+  - Actions gate by preconditions: Parse → Map Cues → Apply.
+  - Results cards after each action: warnings, counts, preview links.
+  - Journal timeline: stored/parsed/cued/applied with anchors and timestamps.
+- Provide one readiness verdict: Keychain OK + URLs valid + services healthy.
+- Keep operator and curator surfaces separate from the composer flow.
+
 AudioTalk Product (essentials)
 - Screenplay source (ETag), parse → model (scenes/beats/tags/characters),
   map cues, cue‑sheet JSON/CSV/PDF, UMP persistence, Journal events.

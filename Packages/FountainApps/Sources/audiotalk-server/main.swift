@@ -3,6 +3,7 @@ import Dispatch
 import FountainRuntime
 import AudioTalkService
 import LauncherSignature
+import FountainStoreClient
 
 let env = ProcessInfo.processInfo.environment
 if env["FOUNTAIN_SKIP_LAUNCHER_SIG"] != "1" { verifyLauncherSignature() }

@@ -510,13 +510,13 @@ struct ControlTab: View {
                 Spacer()
                 Button("Precompile") { vm.precompile() }.disabled(vm.repoPath == nil)
             }
-            HStack(spacing: 12) {
-                Button("Start") { vm.start() }
-                    .disabled(vm.repoPath == nil || vm.starting)
-                Button("Stop") { vm.stop() }
-                Button("Diagnostics") { vm.diagnostics() }
-                Spacer()
-                Button("Copy Logs") {
+        HStack(spacing: 12) {
+            Button("Start") { vm.start() }
+                .disabled(vm.repoPath == nil || vm.starting)
+            Button("Stop") { vm.stop() }
+            Button("Diagnostics") { vm.diagnostics() }
+            Spacer()
+            Button("Copy Logs") {
                     NSPasteboard.general.clearContents();
                     NSPasteboard.general.setString(vm.logText, forType: .string)
                     copied = true
@@ -524,6 +524,28 @@ struct ControlTab: View {
                 }
             }
             Divider()
+            GroupBox(label: Text("AudioTalk Stack")) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 12) {
+                        Text("Ports:")
+                        Text("audiotalk : \(vm.audioTalkPort)")
+                        Text("function-caller : \(vm.functionCallerPort)")
+                        Text("tools-factory : \(vm.toolsFactoryPort)")
+                        Spacer()
+                        Button("Refresh") { vm.refreshAudioTalkPIDs() }
+                    }.font(.caption)
+                    HStack(spacing: 12) {
+                        Text("PIDs:")
+                        Text("audiotalk=") + Text(vm.audiotalkPID ?? "–").foregroundColor(.secondary)
+                        Text("function-caller=") + Text(vm.functionCallerPID ?? "–").foregroundColor(.secondary)
+                        Text("tools-factory=") + Text(vm.toolsFactoryPID ?? "–").foregroundColor(.secondary)
+                        Spacer()
+                        Button("Start Stack") { vm.startAudioTalkStack() }
+                        Button("Stop Stack") { vm.stopAudioTalkStack() }
+                        Button("Kill All") { vm.killAudioTalkAll() }
+                    }.font(.caption)
+                }
+            }
             GroupBox(label: Text("Services")) {
                 if vm.controlPlaneOK && !vm.services.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {

@@ -26,6 +26,7 @@ M1 — Core polish (API, persistence, cues)
 - Finalize spec enums and content types; ensure `JournalEvent` types (parsed, cue_mapped, plan_applied) are complete.
 - Persist parsed model keyed by ETag; prefer cached results across parse/map.
 - Cue sheet CSV/PDF parity (headers, pagination, simple styling).
+- UMP persistence: on `sendUMPBatch`, persist each item (session, ump, jr_timestamp, host_time_ns, receivedAt) to store; optionally mirror to FlexBridge disk journal.
 - Acceptance: Endpoints green; CLI flows stable; CI smoke passes.
 
 M2 — Tools catalog + Planner orchestration
@@ -71,12 +72,14 @@ Specs
 - Extend `JournalEvent.type` (done) and document values.
 - Add `AnchorMap` schemas and endpoints: `scan-anchors`, `get anchors`, `reanchor`.
 - Document Lily marker format and stability guarantees.
+- Add optional `UMPEvent` schema and (optional) browsing endpoint `GET /ump/{session}/events` for development diagnostics.
 
 Service
 - ScreenplayParser warnings coverage; characters heuristics toggleable via request flags.
 - Cue mapping options (`theme_table`, hints) influence plans; persist mapping options alongside cues.
 - Lily mapping: expand beyond comments—dynamics/tempo handled, add articulation/macros as Lily.
 - SSE transport: enable chunked responses in NIO transport for truly live streaming.
+- UMP storage: write each validated UMP frame to collection `audiotalk_ump` with fields `{ session, ump(hex), jr_timestamp?, host_time_ns?, receivedAt }`; enrich Journal with `ump_received` entries. Optionally integrate `FlexBridge` to also journal UMP envs to `.fountain/logs` during preview.
 
 Studio (SwiftUI)
 - Chat bound to Planner + FunctionCaller; tool outputs drive editors.
@@ -109,4 +112,3 @@ References
 - Service: `Packages/FountainServiceKit-AudioTalk/`
 - Apps: `Packages/FountainApps/Sources/audiotalk-*`, Studio inside `FountainLauncherUI`
 - Tools: ToolsFactory (:8011), FunctionCaller (:8004), registration script `Scripts/register-audiotalk-tools.sh`
-

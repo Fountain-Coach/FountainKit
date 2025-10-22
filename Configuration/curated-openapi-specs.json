@@ -1,0 +1,15 @@
+[
+  { "name": "Gateway Server", "path": "Packages/FountainApps/Sources/gateway-server/openapi.yaml" },
+  { "name": "AudioTalk Service", "path": "Packages/FountainServiceKit-AudioTalk/Sources/AudioTalkService/openapi.yaml" },
+  { "name": "ToolsFactory Service", "path": "Packages/FountainServiceKit-ToolsFactory/Sources/ToolsFactoryService/openapi.yaml" },
+  { "name": "FunctionCaller Service", "path": "Packages/FountainServiceKit-FunctionCaller/Sources/FunctionCallerService/openapi.yaml" },
+  { "name": "Planner Service", "path": "Packages/FountainServiceKit-Planner/Sources/PlannerService/openapi.yaml" },
+  { "name": "Persist Service", "path": "Packages/FountainServiceKit-Persist/Sources/PersistService/openapi.yaml" },
+  { "name": "SpeechAtlas Service", "path": "Packages/FountainServiceKit-Persist/Sources/SpeechAtlasService/openapi.yaml" },
+  { "name": "Awareness Service", "path": "Packages/FountainServiceKit-Awareness/Sources/AwarenessService/openapi.yaml" },
+  { "name": "Bootstrap Service", "path": "Packages/FountainServiceKit-Bootstrap/Sources/BootstrapService/openapi.yaml" },
+  { "name": "FKOps Service", "path": "Packages/FountainServiceKit-FKOps/Sources/FKOpsService/openapi.yaml" },
+  { "name": "SemanticBrowser Service", "path": "Packages/FountainServiceKit-SemanticBrowser/Sources/SemanticBrowserService/openapi.yaml" },
+  { "name": "ToolServer Service", "path": "Packages/FountainServiceKit-ToolServer/Sources/ToolServerService/openapi.yaml" }
+]
+

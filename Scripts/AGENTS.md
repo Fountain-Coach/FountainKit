@@ -13,3 +13,6 @@ Testing
 Maintenance
 - Keep usage/help up to date; prefer POSIX sh or bash with `set -euo pipefail`.
 
+Curated OpenAPI validation
+- Validator: `Scripts/validate-curated-specs.sh` ensures curated spec list stays in sync with repo paths.
+- Pre‑commit: run `Scripts/install-git-hooks.sh` once to enforce locally.

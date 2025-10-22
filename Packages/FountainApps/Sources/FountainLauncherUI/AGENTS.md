@@ -43,6 +43,11 @@ Principles
 3) TDD for logic. Each feature ships with tests.
 4) One Control workspace (Left: principal; Middle: logs; Right: OpenAPI/Routes/Services/Persona/Memory).
 
+Curated specs source of truth
+- The curated OpenAPI list is declared in `Configuration/curated-openapi-specs.json`.
+- Validation: `Scripts/validate-curated-specs.sh` checks that every curated path exists (and generator configs are present) and that all server specs are covered.
+- CI runs the validator in both lint jobs; optionally install the local hook via `Scripts/install-git-hooks.sh` to run it pre‑commit.
+
 What to do here
 - Curated OpenAPI panel
   - List the core specs; allow edit (Save/Revert), `lint`, `regenerate` (swift build), `reload routes`.

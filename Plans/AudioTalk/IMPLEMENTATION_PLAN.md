@@ -26,7 +26,8 @@ M1 — Core polish (API, persistence, cues)
 - Finalize spec enums and content types; ensure `JournalEvent` types (parsed, cue_mapped, plan_applied) are complete.
 - Persist parsed model keyed by ETag; prefer cached results across parse/map.
 - Cue sheet CSV/PDF parity (headers, pagination, simple styling).
-- UMP persistence: on `sendUMPBatch`, persist each item (session, ump, jr_timestamp, host_time_ns, receivedAt) to store; optionally mirror to FlexBridge disk journal.
+ - [x] UMP persistence: on `sendUMPBatch`, persist each item (session, ump, jr_timestamp, host_time_ns, receivedAt) to store; optionally mirror to FlexBridge disk journal.
+   - Implemented: `audiotalk_ump` collection + `GET /audiotalk/ump/{session}/events`; journal `ump_received`.
 - Acceptance: Endpoints green; CLI flows stable; CI smoke passes.
 
 M2 — Tools catalog + Planner orchestration

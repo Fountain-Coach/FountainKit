@@ -1,6 +1,6 @@
 import Foundation
 
-struct SpecItem: Identifiable, Hashable {
+struct SpecItem: Identifiable, Hashable, Equatable {
     var id: String { url.path }
     let name: String
     let url: URL

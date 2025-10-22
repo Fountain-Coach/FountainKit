@@ -37,7 +37,8 @@ let package = Package(
                 "OpenAPICurator",
                 "Yams",
                 .product(name: "LauncherSignature", package: "FountainCore")
-            ]
+            ],
+            exclude: ["README.md"]
         ),
         .executableTarget(
             name: "clientgen-service",

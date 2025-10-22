@@ -382,7 +382,7 @@ final class LauncherViewModel: ObservableObject {
     func openRepoLog(_ name: String) {
         if let url = repoLogURL(name), FileManager.default.fileExists(atPath: url.path) { NSWorkspace.shared.open(url) }
     }
-    func fetchGatewayRoutes(_ completion: @escaping (String) -> Void) {
+    func fetchGatewayRoutes(_ completion: @Sendable @escaping (String) -> Void) {
         let defaultsURL = defaultsString("FountainAI.GATEWAY_URL", fallback: "http://127.0.0.1:8010")
         guard let base = URL(string: defaultsURL) else { completion("__INVALID_URL__"); return }
         var url = base; url.append(path: "/admin/routes")
@@ -404,7 +404,7 @@ final class LauncherViewModel: ObservableObject {
             }
         }.resume()
     }
-    private func defaultsString(_ key: String, fallback: String) -> String {
+    func defaultsString(_ key: String, fallback: String) -> String {
         let v = UserDefaults.standard.string(forKey: key) ?? ""
         let t = v.trimmingCharacters(in: .whitespacesAndNewlines)
         return t.isEmpty ? fallback : t

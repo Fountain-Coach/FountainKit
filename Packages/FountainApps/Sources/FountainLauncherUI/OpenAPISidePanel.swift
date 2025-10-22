@@ -51,7 +51,9 @@ struct OpenAPISidePanel: View {
             GatewayRoutesView(vm: vm)
                 .frame(minHeight: 160)
         }
-        .onChange(of: selected) { _ in if let u = selected?.url { content = vm.readSpec(at: u) } else { content = "" } }
+        .onChange(of: selected) { _, newValue in
+            if let u = newValue?.url { content = vm.readSpec(at: u) } else { content = "" }
+        }
     }
 
     private func refreshList(selectFirstIfNeeded: Bool) {

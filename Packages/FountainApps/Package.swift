@@ -68,7 +68,6 @@ let package = Package(
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
         .package(url: "https://github.com/apple/swift-certificates.git", from: "1.0.0"),
-        .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
         .package(url: "https://github.com/Fountain-Coach/swiftcurseskit.git", exact: "0.2.0"),
         .package(url: "https://github.com/Fountain-Coach/swift-secretstore.git", exact: "0.1.0"),
         .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
@@ -175,11 +174,13 @@ let package = Package(
         ),
         .executableTarget(
             name: "llm-doctor",
-            dependencies: []
+            dependencies: [],
+            exclude: ["README.md"]
         ),
         .executableTarget(
             name: "engraver-direct",
-            dependencies: []
+            dependencies: [],
+            exclude: ["README.md"]
         ),
         .executableTarget(
             name: "gateway-ci-smoke",
@@ -301,7 +302,7 @@ let package = Package(
                 .product(name: "SecretStore", package: "swift-secretstore")
             ],
             path: "Sources/FountainLauncherUI",
-            exclude: ["README.md"]
+            exclude: ["README.md", "AGENTS.md"]
         ),
         .executableTarget(
             name: "engraver-studio-app",
@@ -370,7 +371,8 @@ let package = Package(
                 .product(name: "FountainAIAdapters", package: "FountainGatewayKit"),
                 .product(name: "TeatroGUI", package: "TeatroGUI")
             ],
-            path: "Sources/engraver-studio"
+            path: "Sources/engraver-studio",
+            exclude: ["README.md"]
         ),
         .executableTarget(
             name: "engraver-chat-tui",

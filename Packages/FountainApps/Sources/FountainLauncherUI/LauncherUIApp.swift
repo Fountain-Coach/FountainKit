@@ -33,6 +33,43 @@ struct LauncherUIApp: App {
                     Button("AudioTalk Studio") { vm.tab = .audiotalk }.keyboardShortcut("4")
                 }
             }
+            CommandMenu("Profile") {
+                Button(action: { vm.runProfile = .audioTalk }) { Text(vm.runProfile == .audioTalk ? "✓ AudioTalk Only" : "AudioTalk Only") }
+                Button(action: { vm.runProfile = .fullStack }) { Text(vm.runProfile == .fullStack ? "✓ Full Fountain" : "Full Fountain") }
+            }
+            CommandMenu("AudioTalk") {
+                Button("Start Stack") { vm.startAudioTalkStack() }.keyboardShortcut("s", modifiers: [.command, .shift])
+                Button("Stop Stack") { vm.stopAudioTalkStack() }.keyboardShortcut("x", modifiers: [.command, .shift])
+                Button("Kill All") { vm.killAudioTalkAll() }.keyboardShortcut("k", modifiers: [.command, .shift])
+                Divider()
+                Button("Precompile") { vm.precompileAudioTalk() }.keyboardShortcut("p", modifiers: [.command, .shift])
+                Divider()
+                Menu("Open Logs") {
+                    Button("AudioTalk") { vm.openAudioTalkLog("audiotalk") }
+                    Button("Function Caller") { vm.openAudioTalkLog("function-caller") }
+                    Button("Tools Factory") { vm.openAudioTalkLog("tools-factory") }
+                }
+                Menu("Show Logs Panel") {
+                    Button("AudioTalk") { vm.showAudioTalkLog = true }
+                    Button("Function Caller") { vm.showFunctionCallerLog = true }
+                    Button("Tools Factory") { vm.showToolsFactoryLog = true }
+                }
+            }
+            CommandMenu("Full Stack") {
+                Button("Start Full Stack") { vm.startFullStack() }
+                Button("Stop Full Stack") { vm.stopFullStack() }
+                Button("Kill Full Stack") { vm.killFullStack() }
+                Divider()
+                Button("Precompile Full Stack") { vm.precompileFullStack() }
+                Divider()
+                Menu("Open Logs") {
+                    Button("Gateway") { vm.openRepoLog("gateway") }
+                    Button("Planner") { vm.openRepoLog("planner") }
+                    Button("Persist") { vm.openRepoLog("persist") }
+                    Button("Awareness") { vm.openRepoLog("baseline-awareness") }
+                    Button("Bootstrap") { vm.openRepoLog("bootstrap") }
+                }
+            }
         }
     }
 }
@@ -80,6 +117,9 @@ final class LauncherViewModel: ObservableObject {
     enum BuildMode: Hashable { case auto, noBuild, forceBuild }
     @Published var buildMode: BuildMode = .auto
 
+    enum RunProfile: String { case audioTalk, fullStack }
+    @AppStorage("FountainLauncher.RunProfile") var runProfile: RunProfile = .fullStack
+
     static let repoKey = "FountainAI.RepoRoot"
     private var ctrlURL: URL
 
@@ -94,8 +134,11 @@ final class LauncherViewModel: ObservableObject {
         audioTalkPort = Int(env["AUDIOTALK_PORT"] ?? env["PORT"] ?? "8080") ?? 8080
         functionCallerPort = Int(env["FUNCTION_CALLER_PORT"] ?? "8004") ?? 8004
         toolsFactoryPort = Int(env["TOOLS_FACTORY_PORT"] ?? "8011") ?? 8011
-        // Choose status URL: control plane (9090) or AudioTalk health when studio mode
-        if let flag = env["AUDIO_TALK_STUDIO"], ["1","true","yes"].contains(flag.lowercased()) {
+        // Choose status URL based on profile (AudioTalk health vs control-plane status)
+        let audioStudio = env["AUDIO_TALK_STUDIO"].map { ["1","true","yes"].contains($0.lowercased()) } ?? false
+        let storedProfileRaw = UserDefaults.standard.string(forKey: "FountainLauncher.RunProfile")
+        let storedProfile: RunProfile = RunProfile(rawValue: storedProfileRaw ?? "") ?? .audioTalk
+        if storedProfile == .audioTalk || audioStudio {
             let port = Int(env["AUDIOTALK_PORT"] ?? env["PORT"] ?? "8080") ?? 8080
             ctrlURL = URL(string: "http://127.0.0.1:\(port)/audiotalk/meta/health")!
             tab = .audiotalk
@@ -103,9 +146,14 @@ final class LauncherViewModel: ObservableObject {
             ctrlURL = URL(string: "http://127.0.0.1:9090/status")!
         }
         if let auto = env["AUDIO_TALK_AUTOSTART"], ["1","true","yes"].contains(auto.lowercased()), repoPath != nil {
-            // Prefer the consolidated dev-up script to manage build/start/restart and ports
             let env = processEnv()
-            runStreaming(command: ["bash", "Scripts/audiotalk-dev-up.sh"], cwd: repoPath!, env: env)
+            let storedProfileRaw = UserDefaults.standard.string(forKey: "FountainLauncher.RunProfile")
+            let storedProfile: RunProfile = RunProfile(rawValue: storedProfileRaw ?? "") ?? .fullStack
+            if storedProfile == .fullStack {
+                runStreaming(command: ["bash", "Scripts/dev-up", "--check"], cwd: repoPath!, env: env)
+            } else {
+                runStreaming(command: ["bash", "Scripts/audiotalk-dev-up.sh"], cwd: repoPath!, env: env)
+            }
         }
         startStatusPolling()
         startTailingLogs()
@@ -205,6 +253,23 @@ final class LauncherViewModel: ObservableObject {
         let env = processEnv()
         // Precompile the three products to minimize concurrent SwiftPM rebuilds on run
         runStreaming(command: ["swift", "build", "--configuration", "debug", "--package-path", "Packages/FountainApps", "--product", "audiotalk-server", "--product", "tools-factory-server", "--product", "function-caller-server"], cwd: repoPath, env: env)
+    }
+    // Full stack
+    func startFullStack() {
+        guard let repoPath else { errorMessage = "Select repository first"; return }
+        runStreaming(command: ["bash", "Scripts/dev-up", "--check"], cwd: repoPath, env: processEnv())
+    }
+    func stopFullStack() {
+        guard let repoPath else { return }
+        runStreaming(command: ["bash", "Scripts/dev-down"], cwd: repoPath, env: processEnv())
+    }
+    func killFullStack() {
+        guard let repoPath else { return }
+        runStreaming(command: ["bash", "Scripts/dev-down"], cwd: repoPath, env: processEnv())
+    }
+    func precompileFullStack() {
+        guard let repoPath else { return }
+        runStreaming(command: ["bash", "Scripts/dev-up", "prebuild", "--all"], cwd: repoPath, env: processEnv())
     }
     func startToolsFactory() {
         guard let repoPath else { errorMessage = "Select repository first"; return }
@@ -310,14 +375,28 @@ final class LauncherViewModel: ObservableObject {
         let url = serviceLogURL(name)
         if FileManager.default.fileExists(atPath: url.path) { NSWorkspace.shared.open(url) }
     }
+    func repoLogURL(_ name: String) -> URL? {
+        guard let repo = repoPath else { return nil }
+        return URL(fileURLWithPath: repo).appendingPathComponent(".fountain/logs/\(name).log")
+    }
+    func openRepoLog(_ name: String) {
+        if let url = repoLogURL(name), FileManager.default.fileExists(atPath: url.path) { NSWorkspace.shared.open(url) }
+    }
     func updateServiceLogs(maxChars: Int = 20_000) {
         func tail(_ url: URL) -> String {
             guard let data = try? Data(contentsOf: url), !data.isEmpty, let s = String(data: data, encoding: .utf8) else { return "" }
             return s.count <= maxChars ? s : String(s.suffix(maxChars))
         }
-        audiotalkLog = tail(serviceLogURL("audiotalk"))
-        functionCallerLog = tail(serviceLogURL("function-caller"))
-        toolsFactoryLog = tail(serviceLogURL("tools-factory"))
+        if runProfile == .fullStack, let repo = repoPath {
+            let base = URL(fileURLWithPath: repo).appendingPathComponent(".fountain/logs")
+            audiotalkLog = tail(serviceLogURL("audiotalk"))
+            functionCallerLog = tail(base.appendingPathComponent("function-caller.log"))
+            toolsFactoryLog = tail(base.appendingPathComponent("tools-factory.log"))
+        } else {
+            audiotalkLog = tail(serviceLogURL("audiotalk"))
+            functionCallerLog = tail(serviceLogURL("function-caller"))
+            toolsFactoryLog = tail(serviceLogURL("tools-factory"))
+        }
     }
 
     // Build environment for child processes: secrets from Keychain, URLs from defaults
@@ -541,156 +620,132 @@ struct Msg: Identifiable { let id = UUID(); let text: String }
 // MARK: - Tabs
 struct ControlTab: View {
     @ObservedObject var vm: LauncherViewModel
+    @State private var leftWidth: CGFloat = 320
+    @State private var rightWidth: CGFloat = 360
     private var buildVersion: String { (Bundle.main.infoDictionary?["CFBundleVersion"] as? String) ?? "dev" }
     @State private var copied: Bool = false
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Fountain Launcher Dashboard • build \(buildVersion)")
-                    .font(.headline)
-                Spacer()
-                Button("Debug Info") { vm.presentDebugInfo() }
-            }
-            HStack {
-                Button("Environment…") { vm.tab = .environment }
-                Spacer()
-            }
-            HStack {
-                Circle().fill(vm.controlPlaneOK ? Color.green : Color.red).frame(width: 12, height: 12)
-                Text(vm.controlPlaneOK ? "Control plane: reachable" : (vm.starting ? "Booting control plane…" : "Control plane: not reachable"))
-                Spacer()
-            }
-            HStack {
-                if let repo = vm.repoPath {
-                    Text("Repo: \(repo)").font(.footnote).foregroundColor(.secondary)
-                } else {
-                    Text("Repo: not set").font(.footnote).foregroundColor(.secondary)
+        HSplitView {
+            // Left: Principal
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Fountain Launcher • build \(buildVersion)").font(.headline)
+                    Spacer()
+                    Button("Debug Info") { vm.presentDebugInfo() }
                 }
-                Spacer()
-                Button("Choose Repo…") { vm.chooseRepo() }
-            }
-            HStack(spacing: 12) {
-                Picker("Build Mode", selection: Binding(get: { vm.buildMode }, set: { vm.buildMode = $0 })) {
+                HStack(spacing: 8) {
+                    Circle().fill(vm.controlPlaneOK ? Color.green : Color.red).frame(width: 10, height: 10)
+                        .animation(.easeInOut(duration: 0.18), value: vm.controlPlaneOK)
+                    Text(vm.controlPlaneOK ? "Reachable" : (vm.starting ? "Booting…" : "Not reachable"))
+                        .font(.callout)
+                    Spacer()
+                    Button("Environment…") { vm.tab = .environment }
+                }
+                if let repo = vm.repoPath {
+                    Text("Repo: \(repo)").font(.footnote).foregroundStyle(.secondary)
+                } else {
+                    Button("Choose Repo…") { vm.chooseRepo() }
+                }
+                Picker("Build", selection: Binding(get: { vm.buildMode }, set: { vm.buildMode = $0 })) {
                     Text("Auto").tag(LauncherViewModel.BuildMode.auto)
                     Text("No Build").tag(LauncherViewModel.BuildMode.noBuild)
-                    Text("Force Build").tag(LauncherViewModel.BuildMode.forceBuild)
+                    Text("Force").tag(LauncherViewModel.BuildMode.forceBuild)
                 }.pickerStyle(.segmented)
-                Spacer()
-                Button("Precompile") { vm.precompile() }.disabled(vm.repoPath == nil)
-            }
-        HStack(spacing: 12) {
-            Button("Start") { vm.start() }
-                .disabled(vm.repoPath == nil || vm.starting)
-            Button("Stop") { vm.stop() }
-            Button("Diagnostics") { vm.diagnostics() }
-            Spacer()
-            Button("Copy Logs") {
-                    NSPasteboard.general.clearContents();
-                    NSPasteboard.general.setString(vm.logText, forType: .string)
-                    copied = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { copied = false }
+                HStack(spacing: 8) {
+                    Button("Start") { vm.start() }.disabled(vm.repoPath == nil || vm.starting)
+                    Button("Stop") { vm.stop() }
+                    Button("Diagnostics") { vm.diagnostics() }
+                    Spacer()
+                    Button("Precompile") { vm.precompile() }
                 }
-            }
-            Divider()
-            GroupBox(label: Text("AudioTalk Stack")) {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 12) {
-                        Text("Ports:")
-                        Text("audiotalk : \(vm.audioTalkPort)")
-                        Text("function-caller : \(vm.functionCallerPort)")
-                        Text("tools-factory : \(vm.toolsFactoryPort)")
-                        Spacer()
-                        Button("Refresh") { vm.refreshAudioTalkPIDs() }
-                    }.font(.caption)
-                    HStack(spacing: 12) {
-                        Text("PIDs:")
-                        Text("audiotalk=") + Text(vm.audiotalkPID ?? "–").foregroundColor(.secondary)
-                        Text("function-caller=") + Text(vm.functionCallerPID ?? "–").foregroundColor(.secondary)
-                        Text("tools-factory=") + Text(vm.toolsFactoryPID ?? "–").foregroundColor(.secondary)
-                        Spacer()
-                        Button("Start Stack") { vm.startAudioTalkStack() }
-                        Button("Stop Stack") { vm.stopAudioTalkStack() }
-                        Button("Kill All") { vm.killAudioTalkAll() }
-                    }.font(.caption)
-                    HStack(spacing: 12) {
-                        Text("Logs:")
-                        Button("AudioTalk") { vm.openAudioTalkLog("audiotalk") }
-                        Button("FunctionCaller") { vm.openAudioTalkLog("function-caller") }
-                        Button("ToolsFactory") { vm.openAudioTalkLog("tools-factory") }
-                        Spacer()
-                    }.font(.caption)
-                }
-            }
-            GroupBox(label: Text("Service Logs")) {
-                VStack(alignment: .leading, spacing: 8) {
-                    DisclosureGroup(isExpanded: Binding(get: { vm.showAudioTalkLog }, set: { vm.showAudioTalkLog = $0 })) {
-                        TextEditor(text: Binding(get: { vm.audiotalkLog }, set: { _ in }))
-                            .font(.system(.footnote, design: .monospaced))
-                            .frame(minHeight: 120)
-                        HStack(spacing: 12) {
-                            Button("Open") { vm.openAudioTalkLog("audiotalk") }
-                            Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(vm.audiotalkLog, forType: .string) }
-                            Button("Refresh") { vm.updateServiceLogs() }
-                            Spacer()
-                        }.font(.caption)
-                    } label: { Text("AudioTalk") }
-
-                    DisclosureGroup(isExpanded: Binding(get: { vm.showFunctionCallerLog }, set: { vm.showFunctionCallerLog = $0 })) {
-                        TextEditor(text: Binding(get: { vm.functionCallerLog }, set: { _ in }))
-                            .font(.system(.footnote, design: .monospaced))
-                            .frame(minHeight: 120)
-                        HStack(spacing: 12) {
-                            Button("Open") { vm.openAudioTalkLog("function-caller") }
-                            Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(vm.functionCallerLog, forType: .string) }
-                            Button("Refresh") { vm.updateServiceLogs() }
-                            Spacer()
-                        }.font(.caption)
-                    } label: { Text("Function Caller") }
-
-                    DisclosureGroup(isExpanded: Binding(get: { vm.showToolsFactoryLog }, set: { vm.showToolsFactoryLog = $0 })) {
-                        TextEditor(text: Binding(get: { vm.toolsFactoryLog }, set: { _ in }))
-                            .font(.system(.footnote, design: .monospaced))
-                            .frame(minHeight: 120)
-                        HStack(spacing: 12) {
-                            Button("Open") { vm.openAudioTalkLog("tools-factory") }
-                            Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(vm.toolsFactoryLog, forType: .string) }
-                            Button("Refresh") { vm.updateServiceLogs() }
-                            Spacer()
-                        }.font(.caption)
-                    } label: { Text("Tools Factory") }
-                }
-            }
-            GroupBox(label: Text("Services")) {
-                if vm.controlPlaneOK && !vm.services.isEmpty {
+                GroupBox(label: Text("AudioTalk")) {
                     VStack(alignment: .leading, spacing: 6) {
-                        ForEach(vm.services, id: \.name) { s in
-                            HStack {
-                                Circle().fill(s.healthy ? Color.green : (s.running ? Color.yellow : Color.gray)).frame(width: 8, height: 8)
-                                Text(s.name)
-                                Spacer()
-                                Button("View Log") { vm.openServiceLog(name: s.name) }
-                                if s.running {
-                                    Button("Restart") { vm.serviceAction(name: s.name, action: .restart) }
-                                    Button("Stop") { vm.serviceAction(name: s.name, action: .stop) }
-                                } else {
-                                    Button("Start") { vm.serviceAction(name: s.name, action: .start) }
-                                }
-                            }
+                        HStack(spacing: 10) {
+                            Text("Ports:").font(.caption)
+                            Text("AT: \(vm.audioTalkPort)")
+                            Text("FC: \(vm.functionCallerPort)")
+                            Text("TF: \(vm.toolsFactoryPort)")
+                            Spacer()
                         }
+                        HStack(spacing: 10) {
+                            Text("PIDs:").font(.caption)
+                            Text("AT=") + Text(vm.audiotalkPID ?? "–").foregroundColor(.secondary)
+                            Text("FC=") + Text(vm.functionCallerPID ?? "–").foregroundColor(.secondary)
+                            Text("TF=") + Text(vm.toolsFactoryPID ?? "–").foregroundColor(.secondary)
+                            Spacer()
+                            Button("Start") { vm.startAudioTalkStack() }
+                            Button("Stop") { vm.stopAudioTalkStack() }
+                            Button("Kill") { vm.killAudioTalkAll() }
+                        }.font(.caption)
                     }
-                } else {
-                    Text(vm.starting ? "Waiting for services…" : "No services yet.")
-                        .foregroundColor(.secondary)
                 }
+                Spacer()
             }
-            GroupBox(label: Text("Logs")) {
+            .padding(16)
+            .frame(minWidth: 260, idealWidth: leftWidth)
+
+            // Middle: Editing / Logs
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Logs").font(.headline)
+                    Spacer()
+                    Button("Copy") {
+                        NSPasteboard.general.clearContents();
+                        NSPasteboard.general.setString(vm.logText, forType: .string)
+                        copied = true; DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { copied = false }
+                    }
+                }
                 TextEditor(text: Binding(get: { vm.logText }, set: { _ in }))
                     .font(.system(.footnote, design: .monospaced))
                     .disableAutocorrection(true)
-                    .frame(maxWidth: .infinity, minHeight: 260)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .padding(16)
+            .frame(minWidth: 420)
+
+            // Right: Optional / Service diagnostics
+            VStack(alignment: .leading, spacing: 12) {
+                GroupBox(label: Text("Service Logs")) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        DisclosureGroup(isExpanded: Binding(get: { vm.showAudioTalkLog }, set: { vm.showAudioTalkLog = $0 })) {
+                            TextEditor(text: Binding(get: { vm.audiotalkLog }, set: { _ in }))
+                                .font(.system(.footnote, design: .monospaced))
+                                .frame(minHeight: 120)
+                        } label: { Text("AudioTalk") }
+                        DisclosureGroup(isExpanded: Binding(get: { vm.showFunctionCallerLog }, set: { vm.showFunctionCallerLog = $0 })) {
+                            TextEditor(text: Binding(get: { vm.functionCallerLog }, set: { _ in }))
+                                .font(.system(.footnote, design: .monospaced))
+                                .frame(minHeight: 120)
+                        } label: { Text("Function Caller") }
+                        DisclosureGroup(isExpanded: Binding(get: { vm.showToolsFactoryLog }, set: { vm.showToolsFactoryLog = $0 })) {
+                            TextEditor(text: Binding(get: { vm.toolsFactoryLog }, set: { _ in }))
+                                .font(.system(.footnote, design: .monospaced))
+                                .frame(minHeight: 120)
+                        } label: { Text("Tools Factory") }
+                    }
+                }
+                GroupBox(label: Text("Services")) {
+                    if vm.controlPlaneOK && !vm.services.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(vm.services, id: \.name) { s in
+                                HStack {
+                                    Circle().fill(s.healthy ? Color.green : (s.running ? Color.yellow : Color.gray)).frame(width: 8, height: 8)
+                                    Text(s.name)
+                                    Spacer()
+                                    Button("View Log") { vm.openServiceLog(name: s.name) }
+                                }
+                            }
+                        }
+                    } else {
+                        Text(vm.starting ? "Waiting for services…" : "No services yet.").foregroundColor(.secondary)
+                    }
+                }
+                Spacer()
+            }
+            .padding(16)
+            .frame(minWidth: 280, idealWidth: rightWidth)
         }
-        .padding(16)
+        .animation(.easeInOut(duration: 0.2), value: vm.controlPlaneOK)
         .overlay(alignment: .topTrailing) {
             if copied { Text("Copied").padding(6).background(Color.black.opacity(0.7)).foregroundColor(.white).cornerRadius(6).padding() }
         }
@@ -701,62 +756,72 @@ struct EnvTab: View {
     @ObservedObject var vm: LauncherViewModel
     @State private var copied: Bool = false
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack { Button("Back to Control") { vm.tab = .control }; Spacer() }
-            GroupBox(label: Text("Environment")) {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack { SecureField("OPENAI_API_KEY", text: $vm.openAIKeyInput); Button("Clear") { vm.clearOpenAIKey() } }
-                    HStack { TextField("FOUNTAINSTORE_URL", text: $vm.storeURLInput) }
-                    HStack { SecureField("FOUNTAINSTORE_API_KEY", text: $vm.storeKeyInput); Button("Clear") { vm.clearStoreKey() } }
-                    Divider()
-                    HStack { TextField("FOUNTAIN_GATEWAY_URL", text: $vm.gatewayURLInput) }
-                    HStack { SecureField("GATEWAY_BEARER", text: $vm.gatewayTokenInput); Button("Clear") { vm.clearGatewayToken() } }
-                    Divider()
-                    HStack { TextField("ENGRAVER_CORPUS_ID", text: $vm.engraverCorpusInput) }
-                    HStack { TextField("ENGRAVER_COLLECTION", text: $vm.engraverCollectionInput) }
-                    HStack { TextField("ENGRAVER_MODELS (comma separated)", text: $vm.engraverModelsInput) }
-                    HStack { TextField("ENGRAVER_DEFAULT_MODEL", text: $vm.engraverDefaultModelInput) }
-                    Toggle("Enable Diagnostics (ENGRAVER_DEBUG)", isOn: $vm.engraverDebugEnabled)
-                        .toggleStyle(.switch)
-                        .help("When enabled the studio records verbose logs and exposes them in the Diagnostics panel.")
-                    HStack {
-                        Button("Save Env") { vm.saveEnv() }
-                        Button("Export .env (0600)") { vm.exportDotEnv() }
-                        Spacer()
-                        Button("Copy Sanitized") {
-                            let hasOA = KeychainHelper.read(service: "FountainAI", account: "OPENAI_API_KEY") != nil
-                            let hasFS = KeychainHelper.read(service: "FountainAI", account: "FOUNTAINSTORE_API_KEY") != nil
-                            let url = UserDefaults.standard.string(forKey: "FountainAI.FOUNTAINSTORE_URL") ?? ""
-                            let gatewayURL = UserDefaults.standard.string(forKey: "FountainAI.GATEWAY_URL") ?? ""
-                            let hasGateway = KeychainHelper.read(service: "FountainAI", account: "GATEWAY_BEARER") != nil
-                            let engraverCorpus = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_CORPUS_ID") ?? ""
-                            let engraverCollection = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_COLLECTION") ?? ""
-                            let engraverModels = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_MODELS") ?? ""
-                            let engraverDefault = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_DEFAULT_MODEL") ?? ""
-                            let engraverDebug = UserDefaults.standard.bool(forKey: "FountainAI.ENGRAVER_DEBUG")
-                            let report = """
-Env Report
-OPENAI_API_KEY=\(hasOA ? "***" : "(missing)")
-FOUNTAINSTORE_URL=\(url.isEmpty ? "(missing)" : url)
-FOUNTAINSTORE_API_KEY=\(hasFS ? "***" : "(missing)")
-FOUNTAIN_GATEWAY_URL=\(gatewayURL.isEmpty ? "(missing)" : gatewayURL)
-GATEWAY_BEARER=\(hasGateway ? "***" : "(missing)")
-ENGRAVER_CORPUS_ID=\(engraverCorpus.isEmpty ? "(missing)" : engraverCorpus)
-ENGRAVER_COLLECTION=\(engraverCollection.isEmpty ? "(missing)" : engraverCollection)
-ENGRAVER_MODELS=\(engraverModels.isEmpty ? "(missing)" : engraverModels)
-ENGRAVER_DEFAULT_MODEL=\(engraverDefault.isEmpty ? "(missing)" : engraverDefault)
-ENGRAVER_DEBUG=\(engraverDebug ? "enabled" : "disabled")
-"""
-                            NSPasteboard.general.clearContents(); NSPasteboard.general.setString(report, forType: .string)
-                            copied = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { copied = false }
+        ThreePane(leftWidth: 320, rightWidth: 340) {
+            // Left: principal (edit)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack { Button("Back to Control") { vm.tab = .control }; Spacer() }
+                GroupBox(label: Text("Environment")) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack { SecureField("OPENAI_API_KEY", text: $vm.openAIKeyInput); Button("Clear") { vm.clearOpenAIKey() } }
+                        HStack { TextField("FOUNTAINSTORE_URL", text: $vm.storeURLInput) }
+                        HStack { SecureField("FOUNTAINSTORE_API_KEY", text: $vm.storeKeyInput); Button("Clear") { vm.clearStoreKey() } }
+                        Divider()
+                        HStack { TextField("FOUNTAIN_GATEWAY_URL", text: $vm.gatewayURLInput) }
+                        HStack { SecureField("GATEWAY_BEARER", text: $vm.gatewayTokenInput); Button("Clear") { vm.clearGatewayToken() } }
+                        Divider()
+                        HStack { TextField("ENGRAVER_CORPUS_ID", text: $vm.engraverCorpusInput) }
+                        HStack { TextField("ENGRAVER_COLLECTION", text: $vm.engraverCollectionInput) }
+                        HStack { TextField("ENGRAVER_MODELS (comma separated)", text: $vm.engraverModelsInput) }
+                        HStack { TextField("ENGRAVER_DEFAULT_MODEL", text: $vm.engraverDefaultModelInput) }
+                        Toggle("Enable Diagnostics (ENGRAVER_DEBUG)", isOn: $vm.engraverDebugEnabled)
+                            .toggleStyle(.switch)
+                        HStack {
+                            Button("Save Env") { vm.saveEnv() }
+                            Button("Export .env (0600)") { vm.exportDotEnv() }
+                            Spacer()
                         }
                     }
                 }
+                Spacer()
             }
-            Spacer()
+            .padding(16)
+        } middle: {
+            // Middle: detail (sanitized report)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Sanitized Report").font(.headline)
+                    Spacer()
+                    Button("Copy") {
+                        let text = vm.sanitizedEnvReport()
+                        NSPasteboard.general.clearContents();
+                        NSPasteboard.general.setString(text, forType: .string)
+                        copied = true; DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { copied = false }
+                    }
+                }
+                ScrollView {
+                    Text(vm.sanitizedEnvReport())
+                        .font(.system(.footnote, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
+                }
+            }
+            .padding(16)
+        } right: {
+            // Right: optional (tips)
+            VStack(alignment: .leading, spacing: 12) {
+                GroupBox(label: Text("Tips")) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Secrets are stored in macOS Keychain under service ‘FountainAI’. Use the AudioTalk menu or Control pane for stack actions.")
+                            .font(.caption)
+                        Text("Use Copy to export a sanitized report for support without leaking secrets.")
+                            .font(.caption)
+                    }
+                }
+                Spacer()
+            }
+            .padding(16)
         }
-        .padding(16)
         .overlay(alignment: .topTrailing) {
             if copied { Text("Copied").padding(6).background(Color.black.opacity(0.7)).foregroundColor(.white).cornerRadius(6).padding() }
         }
@@ -811,38 +876,84 @@ struct AudioTalkTab: View {
     @State private var screenplayId: String = ""
     @State private var notationId: String = ""
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Text("AudioTalk Studio").font(.headline)
-                Circle()
-                    .fill(vm.controlPlaneOK ? Color.green : Color.red)
-                    .frame(width: 8, height: 8)
-                    .help(vm.controlPlaneOK ? "AudioTalk running" : "AudioTalk not reachable")
-                    .animation(.easeInOut(duration: 0.18), value: vm.controlPlaneOK)
-                Spacer()
-                Text("Use the AudioTalk menu for actions")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Divider()
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading) {
+        ThreePane(leftWidth: 280, rightWidth: 320) {
+            // Left: principal
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 8) {
+                        Text("AudioTalk Studio").font(.headline)
+                        Circle()
+                            .fill(vm.controlPlaneOK ? Color.green : Color.red)
+                            .frame(width: 8, height: 8)
+                            .animation(.easeInOut(duration: 0.18), value: vm.controlPlaneOK)
+                        Spacer()
+                    }
+                    Text("Use the AudioTalk menu for actions").font(.caption).foregroundStyle(.secondary)
+                    Divider()
+                    Text("Session").font(.subheadline)
                     Text("Screenplay ID").font(.caption)
                     TextField("screenplay-id", text: $screenplayId).textFieldStyle(.roundedBorder)
                     Text("Notation Session ID").font(.caption)
                     TextField("notation-id", text: $notationId).textFieldStyle(.roundedBorder)
-                    Text("Use the CLI to PUT source, parse, map cues, and apply.").font(.caption).foregroundStyle(.secondary)
-                }.frame(width: 260)
-                Divider()
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Fountain Editor (connect later)").font(.caption)
-                    Rectangle().fill(Color.gray.opacity(0.1)).frame(height: 200).overlay(Text("Fountain text here").foregroundStyle(.secondary))
-                    Text("Lily Editor + Preview (connect later)").font(.caption)
-                    Rectangle().fill(Color.gray.opacity(0.1)).frame(height: 200).overlay(Text("Lily source / preview here").foregroundStyle(.secondary))
-                }.frame(maxWidth: .infinity, alignment: .leading)
+                    Text("Use CLI or ToolsFactory to PUT source, parse, map cues, and apply.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Divider()
+                    Text("Runtime").font(.subheadline)
+                    HStack(spacing: 10) {
+                        Text("AT:") + Text("\(vm.audioTalkPort)")
+                        Text("FC:") + Text("\(vm.functionCallerPort)")
+                        Text("TF:") + Text("\(vm.toolsFactoryPort)")
+                    }.font(.caption)
+                    HStack(spacing: 10) {
+                        Text("AT PID=") + Text(vm.audiotalkPID ?? "–").foregroundStyle(.secondary)
+                        Text("FC PID=") + Text(vm.functionCallerPID ?? "–").foregroundStyle(.secondary)
+                        Text("TF PID=") + Text(vm.toolsFactoryPID ?? "–").foregroundStyle(.secondary)
+                    }.font(.caption)
+                }
+                .padding(16)
             }
-            Spacer()
-        }.padding(16)
+        } middle: {
+            // Middle: utmost detail editing
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Fountain Editor (connect later)").font(.caption)
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.07))
+                        .frame(height: 260)
+                        .overlay(Text("Fountain text here").foregroundStyle(.secondary))
+                        .cornerRadius(6)
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.gray.opacity(0.2), lineWidth: 1))
+                    Text("Lily Editor + Preview (connect later)").font(.caption)
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.07))
+                        .frame(height: 260)
+                        .overlay(Text("Lily source / preview here").foregroundStyle(.secondary))
+                        .cornerRadius(6)
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.gray.opacity(0.2), lineWidth: 1))
+                }
+                .padding(16)
+            }
+        } right: {
+            // Right: optionals
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    GroupBox(label: Text("Quick Links")) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Button("Open AudioTalk Log") { vm.openAudioTalkLog("audiotalk") }
+                            Button("Open FunctionCaller Log") { vm.openAudioTalkLog("function-caller") }
+                            Button("Open ToolsFactory Log") { vm.openAudioTalkLog("tools-factory") }
+                        }.font(.caption)
+                    }
+                    GroupBox(label: Text("Tips")) {
+                        Text("Use Cmd+Shift+S/X/K/P for Start/Stop/Kill/Precompile").font(.caption)
+                        Text("Stack ports and PIDs update live.").font(.caption)
+                    }
+                    Spacer()
+                }
+                .padding(16)
+            }
+        }
     }
 }
 
@@ -850,6 +961,31 @@ struct AudioTalkTab: View {
 struct CPServiceStatus: Codable, Hashable { let name: String; let running: Bool; let healthy: Bool }
 
 extension LauncherViewModel {
+    func sanitizedEnvReport() -> String {
+        let hasOA = KeychainHelper.read(service: "FountainAI", account: "OPENAI_API_KEY") != nil
+        let hasFS = KeychainHelper.read(service: "FountainAI", account: "FOUNTAINSTORE_API_KEY") != nil
+        let url = UserDefaults.standard.string(forKey: "FountainAI.FOUNTAINSTORE_URL") ?? ""
+        let gatewayURL = UserDefaults.standard.string(forKey: "FountainAI.GATEWAY_URL") ?? ""
+        let hasGateway = KeychainHelper.read(service: "FountainAI", account: "GATEWAY_BEARER") != nil
+        let engraverCorpus = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_CORPUS_ID") ?? ""
+        let engraverCollection = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_COLLECTION") ?? ""
+        let engraverModels = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_MODELS") ?? ""
+        let engraverDefault = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_DEFAULT_MODEL") ?? ""
+        let engraverDebug = UserDefaults.standard.bool(forKey: "FountainAI.ENGRAVER_DEBUG")
+        return """
+Env Report
+OPENAI_API_KEY=\(hasOA ? "***" : "(missing)")
+FOUNTAINSTORE_URL=\(url.isEmpty ? "(missing)" : url)
+FOUNTAINSTORE_API_KEY=\(hasFS ? "***" : "(missing)")
+FOUNTAIN_GATEWAY_URL=\(gatewayURL.isEmpty ? "(missing)" : gatewayURL)
+GATEWAY_BEARER=\(hasGateway ? "***" : "(missing)")
+ENGRAVER_CORPUS_ID=\(engraverCorpus.isEmpty ? "(missing)" : engraverCorpus)
+ENGRAVER_COLLECTION=\(engraverCollection.isEmpty ? "(missing)" : engraverCollection)
+ENGRAVER_MODELS=\(engraverModels.isEmpty ? "(missing)" : engraverModels)
+ENGRAVER_DEFAULT_MODEL=\(engraverDefault.isEmpty ? "(missing)" : engraverDefault)
+ENGRAVER_DEBUG=\(engraverDebug ? "enabled" : "disabled")
+"""
+    }
     enum ServiceAction { case start, stop, restart }
     func serviceAction(name: String, action: ServiceAction) {
         guard controlPlaneOK else { return }

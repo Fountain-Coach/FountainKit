@@ -19,7 +19,6 @@ done
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export FOUNTAINKIT_ROOT="$REPO_ROOT"
-export AUDIO_TALK_STUDIO=1
 if [[ "$USE_KEYCHAIN" != "1" ]]; then export FK_NO_KEYCHAIN=1; fi
 
 # Enforce macOS Keychain secrets (no .env files). Seed once with allow-all access.

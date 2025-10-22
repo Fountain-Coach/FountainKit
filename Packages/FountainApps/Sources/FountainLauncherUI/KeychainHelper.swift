@@ -1,6 +1,7 @@
 import Foundation
 import SecretStore
 
+@MainActor
 enum KeychainHelper {
     private static var cache: [String: String] = [:]
     private static var failures: Set<String> = []

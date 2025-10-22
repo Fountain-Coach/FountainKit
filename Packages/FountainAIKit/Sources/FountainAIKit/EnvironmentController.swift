@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 
+@MainActor
 public protocol EnvironmentController: AnyObject, Sendable {
     // Snapshot accessors
     var overallState: EnvironmentOverallState { get }
@@ -21,4 +22,3 @@ public protocol EnvironmentController: AnyObject, Sendable {
     func restartService(_ service: EnvironmentServiceStatus) async
     func fixAll() async
 }
-

@@ -2,6 +2,9 @@ import Foundation
 import SecretStore
 
 enum KeychainHelper {
+    private static var cache: [String: String] = [:]
+    private static var failures: Set<String> = []
+    private static let lock = NSLock()
     static func save(service: String, account: String, secret: String) -> Bool {
         do {
             let store = makeStore(for: service)
@@ -13,11 +16,20 @@ enum KeychainHelper {
     }
 
     static func read(service: String, account: String) -> String? {
+        let key = service + "#" + account
+        lock.lock(); defer { lock.unlock() }
+        if let cached = cache[key] { return cached }
+        if failures.contains(key) { return nil }
         do {
             let store = makeStore(for: service)
-            guard let data = try store.retrieveSecret(for: account) else { return nil }
-            return String(data: data, encoding: .utf8)
+            guard let data = try store.retrieveSecret(for: account), let value = String(data: data, encoding: .utf8), !value.isEmpty else {
+                failures.insert(key)
+                return nil
+            }
+            cache[key] = value
+            return value
         } catch {
+            failures.insert(key)
             return nil
         }
     }
@@ -52,4 +64,3 @@ enum KeychainHelper {
     }
 #endif
 }
-

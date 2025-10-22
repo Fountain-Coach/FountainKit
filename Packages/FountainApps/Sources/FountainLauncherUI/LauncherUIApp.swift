@@ -222,17 +222,11 @@ final class LauncherViewModel: ObservableObject {
     // Build environment for child processes: secrets from Keychain, URLs from defaults
     private func processEnv() -> [String: String] {
         var env = ProcessInfo.processInfo.environment
-        if let url = UserDefaults.standard.string(forKey: "FountainAI.FOUNTAINSTORE_URL"), !url.isEmpty {
-            env["FOUNTAINSTORE_URL"] = url
-        }
-        if let openai = KeychainHelper.read(service: "FountainAI", account: "OPENAI_API_KEY") { env["OPENAI_API_KEY"] = openai }
-        if let storeKey = KeychainHelper.read(service: "FountainAI", account: "FOUNTAINSTORE_API_KEY") { env["FOUNTAINSTORE_API_KEY"] = storeKey }
-        if let gateway = UserDefaults.standard.string(forKey: "FountainAI.GATEWAY_URL"), !gateway.isEmpty {
-            env["FOUNTAIN_GATEWAY_URL"] = gateway
-        }
-        if let gatewayToken = KeychainHelper.read(service: "FountainAI", account: "GATEWAY_BEARER"), !gatewayToken.isEmpty {
-            env["GATEWAY_BEARER"] = gatewayToken
-        }
+        if let url = UserDefaults.standard.string(forKey: "FountainAI.FOUNTAINSTORE_URL"), !url.isEmpty { env["FOUNTAINSTORE_URL"] = url }
+        if env["OPENAI_API_KEY"] == nil, let openai = KeychainHelper.read(service: "FountainAI", account: "OPENAI_API_KEY") { env["OPENAI_API_KEY"] = openai }
+        if env["FOUNTAINSTORE_API_KEY"] == nil, let storeKey = KeychainHelper.read(service: "FountainAI", account: "FOUNTAINSTORE_API_KEY") { env["FOUNTAINSTORE_API_KEY"] = storeKey }
+        if let gateway = UserDefaults.standard.string(forKey: "FountainAI.GATEWAY_URL"), !gateway.isEmpty { env["FOUNTAIN_GATEWAY_URL"] = gateway }
+        if env["GATEWAY_BEARER"] == nil, let gatewayToken = KeychainHelper.read(service: "FountainAI", account: "GATEWAY_BEARER"), !gatewayToken.isEmpty { env["GATEWAY_BEARER"] = gatewayToken }
         if let corpus = UserDefaults.standard.string(forKey: "FountainAI.ENGRAVER_CORPUS_ID"), !corpus.isEmpty {
             env["ENGRAVER_CORPUS_ID"] = corpus
         }

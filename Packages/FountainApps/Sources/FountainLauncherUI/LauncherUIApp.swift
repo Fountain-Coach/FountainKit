@@ -21,6 +21,7 @@ struct LauncherUIApp: App {
                 Button("Environment") { vm.tab = .environment }.keyboardShortcut("2")
                 if #available(macOS 13.0, *) {
                     Button("Engraver Studio") { vm.tab = .engraver }.keyboardShortcut("3")
+                    Button("AudioTalk Studio") { vm.tab = .audiotalk }.keyboardShortcut("4")
                 }
             }
         }
@@ -38,7 +39,7 @@ final class LauncherViewModel: ObservableObject {
     @Published var logText: String = ""
     @Published var errorMessage: String? = nil
     @Published var services: [CPServiceStatus] = []
-    enum Tab { case control, environment, engraver }
+    enum Tab { case control, environment, engraver, audiotalk }
     @Published var tab: Tab = .control
 
     private var tailProc: Process?
@@ -126,6 +127,33 @@ final class LauncherViewModel: ObservableObject {
                     await MainActor.run { self?.presentAlert(title: "Diagnostics", message: "Control plane not reachable.") }
                 }
             }
+        }
+    }
+
+    // MARK: - AudioTalk helpers
+    func startAudioTalkServer() {
+        guard let repoPath else { errorMessage = "Select repository first"; return }
+        let env = processEnv()
+        runStreaming(command: ["swift", "run", "--package-path", "Packages/FountainApps", "audiotalk-server"], cwd: repoPath, env: env)
+    }
+    func startToolsFactory() {
+        guard let repoPath else { errorMessage = "Select repository first"; return }
+        let env = processEnv()
+        runStreaming(command: ["swift", "run", "--package-path", "Packages/FountainApps", "tools-factory-server"], cwd: repoPath, env: env)
+    }
+    func startFunctionCaller() {
+        guard let repoPath else { errorMessage = "Select repository first"; return }
+        var env = processEnv()
+        env["FUNCTION_CALLER_BASE_URL"] = "http://127.0.0.1:8080/audiotalk/v1"
+        runStreaming(command: ["swift", "run", "--package-path", "Packages/FountainApps", "function-caller-server"], cwd: repoPath, env: env)
+    }
+    func registerAudioTalkTools() {
+        guard let repoPath else { errorMessage = "Select repository first"; return }
+        var env = processEnv()
+        env["TOOLS_FACTORY_URL"] = env["TOOLS_FACTORY_URL"] ?? "http://127.0.0.1:8011"
+        env["TOOLS_CORPUS_ID"] = env["TOOLS_CORPUS_ID"] ?? "audiotalk"
+        run(command: ["bash", "Scripts/register-audiotalk-tools.sh"], cwd: repoPath, env: env) { _, out in
+            Task { @MainActor in self.logText += "\n[tools] \(out)\n" }
         }
     }
 
@@ -360,8 +388,8 @@ final class LauncherViewModel: ObservableObject {
 
 struct ContentView: View {
     @ObservedObject var vm: LauncherViewModel
-    private var minWidth: CGFloat { vm.tab == .engraver ? 960 : 760 }
-    private var minHeight: CGFloat { vm.tab == .engraver ? 620 : 480 }
+    private var minWidth: CGFloat { (vm.tab == .engraver || vm.tab == .audiotalk) ? 960 : 760 }
+    private var minHeight: CGFloat { (vm.tab == .engraver || vm.tab == .audiotalk) ? 620 : 480 }
     var body: some View {
         TabView(selection: $vm.tab) {
             ControlTab(vm: vm)
@@ -374,6 +402,9 @@ struct ContentView: View {
                 EngraverTab(vm: vm)
                     .tabItem { Label("Engraver", systemImage: "wand.and.stars") }
                     .tag(LauncherViewModel.Tab.engraver)
+                AudioTalkTab(vm: vm)
+                    .tabItem { Label("AudioTalk", systemImage: "music.quarternote.3") }
+                    .tag(LauncherViewModel.Tab.audiotalk)
             }
         }
         .frame(minWidth: minWidth, minHeight: minHeight)
@@ -577,6 +608,41 @@ struct EngraverTab: View {
             tokenFlag,
             prompts
         ].joined(separator: "#")
+    }
+}
+
+struct AudioTalkTab: View {
+    @ObservedObject var vm: LauncherViewModel
+    @State private var screenplayId: String = ""
+    @State private var notationId: String = ""
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("AudioTalk Studio").font(.headline)
+            HStack(spacing: 8) {
+                Button("Start AudioTalk Server") { vm.startAudioTalkServer() }
+                Button("Start ToolsFactory") { vm.startToolsFactory() }
+                Button("Start FunctionCaller") { vm.startFunctionCaller() }
+                Button("Register Tools") { vm.registerAudioTalkTools() }
+            }
+            Divider()
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading) {
+                    Text("Screenplay ID").font(.caption)
+                    TextField("screenplay-id", text: $screenplayId).textFieldStyle(.roundedBorder)
+                    Text("Notation Session ID").font(.caption)
+                    TextField("notation-id", text: $notationId).textFieldStyle(.roundedBorder)
+                    Text("Use the CLI to PUT source, parse, map cues, and apply.").font(.caption).foregroundStyle(.secondary)
+                }.frame(width: 260)
+                Divider()
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Fountain Editor (connect later)").font(.caption)
+                    Rectangle().fill(Color.gray.opacity(0.1)).frame(height: 200).overlay(Text("Fountain text here").foregroundStyle(.secondary))
+                    Text("Lily Editor + Preview (connect later)").font(.caption)
+                    Rectangle().fill(Color.gray.opacity(0.1)).frame(height: 200).overlay(Text("Lily source / preview here").foregroundStyle(.secondary))
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Spacer()
+        }.padding(16)
     }
 }
 

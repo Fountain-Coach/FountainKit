@@ -28,5 +28,14 @@ let package = Package(
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
         )
+        ,
+        .testTarget(
+            name: "PlannerServiceTests",
+            dependencies: [
+                "PlannerService",
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
+            ]
+        )
     ]
 )

@@ -33,6 +33,8 @@ The composer sits at the desk.
         .init(role: .assistant, text: "Welcome. Type your screenplay, then tell me what you want musically.")
     ]
     @State private var showReadyPulse: Bool = true
+    enum PreviewTab: String, CaseIterable { case analysis = "Analysis", cues = "Cues", apply = "Apply" }
+    @State private var previewTab: PreviewTab = .analysis
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -55,18 +57,24 @@ The composer sits at the desk.
                         .frame(minHeight: 320)
                         .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.gray.opacity(0.2)))
                 }
-                // Right: chat + analysis results
-                VStack(alignment: .leading, spacing: 8) {
+                // Right: chat (primary) + preview area (segmented)
+                VStack(alignment: .leading, spacing: 10) {
                     Text("Chat").font(.subheadline)
                     ChatView(messages: $chat, onSend: handleSend)
+                        .frame(minHeight: 220)
                         .transition(.opacity.combined(with: .move(edge: .trailing)))
-                    HStack(alignment: .top, spacing: 8) {
-                        resultCard(title: "Analysis", text: parseSummary)
-                        resultCard(title: "Cues", text: cuesSummary)
+                    HStack {
+                        Picker("Preview", selection: $previewTab) {
+                            ForEach(PreviewTab.allCases, id: \.self) { t in Text(t.rawValue).tag(t) }
+                        }
+                        .pickerStyle(.segmented)
+                        Spacer()
+                        Button("Analyze") { analyze() }
+                        Button("Apply to Score") { applyToScore() }
                     }
-                    resultCard(title: "Apply", text: applySummary)
+                    previewCard()
                 }
-                .frame(minWidth: 360)
+                .frame(minWidth: 380)
             }
             GroupBox(label: Text("Journal")) {
                 ScrollView { VStack(alignment: .leading, spacing: 4) { ForEach(journal, id: \.self) { Text($0).font(.caption) } } }.frame(minHeight: 120)
@@ -95,6 +103,20 @@ The composer sits at the desk.
 
     private func resultCard(title: String, text: String) -> some View {
         GroupBox(label: Text(title)) { ScrollView { Text(text.isEmpty ? "(no data)" : text).font(.system(.footnote, design: .monospaced)).frame(maxWidth: .infinity, alignment: .leading) } }.frame(minWidth: 260, minHeight: 160)
+    }
+    @ViewBuilder
+    private func previewCard() -> some View {
+        switch previewTab {
+        case .analysis:
+            resultCard(title: "Analysis", text: parseSummary)
+                .transition(.opacity)
+        case .cues:
+            resultCard(title: "Cues", text: cuesSummary)
+                .transition(.opacity)
+        case .apply:
+            resultCard(title: "Apply", text: applySummary)
+                .transition(.opacity)
+        }
     }
 
     // MARK: - Placeholder logic (fresh start)

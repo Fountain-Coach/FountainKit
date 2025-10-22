@@ -4,6 +4,7 @@ import AppKit
 import EngraverStudio
 import EngraverChatCore
 import FountainDevHarness
+import FountainAIKit
 import Darwin
 
 @main

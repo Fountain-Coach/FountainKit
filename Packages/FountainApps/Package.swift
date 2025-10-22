@@ -306,7 +306,9 @@ let package = Package(
         .executableTarget(
             name: "engraver-studio-app",
             dependencies: [
-                "EngraverStudio"
+                "EngraverStudio",
+                "EngraverChatCore",
+                .product(name: "FountainDevHarness", package: "FountainDevHarness")
             ],
             path: "Sources/engraver-studio-app"
         ),

@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import FountainAIKit
 
+@MainActor
 public final class EnvironmentControllerAdapter: EnvironmentController {
     private let manager: FountainEnvironmentManager
 
@@ -31,4 +32,3 @@ public final class EnvironmentControllerAdapter: EnvironmentController {
     public func restartService(_ service: EnvironmentServiceStatus) async { await manager.restartService(service) }
     public func fixAll() async { await manager.fixAll() }
 }
-

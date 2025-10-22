@@ -274,6 +274,7 @@ let package = Package(
             name: "audiotalk-server",
             dependencies: [
                 .product(name: "FountainRuntime", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore"),
                 .product(name: "AudioTalkService", package: "FountainServiceKit-AudioTalk"),
                 .product(name: "LauncherSignature", package: "FountainCore")
             ],

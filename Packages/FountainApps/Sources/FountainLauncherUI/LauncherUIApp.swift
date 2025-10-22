@@ -12,10 +12,15 @@ import EngraverChatCore
 
 @main
 struct LauncherUIApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var vm = LauncherViewModel()
     var body: some Scene {
         WindowGroup {
             ContentView(vm: vm)
+                .onAppear {
+                    // Ensure the window comes to the foreground when launched from Terminal
+                    if #available(macOS 14.0, *) { NSApp.activate() } else { NSApp.activate(ignoringOtherApps: true) }
+                }
         }
         .commands {
             CommandMenu("View") {
@@ -29,6 +34,16 @@ struct LauncherUIApp: App {
                 }
             }
         }
+    }
+}
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.regular)
+        if #available(macOS 14.0, *) { NSApp.activate() } else { NSApp.activate(ignoringOtherApps: true) }
+    }
+    func applicationDidBecomeActive(_ notification: Notification) {
+        if #available(macOS 14.0, *) { NSApp.activate() } else { NSApp.activate(ignoringOtherApps: true) }
     }
 }
 

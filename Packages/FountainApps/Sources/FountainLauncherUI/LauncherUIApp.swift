@@ -171,6 +171,22 @@ final class LauncherViewModel: ObservableObject {
         let env = processEnv()
         runStreaming(command: ["swift", "run", "--package-path", "Packages/FountainApps", "audiotalk-server"], cwd: repoPath, env: env)
     }
+    func startAudioTalkStack() {
+        guard let repoPath else { errorMessage = "Select repository first"; return }
+        let env = processEnv()
+        runStreaming(command: ["bash", "Scripts/audiotalk-dev-up.sh"], cwd: repoPath, env: env)
+    }
+    func stopAudioTalkStack() {
+        guard let repoPath else { errorMessage = "Select repository first"; return }
+        let env = processEnv()
+        runStreaming(command: ["bash", "Scripts/audiotalk-dev-down.sh"], cwd: repoPath, env: env)
+    }
+    func precompileAudioTalk() {
+        guard let repoPath else { errorMessage = "Select repository first"; return }
+        let env = processEnv()
+        // Precompile the three products to minimize concurrent SwiftPM rebuilds on run
+        runStreaming(command: ["swift", "build", "--configuration", "debug", "--package-path", "Packages/FountainApps", "--product", "audiotalk-server", "--product", "tools-factory-server", "--product", "function-caller-server"], cwd: repoPath, env: env)
+    }
     func startToolsFactory() {
         guard let repoPath else { errorMessage = "Select repository first"; return }
         let env = processEnv()
@@ -662,6 +678,10 @@ struct AudioTalkTab: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("AudioTalk Studio").font(.headline)
             HStack(spacing: 8) {
+                Button("Start Stack") { vm.startAudioTalkStack() }
+                Button("Stop Stack") { vm.stopAudioTalkStack() }
+                Button("Precompile") { vm.precompileAudioTalk() }
+                Divider()
                 Button("Start AudioTalk Server") { vm.startAudioTalkServer() }
                 Button("Start ToolsFactory") { vm.startToolsFactory() }
                 Button("Start FunctionCaller") { vm.startFunctionCaller() }

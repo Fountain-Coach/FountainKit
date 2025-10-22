@@ -44,8 +44,6 @@ The composer sits at the desk.
                     .frame(width: 240)
                 readyBadge
                 Spacer()
-                Button("Analyze") { analyze() }
-                Button("Apply to Score") { applyToScore() }
             }
             .font(.callout)
             HSplitView {
@@ -57,24 +55,28 @@ The composer sits at the desk.
                         .frame(minHeight: 320)
                         .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.gray.opacity(0.2)))
                 }
-                // Right: chat (primary) + preview area (segmented)
+                // Right: preview area (top) + chat anchored at bottom
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Chat").font(.subheadline)
-                    ChatView(messages: $chat, onSend: handleSend)
-                        .frame(minHeight: 220)
-                        .transition(.opacity.combined(with: .move(edge: .trailing)))
                     HStack {
+                        Text("Preview").font(.subheadline)
+                        Spacer()
                         Picker("Preview", selection: $previewTab) {
                             ForEach(PreviewTab.allCases, id: \.self) { t in Text(t.rawValue).tag(t) }
                         }
                         .pickerStyle(.segmented)
-                        Spacer()
                         Button("Analyze") { analyze() }
                         Button("Apply to Score") { applyToScore() }
                     }
                     previewCard()
+                        .frame(minHeight: 160)
+                        .transition(.opacity)
+                    Spacer(minLength: 8)
+                    Text("Chat").font(.subheadline)
+                    ChatView(messages: $chat, onSend: handleSend)
+                        .frame(minHeight: 220)
+                        .transition(.opacity.combined(with: .move(edge: .trailing)))
                 }
-                .frame(minWidth: 380)
+                .frame(minWidth: 420)
             }
             GroupBox(label: Text("Journal")) {
                 ScrollView { VStack(alignment: .leading, spacing: 4) { ForEach(journal, id: \.self) { Text($0).font(.caption) } } }.frame(minHeight: 120)

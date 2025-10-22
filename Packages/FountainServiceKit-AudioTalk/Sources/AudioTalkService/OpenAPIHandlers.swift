@@ -563,8 +563,8 @@ public struct AudioTalkOpenAPI: APIProtocol, @unchecked Sendable {
         let ifm = input.headers.If_hyphen_Match
         let bodyStr: String
         switch input.body {
-        case .plainText:
-            bodyStr = ""
+        case .plainText(let b):
+            bodyStr = try await String(collecting: b, upTo: 1<<20)
         }
         guard let result = await state.putLilySource(id: id, ifMatch: ifm, body: bodyStr) else {
             return .undocumented(statusCode: 404, OpenAPIRuntime.UndocumentedPayload())
@@ -634,8 +634,8 @@ public struct AudioTalkOpenAPI: APIProtocol, @unchecked Sendable {
         let ifm = input.headers.If_hyphen_Match
         let bodyStr: String
         switch input.body {
-        case .plainText:
-            bodyStr = ""
+        case .plainText(let b):
+            bodyStr = try await String(collecting: b, upTo: 1<<20)
         }
         guard let result = await state.putScreenplaySource(id: id, ifMatch: ifm, body: bodyStr) else {
             return .undocumented(statusCode: 404, OpenAPIRuntime.UndocumentedPayload())

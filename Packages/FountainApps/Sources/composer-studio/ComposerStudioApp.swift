@@ -99,20 +99,6 @@ The composer sits at the desk.
     private func resultCard(title: String, text: String) -> some View {
         GroupBox(label: Text(title)) { ScrollView { Text(text.isEmpty ? "(no data)" : text).font(.system(.footnote, design: .monospaced)).frame(maxWidth: .infinity, alignment: .leading) } }.frame(minWidth: 260, minHeight: 160)
     }
-    @ViewBuilder
-    private func previewCard() -> some View {
-        switch previewTab {
-        case .analysis:
-            resultCard(title: "Analysis", text: parseSummary)
-                .transition(.opacity)
-        case .cues:
-            resultCard(title: "Cues", text: cuesSummary)
-                .transition(.opacity)
-        case .apply:
-            resultCard(title: "Apply", text: applySummary)
-                .transition(.opacity)
-        }
-    }
 
     // MARK: - Placeholder logic (fresh start)
     private func bootstrap() {

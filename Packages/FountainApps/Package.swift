@@ -111,7 +111,8 @@ let package = Package(
         .executableTarget(
             name: "composer-studio",
             dependencies: [],
-            path: "Sources/composer-studio"
+            path: "Sources/composer-studio",
+            exclude: ["AGENTS.md"]
         ),
         .executableTarget(
             name: "m2-smoke",

@@ -1,4 +1,4 @@
-# FountainKit Refactor — Agent Guide
+# FountainKit — Agent Guide (Unified Master Plan inside)
 
 Welcome to FountainKit, the modular SwiftPM workspace for the Fountain Coach organization (Contexter). The repository is split into local packages under `Packages/`:
 
@@ -13,10 +13,12 @@ Welcome to FountainKit, the modular SwiftPM workspace for the Fountain Coach org
 - `FountainSpecCuration`: Canonical OpenAPI specs, fixtures, and regeneration scripts shared across packages.
 - `FountainExamples`: Sample apps and Teatro integrations that consume the published packages.
 
-### Active Plans
-- `implementation_plan.md` — OpenAPI-first refactor roadmap.
-- `Packages/FountainSpecCuration/openapi/arcspec_studio_plan.md` — ArcSpec → Swift studio rollout.
- - `Plans/AudioTalk/IMPLEMENTATION_PLAN.md` — AudioTalk service adoption plan (Drift–Pattern–Reflection).
+### Plans Index
+- Unified Master Plan — embedded below in this file (authoritative).
+- Studio plan — `Packages/FountainApps/Sources/FountainLauncherUI/AGENTS.md` (Control workspace).
+- AudioTalk plan — `Packages/FountainServiceKit-AudioTalk/AGENTS.md` (service track).
+- Spec curation norms — `Packages/FountainSpecCuration/openapi/AGENTS.md`.
+- Scripts lifecycle — `Scripts/AGENTS.md`.
 
 ## OpenAPI-first development
 - Every HTTP surface must have an authoritative OpenAPI document in `Packages/FountainSpecCuration/openapi`. Update specs *before* writing server or client code.
@@ -63,4 +65,72 @@ Thank you for helping FountainKit stay modular and healthy!
 
 ---
 
-**Maintenance**: Keep `implementation_plan.md` up to date after each OpenAPI adoption audit; root agents are responsible for reviewing and refreshing the plan when generator coverage changes.
+### Agents
+- Studio (Control workspace) agent: `Packages/FountainApps/Sources/FountainLauncherUI/AGENTS.md`.
+
+**Maintenance**: This file embeds the unified master plan below. Keep this plan and
+`Plans/ROADMAP.md` in sync; prefer editing here and letting `Plans/ROADMAP.md` remain
+the canonical “human‑facing” copy for external links.
+
+---
+
+## Unified Master Plan (embedded)
+
+# FountainKit — Unified Product Roadmap (Master Plan)
+
+This is the authoritative plan for FountainKit.
+
+Tracks
+- AudioTalk Product (service + orchestration + editors)
+- Studio System Introspection & Editing (Control workspace)
+
+Profiles
+- Default: Full Fountain stack (gateway, planner, function‑caller, persist,
+  bootstrap, baseline‑awareness, tools‑factory, tool‑server, semantic‑browser).
+- AudioTalk‑only profile is for focused experiments.
+
+OpenAPI‑first
+- Curated, finite spec list (no scans):
+  `gateway`, `baseline‑awareness`, `bootstrap`, `planner`, `function‑caller`,
+  `persist`, `tools‑factory`, `tool‑server`, `semantic‑browser`, `audiotalk`.
+- Edit in UI (Save/Revert) → Lint → Regenerate (swift build) → Reload Routes.
+
+Three‑pane Studio paradigm
+- Left (Principal): status, repo/build, Start/Stop/Diagnostics, AudioTalk stack,
+  inline Environment (Keychain‑backed secrets).
+- Middle (Editing): main logs (follow tail), later other editors on demand.
+- Right (Optionals): OpenAPI, Routes (viewer + diff), Services tails, Persona,
+  Semantic Memory.
+
+AudioTalk Product (essentials)
+- Screenplay source (ETag), parse → model (scenes/beats/tags/characters),
+  map cues, cue‑sheet JSON/CSV/PDF, UMP persistence, Journal events.
+- Apply cues → Lily (ETag‑aware); anchors; `scan-anchors` endpoint; selection sync.
+- Planner + FunctionCaller orchestration; ToolsFactory registration.
+
+Studio System Introspection (essentials)
+- OpenAPI curated editor; regeneration; gateway reload; routes viewer.
+- Persona editor (`Configuration/persona.yaml`) + effective persona preview.
+- Semantic memory compute: query Journal/Dictionary/Macros/Anchors and render a
+  deterministic snapshot used by the LLM.
+- Unified diagnostics: service health, merged logs, tail with filters.
+
+Testing & TDD (applies to all)
+- Every feature ships with tests; prefer TDD for logic.
+- Unit: spec curation mapping, routes diff, persona round‑trip, memory compute.
+- Integration: generator plugins invoked; reload hits gateway; log filters.
+- E2E: `Scripts/dev-up --check` → health probes → GET `/admin/routes` assert
+  minimal set → `Scripts/dev-down`.
+- CI: lint + build + tests gate merges; coverage trend required.
+
+Milestones (high level)
+1) M0 Stabilize/Trim: Full stack default; Control unified; curated specs.
+2) M1 Context Hub: right‑pane segmented (OpenAPI | Routes | Services | Persona | Memory).
+3) M2 OpenAPI Pipeline E2E: lint/generate/build/reload + route diff in UI.
+4) M3 Persona/Assistant: editor, effective persona, apply hooks.
+5) M4 Semantic Memory: compute snapshot; fixtures + deterministic output.
+6) M5 Diagnostics: merged logs, filters, health timeline; repro links.
+7) M6 Profiles composer: save/load; app scripts generated; Full default.
+8) M7 Perf/Hygiene: precompile, quiet warnings.
+9) M8 QA/CI: smoke matrix; headless E2E; coverage.
+10) M9 Docs: user guide, API refs, onboarding.

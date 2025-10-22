@@ -115,6 +115,7 @@ final class LauncherViewModel: ObservableObject {
     private var statusTimer: Timer?
     enum BuildMode: Hashable { case auto, noBuild, forceBuild }
     @Published var buildMode: BuildMode = .auto
+    @Published var followTailMain: Bool = true
 
     enum RunProfile: String { case audioTalk, fullStack }
     @AppStorage("FountainLauncher.RunProfile") var runProfile: RunProfile = .fullStack
@@ -380,6 +381,28 @@ final class LauncherViewModel: ObservableObject {
     }
     func openRepoLog(_ name: String) {
         if let url = repoLogURL(name), FileManager.default.fileExists(atPath: url.path) { NSWorkspace.shared.open(url) }
+    }
+    func fetchGatewayRoutes(_ completion: @escaping (String) -> Void) {
+        let defaultsURL = UserDefaults.standard.string(forKey: "FountainAI.GATEWAY_URL") ?? "http://127.0.0.1:8010"
+        guard let base = URL(string: defaultsURL) else { completion("invalid GATEWAY_URL"); return }
+        var url = base; url.append(path: "/admin/routes")
+        var req = URLRequest(url: url)
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let bearer = KeychainHelper.read(service: "FountainAI", account: "GATEWAY_BEARER"), !bearer.isEmpty {
+            req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
+        }
+        URLSession.shared.dataTask(with: req) { data, _, _ in
+            guard let data else { completion(""); return }
+            if let obj = try? JSONSerialization.jsonObject(with: data),
+               let pretty = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted]),
+               let s = String(data: pretty, encoding: .utf8) {
+                completion(s)
+            } else if let s = String(data: data, encoding: .utf8) {
+                completion(s)
+            } else {
+                completion("")
+            }
+        }.resume()
     }
     func updateServiceLogs(maxChars: Int = 20_000) {
         func tail(_ url: URL) -> String {
@@ -699,15 +722,14 @@ struct ControlTab: View {
                 HStack {
                     Text("Logs").font(.headline)
                     Spacer()
+                    Toggle("Follow", isOn: $vm.followTailMain).toggleStyle(.switch).labelsHidden()
                     Button("Copy") {
                         NSPasteboard.general.clearContents();
                         NSPasteboard.general.setString(vm.logText, forType: .string)
                         copied = true; DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { copied = false }
                     }
                 }
-                TextEditor(text: Binding(get: { vm.logText }, set: { _ in }))
-                    .font(.system(.footnote, design: .monospaced))
-                    .disableAutocorrection(true)
+                LogTailView(text: vm.logText, follow: vm.followTailMain)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .padding(16)

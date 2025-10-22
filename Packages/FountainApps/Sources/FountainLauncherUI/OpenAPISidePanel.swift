@@ -6,11 +6,12 @@ struct OpenAPISidePanel: View {
     @State private var specs: [SpecItem] = []
     @State private var selected: SpecItem? = nil
     @State private var filter: String = ""
+    @State private var content: String = ""
 
     var body: some View {
         GroupBox(label: Text("OpenAPI Specs")) {
             VStack(alignment: .leading, spacing: 6) {
-                HStack { TextField("Filter", text: $filter); Spacer(); Button("Refresh") { specs = vm.findSpecs() } }
+                HStack { TextField("Filter", text: $filter); Spacer(); Button("Refresh") { specs = vm.curatedSpecs() } }
                 HStack(alignment: .top, spacing: 8) {
                     List(selection: Binding(get: { selected }, set: { selected = $0 })) {
                         ForEach(specs.filter { filter.isEmpty ? true : $0.name.localizedCaseInsensitiveContains(filter) }) { item in
@@ -18,7 +19,7 @@ struct OpenAPISidePanel: View {
                         }
                     }
                     .frame(minWidth: 160, maxHeight: 160)
-                    TextEditor(text: Binding(get: { selected.flatMap { vm.readSpec(at: $0.url) } ?? "" }, set: { _ in }))
+                    TextEditor(text: $content)
                         .font(.system(.footnote, design: .monospaced))
                         .frame(minHeight: 160)
                 }
@@ -26,12 +27,18 @@ struct OpenAPISidePanel: View {
                     Button("Lint") { if let u = selected?.url { vm.lintSpec(at: u) } }
                     Button("Regenerate") { vm.regenerateFromSpecs() }
                     Button("Reload Routes") { vm.reloadGatewayRoutes() }
+                    Button("Save") { if let u = selected?.url { vm.writeSpec(at: u, content: content) } }
+                    Button("Revert") { if let u = selected?.url { content = vm.readSpec(at: u) } }
                     Spacer()
                     if let u = selected?.url { Button("Reveal") { NSWorkspace.shared.activateFileViewerSelecting([u]) } }
                 }.font(.caption)
             }
-            .onAppear { specs = vm.findSpecs() }
+            .onAppear { specs = vm.curatedSpecs() }
         }
+        GroupBox(label: Text("Gateway Routes")) {
+            GatewayRoutesView(vm: vm)
+                .frame(minHeight: 160)
+        }
+        .onChange(of: selected) { _ in if let u = selected?.url { content = vm.readSpec(at: u) } else { content = "" } }
     }
 }
-

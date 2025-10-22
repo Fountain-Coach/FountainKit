@@ -51,11 +51,24 @@ final class LauncherViewModel: ObservableObject {
     private let ctrlURL = URL(string: "http://127.0.0.1:9090/status")!
 
     init() {
-        if let saved = UserDefaults.standard.string(forKey: Self.repoKey), !saved.isEmpty {
+        let env = ProcessInfo.processInfo.environment
+        if let envRoot = env["FOUNTAINKIT_ROOT"], !envRoot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            repoPath = envRoot
+        } else if let saved = UserDefaults.standard.string(forKey: Self.repoKey), !saved.isEmpty {
             repoPath = saved
         }
         startStatusPolling()
         startTailingLogs()
+        if let flag = env["AUDIO_TALK_STUDIO"], ["1","true","yes"].contains(flag.lowercased()) {
+            tab = .audiotalk
+        }
+        if let auto = env["AUDIO_TALK_AUTOSTART"], ["1","true","yes"].contains(auto.lowercased()), repoPath != nil {
+            // Fire and forget; these append logs
+            startToolsFactory()
+            startFunctionCaller()
+            startAudioTalkServer()
+            registerAudioTalkTools()
+        }
     }
 
     func chooseRepo() {

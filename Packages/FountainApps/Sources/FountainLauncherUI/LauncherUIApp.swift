@@ -67,7 +67,7 @@ final class LauncherViewModel: ObservableObject {
     @Published var buildMode: BuildMode = .auto
 
     static let repoKey = "FountainAI.RepoRoot"
-    private let ctrlURL = URL(string: "http://127.0.0.1:9090/status")!
+    private var ctrlURL: URL
 
     init() {
         let env = ProcessInfo.processInfo.environment
@@ -78,8 +78,13 @@ final class LauncherViewModel: ObservableObject {
         }
         startStatusPolling()
         startTailingLogs()
+        // Choose status URL: control plane (9090) or AudioTalk health when studio mode
         if let flag = env["AUDIO_TALK_STUDIO"], ["1","true","yes"].contains(flag.lowercased()) {
+            let port = Int(env["AUDIOTALK_PORT"] ?? env["PORT"] ?? "8080") ?? 8080
+            ctrlURL = URL(string: "http://127.0.0.1:\(port)/audiotalk/meta/health")!
             tab = .audiotalk
+        } else {
+            ctrlURL = URL(string: "http://127.0.0.1:9090/status")!
         }
         if let auto = env["AUDIO_TALK_AUTOSTART"], ["1","true","yes"].contains(auto.lowercased()), repoPath != nil {
             // Prefer the consolidated dev-up script to manage build/start/restart and ports

@@ -90,14 +90,10 @@ final class LauncherViewModel: ObservableObject {
         } else if let saved = UserDefaults.standard.string(forKey: Self.repoKey), !saved.isEmpty {
             repoPath = saved
         }
-        // Determine default ports from environment for display
-        let envPorts = processEnv()
-        audioTalkPort = Int(envPorts["AUDIOTALK_PORT"] ?? envPorts["PORT"] ?? "8080") ?? 8080
-        functionCallerPort = Int(envPorts["FUNCTION_CALLER_PORT"] ?? "8004") ?? 8004
-        toolsFactoryPort = Int(envPorts["TOOLS_FACTORY_PORT"] ?? "8011") ?? 8011
-
-        startStatusPolling()
-        startTailingLogs()
+        // Determine default ports from environment for display (use raw env; processEnv requires full init)
+        audioTalkPort = Int(env["AUDIOTALK_PORT"] ?? env["PORT"] ?? "8080") ?? 8080
+        functionCallerPort = Int(env["FUNCTION_CALLER_PORT"] ?? "8004") ?? 8004
+        toolsFactoryPort = Int(env["TOOLS_FACTORY_PORT"] ?? "8011") ?? 8011
         // Choose status URL: control plane (9090) or AudioTalk health when studio mode
         if let flag = env["AUDIO_TALK_STUDIO"], ["1","true","yes"].contains(flag.lowercased()) {
             let port = Int(env["AUDIOTALK_PORT"] ?? env["PORT"] ?? "8080") ?? 8080
@@ -111,7 +107,9 @@ final class LauncherViewModel: ObservableObject {
             let env = processEnv()
             runStreaming(command: ["bash", "Scripts/audiotalk-dev-up.sh"], cwd: repoPath!, env: env)
         }
-        refreshAudioTalkPIDs()
+        startStatusPolling()
+        startTailingLogs()
+        refreshAudioTalkPIDs(); updateServiceLogs()
     }
 
     func chooseRepo() {
@@ -814,16 +812,17 @@ struct AudioTalkTab: View {
     @State private var notationId: String = ""
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("AudioTalk Studio").font(.headline)
-            HStack(spacing: 8) {
-                Button("Start Stack") { vm.startAudioTalkStack() }
-                Button("Stop Stack") { vm.stopAudioTalkStack() }
-                Button("Precompile") { vm.precompileAudioTalk() }
-                Divider()
-                Button("Start AudioTalk Server") { vm.startAudioTalkServer() }
-                Button("Start ToolsFactory") { vm.startToolsFactory() }
-                Button("Start FunctionCaller") { vm.startFunctionCaller() }
-                Button("Register Tools") { vm.registerAudioTalkTools() }
+            HStack(spacing: 12) {
+                Text("AudioTalk Studio").font(.headline)
+                Circle()
+                    .fill(vm.controlPlaneOK ? Color.green : Color.red)
+                    .frame(width: 8, height: 8)
+                    .help(vm.controlPlaneOK ? "AudioTalk running" : "AudioTalk not reachable")
+                    .animation(.easeInOut(duration: 0.18), value: vm.controlPlaneOK)
+                Spacer()
+                Text("Use the AudioTalk menu for actions")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Divider()
             HStack(alignment: .top, spacing: 12) {

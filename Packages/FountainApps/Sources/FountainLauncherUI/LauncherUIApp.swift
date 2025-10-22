@@ -25,12 +25,11 @@ struct LauncherUIApp: App {
         .commands {
             CommandMenu("View") {
                 Button("Control") { vm.tab = .control }.keyboardShortcut("1")
-                Button("Environment") { vm.tab = .environment }.keyboardShortcut("2")
                 if #available(macOS 13.0, *) {
                     #if canImport(EngraverStudio)
-                    Button("Engraver Studio") { vm.tab = .engraver }.keyboardShortcut("3")
+                    Button("Engraver Studio") { vm.tab = .engraver }.keyboardShortcut("2")
                     #endif
-                    Button("AudioTalk Studio") { vm.tab = .audiotalk }.keyboardShortcut("4")
+                    Button("AudioTalk Studio") { vm.tab = .audiotalk }.keyboardShortcut("3")
                 }
             }
             CommandMenu("Profile") {
@@ -109,7 +108,7 @@ final class LauncherViewModel: ObservableObject {
     @Published var showAudioTalkLog: Bool = false
     @Published var showFunctionCallerLog: Bool = false
     @Published var showToolsFactoryLog: Bool = false
-    enum Tab { case control, environment, engraver, audiotalk }
+    enum Tab { case control, engraver, audiotalk }
     @Published var tab: Tab = .control
 
     private var tailProc: Process?
@@ -316,7 +315,7 @@ final class LauncherViewModel: ObservableObject {
         }
     }
 
-    private func runStreaming(command: [String], cwd: String, env: [String: String]? = nil) {
+    func runStreaming(command: [String], cwd: String, env: [String: String]? = nil) {
         let proc = Process()
         proc.currentDirectoryURL = URL(fileURLWithPath: cwd)
         proc.executableURL = URL(fileURLWithPath: "/usr/bin/env")
@@ -400,7 +399,7 @@ final class LauncherViewModel: ObservableObject {
     }
 
     // Build environment for child processes: secrets from Keychain, URLs from defaults
-    private func processEnv() -> [String: String] {
+    func processEnv() -> [String: String] {
         var env = ProcessInfo.processInfo.environment
         // Ensure signed binaries receive a valid launcher signature
         if env["LAUNCHER_SIGNATURE"] == nil {
@@ -597,9 +596,6 @@ struct ContentView: View {
             ControlTab(vm: vm)
                 .tabItem { Label("Control", systemImage: "switch.2") }
                 .tag(LauncherViewModel.Tab.control)
-            EnvTab(vm: vm)
-                .tabItem { Label("Environment", systemImage: "key.fill") }
-                .tag(LauncherViewModel.Tab.environment)
             if #available(macOS 13.0, *) {
                 #if canImport(EngraverStudio)
                 EngraverTab(vm: vm)
@@ -636,10 +632,8 @@ struct ControlTab: View {
                 HStack(spacing: 8) {
                     Circle().fill(vm.controlPlaneOK ? Color.green : Color.red).frame(width: 10, height: 10)
                         .animation(.easeInOut(duration: 0.18), value: vm.controlPlaneOK)
-                    Text(vm.controlPlaneOK ? "Reachable" : (vm.starting ? "Booting…" : "Not reachable"))
-                        .font(.callout)
+                    Text(vm.controlPlaneOK ? "Reachable" : (vm.starting ? "Booting…" : "Not reachable")).font(.callout)
                     Spacer()
-                    Button("Environment…") { vm.tab = .environment }
                 }
                 if let repo = vm.repoPath {
                     Text("Repo: \(repo)").font(.footnote).foregroundStyle(.secondary)
@@ -679,6 +673,22 @@ struct ControlTab: View {
                         }.font(.caption)
                     }
                 }
+                DisclosureGroup("Environment") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack { SecureField("OPENAI_API_KEY", text: $vm.openAIKeyInput); Button("Clear") { vm.clearOpenAIKey() } }
+                        HStack { TextField("FOUNTAINSTORE_URL", text: $vm.storeURLInput) }
+                        HStack { SecureField("FOUNTAINSTORE_API_KEY", text: $vm.storeKeyInput); Button("Clear") { vm.clearStoreKey() } }
+                        HStack { TextField("FOUNTAIN_GATEWAY_URL", text: $vm.gatewayURLInput) }
+                        HStack { SecureField("GATEWAY_BEARER", text: $vm.gatewayTokenInput); Button("Clear") { vm.clearGatewayToken() } }
+                        Divider()
+                        HStack { TextField("ENGRAVER_CORPUS_ID", text: $vm.engraverCorpusInput) }
+                        HStack { TextField("ENGRAVER_COLLECTION", text: $vm.engraverCollectionInput) }
+                        HStack { TextField("ENGRAVER_MODELS (comma separated)", text: $vm.engraverModelsInput) }
+                        HStack { TextField("ENGRAVER_DEFAULT_MODEL", text: $vm.engraverDefaultModelInput) }
+                        Toggle("Diagnostics (ENGRAVER_DEBUG)", isOn: $vm.engraverDebugEnabled).toggleStyle(.switch)
+                        HStack { Button("Save Env") { vm.saveEnv() }; Button("Export .env") { vm.exportDotEnv() } }
+                    }
+                }
                 Spacer()
             }
             .padding(16)
@@ -703,8 +713,10 @@ struct ControlTab: View {
             .padding(16)
             .frame(minWidth: 420)
 
-            // Right: Optional / Service diagnostics
+            // Right: Optional / Service diagnostics + Specs
             VStack(alignment: .leading, spacing: 12) {
+                // OpenAPI integrated with diagnostics
+                OpenAPISidePanel(vm: vm)
                 GroupBox(label: Text("Service Logs")) {
                     VStack(alignment: .leading, spacing: 8) {
                         DisclosureGroup(isExpanded: Binding(get: { vm.showAudioTalkLog }, set: { vm.showAudioTalkLog = $0 })) {

@@ -1,3 +1,6 @@
 [submodule "Workspace/deps/chatkit-js"]
 	path = Workspace/deps/chatkit-js
 	url = https://github.com/openai/chatkit-js
+[submodule "External/SDLKit"]
+	path = External/SDLKit
+	url = https://github.com/Fountain-Coach/SDLKit.git

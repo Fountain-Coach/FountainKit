@@ -12,8 +12,11 @@ fi
 if [[ "$(uname)" == "Darwin" ]]; then
   export SDL_VIDEODRIVER="cocoa"
   export SDL_AUDIODRIVER="dummy"
+  export SDL_RENDER_DRIVER="metal"
+  export SDLKIT_LOG_LEVEL="debug"
   HB_PREFIX="${HOMEBREW_PREFIX:-/opt/homebrew}"
   export DYLD_FALLBACK_LIBRARY_PATH="$HB_PREFIX/lib:${DYLD_FALLBACK_LIBRARY_PATH:-}"
+  export DYLD_LIBRARY_PATH="$HB_PREFIX/lib:${DYLD_LIBRARY_PATH:-}"
   export SDLKIT_GUI_ENABLED=1
   export SDLKIT_RENDER_BACKEND=metal
   export SDLKIT_FORCE_SYSTEM_SDL=1

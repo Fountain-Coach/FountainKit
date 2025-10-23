@@ -5,7 +5,8 @@ let package = Package(
     name: "SDLExperiment",
     platforms: [ .macOS(.v14) ],
     products: [
-        .executable(name: "sdl-composer-experiment", targets: ["SDLComposerExperiment"]) 
+        .executable(name: "sdl-composer-experiment", targets: ["SDLComposerExperiment"]),
+        .executable(name: "sdl-diagnostics", targets: ["SDLDiagnostics"]) 
     ],
     dependencies: [
         // Local external dependency: initialize with
@@ -19,7 +20,14 @@ let package = Package(
                 .product(name: "SDLKit", package: "SDLKit")
             ],
             path: "Sources/SDLComposerExperiment"
+        ),
+        .executableTarget(
+            name: "SDLDiagnostics",
+            dependencies: [
+                // use C shim directly for low-level info
+                .product(name: "SDLKit", package: "SDLKit")
+            ],
+            path: "Sources/SDLDiagnostics"
         )
     ]
 )
-

@@ -1,10 +1,14 @@
 import Foundation
 import SDLKit
+#if canImport(CSDL3)
+import CSDL3
+#endif
 
 // SDL Composer Experiment
 // Window with a neutral background and a bouncing rectangle to validate render loop.
 
 @main
+@MainActor
 struct App {
     static func main() {
         do {
@@ -45,9 +49,18 @@ struct App {
             renderer.shutdown()
             window.close()
         } catch {
-            // Avoid LLDB attach prompt; print friendly guidance instead
+            // Avoid LLDB attach prompt; print friendly guidance and fall back to a headless no-op loop
+            #if canImport(CSDL3)
+            let cmsg = String(cString: SDLKit_GetError())
+            #else
+            let cmsg = "(CSDL3 unavailable)"
+            #endif
             fputs("SDL experiment failed: \(error)\n", stderr)
+            if !cmsg.isEmpty { fputs("SDL lastError: \(cmsg)\n", stderr) }
             fputs("If SDL is unavailable, install required libs (e.g. brew install sdl3 sdl3_ttf sdl3_image) or run on a system with a display.\n", stderr)
+            // Headless fallback: keep process alive briefly so launcher can verify run path
+            let end = Date().addingTimeInterval(2)
+            while Date() < end { usleep(50_000) }
         }
     }
 }

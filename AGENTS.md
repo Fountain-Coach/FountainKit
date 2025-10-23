@@ -21,6 +21,35 @@ Welcome to FountainKit, the modular SwiftPM workspace for the Fountain Coach org
 - Scripts lifecycle — `Scripts/AGENTS.md`.
 - Composer Studio design — `Design/COMPOSER_STUDIO_STORY.md` (full story + SVG prompts). SVGs live in `Design/` and are the UI source of truth.
 
+## Scripts — Spec and Structure (authoritative)
+- Canonical locations live under `Scripts/<area>/` with a scoped AGENTS.md per area. Root‑level paths remain as thin wrappers for compatibility.
+- Areas (current):
+  - `Scripts/design/` — GUI/engraving tooling (SVG↔PNG, LilyPond). Source of truth lives in `Design/`.
+  - `Scripts/openapi/` — spec lint and curated‑list validator.
+  - `Scripts/ci/` — workspace smoke and optional toolserver smoke.
+  - `Scripts/dev/` — workspace lifecycle (up/down/status/prebuild/keychain).
+  - `Scripts/audiotalk/` — AudioTalk stack runners and tool registration.
+  - `Scripts/apps/` — app launchers (composer, legacy studio, engraver, memchat).
+  - `Scripts/memchat/` — DEPRECATED (learnings only); see AGENT for scope.
+
+Conventions
+- Idempotent, safe scripts with `set -euo pipefail`; clear `Usage:` help at top.
+- No `.env` in repo; secrets only via Keychain. Signature defaults provided (`LAUNCHER_SIGNATURE`).
+- Logs under `.fountain/logs`, PIDs under `.fountain/pids` at repo root.
+- New scripts must live in the correct subdirectory and be documented in that area’s AGENTS.md. Root wrappers may be added only for compatibility.
+
+Migration policy (enforced)
+- Do not add new functional scripts at the root of `Scripts/`.
+- If an existing root script is enhanced, prefer converting it to a wrapper and moving the body into the appropriate subdirectory in the same PR.
+- CI may call canonical paths or wrappers; wrappers must be kept stable.
+
+Status (completed)
+- Design tooling canonicalized; PNG converter and LilyPond renderer added.
+- OpenAPI and CI scripts moved under `Scripts/openapi/` and `Scripts/ci/`.
+- Dev lifecycle canonicalized under `Scripts/dev/`.
+- AudioTalk stack canonicalized under `Scripts/audiotalk/`; root scripts delegate.
+- MemChat marked DEPRECATED; runnable but not active product work.
+
 ## OpenAPI-first development
 - Every HTTP surface must have an authoritative OpenAPI document in `Packages/FountainSpecCuration/openapi`. Update specs *before* writing server or client code.
 - Specs are versioned (`openapi/v{major}/service-name.yml`) and curated via the FountainAI OpenAPI Curator. Keep the curator output as the single source of truth and follow `Packages/FountainSpecCuration/openapi/AGENTS.md` for directory rules.
@@ -69,6 +98,7 @@ Thank you for helping FountainKit stay modular and healthy!
 ### Agents
 - Legacy Studio (deprecated) — learnings only: `Packages/FountainApps/Sources/FountainLauncherUI/AGENTS.md`.
 - Composer Studio (fresh app) — new work: `Packages/FountainApps/Sources/composer-studio/AGENTS.md`.
+- MemChat (deprecated) — learnings only: `Scripts/memchat/AGENTS.md`.
 
 **Maintenance**: This file embeds the unified master plan below. Keep this plan and
 `Plans/ROADMAP.md` in sync; prefer editing here and letting `Plans/ROADMAP.md` remain

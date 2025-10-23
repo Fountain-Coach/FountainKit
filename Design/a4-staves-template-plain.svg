@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A4 score template (plain SVG) using px units for maximum editor compatibility. -->
+<!-- Canvas at 300 DPI: 210mm × 297mm => ~2480 × 3508 px -->
+<svg xmlns="http://www.w3.org/2000/svg" width="2480" height="3508" viewBox="0 0 2480 3508">
+  <title>A4 Staves Template (plain)</title>
+  <rect x="0" y="0" width="2480" height="3508" fill="#ffffff"/>
+
+  <!-- Margins: 15mm ≈ 177px at 300dpi -->
+  <rect x="177" y="177" width="2126" height="3154" fill="none" stroke="#e0e0e0" stroke-width="1"/>
+  <!-- Header band: 25mm ≈ 295px -->
+  <line x1="177" y1="472" x2="2303" y2="472" stroke="#e0e0e0" stroke-width="1"/>
+
+  <!-- Title -->
+  <text x="1240" y="350" text-anchor="middle" font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" font-size="36" fill="#111">Title</text>
+  <text x="1240" y="400" text-anchor="middle" font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" font-size="24" fill="#666">Composer • Subtitle</text>
+
+  <!-- Staff metrics at 300dpi: spacing ~1.8mm => ~21px; line thickness ~0.2mm => ~2px; system gap 12mm => ~142px -->
+  <!-- Usable area top = 472; draw ~12 systems -->
+  <g stroke="#111" stroke-width="2">
+    <!-- Helper to draw a 5-line staff at baseY -->
+    <!-- System 1 (baseY=472) -->
+    <line x1="177" x2="2303" y1="472" y2="472"/>
+    <line x1="177" x2="2303" y1="493" y2="493"/>
+    <line x1="177" x2="2303" y1="514" y2="514"/>
+    <line x1="177" x2="2303" y1="535" y2="535"/>
+    <line x1="177" x2="2303" y1="556" y2="556"/>
+    <!-- System 2 (baseY=698) -->
+    <line x1="177" x2="2303" y1="698" y2="698"/>
+    <line x1="177" x2="2303" y1="719" y2="719"/>
+    <line x1="177" x2="2303" y1="740" y2="740"/>
+    <line x1="177" x2="2303" y1="761" y2="761"/>
+    <line x1="177" x2="2303" y1="782" y2="782"/>
+    <!-- System 3 (baseY=924) -->
+    <line x1="177" x2="2303" y1="924" y2="924"/>
+    <line x1="177" x2="2303" y1="945" y2="945"/>
+    <line x1="177" x2="2303" y1="966" y2="966"/>
+    <line x1="177" x2="2303" y1="987" y2="987"/>
+    <line x1="177" x2="2303" y1="1008" y2="1008"/>
+    <!-- System 4 (baseY=1150) -->
+    <line x1="177" x2="2303" y1="1150" y2="1150"/>
+    <line x1="177" x2="2303" y1="1171" y2="1171"/>
+    <line x1="177" x2="2303" y1="1192" y2="1192"/>
+    <line x1="177" x2="2303" y1="1213" y2="1213"/>
+    <line x1="177" x2="2303" y1="1234" y2="1234"/>
+    <!-- System 5 (baseY=1376) -->
+    <line x1="177" x2="2303" y1="1376" y2="1376"/>
+    <line x1="177" x2="2303" y1="1397" y2="1397"/>
+    <line x1="177" x2="2303" y1="1418" y2="1418"/>
+    <line x1="177" x2="2303" y1="1439" y2="1439"/>
+    <line x1="177" x2="2303" y1="1460" y2="1460"/>
+    <!-- System 6 (baseY=1602) -->
+    <line x1="177" x2="2303" y1="1602" y2="1602"/>
+    <line x1="177" x2="2303" y1="1623" y2="1623"/>
+    <line x1="177" x2="2303" y1="1644" y2="1644"/>
+    <line x1="177" x2="2303" y1="1665" y2="1665"/>
+    <line x1="177" x2="2303" y1="1686" y2="1686"/>
+    <!-- System 7 (baseY=1828) -->
+    <line x1="177" x2="2303" y1="1828" y2="1828"/>
+    <line x1="177" x2="2303" y1="1849" y2="1849"/>
+    <line x1="177" x2="2303" y1="1870" y2="1870"/>
+    <line x1="177" x2="2303" y1="1891" y2="1891"/>
+    <line x1="177" x2="2303" y1="1912" y2="1912"/>
+    <!-- System 8 (baseY=2054) -->
+    <line x1="177" x2="2303" y1="2054" y2="2054"/>
+    <line x1="177" x2="2303" y1="2075" y2="2075"/>
+    <line x1="177" x2="2303" y1="2096" y2="2096"/>
+    <line x1="177" x2="2303" y1="2117" y2="2117"/>
+    <line x1="177" x2="2303" y1="2138" y2="2138"/>
+    <!-- System 9 (baseY=2280) -->
+    <line x1="177" x2="2303" y1="2280" y2="2280"/>
+    <line x1="177" x2="2303" y1="2301" y2="2301"/>
+    <line x1="177" x2="2303" y1="2322" y2="2322"/>
+    <line x1="177" x2="2303" y1="2343" y2="2343"/>
+    <line x1="177" x2="2303" y1="2364" y2="2364"/>
+    <!-- System 10 (baseY=2506) -->
+    <line x1="177" x2="2303" y1="2506" y2="2506"/>
+    <line x1="177" x2="2303" y1="2527" y2="2527"/>
+    <line x1="177" x2="2303" y1="2548" y2="2548"/>
+    <line x1="177" x2="2303" y1="2569" y2="2569"/>
+    <line x1="177" x2="2303" y1="2590" y2="2590"/>
+    <!-- System 11 (baseY=2732) -->
+    <line x1="177" x2="2303" y1="2732" y2="2732"/>
+    <line x1="177" x2="2303" y1="2753" y2="2753"/>
+    <line x1="177" x2="2303" y1="2774" y2="2774"/>
+    <line x1="177" x2="2303" y1="2795" y2="2795"/>
+    <line x1="177" x2="2303" y1="2816" y2="2816"/>
+    <!-- System 12 (baseY=2958) -->
+    <line x1="177" x2="2303" y1="2958" y2="2958"/>
+    <line x1="177" x2="2303" y1="2979" y2="2979"/>
+    <line x1="177" x2="2303" y1="3000" y2="3000"/>
+    <line x1="177" x2="2303" y1="3021" y2="3021"/>
+    <line x1="177" x2="2303" y1="3042" y2="3042"/>
+  </g>
+
+  <text x="177" y="3460" font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" font-size="14" fill="#666">Margins 15mm • Header 25mm • Staff spacing ~1.8mm • Line 0.2mm • System gap 12mm • Systems 12</text>
+</svg>
+

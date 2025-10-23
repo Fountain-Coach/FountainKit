@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A4 portrait canvas (300 dpi px), three rotated copies of the A4 staves grid. -->
+<!-- Grid source matches Design/a4-staves-template-plain.svg (12 systems, 5 lines each). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="2480" height="3508" viewBox="0 0 2480 3508">
+  <title>A4 — Triple Tilted Staves (45°)</title>
+  <desc>Three evenly distributed instances of the A4 staves grid, each rotated 45 degrees.</desc>
+
+  <!-- Background -->
+  <rect x="0" y="0" width="2480" height="3508" fill="#ffffff"/>
+
+  <!-- Margin box for reference (15mm ≈ 177px) -->
+  <rect x="177" y="177" width="2126" height="3154" fill="none" stroke="#eaeaea" stroke-width="1"/>
+
+  <!-- Define the staves grid as a reusable group at native size (W=2126, H≈2570) -->
+  <defs>
+    <g id="staves-grid" stroke="#111" stroke-width="2" fill="none">
+      <!-- Staff metrics at 300dpi: spacing ≈21px; system gap ≈142px -->
+      <!-- Systems drawn from baseY values: 472, 698, 924, ... in the plain template. Here we normalize to start at y=0. -->
+      <!-- A single system height = 84px (5 lines); gap = 142px; step = 226px -->
+      <!-- Draw 12 systems (0..11) -->
+      <!-- Generated values: baseY = i*226 -->
+      <!-- System 1 (i=0) -->
+      <g>
+        <line x1="0" x2="2126" y1="0" y2="0"/>
+        <line x1="0" x2="2126" y1="21" y2="21"/>
+        <line x1="0" x2="2126" y1="42" y2="42"/>
+        <line x1="0" x2="2126" y1="63" y2="63"/>
+        <line x1="0" x2="2126" y1="84" y2="84"/>
+      </g>
+      <!-- System 2 (i=1, baseY=226) -->
+      <g transform="translate(0,226)">
+        <line x1="0" x2="2126" y1="0" y2="0"/>
+        <line x1="0" x2="2126" y1="21" y2="21"/>
+        <line x1="0" x2="2126" y1="42" y2="42"/>
+        <line x1="0" x2="2126" y1="63" y2="63"/>
+        <line x1="0" x2="2126" y1="84" y2="84"/>
+      </g>
+      <!-- System 3 (i=2, baseY=452) -->
+      <g transform="translate(0,452)">
+        <line x1="0" x2="2126" y1="0" y2="0"/>
+        <line x1="0" x2="2126" y1="21" y2="21"/>
+        <line x1="0" x2="2126" y1="42" y2="42"/>
+        <line x1="0" x2="2126" y1="63" y2="63"/>
+        <line x1="0" x2="2126" y1="84" y2="84"/>
+      </g>
+      <!-- System 4 (i=3, baseY=678) -->
+      <g transform="translate(0,678)">
+        <line x1="0" x2="2126" y1="0" y2="0"/>
+        <line x1="0" x2="2126" y1="21" y2="21"/>
+        <line x1="0" x2="2126" y1="42" y2="42"/>
+        <line x1="0" x2="2126" y1="63" y2="63"/>
+        <line x1="0" x2="2126" y1="84" y2="84"/>
+      </g>
+      <!-- System 5 (i=4, baseY=904) -->
+      <g transform="translate(0,904)">
+        <line x1="0" x2="2126" y1="0" y2="0"/>
+        <line x1="0" x2="2126" y1="21" y2="21"/>
+        <line x1="0" x2="2126" y1="42" y2="42"/>
+        <line x1="0" x2="2126" y1="63" y2="63"/>
+        <line x1="0" x2="2126" y1="84" y2="84"/>
+      </g>
+      <!-- System 6 (i=5, baseY=1130) -->
+      <g transform="translate(0,1130)">
+        <line x1="0" x2="2126" y1="0" y2="0"/>
+        <line x1="0" x2="2126" y1="21" y2="21"/>
+        <line x1="0" x2="2126" y1="42" y2="42"/>
+        <line x1="0" x2="2126" y1="63" y2="63"/>
+        <line x1="0" x2="2126" y1="84" y2="84"/>
+      </g>
+      <!-- System 7 (i=6, baseY=1356) -->
+      <g transform="translate(0,1356)">
+        <line x1="0" x2="2126" y1="0" y2="0"/>
+        <line x1="0" x2="2126" y1="21" y2="21"/>
+        <line x1="0" x2="2126" y1="42" y2="42"/>
+        <line x1="0" x2="2126" y1="63" y2="63"/>
+        <line x1="0" x2="2126" y1="84" y2="84"/>
+      </g>
+      <!-- System 8 (i=7, baseY=1582) -->
+      <g transform="translate(0,1582)">
+        <line x1="0" x2="2126" y1="0" y2="0"/>
+        <line x1="0" x2="2126" y1="21" y2="21"/>
+        <line x1="0" x2="2126" y1="42" y2="42"/>
+        <line x1="0" x2="2126" y1="63" y2="63"/>
+        <line x1="0" x2="2126" y1="84" y2="84"/>
+      </g>
+      <!-- System 9 (i=8, baseY=1808) -->
+      <g transform="translate(0,1808)">
+        <line x1="0" x2="2126" y1="0" y2="0"/>
+        <line x1="0" x2="2126" y1="21" y2="21"/>
+        <line x1="0" x2="2126" y1="42" y2="42"/>
+        <line x1="0" x2="2126" y1="63" y2="63"/>
+        <line x1="0" x2="2126" y1="84" y2="84"/>
+      </g>
+      <!-- System 10 (i=9, baseY=2034) -->
+      <g transform="translate(0,2034)">
+        <line x1="0" x2="2126" y1="0" y2="0"/>
+        <line x1="0" x2="2126" y1="21" y2="21"/>
+        <line x1="0" x2="2126" y1="42" y2="42"/>
+        <line x1="0" x2="2126" y1="63" y2="63"/>
+        <line x1="0" x2="2126" y1="84" y2="84"/>
+      </g>
+      <!-- System 11 (i=10, baseY=2260) -->
+      <g transform="translate(0,2260)">
+        <line x1="0" x2="2126" y1="0" y2="0"/>
+        <line x1="0" x2="2126" y1="21" y2="21"/>
+        <line x1="0" x2="2126" y1="42" y2="42"/>
+        <line x1="0" x2="2126" y1="63" y2="63"/>
+        <line x1="0" x2="2126" y1="84" y2="84"/>
+      </g>
+      <!-- System 12 (i=11, baseY=2486) -->
+      <g transform="translate(0,2486)">
+        <line x1="0" x2="2126" y1="0" y2="0"/>
+        <line x1="0" x2="2126" y1="21" y2="21"/>
+        <line x1="0" x2="2126" y1="42" y2="42"/>
+        <line x1="0" x2="2126" y1="63" y2="63"/>
+        <line x1="0" x2="2126" y1="84" y2="84"/>
+      </g>
+    </g>
+  </defs>
+
+  <!-- Place three rotated instances at equal vertical spacing within safe bounds -->
+  <!-- Native grid size: W=2126, H=2570 (approx). We scale to 0.55 and rotate 45° around the grid center. -->
+  <!-- Center X for all: 1240; Center Ys: 912, 1754, 2596 (≈ even with top/bottom safety) -->
+  <g opacity="0.9">
+    <g transform="translate(1240,912) rotate(45) scale(0.55) translate(-1063,-1285)"> <use href="#staves-grid"/> </g>
+    <g transform="translate(1240,1754) rotate(45) scale(0.55) translate(-1063,-1285)"> <use href="#staves-grid"/> </g>
+    <g transform="translate(1240,2596) rotate(45) scale(0.55) translate(-1063,-1285)"> <use href="#staves-grid"/> </g>
+  </g>
+
+  <!-- Caption -->
+  <text x="1240" y="3440" text-anchor="middle" font-family="-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" font-size="16" fill="#666">A4 — Triple Tilted Staves (45°) • based on 12-system grid</text>
+</svg>
+

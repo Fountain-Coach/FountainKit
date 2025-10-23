@@ -42,6 +42,8 @@ if [[ "$(uname)" == "Darwin" ]]; then
   # Help the dynamic loader find Homebrew libraries
   HB_PREFIX="${HOMEBREW_PREFIX:-/opt/homebrew}"
   export DYLD_FALLBACK_LIBRARY_PATH="$HB_PREFIX/lib:${DYLD_FALLBACK_LIBRARY_PATH:-}"
+  # Some setups honor DYLD_LIBRARY_PATH over the fallback path
+  export DYLD_LIBRARY_PATH="$HB_PREFIX/lib:${DYLD_LIBRARY_PATH:-}"
   # SDLKit runtime hints
   export SDLKIT_GUI_ENABLED=1
   export SDLKIT_PRESENT_POLICY=auto

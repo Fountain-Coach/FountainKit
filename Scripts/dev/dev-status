@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")"/../.. && pwd)
+PID_DIR="$REPO_ROOT/.fountain/pids"
+
+port_for() {
+  case "$1" in
+    baseline-awareness) echo "${BASELINE_AWARENESS_PORT:-8001}" ;;
+    bootstrap) echo "${BOOTSTRAP_PORT:-8002}" ;;
+    planner) echo "${PLANNER_PORT:-8003}" ;;
+    function-caller) echo "${FUNCTION_CALLER_PORT:-8004}" ;;
+    persist) echo "${FOUNTAINSTORE_PORT:-8005}" ;;
+    gateway) echo "${GATEWAY_PORT:-${PORT:-8010}}" ;;
+    semantic-browser) echo "${SEMANTIC_BROWSER_PORT:-8007}" ;;
+    tools-factory) echo "${TOOLS_FACTORY_PORT:-8011}" ;;
+    tool-server) echo "${PORT:-8012}" ;;
+    *) echo 0 ;;
+  esac
+}
+
+is_listening() {
+  local port="$1"
+  [[ "$port" -eq 0 ]] && return 1
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
+    return $?
+  fi
+  return 1
+}
+
+pid_of() {
+  local name="$1"
+  local f="$PID_DIR/$name.pid"
+  [[ -f "$f" ]] && cat "$f" 2>/dev/null || true
+}
+
+printf "%-18s %-8s %-8s %-8s\n" SERVICE PORT STATUS PID
+for svc in baseline-awareness bootstrap planner function-caller persist gateway semantic-browser tools-factory tool-server; do
+  port=$(port_for "$svc")
+  status="down"
+  if is_listening "$port"; then status="up"; fi
+  pid=$(pid_of "$svc")
+  printf "%-18s %-8s %-8s %-8s\n" "$svc" "$port" "$status" "${pid:-}"
+done
+

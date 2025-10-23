@@ -17,8 +17,7 @@ USAGE
 }
 
 # Determine repo root
-REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)
-exec "$REPO_ROOT/Scripts/dev/dev-up" "$@"
+REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")"/../.. && pwd)
 LOG_DIR="$REPO_ROOT/.fountain/logs"
 PID_DIR="$REPO_ROOT/.fountain/pids"
 mkdir -p "$LOG_DIR" "$PID_DIR"
@@ -34,7 +33,7 @@ if [[ "${1:-}" == "env" ]]; then
     echo "[dev-up] Exported LAUNCHER_SIGNATURE=$LAUNCHER_SIGNATURE"
     return 0
   else
-    echo "[dev-up] Tip: run 'source Scripts/dev-up env' to export into current shell"
+    echo "[dev-up] Tip: run 'source Scripts/dev/dev-up env' to export into current shell"
     exit 0
   fi
 fi
@@ -127,10 +126,7 @@ http_json_ok() {
 import sys, json
 json.loads(sys.argv[1])
 PY
-    return $?
   fi
-  # Fallback heuristic when python3 is unavailable
-  [[ "$body" == \{* ]] && return 0 || return 1
 }
 
 wait_ready_json() {
@@ -259,41 +255,3 @@ start_bg function-caller function-caller-server Packages/FountainApps
 start_bg persist persist-server Packages/FountainApps
 start_bg gateway gateway-server Packages/FountainApps
 
-if [[ "$ALL" == "1" ]]; then
-  echo "[dev-up] semantic-browser env: see Configuration/semantic-browser.env.example (SB_CDP_URL, SB_BROWSER_CLI/SB_BROWSER_ARGS, SEMANTIC_BROWSER_PORT)"
-  start_bg semantic-browser semantic-browser-server Packages/FountainApps-SemanticBrowser
-  start_bg tools-factory tools-factory-server Packages/FountainApps
-  start_bg tool-server tool-server Packages/FountainApps
-  start_bg publishing-frontend publishing-frontend Packages/FountainApps
-fi
-
-if [[ "$CHECK" == "1" || "${DEV_UP_CHECKS:-0}" == "1" ]]; then
-  # Common readiness probes
-  wait_ready baseline-awareness http://127.0.0.1:8001/metrics || true
-  wait_ready bootstrap          http://127.0.0.1:8002/metrics || true
-  wait_ready planner            http://127.0.0.1:8003/metrics || true
-  wait_ready function-caller    http://127.0.0.1:8004/metrics || true
-  wait_ready persist            http://127.0.0.1:8005/metrics || true
-  # Gateway metrics are JSON; verify parsable shape for a stronger signal
-  wait_ready_json gateway       http://127.0.0.1:8010/metrics || true
-  if [[ "$ALL" == "1" ]]; then
-    wait_ready tools-factory    http://127.0.0.1:8011/metrics || true
-    wait_ready tool-server      http://127.0.0.1:8012/_health || true
-    # semantic-browser exposes /metrics per its README; may depend on env, so mark optional
-    wait_ready semantic-browser http://127.0.0.1:8007/metrics || true
-  fi
-fi
-
-# Auto-seed Scripts corpus into FountainStore (idempotent; guarded by baselines)
-if [[ "${DEV_UP_AUTO_SEED_SCRIPTS:-1}" == "1" ]]; then
-  if command -v python3 >/dev/null 2>&1; then
-    echo "[dev-up] Seeding scripts corpus (fountain-scripts)…"
-    ver="auto-$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
-    "$REPO_ROOT/Scripts/seed-scripts-corpus" --persist-url "http://127.0.0.1:$(port_for persist)" --corpus fountain-scripts --version "$ver" >/dev/null 2>&1 || true
-    echo "[dev-up] Registering scripts as functions…"
-    "$REPO_ROOT/Scripts/register-scripts-functions" --persist-url "http://127.0.0.1:$(port_for persist)" --corpus fountain-scripts >/dev/null 2>&1 || true
-  fi
-fi
-
-echo "[dev-up] Done. Logs under .fountain/logs; pids under .fountain/pids"
-echo "[dev-up] Tip: 'source Scripts/dev-up env' to export LAUNCHER_SIGNATURE into your shell"

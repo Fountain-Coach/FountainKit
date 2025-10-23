@@ -6,7 +6,7 @@ usage() {
 Usage:
   $(basename "$0") [--all] [--force]
 
-Stops background FountainKit dev processes started by Scripts/dev-up and the LocalAgent.
+Stops background FountainKit dev processes started by Scripts/dev/dev-up and the LocalAgent.
 
 Options:
   --all     Also stop optional extras (semantic-browser, tools-factory, tool-server, publishing-frontend)
@@ -14,8 +14,8 @@ Options:
 USAGE
 }
 
-REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)
-exec "$REPO_ROOT/Scripts/dev/dev-down" "$@"
+REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")"/../.. && pwd)
+PID_DIR="$REPO_ROOT/.fountain/pids"
 
 ALL=0
 FORCE=0
@@ -71,3 +71,4 @@ if [[ "$FORCE" == "1" ]]; then
 fi
 
 echo "[dev-down] Done."
+

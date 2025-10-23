@@ -30,8 +30,9 @@ struct App {
 
             let fps: Double = 60
             let frameTime: useconds_t = useconds_t(1_000_000.0 / fps)
-
-            let end = Date().addingTimeInterval(5) // run ~5 seconds for demo
+            // Allow duration override via env; default to 12 seconds for visibility
+            let duration = Double(ProcessInfo.processInfo.environment["SDL_EXPERIMENT_DURATION_SEC"] ?? "12") ?? 12.0
+            let end = Date().addingTimeInterval(duration)
             while Date() < end {
                 // Update
                 x += vx; y += vy

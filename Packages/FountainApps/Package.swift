@@ -42,6 +42,8 @@ let package = Package(
         .executable(name: "engraver-direct", targets: ["engraver-direct"]),
         .library(name: "EngraverChatCore", targets: ["EngraverChatCore"]),
         .library(name: "EngraverStudio", targets: ["EngraverStudio"]),
+        .library(name: "MetalViewKit", targets: ["MetalViewKit"]),
+        .executable(name: "metalview-demo-app", targets: ["metalview-demo-app"]),
         .executable(name: "fk", targets: ["fk"])
         ,
         .executable(name: "composer-studio", targets: ["composer-studio"])
@@ -65,8 +67,10 @@ let package = Package(
         .package(path: "../FountainServiceKit-ToolServer"),
         .package(path: "../FountainServiceKit-FKOps"),
         .package(path: "../FountainTooling"),
+        .package(path: "../FountainTelemetryKit"),
         .package(path: "../../Tools/PersistenceSeeder"),
-        .package(path: "../../External/Teatro/Packages/TeatroGUI"),
+        .package(path: "../../External/TeatroFull"),
+        
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
         .package(url: "https://github.com/apple/swift-certificates.git", from: "1.0.0"),
@@ -75,7 +79,9 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
         .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.0"),
-        .package(url: "https://github.com/apple/swift-openapi-urlsession.git", from: "1.0.0")
+        .package(url: "https://github.com/apple/swift-openapi-urlsession.git", from: "1.0.0"),
+        // MIDI 2.0 + MIDI-CI helpers (Discovery, Property Exchange)
+        .package(url: "https://github.com/Fountain-Coach/midi2.git", branch: "main")
     ],
     targets: [
         .executableTarget(
@@ -107,6 +113,14 @@ let package = Package(
                 .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
+        ),
+        .target(
+            name: "MetalViewKit",
+            dependencies: [
+                .product(name: "MIDI2CI", package: "midi2")
+            ],
+            path: "Sources/MetalViewKit",
+            exclude: ["AGENTS.md"]
         ),
         .executableTarget(
             name: "composer-studio",
@@ -377,7 +391,7 @@ let package = Package(
                 .product(name: "ProviderLocalLLM", package: "FountainProviders"),
                 .product(name: "ProviderGateway", package: "FountainProviders"),
                 .product(name: "FountainAIAdapters", package: "FountainGatewayKit"),
-                .product(name: "TeatroGUI", package: "TeatroGUI")
+                .product(name: "Teatro", package: "TeatroFull")
             ],
             path: "Sources/engraver-studio",
             exclude: ["README.md"]
@@ -430,7 +444,7 @@ let package = Package(
                 .product(name: "LauncherSignature", package: "FountainCore"),
                 .product(name: "MemChatKit", package: "MemChatKit"),
                 .product(name: "SecretStore", package: "swift-secretstore"),
-                .product(name: "TeatroGUI", package: "TeatroGUI")
+                .product(name: "Teatro", package: "TeatroFull")
             ],
             path: "Sources/memchat-teatro"
         ),
@@ -463,6 +477,18 @@ let package = Package(
                 .product(name: "ChatKitGatewayPlugin", package: "FountainGatewayKit"),
                 .product(name: "GatewayAPI", package: "FountainAPIClients")
             ]
+        )
+        ,
+        .executableTarget(
+            name: "metalview-demo-app",
+            dependencies: [
+                "MetalViewKit",
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit"),
+                .product(name: "Teatro", package: "TeatroFull"),
+                .product(name: "MIDI2CI", package: "midi2")
+            ],
+            path: "Sources/metalview-demo-app",
+            exclude: ["AGENTS.md"]
         )
     ]
 )

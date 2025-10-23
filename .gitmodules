@@ -4,3 +4,6 @@
 [submodule "External/SDLKit"]
 	path = External/SDLKit
 	url = https://github.com/Fountain-Coach/SDLKit.git
+[submodule "External/TeatroFull"]
+	path = External/TeatroFull
+	url = https://github.com/Fountain-Coach/Teatro.git

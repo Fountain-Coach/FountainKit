@@ -40,6 +40,11 @@ Your machine — “now it’s about you”
     - `MPSGraph Available: yes/no` (tensor graphs available on this SDK)
   - Then it benchmarks a large vector add (vadd). If MPSGraph is available, it also attempts a matmul (stubbed when unavailable).
 
+Extensible (future‑proofing)
+- FFT: `fftMagnitudesPreferred(_:)` uses Accelerate vDSP for reliability today. A GPU path (MPSGraph or MPSFFT) can be enabled behind availability without changing call sites.
+- DSP kernels live in `MPSDsp.swift` (2D convolution, windowing, resample). Additions here don’t affect core compute.
+- Validation: use `metalcompute-tests` to keep additions green across SDK differences; be tolerant where MPS implementations vary (compare MAE or constrain to inner regions).
+
 If the report says “MPSGraph Available: no”
 - Why you’re seeing this
   - The running Swift toolchain is using an SDK or Xcode that doesn’t expose `MetalPerformanceShadersGraph`.

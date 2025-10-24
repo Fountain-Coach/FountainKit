@@ -33,8 +33,8 @@ public final class MPSGraphFacade {
         a.withUnsafeBytes { p in aArr.writeBytes(UnsafeMutableRawPointer(mutating: p.baseAddress!), strideBytes: nil) }
         b.withUnsafeBytes { p in bArr.writeBytes(UnsafeMutableRawPointer(mutating: p.baseAddress!), strideBytes: nil) }
         let feeds: [MPSGraphTensor: MPSGraphTensorData] = [
-            aTensor: MPSGraphTensorData(mpsNDArray: aArr),
-            bTensor: MPSGraphTensorData(mpsNDArray: bArr)
+            aTensor: MPSGraphTensorData(aArr),
+            bTensor: MPSGraphTensorData(bArr)
         ]
 
         let results = graph.run(feeds: feeds, targetTensors: [cTensor], targetOperations: nil)

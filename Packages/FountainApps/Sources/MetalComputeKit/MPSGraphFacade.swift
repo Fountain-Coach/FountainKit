@@ -2,6 +2,8 @@ import Foundation
 import Metal
 
 import MetalPerformanceShaders
+#if canImport(MetalPerformanceShadersGraph)
+import MetalPerformanceShadersGraph
 
 public final class MPSGraphFacade {
     private let graph = MPSGraph()
@@ -19,17 +21,17 @@ public final class MPSGraphFacade {
         let bShape: [NSNumber] = [k as NSNumber, n as NSNumber]
 
         // Placeholders
-        let aTensor = graph.placeholder(shape: aShape, dataType: .float32, name: "A")
-        let bTensor = graph.placeholder(shape: bShape, dataType: .float32, name: "B")
-        let cTensor = graph.matrixMultiplication(primary: aTensor, secondary: bTensor, name: nil)
+        let aTensor = graph.placeholder(shape: aShape, dataType: MPSDataType.float32, name: "A")
+        let bTensor = graph.placeholder(shape: bShape, dataType: MPSDataType.float32, name: "B")
+        let cTensor = graph.matrixMultiplication(primary: aTensor, secondary: bTensor, name: nil as String?)
 
         // MPSNDArray feeds
         let aDesc = MPSNDArrayDescriptor(dataType: .float32, shape: aShape)
         let bDesc = MPSNDArrayDescriptor(dataType: .float32, shape: bShape)
         let aArr = MPSNDArray(device: device, descriptor: aDesc)
         let bArr = MPSNDArray(device: device, descriptor: bDesc)
-        a.withUnsafeBytes { p in aArr.writeBytes(p.baseAddress!, strideBytes: nil) }
-        b.withUnsafeBytes { p in bArr.writeBytes(p.baseAddress!, strideBytes: nil) }
+        a.withUnsafeBytes { p in aArr.writeBytes(UnsafeMutableRawPointer(mutating: p.baseAddress!), strideBytes: nil) }
+        b.withUnsafeBytes { p in bArr.writeBytes(UnsafeMutableRawPointer(mutating: p.baseAddress!), strideBytes: nil) }
         let feeds: [MPSGraphTensor: MPSGraphTensorData] = [
             aTensor: MPSGraphTensorData(mpsndarray: aArr),
             bTensor: MPSGraphTensorData(mpsndarray: bArr)
@@ -42,3 +44,9 @@ public final class MPSGraphFacade {
         return out
     }
 }
+#else
+public final class MPSGraphFacade {
+    public init?() { return nil }
+    public func matmul(a: [Float], m: Int, k: Int, b: [Float], n: Int) -> [Float] { return [] }
+}
+#endif

@@ -34,12 +34,12 @@ public final class MetalComputeContext {
         let length = array.count * MemoryLayout<T>.stride
         let buf = device.makeBuffer(length: length, options: options)!
         buf.label = "MetalComputeKit.Buffer"
-        array.withUnsafeBytes { ptr in memcpy(buf.contents(), ptr.baseAddress!, length) }
+        _ = array.withUnsafeBytes { ptr in memcpy(buf.contents(), ptr.baseAddress!, length) }
         return buf
     }
 
-    public func makeEmptyBuffer<T>(count: Int, options: MTLResourceOptions = .storageModeShared) -> MTLBuffer {
-        let length = count * MemoryLayout<T>.stride
+    public func makeEmptyBuffer<Element>(of: Element.Type, count: Int, options: MTLResourceOptions = .storageModeShared) -> MTLBuffer {
+        let length = count * MemoryLayout<Element>.stride
         let buf = device.makeBuffer(length: length, options: options)!
         buf.label = "MetalComputeKit.Buffer.Empty"
         return buf
@@ -89,11 +89,12 @@ public extension MetalComputeContext {
         let pso = try makeComputePipeline(functionName: "vadd", source: BuiltinComputeKernels.vaddMSL)
         let aBuf = makeBuffer(from: a)
         let bBuf = makeBuffer(from: b)
-        let outBuf = makeEmptyBuffer(count: a.count) as MTLBuffer
+        let outBuf = makeEmptyBuffer(of: Float.self, count: a.count)
         var nCopy = n
         let nBuf = makeBuffer(from: [nCopy])
-        let tg = MTLSize(width: min(pso.maxTotalThreadsPerThreadgroup, 256), height: 1, depth: 1)
-        let grid = MTLSize(width: Int((n + UInt32(tg.width - 1)) / UInt32(tg.width)), height: 1, depth: 1)
+        let tgW = min(pso.threadExecutionWidth, 256)
+        let tg = MTLSize(width: tgW, height: 1, depth: 1)
+        let grid = MTLSize(width: a.count, height: 1, depth: 1)
         try dispatch(pso, grid: grid, threadsPerThreadgroup: tg) { enc in
             enc.setBuffer(aBuf, offset: 0, index: 0)
             enc.setBuffer(bBuf, offset: 0, index: 1)
@@ -104,4 +105,3 @@ public extension MetalComputeContext {
         return Array(UnsafeBufferPointer(start: ptr, count: a.count))
     }
 }
-

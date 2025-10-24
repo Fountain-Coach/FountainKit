@@ -78,6 +78,28 @@ Status (completed)
 4. Run focused tests with `swift test --package-path Packages/<PackageName>`; every touched package must have green tests before PRs merge. Telemetry changes must cover `FountainTelemetryKit`.
 5. Update package manifests when adding/removing targets or dependencies. Ensure client/server targets declare the generator plug-in and runtime dependencies.
 
+## Agent Operating Mode — Self‑Healing Build/Test Loop (Default)
+
+This repo expects the agent to own build/test health end‑to‑end. The agent must:
+
+- Read and diagnose build/test logs without asking the operator to paste output. Run the exact commands locally and fix failures.
+- Only claim “green” after the same commands succeed on the agent side.
+- Prefer spec‑first changes (e.g., MIDI‑CI envelopes) and add capability detectors to avoid guesswork.
+- Add dedicated, focused test runners when the full workspace is noisy (e.g., `metalcompute-tests`).
+- Commit semantically (“feat: …”, “fix: …”, “docs: …”) and push when changes are validated.
+- Keep changes surgical: do not modify UI unless asked; fix the broken target(s) and add tests.
+
+Recommended validation commands (agent runs these proactively):
+
+- Build and compute demo:
+  - `swift run --package-path Packages/FountainApps metalcompute-demo`
+- Compute test runner (fast, self‑contained):
+  - `swift run --package-path Packages/FountainApps metalcompute-tests`
+- Package‑scoped tests (when applicable):
+  - `swift test --package-path Packages/FountainApps -c debug --filter <TargetName>`
+
+If a command fails, the agent enters a self‑healing loop: read logs, patch, rerun, and only return success when the same command passes.
+
 ## Continuous integration
 - `CI` workflow: lint OpenAPI specs, run a full `swift build`, and fan out `swift test --package-path Packages/<Package>` across a matrix of packages on Xcode 16 runners.
 - `CI Smoke`: boots core services via `Scripts/ci-smoke.sh`, probes readiness endpoints, and uploads logs for diagnostics.

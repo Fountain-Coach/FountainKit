@@ -492,6 +492,11 @@ let package = Package(
             ]
         )
         ,
+        .testTarget(
+            name: "MetalComputeKitTests",
+            dependencies: ["MetalComputeKit"],
+            path: "Tests/MetalComputeKitTests"
+        ),
         .executableTarget(
             name: "metalview-demo-app",
             dependencies: [

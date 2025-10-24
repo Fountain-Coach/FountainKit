@@ -43,6 +43,7 @@ let package = Package(
         .library(name: "EngraverChatCore", targets: ["EngraverChatCore"]),
         .library(name: "EngraverStudio", targets: ["EngraverStudio"]),
         .library(name: "MetalViewKit", targets: ["MetalViewKit"]),
+        .library(name: "MetalComputeKit", targets: ["MetalComputeKit"]),
         .executable(name: "metalview-demo-app", targets: ["metalview-demo-app"]),
         .executable(name: "fk", targets: ["fk"])
         ,
@@ -120,6 +121,12 @@ let package = Package(
                 .product(name: "MIDI2CI", package: "midi2")
             ],
             path: "Sources/MetalViewKit",
+            exclude: ["AGENTS.md"]
+        ),
+        .target(
+            name: "MetalComputeKit",
+            dependencies: [],
+            path: "Sources/MetalComputeKit",
             exclude: ["AGENTS.md"]
         ),
         .executableTarget(

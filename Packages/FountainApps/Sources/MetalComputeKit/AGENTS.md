@@ -13,6 +13,8 @@ Usage (example)
 ```swift
 import MetalComputeKit
 
+print(MetalComputeInspector.report()) // quick capability report (device name, thread width hint, MPSGraph availability)
+
 guard let ctx = MetalComputeContext() else { fatalError("No Metal") }
 let a = Array(repeating: 1.0 as Float, count: 1024)
 let b = Array(repeating: 2.0 as Float, count: 1024)
@@ -29,6 +31,16 @@ if let g = MPSGraphFacade() {
 #endif
 ```
 
+Your machine — “now it’s about you”
+- Run the demo to see what this Mac can do:
+  - `swift run --package-path Packages/FountainApps metalcompute-demo`
+  - You’ll get a capability report like:
+    - `Metal Device: Apple M2` (or discrete GPU name)
+    - `Thread Execution Width (hint): 32/64` (guides threadgroup sizing)
+    - `MPSGraph Available: yes/no` (tensor graphs available on this SDK)
+  - Then it benchmarks a large vector add (vadd). If MPSGraph is available, it also attempts a matmul (stubbed when unavailable).
+
+
 Design choices
 - Runtime MSL compilation via `device.makeLibrary(source:)` to avoid toolchain/env issues during development.
 - Simple, explicit grid/threadgroup dispatch. Pick `threadsPerThreadgroup` based on the device’s `maxTotalThreadsPerThreadgroup`.
@@ -42,4 +54,3 @@ Threading & performance
 - Prefer `.storageModeShared` for CPU‑visible staging; use `.storageModePrivate` for GPU‑only buffers and blit when needed.
 - Batch work per command buffer; reuse pipelines.
 - Avoid CPU–GPU round‑trips in tight loops.
-

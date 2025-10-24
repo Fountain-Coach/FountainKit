@@ -4,6 +4,7 @@ import MetalComputeKit
 @main
 struct MetalComputeDemo {
     static func main() {
+        print("[capabilities]\n\(MetalComputeInspector.report())\n")
         guard let ctx = MetalComputeContext() else {
             fputs("[compute-demo] No Metal device available\n", stderr)
             exit(1)
@@ -47,4 +48,3 @@ struct MetalComputeDemo {
         #endif
     }
 }
-

@@ -3,9 +3,8 @@ import XCTest
 import Metal
 
 final class MetalComputeKitTests: XCTestCase {
-    private func requireMetalDevice() -> MTLDevice? {
-        let dev = MTLCreateSystemDefaultDevice()
-        if dev == nil {
+    private func requireMetalDevice() throws -> MTLDevice {
+        guard let dev = MTLCreateSystemDefaultDevice() else {
             throw XCTSkip("No Metal device present on this host — skipping compute tests.")
         }
         return dev
@@ -87,4 +86,3 @@ final class MetalComputeKitTests: XCTestCase {
         }
     }
 }
-

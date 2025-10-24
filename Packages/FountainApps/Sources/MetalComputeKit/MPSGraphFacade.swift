@@ -25,12 +25,16 @@ public final class MPSGraphFacade {
         let bTensor = graph.placeholder(shape: bShape, dataType: MPSDataType.float32, name: "B")
         let cTensor = graph.matrixMultiplication(primary: aTensor, secondary: bTensor, name: nil as String?)
 
-        // Build feeds as MPSGraphTensorData directly from Data buffers (SDK-friendly)
-        let aData = Data(buffer: UnsafeBufferPointer(start: a, count: a.count))
-        let bData = Data(buffer: UnsafeBufferPointer(start: b, count: b.count))
+        // Build feeds using MPSNDArray path for broad SDK compatibility
+        let aDesc = MPSNDArrayDescriptor(dataType: .float32, shape: aShape)
+        let bDesc = MPSNDArrayDescriptor(dataType: .float32, shape: bShape)
+        let aArr = MPSNDArray(device: device, descriptor: aDesc)
+        let bArr = MPSNDArray(device: device, descriptor: bDesc)
+        a.withUnsafeBytes { p in aArr.writeBytes(UnsafeMutableRawPointer(mutating: p.baseAddress!), strideBytes: nil) }
+        b.withUnsafeBytes { p in bArr.writeBytes(UnsafeMutableRawPointer(mutating: p.baseAddress!), strideBytes: nil) }
         let feeds: [MPSGraphTensor: MPSGraphTensorData] = [
-            aTensor: MPSGraphTensorData(device: device, data: aData, shape: aShape, dataType: .float32),
-            bTensor: MPSGraphTensorData(device: device, data: bData, shape: bShape, dataType: .float32)
+            aTensor: MPSGraphTensorData(mpsNDArray: aArr),
+            bTensor: MPSGraphTensorData(mpsNDArray: bArr)
         ]
 
         let results = graph.run(feeds: feeds, targetTensors: [cTensor], targetOperations: nil)

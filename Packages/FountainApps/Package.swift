@@ -44,6 +44,7 @@ let package = Package(
         .library(name: "EngraverStudio", targets: ["EngraverStudio"]),
         .library(name: "MetalViewKit", targets: ["MetalViewKit"]),
         .library(name: "MetalComputeKit", targets: ["MetalComputeKit"]),
+        .executable(name: "metalcompute-demo", targets: ["metalcompute-demo"]),
         .executable(name: "metalview-demo-app", targets: ["metalview-demo-app"]),
         .executable(name: "fk", targets: ["fk"])
         ,
@@ -114,6 +115,11 @@ let package = Package(
                 .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
+        ),
+        .executableTarget(
+            name: "metalcompute-demo",
+            dependencies: ["MetalComputeKit"],
+            path: "Sources/metalcompute-demo"
         ),
         .target(
             name: "MetalViewKit",

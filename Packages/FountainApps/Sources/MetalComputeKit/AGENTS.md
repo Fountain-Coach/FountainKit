@@ -40,6 +40,27 @@ Your machine — “now it’s about you”
     - `MPSGraph Available: yes/no` (tensor graphs available on this SDK)
   - Then it benchmarks a large vector add (vadd). If MPSGraph is available, it also attempts a matmul (stubbed when unavailable).
 
+If the report says “MPSGraph Available: no”
+- Why you’re seeing this
+  - The running Swift toolchain is using an SDK or Xcode that doesn’t expose `MetalPerformanceShadersGraph`.
+  - Common causes: Command‑line build pointed at an old Xcode, or macOS SDK too old for your repo’s platform (we target macOS 14).
+- Quick fixes (pick the one that applies)
+  - Ensure Xcode 15+ (or newer) is selected for CLI builds:
+    - `sudo xcode-select -s /Applications/Xcode.app`
+    - Verify: `xcode-select -p` and `swift --version`
+  - Sanity‑check the SDK path and the module:
+    - `xcrun --sdk macosx --show-sdk-path`
+    - `xcrun swiftc -sdk $(xcrun --show-sdk-path --sdk macosx) -e 'import MetalPerformanceShadersGraph; print("MPSGraph OK")'`
+  - Confirm OS/SDK target: this workspace targets `macOS 14`. If you’re on an older macOS, keep using MetalComputeKit kernels and Core ML; enable MPSGraph on a newer host.
+- You’re not blocked
+  - All compute examples (vadd, custom kernels) run with plain Metal.
+  - For ML, prefer Core ML for packaged models or keep using custom Metal/MPS kernels; we can enable MPSGraph later without changing call sites.
+
+Xmas upgrades (make this machine “happy”)
+- Upgrade to the latest stable Xcode and macOS you’re comfortable with.
+- Re‑select Xcode for CLI (`xcode-select`) so `swift build` uses that SDK.
+- Optional: ask us to enable the full MPSGraphFacade implementation — it’s gated behind availability and can be swapped in once the module is present.
+
 
 Design choices
 - Runtime MSL compilation via `device.makeLibrary(source:)` to avoid toolchain/env issues during development.

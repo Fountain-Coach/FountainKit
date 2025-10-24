@@ -6,8 +6,9 @@ Scope
 Targets
 - `MetalComputeKit` (library)
   - `MetalComputeContext`: wraps `MTLDevice`/`MTLCommandQueue`, runtime MSL compilation, buffer helpers, and a dispatch helper.
-  - Built‑in `vadd` kernel (vector add) compiled at runtime from inline MSL.
-  - `MPSGraphFacade` (optional): basic matmul wrapper when `MetalPerformanceShadersGraph` is available.
+  - Built‑in compute: vadd/vmul/saxpy, activations (relu/clamp/sigmoid), reductions (sum/min/max), softmax, FIR, window, linear resample.
+  - `MPSDsp`: MPS 2D convolution wrapper with CPU fallback; preferred FFT path (vDSP today, GPU upgrade later).
+  - `MPSGraphFacade` (optional): basic matmul when `MetalPerformanceShadersGraph` is available.
 
 Usage (example)
 ```swift
@@ -75,6 +76,11 @@ Design choices
 Extending
 - Add kernels as inline MSL strings or load them from files; use `makeComputePipeline(functionName:source:)`.
 - Prefer MPS (convolution, pooling, reduction) or MPSGraph (tensor graphs) over custom kernels where possible.
+
+Core ML interop (new)
+- Use `CoreMLInterop.loadModel(at:)` to load a `.mlmodel` or compiled `.mlmodelc` and `predict(model:inputs:)` with MLMultiArray.
+- Demo runner: `swift run --package-path Packages/FountainApps coreml-demo` with `COREML_MODEL=/path/to/Model.mlmodel[c]`.
+- Helpers exist to convert `[Float]` ↔︎ `MLMultiArray`. Prefer multiarray inputs for simplicity.
 
 Threading & performance
 - Prefer `.storageModeShared` for CPU‑visible staging; use `.storageModePrivate` for GPU‑only buffers and blit when needed.

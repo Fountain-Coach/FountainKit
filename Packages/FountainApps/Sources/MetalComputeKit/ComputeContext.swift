@@ -90,8 +90,7 @@ public extension MetalComputeContext {
         let aBuf = makeBuffer(from: a)
         let bBuf = makeBuffer(from: b)
         let outBuf = makeEmptyBuffer(of: Float.self, count: a.count)
-        var nCopy = n
-        let nBuf = makeBuffer(from: [nCopy])
+        let nBuf = makeBuffer(from: [n])
         let tgW = min(pso.threadExecutionWidth, 256)
         let tg = MTLSize(width: tgW, height: 1, depth: 1)
         let grid = MTLSize(width: a.count, height: 1, depth: 1)

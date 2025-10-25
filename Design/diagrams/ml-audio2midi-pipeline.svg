@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700">
+  <rect width="1200" height="700" fill="#ffffff"/>
+  <text x="50%" y="50" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="28">Audio → MIDI 2.0 Pipeline (PLACEHOLDER)</text>
+  <rect x="60" y="160" width="200" height="100" fill="#f4f6f8" stroke="#cfd8dc"/>
+  <text x="160" y="210" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="16">Audio / Mic</text>
+  <rect x="300" y="160" width="230" height="100" fill="#f4f6f8" stroke="#cfd8dc"/>
+  <text x="415" y="210" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="16">Features</text>
+  <rect x="560" y="160" width="230" height="100" fill="#f4f6f8" stroke="#cfd8dc"/>
+  <text x="675" y="210" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="16">Pitch / Activations</text>
+  <rect x="820" y="160" width="280" height="100" fill="#f4f6f8" stroke="#cfd8dc"/>
+  <text x="960" y="210" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="16">Event Builder → UMP</text>
+  <line x1="260" y1="210" x2="300" y2="210" stroke="#00B3A4" stroke-width="3"/>
+  <line x1="530" y1="210" x2="560" y2="210" stroke="#00B3A4" stroke-width="3"/>
+  <line x1="790" y1="210" x2="820" y2="210" stroke="#00B3A4" stroke-width="3"/>
+  <text x="415" y="280" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#666">Core ML (CREPE/BasicPitch) or DSP fallback</text>
+  <text x="960" y="280" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#666">NoteOn/Off, PB 16-bit, Velocity 32-bit</text>
+</svg>
+

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700">
+  <rect width="1200" height="700" fill="#ffffff"/>
+  <text x="50%" y="50" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="28">Visual Instruments — Mapping (PLACEHOLDER)</text>
+  <rect x="80" y="140" width="320" height="120" fill="#f4f6f8" stroke="#cfd8dc"/>
+  <text x="240" y="200" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="16">MIDI 2.0 Endpoint (View)</text>
+  <rect x="440" y="140" width="320" height="200" fill="#eef7ff" stroke="#90caf9"/>
+  <text x="600" y="170" text-anchor="middle" font-family="sans-serif" font-size="16" fill="#2F74FF">Mapping</text>
+  <text x="600" y="200" text-anchor="middle" font-family="sans-serif" font-size="14">rotationSpeed ↔ Note 60</text>
+  <text x="600" y="225" text-anchor="middle" font-family="sans-serif" font-size="14">zoom ↔ CC2</text>
+  <text x="600" y="250" text-anchor="middle" font-family="sans-serif" font-size="14">tint.r/g/b ↔ CC20/21/22</text>
+  <rect x="800" y="160" width="320" height="160" fill="#f4f6f8" stroke="#cfd8dc"/>
+  <text x="960" y="200" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="16">Uniform Buffer</text>
+  <line x1="400" y1="200" x2="440" y2="200" stroke="#00B3A4" stroke-width="3"/>
+  <line x1="760" y1="220" x2="800" y2="220" stroke="#00B3A4" stroke-width="3"/>
+</svg>
+

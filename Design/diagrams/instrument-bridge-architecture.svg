@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700">
+  <rect width="1200" height="700" fill="#ffffff"/>
+  <text x="50%" y="50" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="28">Instrument Bridge — Architecture (PLACEHOLDER)</text>
+  <rect x="80" y="120" width="320" height="120" fill="#f4f6f8" stroke="#cfd8dc"/>
+  <text x="240" y="180" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="18">Audio / Mic or File</text>
+  <rect x="440" y="120" width="320" height="120" fill="#f4f6f8" stroke="#cfd8dc"/>
+  <text x="600" y="180" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="18">ML / DSP → MIDI 2.0 UMP</text>
+  <rect x="800" y="90" width="320" height="90" fill="#eef7ff" stroke="#90caf9"/>
+  <text x="960" y="135" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="16" fill="#2F74FF">AudioTalk Control Plane</text>
+  <rect x="800" y="210" width="320" height="90" fill="#f4f6f8" stroke="#cfd8dc"/>
+  <text x="960" y="255" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="16">Local Render (Sampler)</text>
+  <rect x="800" y="320" width="320" height="90" fill="#f4f6f8" stroke="#cfd8dc"/>
+  <text x="960" y="365" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="16">External Destinations</text>
+  <line x1="400" y1="180" x2="440" y2="180" stroke="#00B3A4" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="760" y1="180" x2="800" y2="255" stroke="#00B3A4" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="760" y1="180" x2="800" y2="365" stroke="#00B3A4" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="960" y1="180" x2="960" y2="210" stroke="#2F74FF" stroke-width="2"/>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="10" refY="3" orient="auto">
+      <path d="M0,0 L10,3 L0,6 z" fill="#00B3A4"/>
+    </marker>
+  </defs>
+</svg>
+

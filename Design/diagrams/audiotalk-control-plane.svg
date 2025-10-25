@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700">
+  <rect width="1200" height="700" fill="#ffffff"/>
+  <text x="50%" y="50" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="28">AudioTalk — Control Plane (PLACEHOLDER)</text>
+  <rect x="80" y="120" width="300" height="400" fill="#f4f6f8" stroke="#cfd8dc"/>
+  <text x="230" y="150" font-family="sans-serif" font-size="16" text-anchor="middle">Devices</text>
+  <rect x="410" y="120" width="300" height="180" fill="#f4f6f8" stroke="#cfd8dc"/>
+  <text x="560" y="150" font-family="sans-serif" font-size="16" text-anchor="middle">CI Snapshot</text>
+  <rect x="410" y="320" width="300" height="200" fill="#f4f6f8" stroke="#cfd8dc"/>
+  <text x="560" y="350" font-family="sans-serif" font-size="16" text-anchor="middle">Routing (UMP Paths)</text>
+  <rect x="740" y="120" width="380" height="280" fill="#f4f6f8" stroke="#cfd8dc"/>
+  <text x="930" y="150" font-family="sans-serif" font-size="16" text-anchor="middle">Health / Logs</text>
+  <rect x="740" y="420" width="380" height="100" fill="#eef7ff" stroke="#90caf9"/>
+  <text x="930" y="470" font-family="sans-serif" font-size="16" text-anchor="middle" fill="#2F74FF">Actions: GET/SET, Start/Stop</text>
+</svg>
+

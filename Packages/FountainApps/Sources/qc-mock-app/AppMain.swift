@@ -144,7 +144,8 @@ struct EditorHost: View {
     @State private var newPort: (side: QCDocument.Side, dir: QCDocument.Dir, id: String, type: String) = (.left, .input, "in", "data")
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: .constant(.all)) {
+            // Left: Outline
             List(selection: $state.selection) {
                 Section("Nodes") {
                     ForEach(state.doc.nodes) { n in
@@ -158,17 +159,23 @@ struct EditorHost: View {
                 }
             }
             .frame(minWidth: 220)
+            .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
             .toolbar { toolbarContent }
+        } content: {
+            // Center: Canvas takes full right-side middle pane
+            EditorCanvas()
+                .environmentObject(state)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(NSColor.textBackgroundColor))
+                .navigationSplitViewColumnWidth(min: 500, ideal: 900, max: .infinity)
         } detail: {
-            VStack(spacing: 0) {
-                EditorCanvas()
-                    .environmentObject(state)
-                Inspector()
-                    .environmentObject(state)
-                    .frame(maxWidth: .infinity)
-                    .padding(8)
-                    .background(Color(NSColor.windowBackgroundColor))
-            }
+            // Right: Inspector
+            Inspector()
+                .environmentObject(state)
+                .frame(minWidth: 260, maxWidth: 360, maxHeight: .infinity)
+                .padding(8)
+                .background(Color(NSColor.windowBackgroundColor))
+                .navigationSplitViewColumnWidth(min: 240, ideal: 300, max: 420)
         }
         .sheet(isPresented: $showingAddPort) {
             AddPortSheet(newPort: $newPort) { side, dir, id, type in

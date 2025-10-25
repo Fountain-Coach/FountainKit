@@ -56,7 +56,8 @@ let package = Package(
         .executable(name: "metalview-demo-app", targets: ["metalview-demo-app"]),
         .executable(name: "fk", targets: ["fk"])
         ,
-        .executable(name: "composer-studio", targets: ["composer-studio"])
+        .executable(name: "composer-studio", targets: ["composer-studio"]),
+        .executable(name: "qc-mock-app", targets: ["qc-mock-app"])
     ],
     dependencies: [
         .package(path: "../FountainCore"),
@@ -208,6 +209,12 @@ let package = Package(
             name: "composer-studio",
             dependencies: [],
             path: "Sources/composer-studio",
+            exclude: ["AGENTS.md"]
+        ),
+        .executableTarget(
+            name: "qc-mock-app",
+            dependencies: [],
+            path: "Sources/qc-mock-app",
             exclude: ["AGENTS.md"]
         ),
         .executableTarget(

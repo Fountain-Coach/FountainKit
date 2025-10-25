@@ -21,7 +21,12 @@ struct ZoomScrollView<Content: View>: NSViewRepresentable {
     @Binding var zoom: CGFloat
     @ViewBuilder var content: () -> Content
 
-    class Coordinator: NSObject { var parent: ZoomScrollView; weak var scrollView: NSScrollView?; init(_ parent: ZoomScrollView) { self.parent = parent } }
+    class Coordinator: NSObject {
+        var parent: ZoomScrollView
+        weak var scrollView: NSScrollView?
+        var observation: NSKeyValueObservation?
+        init(_ parent: ZoomScrollView) { self.parent = parent }
+    }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -40,6 +45,11 @@ struct ZoomScrollView<Content: View>: NSViewRepresentable {
         host.frame = NSRect(origin: .zero, size: contentSize)
         scroll.documentView = host
         context.coordinator.scrollView = scroll
+        context.coordinator.observation = scroll.observe(\NSScrollView.magnification, options: [.new]) { [weak coord = context.coordinator] sv, _ in
+            DispatchQueue.main.async {
+                coord?.parent.zoom = sv.magnification
+            }
+        }
         // Initial fit
         DispatchQueue.main.async { updateMagnification(scroll, fit: fitToVisible) }
         return scroll

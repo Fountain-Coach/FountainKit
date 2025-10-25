@@ -276,7 +276,7 @@ struct CanvasDocumentView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            GridBackground(size: CGSize(width: artboard.width, height: artboard.height), grid: CGFloat(max(4, state.doc.canvas.grid)))
+            GridBackground(size: CGSize(width: artboard.width, height: artboard.height), grid: CGFloat(max(4, state.doc.canvas.grid)), scale: state.zoom)
             // Edges
             ForEach(state.doc.edges) { e in
                 DocEdgeView(edge: e, artboard: artboard)
@@ -299,9 +299,11 @@ struct CanvasDocumentView: View {
                 guard let idx = state.nodeIndex(by: node.id) else { return }
                 if dragStart == nil { dragStart = CGPoint(x: node.x, y: node.y) }
                 let start = dragStart ?? CGPoint(x: node.x, y: node.y)
-                // In doc space, NSScrollView handles scale; deltas map 1:1 at magnification level
-                let nowX = CGFloat(start.x) + v.translation.width
-                let nowY = CGFloat(start.y) + v.translation.height
+                // Convert view-space deltas to doc-space deltas using current zoom
+                let dx = v.translation.width / max(0.0001, state.zoom)
+                let dy = v.translation.height / max(0.0001, state.zoom)
+                let nowX = CGFloat(start.x) + dx
+                let nowY = CGFloat(start.y) + dy
                 state.doc.nodes[idx].x = Int(nowX)
                 state.doc.nodes[idx].y = Int(nowY)
             }
@@ -349,26 +351,34 @@ struct DocEdgeView: View {
 }
 
 struct GridBackground: View {
-    var size: CGSize; var grid: CGFloat
+    var size: CGSize; var grid: CGFloat; var scale: CGFloat = 1.0
     var body: some View {
         Canvas { ctx, sz in
             let W = sz.width, H = sz.height
             let g1 = Color(NSColor.quaternaryLabelColor)
             let g5 = Color(NSColor.tertiaryLabelColor)
             var labels: [(CGPoint, String)] = []
+            let minorStepView = grid * max(scale, 0.0001)
+            let majorStepView = minorStepView * 5.0
+            let showMinor = minorStepView >= 8.0
+            let showLabels = majorStepView >= 12.0
             var i = 0 as Int
             var x: CGFloat = 0
             while x <= W {
-                var p = Path(); p.move(to: CGPoint(x: x, y: 0)); p.addLine(to: CGPoint(x: x, y: H))
-                ctx.stroke(p, with: .color((i % 5 == 0) ? g5 : g1), lineWidth: 1)
-                labels.append((CGPoint(x: x+2, y: 10), "\(Int(x))"))
+                if showMinor || i % 5 == 0 {
+                    var p = Path(); p.move(to: CGPoint(x: x, y: 0)); p.addLine(to: CGPoint(x: x, y: H))
+                    ctx.stroke(p, with: .color((i % 5 == 0) ? g5 : g1), lineWidth: 1)
+                }
+                if showLabels && i % 5 == 0 { labels.append((CGPoint(x: x+2, y: 10), "\(Int(x))")) }
                 i += 1; x += grid
             }
             i = 0; var y: CGFloat = 0
             while y <= H {
-                var p = Path(); p.move(to: CGPoint(x: 0, y: y)); p.addLine(to: CGPoint(x: W, y: y))
-                ctx.stroke(p, with: .color((i % 5 == 0) ? g5 : g1), lineWidth: 1)
-                labels.append((CGPoint(x: 4, y: y-2), "\(Int(y))"))
+                if showMinor || i % 5 == 0 {
+                    var p = Path(); p.move(to: CGPoint(x: 0, y: y)); p.addLine(to: CGPoint(x: W, y: y))
+                    ctx.stroke(p, with: .color((i % 5 == 0) ? g5 : g1), lineWidth: 1)
+                }
+                if showLabels && i % 5 == 0 { labels.append((CGPoint(x: 4, y: y-2), "\(Int(y))")) }
                 i += 1; y += grid
             }
             for (pt, s) in labels {
@@ -421,8 +431,10 @@ struct PortDot: View {
             case .bottom: return CGPoint(x: w*0.5, y: h*1.0)
             }
         }()
+        // Non-scaling radius for legibility
+        let r: CGFloat = max(3, 7 / max(0.25, (NSApp.keyWindow?.contentView?.enclosingScrollView?.magnification ?? 1.0)))
         return Circle().fill(Color(NSColor.secondaryLabelColor))
-            .frame(width: 7, height: 7)
+            .frame(width: r, height: r)
             .position(x: pos.x, y: pos.y)
             .overlay(Text(port.id).font(.system(size: 8)).foregroundColor(.secondary)
                         .offset(x: port.side == .left ? -10 : 10, y: port.side == .top ? -10 : 10)

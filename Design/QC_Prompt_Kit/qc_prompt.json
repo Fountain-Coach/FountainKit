@@ -1,0 +1,21 @@
+{
+  "canvas": { "width": 900, "height": 560, "theme": "dark", "grid": 24 },
+  "nodes": [
+    {"id":"Source","title":"Source","x":100,"y":120,"w":200,"h":110,
+     "ports":[
+       {"id":"in","side":"left","type":"data","dir":"in"},
+       {"id":"out","side":"right","type":"data","dir":"out"}
+     ]},
+    {"id":"Filter","title":"Filter","x":520,"y":280,"w":200,"h":110,
+     "ports":[
+       {"id":"in","side":"left","type":"data","dir":"in"},
+       {"id":"out","side":"right","type":"data","dir":"out"}
+     ]}
+  ],
+  "edges": [
+    {"from":"Source.out","to":"Filter.in",
+     "routing":"qcBezier","width":3.5,"glow":true}
+  ],
+  "notes":[{"text":"drag to connect…","x":620,"y":230}],
+  "autolayout":"none"
+}

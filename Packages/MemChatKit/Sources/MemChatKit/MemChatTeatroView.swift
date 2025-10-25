@@ -1,6 +1,6 @@
 import SwiftUI
 import Combine
-import TeatroGUI
+import Teatro
 
 /// Cross-platform MemChat surface built with Teatro GUI primitives.
 /// Embedding hosts can integrate the streaming token inspector while

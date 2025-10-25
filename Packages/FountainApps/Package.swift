@@ -44,7 +44,15 @@ let package = Package(
         .library(name: "EngraverStudio", targets: ["EngraverStudio"]),
         .library(name: "MetalViewKit", targets: ["MetalViewKit"]),
         .library(name: "MetalComputeKit", targets: ["MetalComputeKit"]),
+        .library(name: "CoreMLKit", targets: ["CoreMLKit"]),
         .executable(name: "metalcompute-demo", targets: ["metalcompute-demo"]),
+        .executable(name: "metalcompute-tests", targets: ["metalcompute-tests"]),
+        .executable(name: "coreml-demo", targets: ["coreml-demo"]),
+        .executable(name: "coreml-fetch", targets: ["coreml-fetch"]),
+        .executable(name: "ml-audio2midi", targets: ["ml-audio2midi"]),
+        .executable(name: "ml-basicpitch2midi", targets: ["ml-basicpitch2midi"]),
+        .executable(name: "ml-yamnet2midi", targets: ["ml-yamnet2midi"]),
+        .executable(name: "ml-sampler-smoke", targets: ["ml-sampler-smoke"]),
         .executable(name: "metalview-demo-app", targets: ["metalview-demo-app"]),
         .executable(name: "fk", targets: ["fk"])
         ,
@@ -83,7 +91,9 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.0"),
         .package(url: "https://github.com/apple/swift-openapi-urlsession.git", from: "1.0.0"),
         // MIDI 2.0 + MIDI-CI helpers (Discovery, Property Exchange)
-        .package(url: "https://github.com/Fountain-Coach/midi2.git", branch: "main")
+        .package(url: "https://github.com/Fountain-Coach/midi2.git", branch: "main"),
+        // MIDI2 Instrument Bridge (sampler)
+        .package(path: "../../External/midi2sampler")
     ],
     targets: [
         .executableTarget(
@@ -117,9 +127,62 @@ let package = Package(
             ]
         ),
         .executableTarget(
+            name: "ml-sampler-smoke",
+            dependencies: [
+                .product(name: "ArgumentParser", package: "swift-argument-parser")
+            ],
+            path: "Sources/ml-sampler-smoke"
+        ),
+        .executableTarget(
+            name: "ml-audio2midi",
+            dependencies: [
+                "CoreMLKit",
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit"),
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                .product(name: "Midi2SamplerDSP", package: "midi2sampler")
+            ],
+            path: "Sources/ml-audio2midi"
+        ),
+        .executableTarget(
+            name: "ml-basicpitch2midi",
+            dependencies: [
+                "CoreMLKit",
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit"),
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                .product(name: "Midi2SamplerDSP", package: "midi2sampler")
+            ],
+            path: "Sources/ml-basicpitch2midi"
+        ),
+        .executableTarget(
+            name: "ml-yamnet2midi",
+            dependencies: [
+                "CoreMLKit",
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit"),
+                .product(name: "ArgumentParser", package: "swift-argument-parser")
+            ],
+            path: "Sources/ml-yamnet2midi"
+        ),
+        .executableTarget(
             name: "metalcompute-demo",
             dependencies: ["MetalComputeKit"],
             path: "Sources/metalcompute-demo"
+        ),
+        .executableTarget(
+            name: "metalcompute-tests",
+            dependencies: ["MetalComputeKit"],
+            path: "Sources/metalcompute-tests"
+        ),
+        .executableTarget(
+            name: "coreml-demo",
+            dependencies: ["CoreMLKit"],
+            path: "Sources/coreml-demo"
+        ),
+        .executableTarget(
+            name: "coreml-fetch",
+            dependencies: [
+                .product(name: "ArgumentParser", package: "swift-argument-parser")
+            ],
+            path: "Sources/coreml-fetch"
         ),
         .target(
             name: "MetalViewKit",
@@ -133,6 +196,12 @@ let package = Package(
             name: "MetalComputeKit",
             dependencies: [],
             path: "Sources/MetalComputeKit",
+            exclude: ["AGENTS.md"]
+        ),
+        .target(
+            name: "CoreMLKit",
+            dependencies: [],
+            path: "Sources/CoreMLKit",
             exclude: ["AGENTS.md"]
         ),
         .executableTarget(

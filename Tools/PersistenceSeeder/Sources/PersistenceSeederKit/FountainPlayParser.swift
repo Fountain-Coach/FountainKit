@@ -1,5 +1,5 @@
 import Foundation
-import TeatroCore
+import Teatro
 
 public struct FountainPlayParser: Sendable {
     public struct Speech: Sendable, Equatable {

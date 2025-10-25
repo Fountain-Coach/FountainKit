@@ -22,6 +22,12 @@ logs/
 # App bundles and distribution artifacts
 Dist/
 
+# Core ML models (fetched or converted locally)
+Public/Models/*.mlmodel
+Public/Models/*.mlmodelc
+External/Models/*.mlmodel
+External/Models/*.mlmodelc
+
 # Local embedded repos (do not track as submodules)
 External/LocalAgent/
 External/swiftcurseskit/

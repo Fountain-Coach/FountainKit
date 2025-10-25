@@ -24,13 +24,10 @@ public enum CoreMLInterop {
 
     // Convenience construction of MLMultiArray from [Float] with a given shape.
     public static func makeMultiArray(_ values: [Float], shape: [Int]) throws -> MLMultiArray {
-        let ptr = UnsafeMutablePointer<Float>.allocate(capacity: values.count)
-        ptr.initialize(from: values, count: values.count)
-        defer { ptr.deallocate() }
         let mlshape = shape.map { NSNumber(value: $0) }
         let arr = try MLMultiArray(shape: mlshape, dataType: .float32)
-        let buf = UnsafeMutableBufferPointer(start: arr.dataPointer.assumingMemoryBound(to: Float.self), count: values.count)
-        _ = buf.initialize(from: UnsafeBufferPointer(start: ptr, count: values.count))
+        let count = values.count
+        arr.dataPointer.assumingMemoryBound(to: Float.self).update(from: values, count: count)
         return arr
     }
 
@@ -45,11 +42,9 @@ public enum CoreMLInterop {
         let provider = try MLDictionaryFeatureProvider(dictionary: inputs.mapValues { MLFeatureValue(multiArray: $0) })
         let out = try model.prediction(from: provider)
         var dict: [String: MLMultiArray] = [:]
-        for (k, v) in out.featureNames.enumerated() {
-            let name = Array(out.featureNames)[k]
+        for name in out.featureNames {
             if let arr = out.featureValue(for: name)?.multiArrayValue { dict[name] = arr }
         }
         return dict
     }
 }
-

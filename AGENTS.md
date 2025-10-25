@@ -15,6 +15,7 @@ Welcome to FountainKit, the modular SwiftPM workspace for the Fountain Coach org
 
 ### Plans Index
 - Unified Master Plan — embedded below in this file (authoritative).
+- ML × MIDI 2.0 plan — `Plans/ML-MIDI2-Plan.md` (models, runners, CI/PE, integration).
 - Studio plan — `Packages/FountainApps/Sources/FountainLauncherUI/AGENTS.md` (Control workspace).
 - AudioTalk plan — `Packages/FountainServiceKit-AudioTalk/AGENTS.md` (service track).
 - Spec curation norms — `Packages/FountainSpecCuration/openapi/AGENTS.md`.

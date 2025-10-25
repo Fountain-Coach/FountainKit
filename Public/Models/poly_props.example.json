@@ -1,0 +1,7 @@
+{
+  "voiceLimit": 8,
+  "onsetConfidence": 0.6,
+  "quantizeGrid": "1/16",
+  "minNoteLengthMs": 60
+}
+

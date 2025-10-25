@@ -77,10 +77,10 @@ Extending
 - Add kernels as inline MSL strings or load them from files; use `makeComputePipeline(functionName:source:)`.
 - Prefer MPS (convolution, pooling, reduction) or MPSGraph (tensor graphs) over custom kernels where possible.
 
-Core ML interop (new)
-- Use `CoreMLInterop.loadModel(at:)` to load a `.mlmodel` or compiled `.mlmodelc` and `predict(model:inputs:)` with MLMultiArray.
+Core ML interop
+- Moved to `CoreMLKit` to keep responsibilities clean.
+- Use `CoreMLKit.CoreMLInterop.loadModel(at:)` and `predict(model:inputs:)`.
 - Demo runner: `swift run --package-path Packages/FountainApps coreml-demo` with `COREML_MODEL=/path/to/Model.mlmodel[c]`.
-- Helpers exist to convert `[Float]` ↔︎ `MLMultiArray`. Prefer multiarray inputs for simplicity.
 
 Threading & performance
 - Prefer `.storageModeShared` for CPU‑visible staging; use `.storageModePrivate` for GPU‑only buffers and blit when needed.

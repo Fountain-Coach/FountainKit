@@ -1,0 +1,14 @@
+{
+  "programMap": {
+    "Speech": 1,
+    "Music": 5,
+    "Drum": 9
+  },
+  "programMapByIndex": {
+    "0": 1,
+    "1": 5,
+    "2": 9
+  },
+  "defaultProgram": 0
+}
+

@@ -59,6 +59,30 @@ final class MetalComputeKitTests: XCTestCase {
         for i in stride(from: 0, to: n, by: n/64) { XCTAssertEqual(out[i], a[i]+b[i], accuracy: 1e-5) }
     }
 
+    func testSaxpyCorrectness() throws {
+        _ = try requireMetalDevice()
+        guard let ctx = MetalComputeContext() else { throw XCTSkip("MetalComputeContext unavailable") }
+        let n = 8192
+        let alpha: Float = 1.5
+        let x = (0..<n).map { _ in Float.random(in: -1...1) }
+        let y0 = (0..<n).map { _ in Float.random(in: -1...1) }
+        let y = try ctx.saxpy(alpha: alpha, x: x, y: y0)
+        XCTAssertEqual(y.count, n)
+        for i in stride(from: 0, to: n, by: n/32) {
+            XCTAssertEqual(y[i], alpha*x[i] + y0[i], accuracy: 1e-5)
+        }
+    }
+
+    func testReduceSumCorrectness() throws {
+        _ = try requireMetalDevice()
+        guard let ctx = MetalComputeContext() else { throw XCTSkip("MetalComputeContext unavailable") }
+        let n = 100_000
+        let a = (0..<n).map { _ in Float.random(in: -1...1) }
+        let gpu = try ctx.reduceSum(a)
+        let cpu = a.reduce(0, +)
+        XCTAssertEqual(gpu, cpu, accuracy: 1e-2)
+    }
+
     func testMPSGraphMatmulCorrectnessIfAvailable() throws {
         _ = try requireMetalDevice()
         guard let g = MPSGraphFacade() else { throw XCTSkip("MPSGraph unavailable on this SDK") }

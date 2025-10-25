@@ -1,0 +1,10 @@
+{
+  "smoothingMs": 80,
+  "latencyMs": 50,
+  "pitchBendRangeSemitones": 2,
+  "noteOnVelocity": 100,
+  "publish": {
+    "identity": "Pitch-Device-1"
+  }
+}
+

@@ -1,6 +1,9 @@
 import SwiftUI
 import AppKit
 import MetalViewKit
+#if canImport(MIDI2)
+import MIDI2
+#endif
 #if canImport(MIDI2Transports)
 import MIDI2Transports
 #endif
@@ -576,8 +579,8 @@ extension ContentView {
             try? t.open()
             // Build CI PE GET with requestId
             let requestId = UInt32.random(in: 1...0x0FFFFFFF)
-            let body = MIDI2CI.MidiCiPropertyExchangeBody(command: .get, requestId: requestId, encoding: .json, header: [:], data: [])
-            let env = MIDI2CI.MidiCiEnvelope(scope: .nonRealtime, subId2: 0x7C, version: 1, body: .propertyExchange(body))
+            let body = MidiCiPropertyExchangeBody(command: .get, requestId: requestId, encoding: .json, header: [:], data: [])
+            let env = MidiCiEnvelope(scope: .nonRealtime, subId2: 0x7C, version: 1, body: .propertyExchange(body))
             let ump = packSysEx7UMP(group: rtpGroup, bytes: env.sysEx7Payload())
             try? t.send(umpWords: ump)
             log("CI TX: PE GET sent to \(destinationName)")
@@ -590,8 +593,8 @@ extension ContentView {
             let t = CoreMIDITransport(name: "InspectorSet", destinationName: destinationName, enableVirtualEndpoints: false)
             try? t.open()
             let requestId = UInt32.random(in: 1...0x0FFFFFFF)
-            let body = MIDI2CI.MidiCiPropertyExchangeBody(command: .set, requestId: requestId, encoding: .json, header: [:], data: [UInt8](data))
-            let env = MIDI2CI.MidiCiEnvelope(scope: .nonRealtime, subId2: 0x7C, version: 1, body: .propertyExchange(body))
+            let body = MidiCiPropertyExchangeBody(command: .set, requestId: requestId, encoding: .json, header: [:], data: [UInt8](data))
+            let env = MidiCiEnvelope(scope: .nonRealtime, subId2: 0x7C, version: 1, body: .propertyExchange(body))
             let ump = packSysEx7UMP(group: rtpGroup, bytes: env.sysEx7Payload())
             try? t.send(umpWords: ump)
             log("CI TX: PE SET sent to \(destinationName)")

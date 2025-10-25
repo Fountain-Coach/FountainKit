@@ -1,7 +1,7 @@
 import Foundation
 import OpenAPIRuntime
 import FountainStoreClient
-import TeatroCore
+import Teatro
 
 /// Implements the Speech Atlas API on top of the seeded Four Stars corpus.
 public struct SpeechAtlasHandlers: APIProtocol, @unchecked Sendable {

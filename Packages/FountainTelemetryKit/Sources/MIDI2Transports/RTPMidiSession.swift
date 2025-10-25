@@ -174,15 +174,22 @@ public final class RTPMidiSession: MIDITransport, @unchecked Sendable {
                 let payload = data.subdata(in: 12..<data.count)
                 var umps: [[UInt32]] = []
                 var idx = payload.startIndex
-                while idx < payload.endIndex {
+                while idx + 4 <= payload.endIndex {
+                    // Peek first word to infer message length by UMP Message Type
+                    let w1BE = payload[idx..<idx+4].withUnsafeBytes { $0.load(as: UInt32.self) }
+                    let w1 = UInt32(bigEndian: w1BE)
+                    let mt = (w1 >> 28) & 0xF
+                    var words = 4 // default to 128-bit-safe
+                    if mt == 0x4 { words = 2 } // MIDI 2.0 Channel Voice (64-bit)
+                    else if mt == 0x2 { words = 1 } // MIDI 1.0 in UMP (32-bit)
+                    guard idx + words*4 <= payload.endIndex else { break }
                     var ump: [UInt32] = []
-                    for _ in 0..<4 {
-                        guard idx + 4 <= payload.endIndex else { break }
-                        let word = payload[idx..<idx+4].withUnsafeBytes { $0.load(as: UInt32.self) }
-                        ump.append(UInt32(bigEndian: word))
+                    for _ in 0..<words {
+                        let wBE = payload[idx..<idx+4].withUnsafeBytes { $0.load(as: UInt32.self) }
+                        ump.append(UInt32(bigEndian: wBE))
                         idx += 4
                     }
-                    if !ump.isEmpty { umps.append(ump) }
+                    umps.append(ump)
                 }
                 // Deliver to both handlers if present.
                 if let batch = self?.onReceiveUmps { batch(umps) }
@@ -191,6 +198,18 @@ public final class RTPMidiSession: MIDITransport, @unchecked Sendable {
             self?.configureReceive(on: connection)
         }
         connection.receiveMessage(completion: handler)
+    }
+
+    // MARK: - Remote connect
+    public func connect(host: String, port: UInt16) throws {
+        let params = NWParameters.udp
+        let host = NWEndpoint.Host(host)
+        let port = NWEndpoint.Port(rawValue: port) ?? .any
+        let conn = NWConnection(host: host, port: port, using: params)
+        conn.start(queue: queue)
+        if enableCINegotiation { startMIDICINegotiation(on: conn) }
+        configureReceive(on: conn)
+        self.connection = conn
     }
 
     private func startBonjourDiscovery() {

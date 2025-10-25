@@ -43,7 +43,7 @@ struct SDLDiagnosticsApp {
 
         #if canImport(CSDL3)
         let rc = SDLKit_Init(0)
-        if rc != 0 {
+        if rc < 0 {
             let msg = String(cString: SDLKit_GetError())
             print("SDLKit_Init failed: \(msg)")
             if msg.isEmpty {

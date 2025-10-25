@@ -4,6 +4,7 @@
 // properties (e.g., rotationSpeed, zoom, tint.r/g/b).
 
 import Foundation
+import MIDI2
 import MIDI2CI
 
 #if canImport(CoreMIDI)
@@ -225,8 +226,9 @@ final class MetalInstrument: @unchecked Sendable {
         // Hash instanceId to a 28-bit value (7-bit packed in SysEx7 helpers)
         var hasher = Hasher()
         hasher.combine(desc.instanceId)
-        let raw = UInt32(bitPattern: Int32(truncatingIfNeeded: hasher.finalize()))
-        return raw & 0x0FFFFFFF
+        let hash = hasher.finalize()
+        let raw = UInt32(truncatingIfNeeded: hash)
+        return raw & 0x0FFF_FFFF
     }
 
     // Send SysEx7 UMP stream with correct packet headers (Single/Start/Continue/End), 6 bytes per packet

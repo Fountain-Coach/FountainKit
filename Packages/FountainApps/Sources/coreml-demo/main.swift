@@ -1,6 +1,6 @@
 import Foundation
 import CoreML
-import MetalComputeKit
+import CoreMLKit
 
 @main
 struct CoreMLDemo {
@@ -34,4 +34,3 @@ struct CoreMLDemo {
         }
     }
 }
-

@@ -16,7 +16,7 @@ let package = Package(
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.1"),
         .package(path: "../../Packages/FountainAPIClients"),
         .package(url: "https://github.com/Fountain-Coach/swift-secretstore.git", from: "0.1.0"),
-        .package(path: "../../External/Teatro/Packages/TeatroCore")
+        .package(path: "../../External/TeatroFull")
     ],
     targets: [
         .target(
@@ -25,7 +25,7 @@ let package = Package(
                 .product(name: "Yams", package: "Yams"),
                 .product(name: "ApiClientsCore", package: "FountainAPIClients"),
                 .product(name: "SecretStore", package: "swift-secretstore"),
-                .product(name: "TeatroCore", package: "TeatroCore")
+                .product(name: "Teatro", package: "TeatroFull")
             ],
             path: "Sources/PersistenceSeederKit"
         ),

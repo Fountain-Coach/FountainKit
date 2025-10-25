@@ -1,4 +1,4 @@
-import Foundation
+Yes import Foundation
 import Metal
 import MetalPerformanceShaders
 #if canImport(Accelerate)

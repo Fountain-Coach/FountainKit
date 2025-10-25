@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "FountainServiceKit-Persist",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v14)
     ],
     products: [
         .library(name: "PersistService", targets: ["PersistService"]),
@@ -13,7 +13,7 @@ let package = Package(
     dependencies: [
         .package(path: "../FountainCore"),
         .package(path: "../FountainTooling"),
-        .package(path: "../../External/Teatro/Packages/TeatroCore"),
+        .package(path: "../../External/TeatroFull"),
         .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
         .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0")
     ],
@@ -35,7 +35,7 @@ let package = Package(
             dependencies: [
                 .product(name: "FountainStoreClient", package: "FountainCore"),
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
-                .product(name: "TeatroCore", package: "TeatroCore")
+                .product(name: "Teatro", package: "TeatroFull")
             ],
             plugins: [
                 .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),

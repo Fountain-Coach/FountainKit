@@ -1,5 +1,5 @@
 {
-  "originHash" : "216962ad94393109e67ea1cb6245fa4d3371a1484a95754c2da1e5cc29f922ce",
+  "originHash" : "a74bf1dc93141f800afc93f515ea3dc9dc239c0718df427a5ee77a7612b85aa7",
   "pins" : [
     {
       "identity" : "async-http-client",
@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Fountain-Coach/midi2.git",
       "state" : {
-        "revision" : "fec93dae9efbb4f1d56984eb0889983962a1dbab",
-        "version" : "0.3.1"
+        "branch" : "main",
+        "revision" : "fec93dae9efbb4f1d56984eb0889983962a1dbab"
       }
     },
     {
@@ -35,6 +35,24 @@
       "state" : {
         "revision" : "c1dcd65ccbcc1f3e132293ff2338c72c49a9026d",
         "version" : "3.8.0"
+      }
+    },
+    {
+      "identity" : "ruleskit-spm",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Fountain-Coach/RulesKit-SPM.git",
+      "state" : {
+        "revision" : "8ed5dd11fec737518716e10c6f8eb98268236319",
+        "version" : "0.1.0"
+      }
+    },
+    {
+      "identity" : "scorekit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Fountain-Coach/ScoreKit.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "73c1f2d0926bbce57b872ffc5d948b2f2ecd3f40"
       }
     },
     {
@@ -242,6 +260,24 @@
       "state" : {
         "revision" : "395a77f0aa927f0ff73941d7ac35f2b46d47c9db",
         "version" : "1.6.3"
+      }
+    },
+    {
+      "identity" : "swift-tools-support-core",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-tools-support-core",
+      "state" : {
+        "revision" : "e8fbc8b05a155f311b862178d92d043afb216fe3",
+        "version" : "0.7.3"
+      }
+    },
+    {
+      "identity" : "swiftcbor",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/unrelentingtech/SwiftCBOR",
+      "state" : {
+        "revision" : "04ccff117f6549121d5721ec84fdf0162122b90e",
+        "version" : "0.5.0"
       }
     },
     {

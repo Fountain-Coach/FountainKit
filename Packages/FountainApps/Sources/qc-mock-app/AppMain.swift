@@ -9,6 +9,18 @@ struct QCMockApp: App {
         }
         .windowStyle(.titleBar)
         .windowToolbarStyle(.expanded)
+        .commands {
+            CommandMenu("View") {
+                Button("Fit to View") { NotificationCenter.default.post(name: .qcZoomFit, object: nil) }
+                    .keyboardShortcut("0", modifiers: [.command])
+                Button("Actual Size (100%)") { NotificationCenter.default.post(name: .qcZoomOne, object: nil) }
+                    .keyboardShortcut("1", modifiers: [.command])
+                Button("Zoom In") { NotificationCenter.default.post(name: .qcZoomIn, object: nil) }
+                    .keyboardShortcut("=", modifiers: [.command])
+                Button("Zoom Out") { NotificationCenter.default.post(name: .qcZoomOut, object: nil) }
+                    .keyboardShortcut("-", modifiers: [.command])
+            }
+        }
     }
 }
 
@@ -36,6 +48,7 @@ extension QCDocument.Node {
 
 // MARK: - View Model
 
+@MainActor
 final class EditorState: ObservableObject {
     @Published var doc = QCDocument()
     @Published var selection: String? = nil
@@ -45,6 +58,11 @@ final class EditorState: ObservableObject {
     @Published var pan: CGSize = .zero
     @Published var panMode: Bool = false
     @Published var autoScale: Bool = true
+    @Published var panHold: Bool = false // true while spacebar held
+
+    // Service wiring
+    let client = QCMClient()
+    @Published var useService = true
 
     // Convenience
     func node(by id: String) -> QCDocument.Node? { doc.nodes.first{ $0.id == id } }
@@ -63,9 +81,18 @@ final class EditorState: ObservableObject {
         let grid = max(4, doc.canvas.grid)
         let snap: (CGFloat)->Int = { Int((($0 / CGFloat(grid)).rounded()) * CGFloat(grid)) }
         let nid = uniqueNodeID(prefix: "Node")
-        let node = QCDocument.Node(id: nid, title: nid, x: snap(pt.x), y: snap(pt.y), w: grid*10, h: grid*6, ports: [])
-        doc.nodes.append(node)
-        selection = node.id
+        let (x, y) = (snap(pt.x), snap(pt.y))
+        if useService {
+            Task { @MainActor in
+                _ = try? await client.createNode(id: nid, title: nid, x: x, y: y, w: grid*10, h: grid*6)
+                if let g = try? await client.exportJSON() { self.doc = QCDocument.from(g) }
+                self.selection = nid
+            }
+        } else {
+            let node = QCDocument.Node(id: nid, title: nid, x: x, y: y, w: grid*10, h: grid*6, ports: [])
+            doc.nodes.append(node)
+            selection = node.id
+        }
     }
 
     func uniqueNodeID(prefix: String) -> String {
@@ -76,14 +103,29 @@ final class EditorState: ObservableObject {
     }
 
     func addPort(to nodeID: String, side: QCDocument.Side, dir: QCDocument.Dir, id: String, type: String) {
-        guard let i = nodeIndex(by: nodeID) else { return }
-        if doc.nodes[i].ports.contains(where: { $0.id == id }) { return }
-        doc.nodes[i].ports.append(.init(id: id, side: side, dir: dir, type: type))
+        if useService {
+            Task { @MainActor in
+                let port = Components.Schemas.Port(id: id, side: .init(rawValue: side.rawValue) ?? .left, dir: (dir == .input ? ._in : .out), _type: .init(rawValue: type) ?? .data)
+                _ = try? await client.addPort(nodeId: nodeID, port: port)
+                if let g = try? await client.exportJSON() { self.doc = QCDocument.from(g) }
+            }
+        } else {
+            guard let i = nodeIndex(by: nodeID) else { return }
+            if doc.nodes[i].ports.contains(where: { $0.id == id }) { return }
+            doc.nodes[i].ports.append(.init(id: id, side: side, dir: dir, type: type))
+        }
     }
 
     func addEdge(from: (String,String), to: (String,String)) {
-        let e = QCDocument.Edge(from: "\(from.0).\(from.1)", to: "\(to.0).\(to.1)", routing: "qcBezier", width: 2.0, glow: false)
-        doc.edges.append(e)
+        if useService {
+            Task { @MainActor in
+                _ = try? await client.createEdge(from: "\(from.0).\(from.1)", to: "\(to.0).\(to.1)")
+                if let g = try? await client.exportJSON() { self.doc = QCDocument.from(g) }
+            }
+        } else {
+            let e = QCDocument.Edge(from: "\(from.0).\(from.1)", to: "\(to.0).\(to.1)", routing: "qcBezier", width: 2.0, glow: false)
+            doc.edges.append(e)
+        }
     }
 
     // Serialization
@@ -181,6 +223,9 @@ struct EditorHost: View {
             AddPortSheet(newPort: $newPort) { side, dir, id, type in
                 if let nid = state.selection { state.addPort(to: nid, side: side, dir: dir, id: id, type: type) }
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .qcPanHold)) { note in
+            if let down = note.userInfo?["down"] as? Bool { state.panHold = down }
         }
     }
 
@@ -289,6 +334,7 @@ struct CanvasDocumentView: View {
                     .onTapGesture { state.selection = n.id }
             }
         }
+        .environment(\.canvasTransform, CanvasTransform(scale: state.zoom, translation: .zero))
         .frame(width: artboard.width, height: artboard.height, alignment: .topLeading)
         .background(Color(NSColor.textBackgroundColor))
     }
@@ -421,6 +467,7 @@ struct PortsView: View {
 
 struct PortDot: View {
     var port: QCDocument.Port; var node: QCDocument.Node
+    @Environment(\.canvasTransform) private var xform
     var body: some View {
         let pos: CGPoint = {
             let x = CGFloat(node.x), y = CGFloat(node.y), w = CGFloat(node.w), h = CGFloat(node.h)
@@ -432,7 +479,7 @@ struct PortDot: View {
             }
         }()
         // Non-scaling radius for legibility
-        let r: CGFloat = max(3, 7 / max(0.25, (NSApp.keyWindow?.contentView?.enclosingScrollView?.magnification ?? 1.0)))
+        let r: CGFloat = max(3, 7 / max(0.25, xform.scale))
         return Circle().fill(Color(NSColor.secondaryLabelColor))
             .frame(width: r, height: r)
             .position(x: pos.x, y: pos.y)

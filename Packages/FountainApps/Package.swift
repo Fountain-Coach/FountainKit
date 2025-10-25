@@ -224,9 +224,17 @@ let package = Package(
         ),
         .executableTarget(
             name: "qc-mock-app",
-            dependencies: ["QCMockCore"],
+            dependencies: [
+                "QCMockCore",
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
+            ],
             path: "Sources/qc-mock-app",
-            exclude: ["AGENTS.md"]
+            exclude: ["AGENTS.md"],
+            plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
         ),
         .target(
             name: "qc-mock-service",
@@ -239,6 +247,14 @@ let package = Package(
                 .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
+        ),
+        .executableTarget(
+            name: "qc-mock-service-server",
+            dependencies: [
+                "qc-mock-service",
+                .product(name: "FountainRuntime", package: "FountainCore")
+            ],
+            path: "Sources/qc-mock-service-server"
         ),
         .executableTarget(
             name: "qcmockcore-tests",

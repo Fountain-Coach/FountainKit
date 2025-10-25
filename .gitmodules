@@ -7,6 +7,3 @@
 [submodule "External/TeatroFull"]
 	path = External/TeatroFull
 	url = https://github.com/Fountain-Coach/Teatro.git
-[submodule "External/midi2sampler"]
-	path = External/midi2sampler
-	url = https://github.com/Fountain-Coach/midi2sampler.git

@@ -41,6 +41,9 @@ final class EditorState: ObservableObject {
     @Published var selection: String? = nil
     @Published var connectMode: Bool = false
     @Published var pendingFrom: (node: String, port: String)? = nil
+    @Published var zoom: CGFloat = 1.0
+    @Published var pan: CGSize = .zero
+    @Published var panMode: Bool = false
 
     // Convenience
     func node(by id: String) -> QCDocument.Node? { doc.nodes.first{ $0.id == id } }
@@ -165,6 +168,16 @@ struct EditorHost: View {
 
             Toggle(isOn: $state.connectMode) { Label("Connect", systemImage: state.connectMode ? "link" : "link.badge.plus") }
 
+            Toggle(isOn: $state.panMode) { Label("Pan", systemImage: state.panMode ? "hand.draw.fill" : "hand.draw") }
+                .help("When enabled, drag on canvas pans the artboard")
+
+            HStack(spacing: 4) {
+                Button { withAnimation { state.zoom = max(0.25, state.zoom - 0.1) } } label: { Image(systemName: "minus.magnifyingglass") }
+                Slider(value: Binding(get: { Double(state.zoom) }, set: { state.zoom = CGFloat($0) }), in: 0.25...3.0, step: 0.05)
+                    .frame(width: 160)
+                Button { withAnimation { state.zoom = min(3.0, state.zoom + 0.1) } } label: { Image(systemName: "plus.magnifyingglass") }
+            }
+
             Spacer()
             Button { saveKit() } label: { Label("Save Kit", systemImage: "square.and.arrow.down") }
             Button { loadKit() } label: { Label("Load Kit", systemImage: "folder") }
@@ -213,6 +226,7 @@ struct EditorCanvas: View {
     @EnvironmentObject var state: EditorState
     @State private var dragOffset: CGSize = .zero
     @GestureState private var dragNodeID: String? = nil
+    @State private var dragStartPos: CGPoint? = nil
 
     var body: some View {
         GeometryReader { geo in
@@ -226,26 +240,50 @@ struct EditorCanvas: View {
                 ForEach(state.doc.nodes) { n in
                     NodeView(node: n, selected: state.selection == n.id)
                         .position(x: CGFloat(n.x + n.w/2), y: CGFloat(n.y + n.h/2))
-                        .gesture(dragGesture(for: n))
+                        .highPriorityGesture(dragGesture(for: n))
                         .onTapGesture { state.selection = n.id }
                 }
             }
             .background(Color(NSColor.textBackgroundColor))
+            .scaleEffect(state.zoom, anchor: .topLeading)
+            .offset(x: state.pan.width, y: state.pan.height)
+            .gesture(panGesture())
         }
     }
 
     func dragGesture(for node: QCDocument.Node) -> some Gesture {
         DragGesture(minimumDistance: 1)
             .onChanged { v in
-                guard let idx = state.nodeIndex(by: node.id) else { return }
+                guard !state.panMode, let idx = state.nodeIndex(by: node.id) else { return }
+                // Capture start
+                if dragStartPos == nil { dragStartPos = CGPoint(x: node.x, y: node.y) }
+                let start = dragStartPos ?? CGPoint(x: node.x, y: node.y)
+                // Convert translation from view points to document units (account for zoom only; pan is handled by offset)
+                let dx = v.translation.width / max(0.0001, state.zoom)
+                let dy = v.translation.height / max(0.0001, state.zoom)
+                let nowX = CGFloat(start.x) + dx
+                let nowY = CGFloat(start.y) + dy
+                state.doc.nodes[idx].x = Int(nowX)
+                state.doc.nodes[idx].y = Int(nowY)
+            }
+            .onEnded { _ in
+                guard let idx = state.nodeIndex(by: node.id) else { dragStartPos = nil; return }
                 let grid = CGFloat(max(4, state.doc.canvas.grid))
-                let nx = Int((CGFloat(node.x) + v.translation.width).rounded())
-                let ny = Int((CGFloat(node.y) + v.translation.height).rounded())
-                // Snap to grid
-                let sx = Int((round(CGFloat(nx)/grid) * grid))
-                let sy = Int((round(CGFloat(ny)/grid) * grid))
+                let x = CGFloat(state.doc.nodes[idx].x)
+                let y = CGFloat(state.doc.nodes[idx].y)
+                let sx = Int((round(x / grid) * grid))
+                let sy = Int((round(y / grid) * grid))
                 state.doc.nodes[idx].x = sx
                 state.doc.nodes[idx].y = sy
+                dragStartPos = nil
+            }
+    }
+
+    func panGesture() -> some Gesture {
+        DragGesture(minimumDistance: 2)
+            .onChanged { v in
+                guard state.panMode else { return }
+                state.pan = CGSize(width: state.pan.width + v.translation.width, height: state.pan.height + v.translation.height)
             }
     }
 }
@@ -255,10 +293,8 @@ struct GridBackground: View {
     var body: some View {
         Canvas { ctx, sz in
             let W = sz.width, H = sz.height
-            let axis = Color(NSColor.systemGray)
             let g1 = Color(NSColor.quaternaryLabelColor)
             let g5 = Color(NSColor.tertiaryLabelColor)
-            var path = Path()
             var labels: [(CGPoint, String)] = []
             var i = 0 as Int
             var x: CGFloat = 0
@@ -429,4 +465,3 @@ struct AddPortSheet: View {
         .frame(width: 420)
     }
 }
-

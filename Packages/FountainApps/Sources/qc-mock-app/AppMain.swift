@@ -44,6 +44,7 @@ final class EditorState: ObservableObject {
     @Published var zoom: CGFloat = 1.0
     @Published var pan: CGSize = .zero
     @Published var panMode: Bool = false
+    @Published var autoScale: Bool = true
 
     // Convenience
     func node(by id: String) -> QCDocument.Node? { doc.nodes.first{ $0.id == id } }
@@ -110,6 +111,29 @@ final class EditorState: ObservableObject {
     }
 
     func importJSON(_ data: Data) throws { doc = try JSONDecoder().decode(QCDocument.self, from: data) }
+
+    // Compute square content bounds (with margin) for auto-scaling
+    func contentBounds(margin: CGFloat = 40) -> CGRect {
+        guard !doc.nodes.isEmpty else {
+            let s = CGFloat(doc.canvas.grid * 20)
+            return CGRect(x: 0, y: 0, width: s, height: s).insetBy(dx: -margin, dy: -margin)
+        }
+        var minX = CGFloat.greatestFiniteMagnitude
+        var minY = CGFloat.greatestFiniteMagnitude
+        var maxX = CGFloat.leastNormalMagnitude
+        var maxY = CGFloat.leastNormalMagnitude
+        for n in doc.nodes {
+            minX = min(minX, CGFloat(n.x))
+            minY = min(minY, CGFloat(n.y))
+            maxX = max(maxX, CGFloat(n.x + n.w))
+            maxY = max(maxY, CGFloat(n.y + n.h))
+        }
+        var rect = CGRect(x: minX, y: minY, width: max(1, maxX - minX), height: max(1, maxY - minY))
+        rect = rect.insetBy(dx: -margin, dy: -margin)
+        let side = max(rect.width, rect.height)
+        let cx = rect.midX, cy = rect.midY
+        return CGRect(x: cx - side/2, y: cy - side/2, width: side, height: side)
+    }
 }
 
 // MARK: - Editor Host
@@ -178,6 +202,8 @@ struct EditorHost: View {
                 Button { withAnimation { state.zoom = min(3.0, state.zoom + 0.1) } } label: { Image(systemName: "plus.magnifyingglass") }
             }
 
+            Toggle(isOn: $state.autoScale) { Label("Auto Scale", systemImage: "aspectratio") }
+
             Spacer()
             Button { saveKit() } label: { Label("Save Kit", systemImage: "square.and.arrow.down") }
             Button { loadKit() } label: { Label("Load Kit", systemImage: "folder") }
@@ -230,8 +256,20 @@ struct EditorCanvas: View {
 
     var body: some View {
         GeometryReader { geo in
+            // Determine local transform (auto scale to square artboard or manual zoom/pan)
+            let viewSize = geo.size
+            let artboard = state.contentBounds()
+            let localScale: CGFloat = state.autoScale ? min(viewSize.width / max(1, artboard.width), viewSize.height / max(1, artboard.height)) : state.zoom
+            let centerOffset = CGSize(
+                width: (viewSize.width - artboard.width*localScale)/2 - artboard.minX*localScale,
+                height: (viewSize.height - artboard.height*localScale)/2 - artboard.minY*localScale
+            )
+            let contentOffset = state.autoScale ? centerOffset : state.pan
+
             ZStack(alignment: .topLeading) {
-                GridBackground(size: geo.size, grid: CGFloat(max(4, state.doc.canvas.grid)))
+                MetalGridLayerView()
+                    .ignoresSafeArea()
+                GridBackground(size: geo.size, grid: CGFloat(max(4, state.doc.canvas.grid)) * localScale)
                 // Edges
                 ForEach(state.doc.edges) { e in
                     EdgeView(edge: e)
@@ -240,18 +278,18 @@ struct EditorCanvas: View {
                 ForEach(state.doc.nodes) { n in
                     NodeView(node: n, selected: state.selection == n.id)
                         .position(x: CGFloat(n.x + n.w/2), y: CGFloat(n.y + n.h/2))
-                        .highPriorityGesture(dragGesture(for: n))
+                        .highPriorityGesture(dragGesture(for: n, effectiveScale: localScale))
                         .onTapGesture { state.selection = n.id }
                 }
             }
             .background(Color(NSColor.textBackgroundColor))
-            .scaleEffect(state.zoom, anchor: .topLeading)
-            .offset(x: state.pan.width, y: state.pan.height)
-            .gesture(panGesture())
+            .scaleEffect(localScale, anchor: .topLeading)
+            .offset(x: contentOffset.width, y: contentOffset.height)
+            .gesture(panGesture(visibleSize: viewSize, artboard: artboard, scale: localScale))
         }
     }
 
-    func dragGesture(for node: QCDocument.Node) -> some Gesture {
+    func dragGesture(for node: QCDocument.Node, effectiveScale: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 1)
             .onChanged { v in
                 guard !state.panMode, let idx = state.nodeIndex(by: node.id) else { return }
@@ -259,8 +297,8 @@ struct EditorCanvas: View {
                 if dragStartPos == nil { dragStartPos = CGPoint(x: node.x, y: node.y) }
                 let start = dragStartPos ?? CGPoint(x: node.x, y: node.y)
                 // Convert translation from view points to document units (account for zoom only; pan is handled by offset)
-                let dx = v.translation.width / max(0.0001, state.zoom)
-                let dy = v.translation.height / max(0.0001, state.zoom)
+                let dx = v.translation.width / max(0.0001, effectiveScale)
+                let dy = v.translation.height / max(0.0001, effectiveScale)
                 let nowX = CGFloat(start.x) + dx
                 let nowY = CGFloat(start.y) + dy
                 state.doc.nodes[idx].x = Int(nowX)
@@ -279,11 +317,20 @@ struct EditorCanvas: View {
             }
     }
 
-    func panGesture() -> some Gesture {
+    func panGesture(visibleSize: CGSize, artboard: CGRect, scale: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 2)
             .onChanged { v in
-                guard state.panMode else { return }
-                state.pan = CGSize(width: state.pan.width + v.translation.width, height: state.pan.height + v.translation.height)
+                guard state.panMode, !state.autoScale else { return }
+                let newW = state.pan.width + v.translation.width
+                let newH = state.pan.height + v.translation.height
+                let margin: CGFloat = 50
+                let contentW = artboard.width * scale
+                let contentH = artboard.height * scale
+                let minX = min(margin, visibleSize.width - contentW - margin)
+                let maxX = max(visibleSize.width - margin, contentW + margin)
+                let minY = min(margin, visibleSize.height - contentH - margin)
+                let maxY = max(visibleSize.height - margin, contentH + margin)
+                state.pan = CGSize(width: max(minX, min(newW, maxX)), height: max(minY, min(newH, maxY)))
             }
     }
 }

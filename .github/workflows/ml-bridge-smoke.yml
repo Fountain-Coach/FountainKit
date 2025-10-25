@@ -1,0 +1,47 @@
+name: ML Bridge Smoke
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'Packages/FountainApps/**'
+      - 'Scripts/audio/**'
+      - '.github/workflows/ml-bridge-smoke.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'Packages/FountainApps/**'
+      - 'Scripts/audio/**'
+
+jobs:
+  smoke:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          swift --version
+          xcode-select -p
+
+      - name: Generate sample audio
+        run: |
+          bash Scripts/audio/tonegen.sh --type sine --freq 440 --dur 1.0
+
+      - name: Compute tests (fast, self-contained)
+        run: |
+          swift run --package-path Packages/FountainApps metalcompute-tests
+
+      - name: Build ML runners
+        run: |
+          swift build --package-path Packages/FountainApps -c debug --target ml-audio2midi
+          swift build --package-path Packages/FountainApps -c debug --target ml-basicpitch2midi
+          swift build --package-path Packages/FountainApps -c debug --target ml-sampler-smoke
+
+      - name: Optional audio smoke (non-fatal)
+        continue-on-error: true
+        run: |
+          swift run --package-path Packages/FountainApps ml-sampler-smoke --pattern arp --wave triangle --duration 1
+          swift run --package-path Packages/FountainApps ml-audio2midi --file Public/Audio/sine_440_1s.wav --render --publish-map --group 0 --channel 0 || true
+

@@ -1,4 +1,4 @@
-Yes import Foundation
+import Foundation
 import Metal
 import MetalPerformanceShaders
 #if canImport(Accelerate)
@@ -33,39 +33,41 @@ public extension MetalComputeContext {
     // 1D real FFT (CPU via Accelerate for broad compatibility). Returns magnitudes.
     func fftMagnitudes(_ x: [Float]) -> [Float] {
         #if canImport(Accelerate)
+        // Ensure power-of-two length using zero-padding for deterministic results
         let n = x.count
-        let log2n = vDSP_Length(round(log2(Double(n))))
+        let log2n = vDSP_Length(floor(log2(Double(max(1, n)))))
         let radixN = 1 << log2n
-        if radixN != n { // pad or trim to next pow2
-            let padded = x + [Float](repeating: 0, count: radixN - min(radixN, n))
-            return fftMagnitudes(padded)
+        let data: [Float]
+        if radixN != n {
+            data = x + [Float](repeating: 0, count: max(0, radixN - min(radixN, n)))
+        } else {
+            data = x
         }
-        var real = x
-        var imag = [Float](repeating: 0, count: n)
-        let halfN = n/2
-        let setup = vDSP_DFT_zop_CreateSetup(nil, vDSP_Length(n), .FORWARD)!
+
+        let halfN = data.count / 2
+        // Real-to-complex DFT (non-interleaved)
+        guard let setup = vDSP_DFT_zrop_CreateSetup(nil, vDSP_Length(data.count), .FORWARD) else { return [] }
         defer { vDSP_DFT_DestroySetup(setup) }
-        real.withUnsafeMutableBufferPointer { rPtr in
-            imag.withUnsafeMutableBufferPointer { iPtr in
-                var oReal = [Float](repeating: 0, count: n)
-                var oImag = [Float](repeating: 0, count: n)
-                oReal.withUnsafeMutableBufferPointer { or in
-                    oImag.withUnsafeMutableBufferPointer { oi in
-                        vDSP_DFT_Execute(setup, rPtr.baseAddress!, iPtr.baseAddress!, or.baseAddress!, oi.baseAddress!)
-                        // compute magnitude for first half (+Nyquist) for real-only signal
-                        var mag = [Float](repeating: 0, count: halfN+1)
-                        for k in 0...halfN {
-                            let re = or[k]
-                            let im = oi[k]
-                            mag[k] = sqrt(re*re + im*im)
-                        }
-                        return
-                    }
-                }
+
+        var real = data
+        var imag = [Float](repeating: 0, count: data.count)
+        var oReal = [Float](repeating: 0, count: halfN)
+        var oImag = [Float](repeating: 0, count: halfN)
+        vDSP_DFT_Execute(setup, &real, &imag, &oReal, &oImag)
+
+        // Magnitudes for bins [0, halfN] (include Nyquist)
+        var mag = [Float](repeating: 0, count: halfN + 1)
+        if halfN > 0 {
+            mag[0] = sqrt(oReal[0]*oReal[0] + oImag[0]*oImag[0])
+            for k in 1..<halfN {
+                let re = oReal[k]
+                let im = oImag[k]
+                mag[k] = sqrt(re*re + im*im)
             }
+            // Nyquist (for even length)
+            mag[halfN] = sqrt(oReal[halfN-1]*oReal[halfN-1] + oImag[halfN-1]*oImag[halfN-1])
         }
-        // Fallback trivial (shouldn't happen)
-        return []
+        return mag
         #else
         return []
         #endif

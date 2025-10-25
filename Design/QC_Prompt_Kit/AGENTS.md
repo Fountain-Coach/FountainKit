@@ -56,11 +56,12 @@ String     := '"' ... '"'
 - Round‑trip goal: `DSL → JSON → SVG → JSON` yields identical `nodes/edges/notes/layout` (order may differ). Add fixtures under `Design/QC_Prompt_Kit/tests/` when generators land.
 
 ### Render Targets
-- SVG (current): anchor math is source of truth; top‑left origin; device‑independent units.
+- SVG (current): anchor math is source of truth; top‑left origin; device‑independent units. Use `Scripts/design/qc-render.sh` to generate a numbered grid preview so coordinates are visible while authoring.
 - SwiftUI (next): replicate anchor math 1:1 via a shared `LayoutEngine`.
 
 ### Conventions
 - Grid default: `grid=24`; renderers may expose snap toggle.
+- Numbered axes: preview renderer overlays labeled axes every grid step to avoid guessing coordinates.
 - Theme: `theme=dark|light` hints background/ink; keep brand colors out of DSL.
 - Numbers: widths are device‑independent; no units in DSL.
 
@@ -100,4 +101,3 @@ autolayout none
 - IDs, ports, and edges validated (no orphans).
 - SVG anchors readable (avoid curves crossing boxes when possible).
 - Keep examples small and composable.
-

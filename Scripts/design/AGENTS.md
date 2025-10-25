@@ -17,13 +17,14 @@ Included tools
 - `render-staff-paper.sh` — Render `Design/staff-paper.ly` to PDF/SVG via LilyPond.
 - `svg-to-png.sh` — Convert any SVG to PNG using one of: `qlmanage` (macOS), `inkscape`,
   `rsvg-convert`, or ImageMagick `convert`.
+- `qc-lint.sh` — Lint QC Prompt Kit (DSL header parity, JSON schema, SVG presence).
 
 Usage
 - Render staff paper: `bash Scripts/design/render-staff-paper.sh`
 - Convert SVG to PNG: `bash Scripts/design/svg-to-png.sh Design/file.svg 2480 3508`
+- Lint QC Prompt Kit: `bash Scripts/design/qc-lint.sh --kit Design/QC_Prompt_Kit`
 
 Maintenance
 - Add new design scripts here; keep names descriptive.
 - If a script must be called from CI, add a wrapper in `Scripts/` that forwards
   to the canonical path under `Scripts/design/` to avoid breaking existing jobs.
-

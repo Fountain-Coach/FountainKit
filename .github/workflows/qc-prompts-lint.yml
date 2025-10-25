@@ -1,0 +1,24 @@
+name: QC Prompt Lint
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'Design/QC_Prompt_Kit/**'
+      - 'Scripts/design/qclint.py'
+      - 'Scripts/design/qc-lint.sh'
+      - '.github/workflows/qc-prompts-lint.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'Design/QC_Prompt_Kit/**'
+
+jobs:
+  lint:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint QC Prompt Kit
+        run: |
+          bash Scripts/design/qc-lint.sh --kit Design/QC_Prompt_Kit
+

@@ -257,88 +257,94 @@ struct EditorHost: View {
 
 struct EditorCanvas: View {
     @EnvironmentObject var state: EditorState
-    @State private var dragOffset: CGSize = .zero
-    @GestureState private var dragNodeID: String? = nil
     @State private var dragStartPos: CGPoint? = nil
 
     var body: some View {
-        GeometryReader { geo in
-            // Determine local transform (auto scale to square artboard or manual zoom/pan)
-            let viewSize = geo.size
-            let artboard = state.contentBounds()
-            let localScale: CGFloat = state.autoScale ? min(viewSize.width / max(1, artboard.width), viewSize.height / max(1, artboard.height)) : state.zoom
-            let centerOffset = CGSize(
-                width: (viewSize.width - artboard.width*localScale)/2 - artboard.minX*localScale,
-                height: (viewSize.height - artboard.height*localScale)/2 - artboard.minY*localScale
-            )
-            let contentOffset = state.autoScale ? centerOffset : state.pan
-
-            ZStack(alignment: .topLeading) {
-                MetalGridLayerView()
-                    .ignoresSafeArea()
-                GridBackground(size: geo.size, grid: CGFloat(max(4, state.doc.canvas.grid)) * localScale)
-                // Edges
-                ForEach(state.doc.edges) { e in
-                    EdgeView(edge: e)
-                }
-                // Nodes
-                ForEach(state.doc.nodes) { n in
-                    NodeView(node: n, selected: state.selection == n.id)
-                        .position(x: CGFloat(n.x + n.w/2), y: CGFloat(n.y + n.h/2))
-                        .highPriorityGesture(dragGesture(for: n, effectiveScale: localScale))
-                        .onTapGesture { state.selection = n.id }
-                }
-            }
-            .background(Color(NSColor.textBackgroundColor))
-            .scaleEffect(localScale, anchor: .topLeading)
-            .offset(x: contentOffset.width, y: contentOffset.height)
-            .gesture(panGesture(visibleSize: viewSize, artboard: artboard, scale: localScale))
+        let artboard = state.contentBounds()
+        ZoomScrollView(contentSize: CGSize(width: artboard.width, height: artboard.height), fitToVisible: state.autoScale, zoom: $state.zoom) {
+            CanvasDocumentView(artboard: artboard)
+                .environmentObject(state)
         }
     }
+}
 
-    func dragGesture(for node: QCDocument.Node, effectiveScale: CGFloat) -> some Gesture {
+// A doc-space rendering of the canvas content (origin at artboard.topLeft)
+struct CanvasDocumentView: View {
+    @EnvironmentObject var state: EditorState
+    var artboard: CGRect
+    @State private var dragStart: CGPoint? = nil
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            GridBackground(size: CGSize(width: artboard.width, height: artboard.height), grid: CGFloat(max(4, state.doc.canvas.grid)))
+            // Edges
+            ForEach(state.doc.edges) { e in
+                DocEdgeView(edge: e, artboard: artboard)
+            }
+            // Nodes
+            ForEach(state.doc.nodes) { n in
+                NodeView(node: n, selected: state.selection == n.id)
+                    .position(x: CGFloat(n.x - Int(artboard.minX) + n.w/2), y: CGFloat(n.y - Int(artboard.minY) + n.h/2))
+                    .highPriorityGesture(nodeDragGesture(node: n))
+                    .onTapGesture { state.selection = n.id }
+            }
+        }
+        .frame(width: artboard.width, height: artboard.height, alignment: .topLeading)
+        .background(Color(NSColor.textBackgroundColor))
+    }
+
+    func nodeDragGesture(node: QCDocument.Node) -> some Gesture {
         DragGesture(minimumDistance: 1)
             .onChanged { v in
-                guard !state.panMode, let idx = state.nodeIndex(by: node.id) else { return }
-                // Capture start
-                if dragStartPos == nil { dragStartPos = CGPoint(x: node.x, y: node.y) }
-                let start = dragStartPos ?? CGPoint(x: node.x, y: node.y)
-                // Convert translation from view points to document units (account for zoom only; pan is handled by offset)
-                let dx = v.translation.width / max(0.0001, effectiveScale)
-                let dy = v.translation.height / max(0.0001, effectiveScale)
-                let nowX = CGFloat(start.x) + dx
-                let nowY = CGFloat(start.y) + dy
+                guard let idx = state.nodeIndex(by: node.id) else { return }
+                if dragStart == nil { dragStart = CGPoint(x: node.x, y: node.y) }
+                let start = dragStart ?? CGPoint(x: node.x, y: node.y)
+                // In doc space, NSScrollView handles scale; deltas map 1:1 at magnification level
+                let nowX = CGFloat(start.x) + v.translation.width
+                let nowY = CGFloat(start.y) + v.translation.height
                 state.doc.nodes[idx].x = Int(nowX)
                 state.doc.nodes[idx].y = Int(nowY)
             }
             .onEnded { _ in
-                guard let idx = state.nodeIndex(by: node.id) else { dragStartPos = nil; return }
+                guard let idx = state.nodeIndex(by: node.id) else { dragStart = nil; return }
                 let grid = CGFloat(max(4, state.doc.canvas.grid))
                 let x = CGFloat(state.doc.nodes[idx].x)
                 let y = CGFloat(state.doc.nodes[idx].y)
-                let sx = Int((round(x / grid) * grid))
-                let sy = Int((round(y / grid) * grid))
-                state.doc.nodes[idx].x = sx
-                state.doc.nodes[idx].y = sy
-                dragStartPos = nil
+                state.doc.nodes[idx].x = Int((round(x / grid) * grid))
+                state.doc.nodes[idx].y = Int((round(y / grid) * grid))
+                dragStart = nil
             }
     }
+}
 
-    func panGesture(visibleSize: CGSize, artboard: CGRect, scale: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 2)
-            .onChanged { v in
-                guard state.panMode, !state.autoScale else { return }
-                let newW = state.pan.width + v.translation.width
-                let newH = state.pan.height + v.translation.height
-                let margin: CGFloat = 50
-                let contentW = artboard.width * scale
-                let contentH = artboard.height * scale
-                let minX = min(margin, visibleSize.width - contentW - margin)
-                let maxX = max(visibleSize.width - margin, contentW + margin)
-                let minY = min(margin, visibleSize.height - contentH - margin)
-                let maxY = max(visibleSize.height - margin, contentH + margin)
-                state.pan = CGSize(width: max(minX, min(newW, maxX)), height: max(minY, min(newH, maxY)))
+struct DocEdgeView: View {
+    var edge: QCDocument.Edge
+    var artboard: CGRect
+    @EnvironmentObject var state: EditorState
+    var body: some View {
+        Path { p in
+            guard let (n1, p1) = lookup(edge.from), let (n2, p2) = lookup(edge.to) else { return }
+            var a = state.portPosition(node: n1, port: p1)
+            var b = state.portPosition(node: n2, port: p2)
+            a.x -= artboard.minX; a.y -= artboard.minY
+            b.x -= artboard.minX; b.y -= artboard.minY
+            let radius: CGFloat = 80
+            let c1: CGPoint; let c2: CGPoint
+            switch p1.side {
+            case .left:   c1 = CGPoint(x: a.x - radius, y: a.y); c2 = CGPoint(x: b.x + radius, y: b.y)
+            case .right:  c1 = CGPoint(x: a.x + radius, y: a.y); c2 = CGPoint(x: b.x - radius, y: b.y)
+            case .top:    c1 = CGPoint(x: a.x, y: a.y - radius); c2 = CGPoint(x: b.x, y: b.y + radius)
+            case .bottom: c1 = CGPoint(x: a.x, y: a.y + radius); c2 = CGPoint(x: b.x, y: b.y - radius)
             }
+            p.move(to: a)
+            p.addCurve(to: b, control1: c1, control2: c2)
+        }
+        .stroke(Color.accentColor.opacity(edge.glow == true ? 0.5 : 1.0), lineWidth: CGFloat(edge.width ?? 2.0))
+    }
+    func lookup(_ ref: String) -> (QCDocument.Node, QCDocument.Port)? {
+        let comps = ref.split(separator: ".", maxSplits: 1).map(String.init)
+        guard comps.count == 2, let n = state.node(by: comps[0]), let p = n.ports.first(where: { $0.id == comps[1] }) else { return nil }
+        return (n, p)
     }
 }
 

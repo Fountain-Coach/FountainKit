@@ -1,5 +1,8 @@
 import Foundation
 import AVFoundation
+#if canImport(Midi2SamplerDSP)
+import Midi2SamplerDSP
+#endif
 
 protocol LocalRenderSynth: AnyObject {
     func start()

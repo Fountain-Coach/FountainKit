@@ -92,8 +92,8 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-openapi-urlsession.git", from: "1.0.0"),
         // MIDI 2.0 + MIDI-CI helpers (Discovery, Property Exchange)
         .package(url: "https://github.com/Fountain-Coach/midi2.git", branch: "main"),
-        // MIDI2 Instrument Bridge (sampler)
-        .package(path: "../../External/midi2sampler")
+        // MIDI2 Instrument Bridge (sampler) — pin to GitHub branch with DSP fixes
+        .package(url: "https://github.com/Fountain-Coach/midi2sampler.git", branch: "fountainkit-dsp-fixes")
     ],
     targets: [
         .executableTarget(

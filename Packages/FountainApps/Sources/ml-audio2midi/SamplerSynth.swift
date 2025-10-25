@@ -21,8 +21,8 @@ final class SamplerSynth: LocalRenderSynth {
             let n = Int(frameCount)
             var mono = [Float](repeating: 0, count: n)
             self.lock.lock()
-            // Use last velocity2 (if any) to configure processor this block
-            let v2 = self.active.values.last?.v2 ?? 0
+            // Use any active velocity2 (if any) to configure processor this block
+            let v2 = self.active.values.first?.v2 ?? 0
             self.proc.setControls(velocity2: v2, timbre: nil, pressure: nil)
             for frame in 0..<n {
                 var sum: Double = 0

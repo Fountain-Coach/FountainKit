@@ -6,6 +6,11 @@ Purpose
   - JSON (`qc_prompt.json`) and DSL (`qc_prompt.dsl`).
   - Single‑transform canvas: one scale/translation applied to the entire scene.
 
+OpenAPI‑first integration
+- The app must conform to `qc-mock-service` API (see `Sources/qc-mock-service/AGENTS.md`).
+- Do not add UI affordances that are not representable through the service endpoints.
+- Where feasible, route state changes via the service to keep parity (import/export/zoom/pan/CRUD).
+
 Run
 - Build/Run: `swift run --package-path Packages/FountainApps qc-mock-app`
 
@@ -41,4 +46,5 @@ Implementation roadmap
 2) Move all drawing under a single transformed container (or CALayer/MTKView root).
 3) Convert gestures to use `viewToDoc` deltas for drag; snap in doc space.
 4) Scale‑aware grid decimation and non‑scaling strokes for overlays.
-5) Optional: switch Grid/Edges to Metal for dense graphs using the same transform.
+5) Service integration: wire CRUD/zoom/pan to the OpenAPI client.
+6) Optional: switch Grid/Edges to Metal for dense graphs using the same transform.

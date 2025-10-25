@@ -1,14 +1,30 @@
 import SwiftUI
 import AppKit
+extension Notification.Name {
+    static let qcZoomFit = Notification.Name("qcZoomFit")
+    static let qcZoomOne = Notification.Name("qcZoomOne")
+    static let qcZoomIn = Notification.Name("qcZoomIn")
+    static let qcZoomOut = Notification.Name("qcZoomOut")
+    static let qcPanHold = Notification.Name("qcPanHold")
+    static let qcPanDelta = Notification.Name("qcPanDelta")
+}
 
 final class CenteringClipView: NSClipView {
     override func constrainBoundsRect(_ proposedBounds: NSRect) -> NSRect {
         var rect = super.constrainBoundsRect(proposedBounds)
         guard let doc = self.documentView else { return rect }
         let docSize = doc.bounds.size
-        // Center when document is smaller than clip bounds
-        rect.origin.x = max(0, min(rect.origin.x, docSize.width - rect.size.width))
-        rect.origin.y = max(0, min(rect.origin.y, docSize.height - rect.size.height))
+        // If document smaller than clip, center it; otherwise clamp within bounds
+        if docSize.width <= rect.size.width {
+            rect.origin.x = (docSize.width - rect.size.width) / 2.0
+        } else {
+            rect.origin.x = max(0, min(rect.origin.x, docSize.width - rect.size.width))
+        }
+        if docSize.height <= rect.size.height {
+            rect.origin.y = (docSize.height - rect.size.height) / 2.0
+        } else {
+            rect.origin.y = max(0, min(rect.origin.y, docSize.height - rect.size.height))
+        }
         return rect
     }
 }
@@ -21,11 +37,49 @@ struct ZoomScrollView<Content: View>: NSViewRepresentable {
     @Binding var zoom: CGFloat
     @ViewBuilder var content: () -> Content
 
+    @MainActor
     class Coordinator: NSObject {
         var parent: ZoomScrollView
         weak var scrollView: NSScrollView?
         var observation: NSKeyValueObservation?
+        var didFit = false
+        var lastSize: CGSize = .zero
         init(_ parent: ZoomScrollView) { self.parent = parent }
+        var keyDownMonitor: Any?
+        var keyUpMonitor: Any?
+        var scrollMonitor: Any?
+        @objc func handleMagnify(_ gr: NSMagnificationGestureRecognizer) {
+            guard let sv = scrollView else { return }
+            switch gr.state {
+            case .began:
+                break
+            case .changed:
+                let base = sv.magnification
+                // recognizer.magnification is a delta since last callback; apply multiplicatively
+                let newMag = max(parent.minZoom, min(parent.maxZoom, base * (1.0 + gr.magnification)))
+                let loc = gr.location(in: sv.contentView)
+                sv.setMagnification(newMag, centeredAt: loc)
+            default:
+                break
+            }
+        }
+        @objc func handleDoubleClick(_ gr: NSClickGestureRecognizer) {
+            guard let sv = scrollView else { return }
+            let flags = NSApp.currentEvent?.modifierFlags ?? []
+            let loc = gr.location(in: sv.contentView)
+            if flags.contains(.option) {
+                // 100% at click
+                sv.setMagnification(1.0, centeredAt: loc)
+            } else {
+                // Fit to visible
+                let vis = sv.contentView.bounds.size
+                let docSize = sv.documentView?.bounds.size ?? .zero
+                let sx = vis.width / max(1, docSize.width)
+                let sy = vis.height / max(1, docSize.height)
+                let m = max(parent.minZoom, min(parent.maxZoom, min(sx, sy)))
+                sv.setMagnification(m, centeredAt: CGPoint(x: vis.width/2, y: vis.height/2))
+            }
+        }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -35,7 +89,8 @@ struct ZoomScrollView<Content: View>: NSViewRepresentable {
         scroll.hasVerticalScroller = true
         scroll.hasHorizontalScroller = true
         scroll.drawsBackground = false
-        scroll.allowsMagnification = true
+        // We'll handle pinch ourselves to anchor at finger location
+        scroll.allowsMagnification = false
         scroll.minMagnification = minZoom
         scroll.maxMagnification = maxZoom
         let clip = CenteringClipView()
@@ -50,8 +105,40 @@ struct ZoomScrollView<Content: View>: NSViewRepresentable {
                 coord?.parent.zoom = sv.magnification
             }
         }
-        // Initial fit
-        DispatchQueue.main.async { updateMagnification(scroll, fit: fitToVisible) }
+        // Add magnification recognizer to anchor zoom under the fingers
+        let mag = NSMagnificationGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleMagnify(_:)))
+        scroll.contentView.addGestureRecognizer(mag)
+        // Double-click to fit (Option-double-click to 100% at click)
+        let dbl = NSClickGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleDoubleClick(_:)))
+        dbl.numberOfClicksRequired = 2
+        scroll.contentView.addGestureRecognizer(dbl)
+        // Initial fit (once)
+        DispatchQueue.main.async {
+            updateMagnification(scroll, fit: fitToVisible)
+            context.coordinator.didFit = fitToVisible
+            context.coordinator.lastSize = contentSize
+        }
+        // Spacebar temporary pan (post notifications)
+        context.coordinator.keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { e in
+            if e.keyCode == 49 { NotificationCenter.default.post(name: .qcPanHold, object: nil, userInfo: ["down": true]); return nil }
+            return e
+        }
+        context.coordinator.keyUpMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyUp) { e in
+            if e.keyCode == 49 { NotificationCenter.default.post(name: .qcPanHold, object: nil, userInfo: ["down": false]); return nil }
+            return e
+        }
+        // Listen for trackpad/scroll pan and post deltas in doc space for service pan
+        context.coordinator.scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak coord = context.coordinator] e in
+            guard let sv = coord?.scrollView else { return e }
+            // Convert scroll deltas (view space) to doc-space deltas; invert to match visual movement
+            let mag = max(0.0001, sv.magnification)
+            let dx = -Double(e.scrollingDeltaX) / Double(mag)
+            let dy = -Double(e.scrollingDeltaY) / Double(mag)
+            if abs(dx) > 0.001 || abs(dy) > 0.001 {
+                NotificationCenter.default.post(name: .qcPanDelta, object: nil, userInfo: ["dx": dx, "dy": dy])
+            }
+            return e
+        }
         return scroll
     }
 
@@ -62,7 +149,17 @@ struct ZoomScrollView<Content: View>: NSViewRepresentable {
         }
         scroll.minMagnification = minZoom
         scroll.maxMagnification = maxZoom
-        updateMagnification(scroll, fit: fitToVisible)
+        // Avoid fit loop: only fit when requested (fitToVisible true) and not already fit,
+        // or when content size changed.
+        if fitToVisible {
+            if context.coordinator.didFit == false || context.coordinator.lastSize != contentSize {
+                updateMagnification(scroll, fit: true)
+                context.coordinator.didFit = true
+                context.coordinator.lastSize = contentSize
+            }
+        } else {
+            context.coordinator.didFit = false
+        }
     }
 
     private func updateMagnification(_ scroll: NSScrollView, fit: Bool) {

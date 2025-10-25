@@ -193,10 +193,36 @@ struct EditorHost: View {
                     ForEach(state.doc.nodes) { n in
                         Text(n.titleOrID).tag(n.id as String?)
                     }
+                    .onDelete { indexSet in
+                        if state.useService {
+                            Task { @MainActor in
+                                for i in indexSet.sorted(by: >) {
+                                    let id = state.doc.nodes[i].id
+                                    try? await state.client.deleteNode(id: id)
+                                    if let g = try? await state.client.exportJSON() { state.doc = QCDocument.from(g) }
+                                }
+                            }
+                        } else {
+                            for i in indexSet.sorted(by: >) { state.doc.nodes.remove(at: i) }
+                        }
+                    }
                 }
                 Section("Edges") {
                     ForEach(state.doc.edges) { e in
                         Text("\(e.from) → \(e.to)")
+                    }
+                    .onDelete { indexSet in
+                        if state.useService {
+                            Task { @MainActor in
+                                for i in indexSet.sorted(by: >) {
+                                    let id = state.doc.edges[i].id
+                                    try? await state.client.deleteEdge(id: id)
+                                    if let g = try? await state.client.exportJSON() { state.doc = QCDocument.from(g) }
+                                }
+                            }
+                        } else {
+                            for i in indexSet.sorted(by: >) { state.doc.edges.remove(at: i) }
+                        }
                     }
                 }
             }
@@ -226,6 +252,38 @@ struct EditorHost: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .qcPanHold)) { note in
             if let down = note.userInfo?["down"] as? Bool { state.panHold = down }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .qcPanDelta)) { note in
+            guard state.useService, let dx = note.userInfo?["dx"] as? Double, let dy = note.userInfo?["dy"] as? Double else { return }
+            Task { @MainActor in try? await state.client.panBy(dx: dx, dy: dy); if let g = try? await state.client.exportJSON() { state.doc = QCDocument.from(g) } }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .qcZoomFit)) { _ in
+            if state.useService { Task { @MainActor in try? await state.client.zoomFit(); if let g = try? await state.client.exportJSON() { state.doc = QCDocument.from(g) } } }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .qcZoomOne)) { _ in
+            if state.useService { Task { @MainActor in try? await state.client.zoomActual(anchor: nil); if let g = try? await state.client.exportJSON() { state.doc = QCDocument.from(g) } } }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .qcZoomIn)) { _ in
+            if state.useService {
+                Task { @MainActor in
+                    let newScale = min(3.0, Double(state.zoom) + 0.1)
+                    try? await state.client.zoomSet(scale: newScale)
+                    if let g = try? await state.client.exportJSON() { state.doc = QCDocument.from(g) }
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .qcZoomOut)) { _ in
+            if state.useService {
+                Task { @MainActor in
+                    let newScale = max(0.25, Double(state.zoom) - 0.1)
+                    try? await state.client.zoomSet(scale: newScale)
+                    if let g = try? await state.client.exportJSON() { state.doc = QCDocument.from(g) }
+                }
+            }
+        }
+        .task {
+            // Initial sync from service when available
+            if state.useService, let g = try? await state.client.exportJSON() { state.doc = QCDocument.from(g) }
         }
     }
 
@@ -268,15 +326,24 @@ struct EditorHost: View {
         panel.nameFieldStringValue = "qc_prompt.json"
         panel.allowedContentTypes = [.json]
         if panel.runModal() == .OK, let url = panel.url {
-            do {
-                // Write JSON
-                let data = try state.exportJSON()
-                try data.write(to: url)
-                // Write DSL next to it
-                let dslURL = url.deletingLastPathComponent().appendingPathComponent("qc_prompt.dsl")
-                try state.exportDSL().data(using: .utf8)?.write(to: dslURL)
-            } catch {
-                NSAlert(error: error).runModal()
+            Task { @MainActor in
+                do {
+                    if state.useService, let g = try await state.client.exportJSON() {
+                        let data = try JSONEncoder().encode(g)
+                        try data.write(to: url)
+                        let dslURL = url.deletingLastPathComponent().appendingPathComponent("qc_prompt.dsl")
+                        // For now, synthesize DSL from current app view
+                        try state.exportDSL().data(using: .utf8)?.write(to: dslURL)
+                    } else {
+                        // Local fallback
+                        let data = try state.exportJSON()
+                        try data.write(to: url)
+                        let dslURL = url.deletingLastPathComponent().appendingPathComponent("qc_prompt.dsl")
+                        try state.exportDSL().data(using: .utf8)?.write(to: dslURL)
+                    }
+                } catch {
+                    NSAlert(error: error).runModal()
+                }
             }
         }
     }
@@ -288,11 +355,20 @@ struct EditorHost: View {
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         if panel.runModal() == .OK, let url = panel.url {
-            do {
-                let data = try Data(contentsOf: url)
-                try state.importJSON(data)
-            } catch {
-                NSAlert(error: error).runModal()
+            Task { @MainActor in
+                do {
+                    let data = try Data(contentsOf: url)
+                    if state.useService {
+                        // Decode GraphDoc and import through service
+                        let g = try JSONDecoder().decode(Components.Schemas.GraphDoc.self, from: data)
+                        _ = try await state.client.importJSON(body: .json(g))
+                        if let ng = try? await state.client.exportJSON() { state.doc = QCDocument.from(ng) }
+                    } else {
+                        try state.importJSON(data)
+                    }
+                } catch {
+                    NSAlert(error: error).runModal()
+                }
             }
         }
     }
@@ -360,6 +436,19 @@ struct CanvasDocumentView: View {
                 let y = CGFloat(state.doc.nodes[idx].y)
                 state.doc.nodes[idx].x = Int((round(x / grid) * grid))
                 state.doc.nodes[idx].y = Int((round(y / grid) * grid))
+                if state.useService {
+                    Task { @MainActor in
+                        _ = try? await state.client.patchNode(
+                            path: .init(id: node.id),
+                            headers: .init(),
+                            body: .json(.init(title: node.title ?? nil,
+                                              x: state.doc.nodes[idx].x,
+                                              y: state.doc.nodes[idx].y,
+                                              w: state.doc.nodes[idx].w,
+                                              h: state.doc.nodes[idx].h))
+                        )
+                    }
+                }
                 dragStart = nil
             }
     }
@@ -528,6 +617,14 @@ struct Inspector: View {
                 Stepper(value: $state.doc.canvas.grid, in: 4...128, step: 4) {
                     Text("Grid: \(state.doc.canvas.grid)")
                 }
+                .onChange(of: state.doc.canvas.grid) { newValue in
+                    if state.useService {
+                        Task { @MainActor in
+                            do { _ = try await state.client.patchCanvas(gridStep: newValue, autoScale: nil) } catch {}
+                            if let g = try? await state.client.exportJSON() { state.doc = QCDocument.from(g) }
+                        }
+                    }
+                }
             }
             Divider()
             if let sel = state.selection, let i = state.nodeIndex(by: sel) {
@@ -540,6 +637,32 @@ struct Inspector: View {
                     HStack {
                         Stepper(value: Binding(get: { state.doc.nodes[i].w }, set: { state.doc.nodes[i].w = $0 }), in: 40...2000, step: state.doc.canvas.grid) { Text("W: \(state.doc.nodes[i].w)") }
                         Stepper(value: Binding(get: { state.doc.nodes[i].h }, set: { state.doc.nodes[i].h = $0 }), in: 40...2000, step: state.doc.canvas.grid) { Text("H: \(state.doc.nodes[i].h)") }
+                    }
+                    .onChange(of: state.doc.nodes[i].w) { _ in
+                        if state.useService { Task { @MainActor in _ = try? await state.client.patchNode(path: .init(id: state.doc.nodes[i].id), headers: .init(), body: .json(.init(title: state.doc.nodes[i].title ?? nil, x: state.doc.nodes[i].x, y: state.doc.nodes[i].y, w: state.doc.nodes[i].w, h: state.doc.nodes[i].h))) } }
+                    }
+                    .onChange(of: state.doc.nodes[i].h) { _ in
+                        if state.useService { Task { @MainActor in _ = try? await state.client.patchNode(path: .init(id: state.doc.nodes[i].id), headers: .init(), body: .json(.init(title: state.doc.nodes[i].title ?? nil, x: state.doc.nodes[i].x, y: state.doc.nodes[i].y, w: state.doc.nodes[i].w, h: state.doc.nodes[i].h))) } }
+                    }
+
+                    Divider()
+                    Text("Ports").font(.subheadline)
+                    ForEach(state.doc.nodes[i].ports, id: \.id) { p in
+                        HStack {
+                            Text("\(p.id) • \(p.dir.rawValue) • \(p.side.rawValue) • \(p.type)")
+                            Spacer()
+                            Button { 
+                                if state.useService {
+                                    Task { @MainActor in
+                                        _ = try? await state.client.removePort(nodeId: state.doc.nodes[i].id, portId: p.id)
+                                        if let g = try? await state.client.exportJSON() { state.doc = QCDocument.from(g) }
+                                    }
+                                } else {
+                                    if let idx = state.nodeIndex(by: state.doc.nodes[i].id) { state.doc.nodes[idx].ports.removeAll{ $0.id == p.id } }
+                                }
+                            } label: { Image(systemName: "minus.circle") }
+                            .buttonStyle(.borderless)
+                        }
                     }
                 }
             } else {

@@ -24,16 +24,17 @@ final class QCMClient {
             return nil
         }
     }
-    func patchCanvas(gridStep: Int? = nil, autoScale: Bool? = nil) async throws -> Components.Schemas.CanvasState? {
-        let payload = Components.Schemas.CanvasPatch(gridStep: gridStep, autoScale: autoScale)
-        switch try await client.patchCanvas(.init(body: .json(payload))) {
-        case .ok(let ok): return try ok.body.json
-        default: return nil
-        }
-    }
+    // duplicate removed (method defined above)
     func zoomSet(scale: Double, anchor: Components.Schemas.Point? = nil) async throws {
         let payload = Operations.zoomSet.Input.Body.jsonPayload(scale: scale, anchorView: anchor)
         _ = try await client.zoomSet(.init(body: .json(payload)))
+    }
+    func zoomFit() async throws {
+        _ = try await client.zoomFit(.init())
+    }
+    func zoomActual(anchor: Components.Schemas.Point? = nil) async throws {
+        if let anchor { _ = try await client.zoomActual(.init(body: .json(.init(viewPoint: anchor)))) }
+        else { _ = try await client.zoomActual(.init()) }
     }
     func panBy(dx: Double, dy: Double) async throws {
         let payload = Operations.panBy.Input.Body.jsonPayload(dx: dx, dy: dy)
@@ -63,6 +64,33 @@ final class QCMClient {
     }
     func exportJSON() async throws -> Components.Schemas.GraphDoc? {
         switch try await client.exportJSON(.init()) {
+        case .ok(let ok): return try ok.body.json
+        default: return nil
+        }
+    }
+
+    // Expose needed raw operations for cases where we need non-wrapper access
+    func importJSON(body: Operations.importJSON.Input.Body) async throws -> Operations.importJSON.Output {
+        try await client.importJSON(.init(body: body))
+    }
+    func patchNode(path: Operations.patchNode.Input.Path, headers: Operations.patchNode.Input.Headers = .init(), body: Operations.patchNode.Input.Body) async throws -> Operations.patchNode.Output {
+        try await client.patchNode(.init(path: path, headers: headers, body: body))
+    }
+    func deleteNode(id: String) async throws {
+        _ = try await client.deleteNode(.init(path: .init(id: id)))
+    }
+    func removePort(nodeId: String, portId: String) async throws -> Components.Schemas.Node? {
+        switch try await client.removePort(.init(path: .init(id: nodeId, portId: portId), headers: .init())) {
+        case .ok(let ok): return try ok.body.json
+        default: return nil
+        }
+    }
+    func deleteEdge(id: String) async throws {
+        _ = try await client.deleteEdge(.init(path: .init(id: id)))
+    }
+    func patchCanvas(gridStep: Int? = nil, autoScale: Bool? = nil) async throws -> Components.Schemas.CanvasState? {
+        let payload = Components.Schemas.CanvasPatch(gridStep: gridStep, autoScale: autoScale)
+        switch try await client.patchCanvas(.init(body: .json(payload))) {
         case .ok(let ok): return try ok.body.json
         default: return nil
         }

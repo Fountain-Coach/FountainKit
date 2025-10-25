@@ -57,7 +57,8 @@ let package = Package(
         .executable(name: "fk", targets: ["fk"])
         ,
         .executable(name: "composer-studio", targets: ["composer-studio"]),
-        .executable(name: "qc-mock-app", targets: ["qc-mock-app"])
+        .executable(name: "qc-mock-app", targets: ["qc-mock-app"]),
+        .executable(name: "qcmockcore-tests", targets: ["qcmockcore-tests"])
     ],
     dependencies: [
         .package(path: "../FountainCore"),
@@ -97,6 +98,16 @@ let package = Package(
         .package(url: "https://github.com/Fountain-Coach/midi2sampler.git", exact: "0.1.1")
     ],
     targets: [
+        .target(
+            name: "QCMockCore",
+            dependencies: [],
+            path: "Sources/QCMockCore"
+        ),
+        .target(
+            name: "QCMockServiceCore",
+            dependencies: ["QCMockCore"],
+            path: "Sources/QCMockServiceCore"
+        ),
         .executableTarget(
             name: "gateway-server",
             dependencies: [
@@ -213,9 +224,56 @@ let package = Package(
         ),
         .executableTarget(
             name: "qc-mock-app",
-            dependencies: [],
+            dependencies: ["QCMockCore"],
             path: "Sources/qc-mock-app",
             exclude: ["AGENTS.md"]
+        ),
+        .target(
+            name: "qc-mock-service",
+            dependencies: [
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                "QCMockServiceCore"
+            ],
+            path: "Sources/qc-mock-service",
+            plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
+        .executableTarget(
+            name: "qcmockcore-tests",
+            dependencies: ["QCMockCore"],
+            path: "Sources/qcmockcore-tests"
+        ),
+        .testTarget(
+            name: "QCMockCoreTests",
+            dependencies: ["QCMockCore"],
+            path: "Tests/QCMockCoreTests"
+        ),
+        .testTarget(
+            name: "QCMockServiceSpecTests",
+            dependencies: [
+                .product(name: "Yams", package: "Yams")
+            ],
+            path: "Tests/QCMockServiceSpecTests"
+        ),
+        .testTarget(
+            name: "QCMockHandlersTests",
+            dependencies: [
+                "qc-mock-service",
+                "QCMockServiceCore"
+            ],
+            path: "Tests/QCMockHandlersTests"
+        ),
+        .executableTarget(
+            name: "qcmockservice-tests",
+            dependencies: ["QCMockServiceCore"],
+            path: "Sources/qcmockservice-tests"
+        ),
+        .executableTarget(
+            name: "qc-mock-handlers-tests",
+            dependencies: ["qc-mock-service"],
+            path: "Sources/qc-mock-handlers-tests"
         ),
         .executableTarget(
             name: "m2-smoke",

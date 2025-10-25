@@ -1,0 +1,287 @@
+openapi: 3.1.0
+info:
+  title: QC Mock Service API
+  version: 1.0.0
+  description: |
+    HTTP API to control the QC Mock canvas editor. This is the single source of truth; app behavior
+    must conform to these endpoints and schemas.
+servers:
+  - url: http://localhost:7088
+    description: Local development
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [ok] }
+  /canvas:
+    get:
+      operationId: getCanvas
+      responses:
+        '200':
+          description: Canvas state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CanvasState'
+    patch:
+      operationId: patchCanvas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CanvasPatch'
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/CanvasState' } } } }
+  /canvas/zoom/fit:
+    post:
+      operationId: zoomFit
+      responses: { '204': { description: Fitted } }
+  /canvas/zoom/actual:
+    post:
+      operationId: zoomActual
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                viewPoint: { $ref: '#/components/schemas/Point' }
+      responses: { '204': { description: Zoom set to 100% } }
+  /canvas/zoom:
+    post:
+      operationId: zoomSet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scale]
+              properties:
+                scale: { type: number, minimum: 0.1, maximum: 16 }
+                anchorView: { $ref: '#/components/schemas/Point' }
+      responses: { '204': { description: Zoom applied } }
+  /canvas/pan:
+    post:
+      operationId: panBy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dx, dy]
+              properties:
+                dx: { type: number }
+                dy: { type: number }
+      responses: { '204': { description: Panned } }
+  /nodes:
+    get:
+      operationId: listNodes
+      responses:
+        '200': { description: Nodes, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Node' } } } } }
+    post:
+      operationId: createNode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateNode' }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Node' } } } }
+  /nodes/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getNode
+      responses: { '200': { description: Node, content: { application/json: { schema: { $ref: '#/components/schemas/Node' } } } }, '404': { description: Not found } }
+    patch:
+      operationId: patchNode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatchNode' }
+      responses: { '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Node' } } } } }
+    delete:
+      operationId: deleteNode
+      responses: { '204': { description: Deleted } }
+  /nodes/{id}/ports:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: addPort
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Port' }
+      responses: { '200': { description: Updated Node, content: { application/json: { schema: { $ref: '#/components/schemas/Node' } } } } }
+  /nodes/{id}/ports/{portId}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+      - name: portId
+        in: path
+        required: true
+        schema: { type: string }
+    delete:
+      operationId: removePort
+      responses: { '200': { description: Updated Node, content: { application/json: { schema: { $ref: '#/components/schemas/Node' } } } } }
+  /edges:
+    get:
+      operationId: listEdges
+      responses: { '200': { description: Edges, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Edge' } } } } } }
+    post:
+      operationId: createEdge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateEdge' }
+      responses: { '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Edge' } } } } }
+  /edges/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    delete:
+      operationId: deleteEdge
+      responses: { '204': { description: Deleted } }
+  /export/json:
+    get:
+      operationId: exportJSON
+      responses: { '200': { description: JSON graph, content: { application/json: { schema: { $ref: '#/components/schemas/GraphDoc' } } } } }
+  /export/dsl:
+    get:
+      operationId: exportDSL
+      responses: { '200': { description: DSL text, content: { text/plain: { schema: { type: string } } } } }
+  /import/json:
+    post:
+      operationId: importJSON
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/GraphDoc' } } }
+      responses: { '204': { description: Imported } }
+  /import/dsl:
+    post:
+      operationId: importDSL
+      requestBody:
+        required: true
+        content: { text/plain: { schema: { type: string } } }
+      responses: { '204': { description: Imported } }
+
+components:
+  schemas:
+    Point:
+      type: object
+      required: [x, y]
+      properties: { x: { type: number }, y: { type: number } }
+    CanvasTransform:
+      type: object
+      required: [scale, translation]
+      properties:
+        scale: { type: number }
+        translation: { $ref: '#/components/schemas/Point' }
+    CanvasState:
+      type: object
+      required: [docWidth, docHeight, gridStep, transform]
+      properties:
+        docWidth: { type: integer, minimum: 1 }
+        docHeight: { type: integer, minimum: 1 }
+        gridStep: { type: integer, minimum: 1 }
+        autoScale: { type: boolean, default: true }
+        transform: { $ref: '#/components/schemas/CanvasTransform' }
+    CanvasPatch:
+      type: object
+      properties:
+        gridStep: { type: integer, minimum: 1 }
+        autoScale: { type: boolean }
+    Port:
+      type: object
+      required: [id, side, dir, type]
+      properties:
+        id: { type: string }
+        side: { type: string, enum: [left, right, top, bottom] }
+        dir: { type: string, enum: [in, out] }
+        type: { type: string, enum: [data, event, audio, midi], default: data }
+    Node:
+      type: object
+      required: [id, x, y, w, h, ports]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        x: { type: integer }
+        y: { type: integer }
+        w: { type: integer }
+        h: { type: integer }
+        ports: { type: array, items: { $ref: '#/components/schemas/Port' } }
+    PatchNode:
+      type: object
+      properties:
+        title: { type: string }
+        x: { type: integer }
+        y: { type: integer }
+        w: { type: integer }
+        h: { type: integer }
+    CreateNode:
+      type: object
+      required: [id, x, y, w, h]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        x: { type: integer }
+        y: { type: integer }
+        w: { type: integer }
+        h: { type: integer }
+        ports: { type: array, items: { $ref: '#/components/schemas/Port' } }
+    Edge:
+      type: object
+      required: [id, from, to]
+      properties:
+        id: { type: string }
+        from: { type: string, description: 'nodeId.portId' }
+        to: { type: string, description: 'nodeId.portId' }
+        routing: { type: string, enum: [qcBezier, ortho], default: qcBezier }
+        width: { type: number, default: 2.0 }
+        glow: { type: boolean, default: false }
+    CreateEdge:
+      type: object
+      required: [from, to]
+      properties:
+        from: { type: string }
+        to: { type: string }
+        routing: { type: string, enum: [qcBezier, ortho], default: qcBezier }
+    GraphDoc:
+      type: object
+      required: [canvas, nodes, edges]
+      properties:
+        canvas:
+          type: object
+          required: [width, height, theme, grid]
+          properties:
+            width: { type: integer }
+            height: { type: integer }
+            theme: { type: string, enum: [light, dark] }
+            grid: { type: integer }
+        nodes: { type: array, items: { $ref: '#/components/schemas/Node' } }
+        edges: { type: array, items: { $ref: '#/components/schemas/Edge' } }

@@ -298,7 +298,7 @@ components:
         theme: { type: string, enum: [light, dark] }
     InstrumentKind:
       type: string
-      enum: [mvk.triangle, mvk.quad, external.coremidi]
+      enum: [mvk.triangle, mvk.quad, external.coremidi, audiotalk.chat]
     InstrumentIdentity:
       type: object
       properties:

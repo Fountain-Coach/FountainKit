@@ -362,9 +362,7 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("Instruments")
-            .toolbar {
-                ToolbarItem { Button("Auto‑noodle (CI/PE)") { Task { await state.autoNoodle() } } }
-            }
+            
             .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
         } detail: {
             // Canvas center with zoom container (pinch/scroll) and key input (arrow-keys nudge)
@@ -415,6 +413,17 @@ struct ContentView: View {
                             vm.addPort(to: id, side: .right, dir: .output, id: "out", type: "data")
                         }
                     } label: { Label("Add Node", systemImage: "plus.square.on.square") }
+                    Button {
+                        // Open AudioTalk Chat window for selected chat instrument
+                        if let sel = vm.selection, let inst = state.instruments.first(where: { $0.id == sel }), inst.kind.rawValue == "audiotalk.chat" {
+                            ChatInstrumentManager.shared.open(for: sel, preferredProvider: nil, model: nil)
+                        }
+                    } label: { Label("Open Chat", systemImage: "bubble.left.and.bubble.right") }
+                    .help("Open the AudioTalk Chat instrument window for the selected node")
+                    .disabled({ () -> Bool in
+                        guard let sel = vm.selection, let inst = state.instruments.first(where: { $0.id == sel }) else { return true }
+                        return inst.kind.rawValue != "audiotalk.chat"
+                    }())
                 }
             }
         }

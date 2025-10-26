@@ -482,7 +482,7 @@ components:
     InstrumentKind:
       type: string
       description: Logical type of instrument represented by the node
-      enum: [mvk.triangle, mvk.quad, external.coremidi]
+      enum: [mvk.triangle, mvk.quad, external.coremidi, audiotalk.chat]
 
     InstrumentIdentity:
       type: object

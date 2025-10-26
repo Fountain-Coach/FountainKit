@@ -10,13 +10,13 @@ Start everything with logs and readiness checks by running `bash Scripts/dev-up 
 
 ### Using the canvas
 
-The canvas is an A4 page (PDF points) with a scale‑aware mm grid and margin guides. Use the Page menu to switch portrait/landscape, set margins (0/10/12/15 mm), and choose grid spacing (e.g., 5 mm minor / 10 mm major). Double‑click an instrument in the left pane to add it to the page (data ports always; UMP ports when available). To connect nodes, toggle “Connect” in the toolbar, click an output, then an input. Hold Option to fan‑out the same output to multiple inputs. Double‑click an input to break a connection. Arrow keys nudge the selection by one grid step; Option nudges by five.
+The canvas defaults to an A4 page (PDF points) with a scale‑aware mm grid and margin guides. Use the Page menu to switch portrait/landscape, set margins (0/10/12/15 mm), and choose grid spacing (e.g., 5 mm minor / 10 mm major). When you prefer an infinite workspace (Flow’s node bed), toggle Canvas Mode → Infinite Workspace; Fit will then center the visible area and skip page constraints. Double‑click an instrument in the left pane to add it to the canvas (data ports always; UMP ports when available). To connect nodes, toggle “Connect” in the toolbar, click an output, then an input. Hold Option to fan‑out the same output to multiple inputs. Double‑click an input to break a connection. Arrow keys nudge the selection by one grid step; Option nudges by five.
 
 ### Links, actions, and logs
 
 The Links tab offers two complementary tools. “Suggestions” retrieves proposed links from the service (CI/PE‑grounded auto‑noodling). You can preview the exact JSON of a proposed link before applying it, or apply all at once (with a confirmation). “Applied Links” lists the current links and lets you delete any. A run log summarizes changes (what ran, a short detail, and a simple diff like `links: 2→3`) so work remains auditable.
 
-- Visual feedback: When you apply a property link, the matching edge on the canvas is added (if missing) and glows briefly so you can confirm the change at a glance.
+- Visual feedback: When you apply a property link, the matching edge on the canvas is added (if missing) and glows briefly so you can confirm the change at a glance. Wires added/removed in the Flow editor also mirror to the PatchBay service (Create/Delete Link), and the Links tab refreshes automatically.
 
 ### Saving and loading scenes
 

@@ -1,30 +1,23 @@
-# OpenAPI Directory Conventions
+# OpenAPI directory conventions
 
-1. **Versioned specs**  
-   - Place each service spec in `openapi/v{major}/service-name.yml`.  
-   - Gateway plugins use the `*-gateway.yml` suffix.
+This folder is the source of truth for our HTTP contracts. Keep specs versioned, linted, and discoverable so they feed cleanly into generation and the control plane.
 
-2. **README maintenance**  
-   - After adding or updating a spec, update `openapi/README.md`.  
-   - Maintain two tables:
-     - **Gateway Plugins** – all plugin specs for the Gateway layer, with owner and completion status.
-     - **Persistence/FountainStore** – specs for the FountainStore persistence layer.
-   - Mark the status column (e.g., ✅/❌) to reflect task completion.
-   - Do **not** delete or rewrite existing spec links—only append entries so the README remains a versioned index of every OpenAPI document.
+Versioning and names
+Place each service spec in `openapi/v{major}/service-name.yml`. Gateway plugin specs use the `*-gateway.yml` suffix. Don’t delete or rewrite existing links: new versions append to the index so history remains intact.
 
-3. **Validation & copyright**
-   - Run `openapi/lint-matrix.sh <spec>` (or `--list`) after any edits to ensure Redocly passes.
-   - End every spec with `© 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.`
+Index in README
+After any change, update `openapi/README.md`. We maintain two tables there: Gateway plugins (owner and status) and Persistence/FountainStore specs. Use a simple status mark (e.g., ✅/❌) and keep entries additive.
 
-4. **Repository linkage**
-   - Each new gateway spec should have a corresponding Swift package under `libs/GatewayPlugins/` and a registration file `+GatewayPlugin.swift` in `services/GatewayServer/GatewayApp`.
+Validation
+Lint locally with `openapi/lint-matrix.sh <spec>` (or `--list`) and in CI via `Scripts/openapi/openapi-lint.sh`. Redocly failures block merges. Specs end with the required copyright line: `© 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.`
 
-5. **Curatory requirement**
-   - After editing any spec, invoke the FountainAI OpenAPI Curator via `POST /curate` with a list of every `file://openapi/...` document and a `corpusId` for the bundle.
-   - The curated output is the single source of truth and may be submitted to the Tools Factory when `submitToToolsFactory` is `true`.
+Repository linkage
+Each new Gateway spec should map to a Swift package under `libs/GatewayPlugins/` and a `+GatewayPlugin.swift` registration in `services/GatewayServer/GatewayApp`. Keep names aligned so readers can jump between spec and code.
 
-## Active Plans
+Curator as single source
+After editing, invoke the FountainAI OpenAPI Curator via `POST /curate` with every `file://openapi/...` document and a `corpusId` for the bundle. The curated output is the authoritative copy and can be submitted to the Tools Factory when `submitToToolsFactory` is `true`.
 
-- **ArcSpec & Studio Implementation Plan** — `openapi/arcspec_studio_plan.md`
+Active plans
+See `openapi/arcspec_studio_plan.md` for ArcSpec and Studio implementation work. We use that doc to track changes that cross spec, generator, and UI.
 
-Following these guidelines keeps OpenAPI specs discoverable, versioned, and consistently integrated with the Gateway and FountainStore layers.
+Following these guidelines keeps specs versioned, linted, and wired cleanly into Gateway and FountainStore.

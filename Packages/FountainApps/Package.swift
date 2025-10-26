@@ -58,7 +58,9 @@ let package = Package(
         ,
         .executable(name: "composer-studio", targets: ["composer-studio"]),
         .executable(name: "qc-mock-app", targets: ["qc-mock-app"]),
-        .executable(name: "qcmockcore-tests", targets: ["qcmockcore-tests"])
+        .executable(name: "qcmockcore-tests", targets: ["qcmockcore-tests"]),
+        .executable(name: "patchbay-service-server", targets: ["patchbay-service-server"]),
+        .executable(name: "patchbay-app", targets: ["patchbay-app"])
     ],
     dependencies: [
         .package(path: "../FountainCore"),
@@ -236,6 +238,19 @@ let package = Package(
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
         ),
+        .executableTarget(
+            name: "patchbay-app",
+            dependencies: [
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
+            ],
+            path: "Sources/patchbay-app",
+            exclude: ["AGENTS.md"],
+            plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
         .target(
             name: "qc-mock-service",
             dependencies: [
@@ -246,6 +261,40 @@ let package = Package(
             plugins: [
                 .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
+        .target(
+            name: "patchbay-service",
+            dependencies: [
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "SecretStore", package: "swift-secretstore")
+            ],
+            path: "Sources/patchbay-service",
+            plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
+        .executableTarget(
+            name: "patchbay-service-server",
+            dependencies: [
+                "patchbay-service",
+                .product(name: "FountainRuntime", package: "FountainCore")
+            ],
+            path: "Sources/patchbay-service-server"
+        ),
+        .testTarget(
+            name: "PatchBayServiceTests",
+            dependencies: ["patchbay-service"],
+            path: "Tests/PatchBayServiceTests"
+        ),
+        .testTarget(
+            name: "PatchBayAppUITests",
+            dependencies: ["patchbay-app"],
+            path: "Tests/PatchBayAppUITests",
+            resources: [
+                .process("Baselines")
             ]
         ),
         .executableTarget(

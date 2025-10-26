@@ -1,4 +1,8 @@
-## AGENT — qc-mock-app (macOS)
+## AGENT — qc-mock-app (macOS) — DEPRECATED
+
+Status
+- Deprecated in favor of the CI/PE‑first instrument sketcher (“PatchBay Studio”).
+- See the new service spec: `Packages/FountainSpecCuration/openapi/v1/patchbay.yml`.
 
 Purpose
 - A Quartz Composer–inspired macOS tool to mock graphs on a numbered grid.

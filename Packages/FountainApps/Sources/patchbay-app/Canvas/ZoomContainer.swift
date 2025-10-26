@@ -1,0 +1,72 @@
+import SwiftUI
+import AppKit
+
+struct ZoomContainer<Content: View>: NSViewRepresentable {
+    @Binding var zoom: CGFloat
+    @Binding var translation: CGPoint
+    @ViewBuilder var content: () -> Content
+
+    @MainActor
+    class Coordinator: NSObject {
+        var parent: ZoomContainer
+        weak var host: NSHostingView<AnyView>?
+        init(_ parent: ZoomContainer) { self.parent = parent }
+
+        @objc func handleMagnify(_ gr: NSMagnificationGestureRecognizer) {
+            guard let host = host else { return }
+            switch gr.state {
+            case .began: break
+            case .changed:
+                let base = parent.zoom
+                let newScale = max(0.25, min(3.0, base * (1.0 + gr.magnification)))
+                let loc = gr.location(in: host)
+                // Anchor zoom at pointer location: keep doc point under cursor stable
+                let s = max(0.0001, base)
+                let docX = CGFloat(loc.x) / s - parent.translation.x
+                let docY = CGFloat(loc.y) / s - parent.translation.y
+                let s2 = max(0.0001, newScale)
+                let newTx = CGFloat(loc.x) / s2 - docX
+                let newTy = CGFloat(loc.y) / s2 - docY
+                parent.translation = CGPoint(x: newTx, y: newTy)
+                parent.zoom = newScale
+            default: break
+            }
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeNSView(context: Context) -> NSView {
+        let host = NSHostingView(rootView: AnyView(content()))
+        context.coordinator.host = host
+        let view = NSView()
+        view.addSubview(host)
+        host.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            host.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            host.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            host.topAnchor.constraint(equalTo: view.topAnchor),
+            host.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+        // Add magnification recognizer
+        let mag = NSMagnificationGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleMagnify(_:)))
+        view.addGestureRecognizer(mag)
+        // Trackpad scroll to pan in doc space
+        NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak coord = context.coordinator] e in
+            guard let coord, let win = host.window, e.window == win else { return e }
+            Task { @MainActor in
+                let s = max(0.0001, coord.parent.zoom)
+                coord.parent.translation.x += -e.scrollingDeltaX / s
+                coord.parent.translation.y += -e.scrollingDeltaY / s
+            }
+            return e
+        }
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        if let host = context.coordinator.host {
+            host.rootView = AnyView(content())
+        }
+    }
+}

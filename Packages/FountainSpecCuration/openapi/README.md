@@ -40,6 +40,7 @@ For a repository‑wide index of OpenAPI coverage and adoption status, see [../O
 | Tool Server | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/tool-server.yml](v1/tool-server.yml) |
 | Tools Factory Service | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/tools-factory.yml](v1/tools-factory.yml) |
 | AudioTalk Service | 0.1.0 | Contexter alias Benedikt Eickhoff | [v1/audiotalk.yml](v1/audiotalk.yml) |
+| Instrument Sketch Service (PatchBay) | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/patchbay.yml](v1/patchbay.yml) |
 
 ## Coverage Status
 

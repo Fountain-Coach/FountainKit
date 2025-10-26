@@ -31,6 +31,7 @@ final class CenteringClipView: NSClipView {
 
 struct ZoomScrollView<Content: View>: NSViewRepresentable {
     var contentSize: CGSize
+    var fitRect: CGRect? = nil
     var fitToVisible: Bool
     var minZoom: CGFloat = 0.25
     var maxZoom: CGFloat = 4.0
@@ -78,7 +79,32 @@ struct ZoomScrollView<Content: View>: NSViewRepresentable {
                 let sy = vis.height / max(1, docSize.height)
                 let m = max(parent.minZoom, min(parent.maxZoom, min(sx, sy)))
                 sv.setMagnification(m, centeredAt: CGPoint(x: vis.width/2, y: vis.height/2))
+                // Center the document after fit
+                centerDocument(sv)
             }
+        }
+
+        func centerDocument(_ sv: NSScrollView) {
+            guard let doc = sv.documentView else { return }
+            let docSize = doc.bounds.size
+            let clip = sv.contentView.bounds.size
+            let ox = max(0, (docSize.width - clip.width) / 2)
+            let oy = max(0, (docSize.height - clip.height) / 2)
+            sv.contentView.setBoundsOrigin(NSPoint(x: ox, y: oy))
+            sv.reflectScrolledClipView(sv.contentView)
+        }
+
+        func fit(_ rect: CGRect, in sv: NSScrollView) {
+            let clip = sv.contentView.bounds.size
+            let sx = clip.width / max(1, rect.width)
+            let sy = clip.height / max(1, rect.height)
+            let m = max(parent.minZoom, min(parent.maxZoom, min(sx, sy)))
+            let center = CGPoint(x: rect.midX, y: rect.midY)
+            sv.setMagnification(m, centeredAt: CGPoint(x: clip.width/2, y: clip.height/2))
+            let ox = max(0, center.x - clip.width/(2*m))
+            let oy = max(0, center.y - clip.height/(2*m))
+            sv.contentView.setBoundsOrigin(NSPoint(x: ox, y: oy))
+            sv.reflectScrolledClipView(sv.contentView)
         }
     }
 
@@ -112,11 +138,16 @@ struct ZoomScrollView<Content: View>: NSViewRepresentable {
         let dbl = NSClickGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleDoubleClick(_:)))
         dbl.numberOfClicksRequired = 2
         scroll.contentView.addGestureRecognizer(dbl)
-        // Initial fit (once)
+        // Initial fit (once) and center
         DispatchQueue.main.async {
-            updateMagnification(scroll, fit: fitToVisible)
+            if let rect = fitRect {
+                context.coordinator.fit(rect, in: scroll)
+            } else {
+                updateMagnification(scroll, fit: fitToVisible)
+            }
             context.coordinator.didFit = fitToVisible
             context.coordinator.lastSize = contentSize
+            context.coordinator.centerDocument(scroll)
         }
         // Spacebar temporary pan (post notifications)
         context.coordinator.keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { e in
@@ -153,9 +184,11 @@ struct ZoomScrollView<Content: View>: NSViewRepresentable {
         // or when content size changed.
         if fitToVisible {
             if context.coordinator.didFit == false || context.coordinator.lastSize != contentSize {
-                updateMagnification(scroll, fit: true)
+                if let rect = fitRect { context.coordinator.fit(rect, in: scroll) }
+                else { updateMagnification(scroll, fit: true) }
                 context.coordinator.didFit = true
                 context.coordinator.lastSize = contentSize
+                context.coordinator.centerDocument(scroll)
             }
         } else {
             context.coordinator.didFit = false

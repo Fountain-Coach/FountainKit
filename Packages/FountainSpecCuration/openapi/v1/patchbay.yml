@@ -1,0 +1,700 @@
+openapi: 3.1.0
+info:
+  title: PatchBay Service API
+  version: 1.0.0
+  description: |
+    CI/PE‑first instrument sketch service for graph authoring and export.
+    - Canvas: doc space with zoom/pan/grid per QC tradition (fit, actual size, snap, notes).
+    - Nodes are MIDI 2.0 instruments (endpoints). Each exposes a Property Exchange (PE) schema.
+    - Ports are instrument properties (PE). Links represent either property↔property sync or UMP→property mappings.
+    - Auto‑noodling suggests links by intersecting PE properties and common UMP→property heuristics (CC/Note/PB).
+servers:
+  - url: http://localhost:7090
+    description: Local development
+tags:
+  - name: Canvas
+  - name: Instruments
+  - name: Links
+  - name: Discovery
+  - name: Suggest
+  - name: Export
+  - name: Import
+  - name: Store
+  - name: Corpus
+  - name: Admin
+paths:
+  /health:
+    get:
+      tags: [Canvas]
+      operationId: getHealth
+      x-fountain.visibility: public
+      x-fountain.reason: health check for operator UIs
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [ok] }
+
+  /canvas:
+    get:
+      tags: [Canvas]
+      operationId: getCanvas
+      x-fountain.visibility: public
+      x-fountain.reason: render and gesture controls
+      x-fountain.allow-as-tool: true
+      responses:
+        '200': { description: Canvas state, content: { application/json: { schema: { $ref: '#/components/schemas/CanvasState' } } } }
+    patch:
+      tags: [Canvas]
+      operationId: patchCanvas
+      x-fountain.visibility: public
+      x-fountain.reason: tweak grid/auto-scale/theme
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CanvasPatch' }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/CanvasState' } } } }
+
+  /canvas/zoom/fit:
+    post:
+      tags: [Canvas]
+      operationId: zoomFit
+      x-fountain.visibility: public
+      x-fountain.reason: QC-style fit to view
+      x-fountain.allow-as-tool: true
+      responses: { '204': { description: Fitted } }
+
+  /canvas/zoom/actual:
+    post:
+      tags: [Canvas]
+      operationId: zoomActual
+      x-fountain.visibility: public
+      x-fountain.reason: 100% zoom (optionally anchored)
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                viewPoint: { $ref: '#/components/schemas/Point' }
+      responses: { '204': { description: Zoom set to 100% } }
+
+  /canvas/zoom:
+    post:
+      tags: [Canvas]
+      operationId: zoomSet
+      x-fountain.visibility: public
+      x-fountain.reason: set zoom scale with optional anchor
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scale]
+              properties:
+                scale: { type: number, minimum: 0.1, maximum: 16 }
+                anchorView: { $ref: '#/components/schemas/Point' }
+      responses: { '204': { description: Zoom applied } }
+
+  /canvas/pan:
+    post:
+      tags: [Canvas]
+      operationId: panBy
+      x-fountain.visibility: public
+      x-fountain.reason: pan document by view delta converted to doc space
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dx, dy]
+              properties:
+                dx: { type: number }
+                dy: { type: number }
+      responses: { '204': { description: Panned } }
+
+  /graph:
+    get:
+      tags: [Export]
+      operationId: getGraph
+      x-fountain.visibility: public
+      x-fountain.reason: fetch entire document graph
+      x-fountain.allow-as-tool: true
+      responses:
+        '200': { description: GraphDoc, content: { application/json: { schema: { $ref: '#/components/schemas/GraphDoc' } } } }
+    put:
+      tags: [Import]
+      operationId: putGraph
+      x-fountain.visibility: public
+      x-fountain.reason: replace entire document graph
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GraphDoc' }
+      responses: { '204': { description: Replaced } }
+
+  /instruments:
+    get:
+      tags: [Instruments]
+      operationId: listInstruments
+      x-fountain.visibility: public
+      x-fountain.reason: list nodes on canvas
+      x-fountain.allow-as-tool: true
+      responses:
+        '200': { description: Instruments, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Instrument' } } } } }
+    post:
+      tags: [Instruments]
+      operationId: createInstrument
+      x-fountain.visibility: public
+      x-fountain.reason: add instrument node by kind and position
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateInstrument' }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Instrument' } } } }
+
+  /instruments/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Instruments]
+      operationId: getInstrument
+      x-fountain.visibility: public
+      x-fountain.reason: fetch instrument by id
+      x-fountain.allow-as-tool: true
+      responses:
+        '200': { description: Instrument, content: { application/json: { schema: { $ref: '#/components/schemas/Instrument' } } } }
+    patch:
+      tags: [Instruments]
+      operationId: patchInstrument
+      x-fountain.visibility: public
+      x-fountain.reason: rename/move/resize instrument
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatchInstrument' }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Instrument' } } } }
+    delete:
+      tags: [Instruments]
+      operationId: deleteInstrument
+      x-fountain.visibility: public
+      x-fountain.reason: remove instrument node
+      x-fountain.allow-as-tool: true
+      responses: { '204': { description: Deleted } }
+
+  /instruments/{id}/schema:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Instruments]
+      operationId: getInstrumentSchema
+      x-fountain.visibility: public
+      x-fountain.reason: PE property schema for this instrument
+      x-fountain.allow-as-tool: true
+      responses:
+        '200': { description: Property schema, content: { application/json: { schema: { $ref: '#/components/schemas/PropertySchema' } } } }
+
+  /links:
+    get:
+      tags: [Links]
+      operationId: listLinks
+      x-fountain.visibility: public
+      x-fountain.reason: list links (property↔property or UMP→property)
+      x-fountain.allow-as-tool: true
+      responses:
+        '200': { description: Links, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Link' } } } } }
+    post:
+      tags: [Links]
+      operationId: createLink
+      x-fountain.visibility: public
+      x-fountain.reason: create a link (property sync or UMP mapping)
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateLink' }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Link' } } } }
+
+  /links/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    delete:
+      tags: [Links]
+      operationId: deleteLink
+      x-fountain.visibility: public
+      x-fountain.reason: remove link
+      x-fountain.allow-as-tool: true
+      responses: { '204': { description: Deleted } }
+
+  /ci/endpoints:
+    get:
+      tags: [Discovery]
+      operationId: listDiscoveredEndpoints
+      x-fountain.visibility: public
+      x-fountain.reason: MIDI‑CI discovery snapshot for auto‑noodling
+      x-fountain.allow-as-tool: true
+      responses:
+        '200': { description: Discovered endpoints, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/DiscoveredEndpoint' } } } } }
+
+  /ci/endpoints/{id}/schema:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Discovery]
+      operationId: getDiscoveredEndpointSchema
+      x-fountain.visibility: public
+      x-fountain.reason: PE property schema for a discovered endpoint
+      x-fountain.allow-as-tool: true
+      responses:
+        '200': { description: Property schema, content: { application/json: { schema: { $ref: '#/components/schemas/PropertySchema' } } } }
+
+  /graph/suggest:
+    post:
+      tags: [Suggest]
+      operationId: suggestLinks
+      x-fountain.visibility: public
+      x-fountain.reason: auto‑noodle suggestions from CI/PE + heuristics
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nodeIds: { type: array, items: { type: string } }
+                includeUMP: { type: boolean, default: true }
+      responses:
+        '200': { description: Suggestions, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/SuggestedLink' } } } } }
+
+  /export/json:
+    get:
+      tags: [Export]
+      operationId: exportJSON
+      x-fountain.visibility: public
+      x-fountain.reason: serialize graph to JSON
+      x-fountain.allow-as-tool: true
+      responses: { '200': { description: JSON graph, content: { application/json: { schema: { $ref: '#/components/schemas/GraphDoc' } } } } }
+
+  /export/dsl:
+    get:
+      tags: [Export]
+      operationId: exportDSL
+      x-fountain.visibility: public
+      x-fountain.reason: serialize graph to human‑readable DSL
+      x-fountain.allow-as-tool: true
+      responses: { '200': { description: DSL text, content: { text/plain: { schema: { type: string } } } } }
+
+  /import/json:
+    post:
+      tags: [Import]
+      operationId: importJSON
+      x-fountain.visibility: public
+      x-fountain.reason: load graph from JSON
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/GraphDoc' } } }
+      responses: { '204': { description: Imported } }
+
+  /import/dsl:
+    post:
+      tags: [Import]
+      operationId: importDSL
+      x-fountain.visibility: public
+      x-fountain.reason: load graph from DSL
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content: { text/plain: { schema: { type: string } } }
+      responses: { '204': { description: Imported } }
+
+  # Store (FountainStore backing; this service may proxy/persist)
+  /store/graphs:
+    get:
+      tags: [Store]
+      operationId: listStoredGraphs
+      x-fountain.visibility: internal
+      x-fountain.reason: persistence listing for operator and CI
+      x-fountain.allow-as-tool: false
+      responses:
+        '200': { description: Stored graphs, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/StoredGraph' } } } } }
+  /store/graphs/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Store]
+      operationId: getStoredGraph
+      x-fountain.visibility: internal
+      x-fountain.reason: fetch a saved graph by id
+      x-fountain.allow-as-tool: false
+      responses:
+        '200': { description: Stored Graph, content: { application/json: { schema: { $ref: '#/components/schemas/StoredGraph' } } } }
+    put:
+      tags: [Store]
+      operationId: putStoredGraph
+      x-fountain.visibility: internal
+      x-fountain.reason: upsert a stored graph
+      x-fountain.allow-as-tool: false
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/StoredGraph' } } }
+      responses: { '204': { description: Upserted } }
+
+  # Corpus awareness (curation + Tools Factory integration)
+  /corpus/snapshot:
+    post:
+      tags: [Corpus]
+      operationId: createCorpusSnapshot
+      x-fountain.visibility: internal
+      x-fountain.reason: export an AI‑readable snapshot of instruments, schemas, and links
+      x-fountain.allow-as-tool: false
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                includeSchemas: { type: boolean, default: true }
+                includeMappings: { type: boolean, default: true }
+      responses:
+        '200': { description: Corpus JSON, content: { application/json: { schema: { $ref: '#/components/schemas/CorpusSnapshot' } } } }
+
+  # Admin: Vendor identity & sub‑ID allocation (SecretStore‑backed)
+  /admin/vendor-identity:
+    get:
+      tags: [Admin]
+      operationId: getVendorIdentity
+      x-fountain.visibility: private
+      x-fountain.reason: manage MIDI manufacturer identity and subtree allocation
+      x-fountain.allow-as-tool: false
+      responses:
+        '200': { description: Identity, content: { application/json: { schema: { $ref: '#/components/schemas/VendorIdentity' } } } }
+    put:
+      tags: [Admin]
+      operationId: putVendorIdentity
+      x-fountain.visibility: private
+      x-fountain.reason: set/update vendor identity (stored in SecretStore/Keychain)
+      x-fountain.allow-as-tool: false
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/VendorIdentity' } } }
+      responses: { '204': { description: Updated } }
+  /admin/vendor-identity/allocations:
+    get:
+      tags: [Admin]
+      operationId: listVendorAllocations
+      x-fountain.visibility: private
+      x-fountain.reason: list allocated sub‑IDs for instruments
+      x-fountain.allow-as-tool: false
+      responses:
+        '200': { description: Allocations, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Allocation' } } } } }
+    post:
+      tags: [Admin]
+      operationId: allocateSubId
+      x-fountain.visibility: private
+      x-fountain.reason: allocate a new sub‑ID for an instrument endpoint
+      x-fountain.allow-as-tool: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [instrumentId]
+              properties:
+                instrumentId: { type: string }
+      responses:
+        '201': { description: Allocation, content: { application/json: { schema: { $ref: '#/components/schemas/Allocation' } } } }
+
+components:
+  schemas:
+    Point:
+      type: object
+      required: [x, y]
+      properties: { x: { type: number }, y: { type: number } }
+
+    CanvasTransform:
+      type: object
+      required: [scale, translation]
+      properties:
+        scale: { type: number }
+        translation: { $ref: '#/components/schemas/Point' }
+
+    CanvasState:
+      type: object
+      required: [docWidth, docHeight, gridStep, transform]
+      properties:
+        docWidth: { type: integer, minimum: 1 }
+        docHeight: { type: integer, minimum: 1 }
+        gridStep: { type: integer, minimum: 1 }
+        autoScale: { type: boolean, default: true }
+        theme: { type: string, enum: [light, dark], default: light }
+        transform: { $ref: '#/components/schemas/CanvasTransform' }
+
+    CanvasPatch:
+      type: object
+      properties:
+        gridStep: { type: integer, minimum: 1 }
+        autoScale: { type: boolean }
+        theme: { type: string, enum: [light, dark] }
+
+    InstrumentKind:
+      type: string
+      description: Logical type of instrument represented by the node
+      enum: [mvk.triangle, mvk.quad, external.coremidi]
+
+    InstrumentIdentity:
+      type: object
+      properties:
+        manufacturer: { type: string }
+        product: { type: string }
+        displayName: { type: string }
+        instanceId: { type: string, description: app‑level stable id }
+        muid28: { type: integer, description: MIDI‑CI 28‑bit MUID, minimum: 0, maximum: 268435455 }
+        hasUMPInput: { type: boolean, default: true }
+        hasUMPOutput: { type: boolean, default: true }
+
+    PropertySchema:
+      type: object
+      required: [version, properties]
+      properties:
+        version: { type: integer, minimum: 1 }
+        properties:
+          type: array
+          items:
+            type: object
+            required: [name, type]
+            properties:
+              name: { type: string }
+              type: { type: string, enum: [float, int, bool, string, enum] }
+              min: { type: number }
+              max: { type: number }
+              step: { type: number }
+              default: { oneOf: [ { type: number }, { type: integer }, { type: boolean }, { type: string } ] }
+              enumValues: { type: array, items: { type: string } }
+              aliases: { type: array, items: { type: string } }
+
+    Instrument:
+      type: object
+      required: [id, kind, x, y, w, h, identity, propertySchema]
+      properties:
+        id: { type: string }
+        kind: { $ref: '#/components/schemas/InstrumentKind' }
+        title: { type: string }
+        x: { type: integer }
+        y: { type: integer }
+        w: { type: integer }
+        h: { type: integer }
+        identity: { $ref: '#/components/schemas/InstrumentIdentity' }
+        propertySchema: { $ref: '#/components/schemas/PropertySchema' }
+        propertyDefaults:
+          type: object
+          additionalProperties: { oneOf: [ { type: number }, { type: integer }, { type: boolean }, { type: string } ] }
+
+    CreateInstrument:
+      type: object
+      required: [id, kind, x, y, w, h]
+      properties:
+        id: { type: string }
+        kind: { $ref: '#/components/schemas/InstrumentKind' }
+        title: { type: string }
+        x: { type: integer }
+        y: { type: integer }
+        w: { type: integer }
+        h: { type: integer }
+        identity: { $ref: '#/components/schemas/InstrumentIdentity' }
+
+    PatchInstrument:
+      type: object
+      properties:
+        title: { type: string }
+        x: { type: integer }
+        y: { type: integer }
+        w: { type: integer }
+        h: { type: integer }
+        propertyDefaults:
+          type: object
+          additionalProperties: { oneOf: [ { type: number }, { type: integer }, { type: boolean }, { type: string } ] }
+
+    PropertyRef:
+      type: string
+      description: 'instrumentId.propertyName'
+
+    UMPMessageKind:
+      type: string
+      enum: [noteOn, noteOff, cc, pitchBend]
+
+    UMPSource:
+      type: object
+      required: [endpointId, group, channel, message]
+      properties:
+        endpointId: { type: string, description: Discovered or local instrument endpoint id }
+        group: { type: integer, minimum: 0, maximum: 15 }
+        channel: { type: integer, minimum: 0, maximum: 15 }
+        message: { $ref: '#/components/schemas/UMPMessageKind' }
+        cc: { type: integer, minimum: 0, maximum: 127, description: required when message=cc }
+        note: { type: integer, minimum: 0, maximum: 127, description: optional when message=noteOn/noteOff }
+
+    MappingFunction:
+      type: object
+      description: Maps UMP data (0..1 normalized) to property value
+      properties:
+        scale: { type: number, default: 1.0 }
+        offset: { type: number, default: 0.0 }
+        outMin: { type: number }
+        outMax: { type: number }
+        smoothing: { type: number, description: 0..1 smoothing factor }
+        curve: { type: string, enum: [linear, exp, log], default: linear }
+
+    PropertyLink:
+      type: object
+      required: [from, to]
+      properties:
+        from: { $ref: '#/components/schemas/PropertyRef' }
+        to: { $ref: '#/components/schemas/PropertyRef' }
+        direction: { type: string, enum: [a_to_b, b_to_a, bidirectional], default: a_to_b }
+
+    UMPMapping:
+      type: object
+      required: [source, to]
+      properties:
+        source: { $ref: '#/components/schemas/UMPSource' }
+        to: { $ref: '#/components/schemas/PropertyRef' }
+        map: { $ref: '#/components/schemas/MappingFunction' }
+
+    Link:
+      type: object
+      required: [id, kind]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [property, ump] }
+        property: { $ref: '#/components/schemas/PropertyLink' }
+        ump: { $ref: '#/components/schemas/UMPMapping' }
+
+    CreateLink:
+      type: object
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [property, ump] }
+        property: { $ref: '#/components/schemas/PropertyLink' }
+        ump: { $ref: '#/components/schemas/UMPMapping' }
+
+    SuggestedLink:
+      type: object
+      required: [link, reason]
+      properties:
+        link: { $ref: '#/components/schemas/CreateLink' }
+        reason: { type: string, description: explanation for suggestion }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+
+    Note:
+      type: object
+      required: [id, text, x, y]
+      properties:
+        id: { type: string }
+        text: { type: string }
+        x: { type: integer }
+        y: { type: integer }
+
+    GraphDoc:
+      type: object
+      required: [canvas, instruments, links]
+      properties:
+        canvas:
+          type: object
+          required: [width, height, theme, grid]
+          properties:
+            width: { type: integer }
+            height: { type: integer }
+            theme: { type: string, enum: [light, dark] }
+            grid: { type: integer }
+        instruments: { type: array, items: { $ref: '#/components/schemas/Instrument' } }
+        links: { type: array, items: { $ref: '#/components/schemas/Link' } }
+        notes: { type: array, items: { $ref: '#/components/schemas/Note' } }
+
+    DiscoveredEndpoint:
+      type: object
+      required: [id, identity, propertySchema]
+      properties:
+        id: { type: string }
+        identity: { $ref: '#/components/schemas/InstrumentIdentity' }
+        propertySchema: { $ref: '#/components/schemas/PropertySchema' }
+
+    StoredGraph:
+      type: object
+      required: [id, doc]
+      properties:
+        id: { type: string }
+        doc: { $ref: '#/components/schemas/GraphDoc' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        etag: { type: string }
+
+    VendorIdentity:
+      type: object
+      properties:
+        manufacturerId: { type: string, description: 'Hex or decimal (e.g., 0x7D for developer use)' }
+        familyCode: { type: integer }
+        modelCode: { type: integer }
+        revision: { type: integer }
+        subtreeStrategy: { type: string, enum: [sequential, hash-instanceId], default: sequential }
+
+    Allocation:
+      type: object
+      required: [instrumentId, subId]
+      properties:
+        instrumentId: { type: string }
+        subId: { type: integer, minimum: 0, maximum: 65535 }
+        issuedAt: { type: string, format: date-time }
+
+    CorpusSnapshot:
+      type: object
+      properties:
+        version: { type: integer, default: 1 }
+        instruments: { type: array, items: { $ref: '#/components/schemas/Instrument' } }
+        links: { type: array, items: { $ref: '#/components/schemas/Link' } }
+        vendorIdentity: { $ref: '#/components/schemas/VendorIdentity' }
+        notes: { type: array, items: { $ref: '#/components/schemas/Note' } }
+
+# © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

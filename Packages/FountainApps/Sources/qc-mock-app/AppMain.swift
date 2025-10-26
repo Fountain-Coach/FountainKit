@@ -291,8 +291,10 @@ struct EditorHost: View {
     var toolbarContent: some ToolbarContent {
         ToolbarItemGroup(placement: .automatic) {
             Button {
-                // add node roughly center
-                state.addNode(at: CGPoint(x: 200, y: 160))
+                // Add node at artboard center in doc space
+                let art = state.contentBounds()
+                let center = CGPoint(x: art.midX, y: art.midY)
+                state.addNode(at: center)
             } label: { Label("New Node", systemImage: "square.dashed") }
 
             Button {
@@ -382,8 +384,15 @@ struct EditorCanvas: View {
 
     var body: some View {
         let artboard = state.contentBounds()
-        ZoomScrollView(contentSize: CGSize(width: artboard.width, height: artboard.height), fitToVisible: state.autoScale, zoom: $state.zoom) {
-            CanvasDocumentView(artboard: artboard)
+        // Make a generous square document so the grid fills the center
+        let side = max(artboard.width, artboard.height)
+        let docSide = max(4096.0, side * 4.0)
+        let docSize = CGSize(width: docSide, height: docSide)
+        let padX = max(0, (docSize.width - artboard.width) * 0.5 - artboard.minX)
+        let padY = max(0, (docSize.height - artboard.height) * 0.5 - artboard.minY)
+        let artboardInDoc = CGRect(x: padX, y: padY, width: artboard.width, height: artboard.height)
+        ZoomScrollView(contentSize: docSize, fitRect: artboardInDoc, fitToVisible: state.autoScale, zoom: $state.zoom) {
+            CanvasDocumentView(docSize: docSize, artboard: artboard)
                 .environmentObject(state)
         }
     }
@@ -392,26 +401,34 @@ struct EditorCanvas: View {
 // A doc-space rendering of the canvas content (origin at artboard.topLeft)
 struct CanvasDocumentView: View {
     @EnvironmentObject var state: EditorState
+    var docSize: CGSize
     var artboard: CGRect
     @State private var dragStart: CGPoint? = nil
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            GridBackground(size: CGSize(width: artboard.width, height: artboard.height), grid: CGFloat(max(4, state.doc.canvas.grid)), scale: state.zoom)
+            GridBackground(size: docSize, grid: CGFloat(max(4, state.doc.canvas.grid)), scale: state.zoom)
+            // Center artboard inside doc and map coordinates into doc space
+            let padX = max(0, (docSize.width - artboard.width) * 0.5 - artboard.minX)
+            let padY = max(0, (docSize.height - artboard.height) * 0.5 - artboard.minY)
             // Edges
             ForEach(state.doc.edges) { e in
-                DocEdgeView(edge: e, artboard: artboard)
+                DocEdgeView(edge: e, toDoc: { pt in CGPoint(x: pt.x - artboard.minX + padX, y: pt.y - artboard.minY + padY) })
             }
             // Nodes
             ForEach(state.doc.nodes) { n in
                 NodeView(node: n, selected: state.selection == n.id)
-                    .position(x: CGFloat(n.x - Int(artboard.minX) + n.w/2), y: CGFloat(n.y - Int(artboard.minY) + n.h/2))
+                    .position(x: CGFloat(n.x) - artboard.minX + padX + CGFloat(n.w)/2,
+                              y: CGFloat(n.y) - artboard.minY + padY + CGFloat(n.h)/2)
                     .highPriorityGesture(nodeDragGesture(node: n))
                     .onTapGesture { state.selection = n.id }
             }
+            // Marquee selection
+            MarqueeSelection(docToView: { CGPoint(x: $0.x - artboard.minX + padX, y: $0.y - artboard.minY + padY) })
+                .environmentObject(state)
         }
         .environment(\.canvasTransform, CanvasTransform(scale: state.zoom, translation: .zero))
-        .frame(width: artboard.width, height: artboard.height, alignment: .topLeading)
+        .frame(width: docSize.width, height: docSize.height, alignment: .topLeading)
         .background(Color(NSColor.textBackgroundColor))
     }
 
@@ -456,15 +473,14 @@ struct CanvasDocumentView: View {
 
 struct DocEdgeView: View {
     var edge: QCDocument.Edge
-    var artboard: CGRect
+    var toDoc: (CGPoint) -> CGPoint
     @EnvironmentObject var state: EditorState
     var body: some View {
         Path { p in
             guard let (n1, p1) = lookup(edge.from), let (n2, p2) = lookup(edge.to) else { return }
             var a = state.portPosition(node: n1, port: p1)
             var b = state.portPosition(node: n2, port: p2)
-            a.x -= artboard.minX; a.y -= artboard.minY
-            b.x -= artboard.minX; b.y -= artboard.minY
+            a = toDoc(a); b = toDoc(b)
             let radius: CGFloat = 80
             let c1: CGPoint; let c2: CGPoint
             switch p1.side {
@@ -489,7 +505,8 @@ struct GridBackground: View {
     var size: CGSize; var grid: CGFloat; var scale: CGFloat = 1.0
     var body: some View {
         Canvas { ctx, sz in
-            let W = sz.width, H = sz.height
+            // Draw in document space so geometry preserves aspect; adjust stroke by 1/scale
+            let W = size.width, H = size.height
             let g1 = Color(NSColor.quaternaryLabelColor)
             let g5 = Color(NSColor.tertiaryLabelColor)
             var labels: [(CGPoint, String)] = []
@@ -497,12 +514,13 @@ struct GridBackground: View {
             let majorStepView = minorStepView * 5.0
             let showMinor = minorStepView >= 8.0
             let showLabels = majorStepView >= 12.0
+            let lw = max(0.5, 1.0 / max(scale, 0.0001))
             var i = 0 as Int
             var x: CGFloat = 0
             while x <= W {
                 if showMinor || i % 5 == 0 {
                     var p = Path(); p.move(to: CGPoint(x: x, y: 0)); p.addLine(to: CGPoint(x: x, y: H))
-                    ctx.stroke(p, with: .color((i % 5 == 0) ? g5 : g1), lineWidth: 1)
+                    ctx.stroke(p, with: .color((i % 5 == 0) ? g5 : g1), lineWidth: lw)
                 }
                 if showLabels && i % 5 == 0 { labels.append((CGPoint(x: x+2, y: 10), "\(Int(x))")) }
                 i += 1; x += grid
@@ -511,7 +529,7 @@ struct GridBackground: View {
             while y <= H {
                 if showMinor || i % 5 == 0 {
                     var p = Path(); p.move(to: CGPoint(x: 0, y: y)); p.addLine(to: CGPoint(x: W, y: y))
-                    ctx.stroke(p, with: .color((i % 5 == 0) ? g5 : g1), lineWidth: 1)
+                    ctx.stroke(p, with: .color((i % 5 == 0) ? g5 : g1), lineWidth: lw)
                 }
                 if showLabels && i % 5 == 0 { labels.append((CGPoint(x: 4, y: y-2), "\(Int(y))")) }
                 i += 1; y += grid
@@ -551,6 +569,52 @@ struct PortsView: View {
                 PortDot(port: p, node: node)
             }
         }
+    }
+}
+
+// Drag to select a rectangle and select nodes inside (QC-style marquee)
+struct MarqueeSelection: View {
+    @EnvironmentObject var state: EditorState
+    @State private var start: CGPoint? = nil
+    @State private var current: CGPoint? = nil
+    var docToView: (CGPoint) -> CGPoint
+    var body: some View {
+        let drag = DragGesture(minimumDistance: 6)
+            .onChanged { v in
+                if start == nil { start = v.startLocation }
+                current = v.location
+            }
+            .onEnded { v in
+                guard let s = start, let c = current else { start = nil; current = nil; return }
+                let rect = CGRect(x: min(s.x, c.x), y: min(s.y, c.y), width: abs(c.x - s.x), height: abs(c.y - s.y))
+                // Compute selection in doc space by inverting mapping
+                func viewToDoc(_ p: CGPoint) -> CGPoint {
+                    // Our mapping is linear translation: view = doc - artboard.min + pad
+                    // We cannot invert here easily without extra context; approximate by selecting
+                    // against view-mapped node rects directly.
+                    return p
+                }
+                var selected: String? = nil
+                for n in state.doc.nodes {
+                    let p = docToView(CGPoint(x: CGFloat(n.x), y: CGFloat(n.y)))
+                    let r = CGRect(x: p.x, y: p.y, width: CGFloat(n.w), height: CGFloat(n.h))
+                    if rect.intersects(r) { selected = n.id }
+                }
+                state.selection = selected
+                start = nil; current = nil
+            }
+        ZStack {
+            if let s = start, let c = current {
+                let rect = CGRect(x: min(s.x, c.x), y: min(s.y, c.y), width: abs(c.x - s.x), height: abs(c.y - s.y))
+                Rectangle().stroke(Color.accentColor.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [4,3]))
+                    .background(Rectangle().fill(Color.accentColor.opacity(0.08)))
+                    .frame(width: rect.width, height: rect.height)
+                    .position(x: rect.midX, y: rect.midY)
+                    .allowsHitTesting(false)
+            }
+        }
+        .contentShape(Rectangle())
+        .gesture(drag)
     }
 }
 
@@ -614,17 +678,8 @@ struct Inspector: View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading) {
                 Text("Canvas").font(.headline)
-                Stepper(value: $state.doc.canvas.grid, in: 4...128, step: 4) {
-                    Text("Grid: \(state.doc.canvas.grid)")
-                }
-                .onChange(of: state.doc.canvas.grid) { newValue in
-                    if state.useService {
-                        Task { @MainActor in
-                            do { _ = try await state.client.patchCanvas(gridStep: newValue, autoScale: nil) } catch {}
-                            if let g = try? await state.client.exportJSON() { state.doc = QCDocument.from(g) }
-                        }
-                    }
-                }
+                // No grid size arrows: display only
+                Text("Grid: \(state.doc.canvas.grid)").foregroundColor(.secondary)
             }
             Divider()
             if let sel = state.selection, let i = state.nodeIndex(by: sel) {

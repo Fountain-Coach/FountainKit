@@ -1,5 +1,5 @@
 {
-  "originHash" : "99d377f363ad8cd817d4a476577782fe5a7a6902690cf193fffbdc86cd4dcfd2",
+  "originHash" : "6dc9ba72e4bbc86fc8368e41506922b674cacbcccc9dd21d7dfda799aea2b05c",
   "pins" : [
     {
       "identity" : "async-http-client",
@@ -8,6 +8,15 @@
       "state" : {
         "revision" : "7dc119c7edf3c23f52638faadb89182861dee853",
         "version" : "1.28.0"
+      }
+    },
+    {
+      "identity" : "flow",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/AudioKit/Flow.git",
+      "state" : {
+        "revision" : "c2195aff3772a405655c08f22eb2aafbd77c27af",
+        "version" : "1.0.4"
       }
     },
     {

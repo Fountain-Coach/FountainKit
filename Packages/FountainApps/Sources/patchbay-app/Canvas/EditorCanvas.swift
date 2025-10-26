@@ -366,7 +366,7 @@ struct EditorCanvas: View {
     @State private var marqueeStart: CGPoint? = nil
     @State private var marqueeRect: CGRect? = nil
     @State private var flowPatch: Patch = Patch(nodes: [], wires: [])
-    @State private var flowSelection: Set<Int> = []
+    @State private var flowSelection: Set<NodeIndex> = []
     @State private var didInitialFit: Bool = false
 
     var body: some View {
@@ -394,44 +394,7 @@ struct EditorCanvas: View {
                     let major = PageSpec.mm(vm.gridMajorMM)
                     let m = EdgeInsets(top: PageSpec.mm(vm.marginMM), leading: PageSpec.mm(vm.marginMM), bottom: PageSpec.mm(vm.marginMM), trailing: PageSpec.mm(vm.marginMM))
                     GridBackground(size: docSize, minorStepPoints: minor, majorStepPoints: major, margin: m, scale: vm.zoom, translation: vm.translation)
-                    NodeEditor(patch: $flowPatch, selection: Binding(get: { Set(flowSelection) }, set: { flowSelection = Array($0) as! Set<Int> }))
-                        .onNodeMoved { index, loc in
-                            let g = PageSpec.mm(vm.gridMajorMM)
-                            if let i = vm.nodeIndex(by: vm.nodes[index].id) {
-                                vm.nodes[i].x = Int((round(loc.x / g) * g))
-                                vm.nodes[i].y = Int((round(loc.y / g) * g))
-                            }
-                        }
-                        .onWireAdded { wire in
-                            let srcId = vm.nodes[wire.output.nodeIndex].id
-                            let dstId = vm.nodes[wire.input.nodeIndex].id
-                            let outPorts = vm.nodes[wire.output.nodeIndex].ports.filter { $0.dir == .output }
-                            let inPorts = vm.nodes[wire.input.nodeIndex].ports.filter { $0.dir == .input }
-                            guard wire.output.portIndex < outPorts.count, wire.input.portIndex < inPorts.count else { return }
-                            let fromRef = srcId + "." + outPorts[wire.output.portIndex].id
-                            let toRef = dstId + "." + inPorts[wire.input.portIndex].id
-                            vm.ensureEdge(from: (srcId, outPorts[wire.output.portIndex].id), to: (dstId, inPorts[wire.input.portIndex].id))
-                            vm.transientGlowEdge(fromRef: fromRef, toRef: toRef)
-                            // Best-effort service call if available
-                            DispatchQueue.main.async {
-                                if let app = NSApplication.shared.delegate as? AppDelegate { /* placeholder */ }
-                            }
-                        }
-                        .onWireRemoved { wire in
-                            // Remove from vm
-                            let srcId = vm.nodes[wire.output.nodeIndex].id
-                            let dstId = vm.nodes[wire.input.nodeIndex].id
-                            let outPorts = vm.nodes[wire.output.nodeIndex].ports.filter { $0.dir == .output }
-                            let inPorts = vm.nodes[wire.input.nodeIndex].ports.filter { $0.dir == .input }
-                            guard wire.output.portIndex < outPorts.count, wire.input.portIndex < inPorts.count else { return }
-                            let fromRef = srcId + "." + outPorts[wire.output.portIndex].id
-                            let toRef = dstId + "." + inPorts[wire.input.portIndex].id
-                            vm.edges.removeAll { $0.from == fromRef && $0.to == toRef }
-                        }
-                        .transformChanged { pan, z in
-                            vm.zoom = CGFloat(z)
-                            vm.translation = CGPoint(x: pan.width, y: pan.height)
-                        }
+                    flowEditorOverlay(docSize: docSize)
                         .frame(width: docSize.width, height: docSize.height)
                 }
                 .frame(width: docSize.width, height: docSize.height, alignment: .topLeading)
@@ -501,6 +464,12 @@ struct EditorCanvas: View {
                 vm.zoom = z
                 flowPatch = FlowBridge.toFlowPatch(vm: vm)
             }
+            .onChange(of: vm.nodes) { _ in
+                flowPatch = FlowBridge.toFlowPatch(vm: vm)
+            }
+            .onChange(of: vm.edges) { _ in
+                flowPatch = FlowBridge.toFlowPatch(vm: vm)
+            }
             .onReceive(NotificationCenter.default.publisher(for: .pbDelete)) { _ in
                 if !vm.selected.isEmpty {
                     let ids = vm.selected
@@ -538,6 +507,43 @@ struct EditorCanvas: View {
                 vm.nodes[idx].x = Int((round(x / g) * g))
                 vm.nodes[idx].y = Int((round(y / g) * g))
                 dragStart = nil
+            }
+    }
+
+    @ViewBuilder
+    private func flowEditorOverlay(docSize: CGSize) -> some View {
+        NodeEditor(patch: $flowPatch, selection: $flowSelection)
+            .onNodeMoved { index, loc in
+                let g = PageSpec.mm(vm.gridMajorMM)
+                if let i = vm.nodeIndex(by: vm.nodes[index].id) {
+                    vm.nodes[i].x = Int((round(loc.x / g) * g))
+                    vm.nodes[i].y = Int((round(loc.y / g) * g))
+                }
+            }
+            .onWireAdded { wire in
+                let srcId = vm.nodes[wire.output.nodeIndex].id
+                let dstId = vm.nodes[wire.input.nodeIndex].id
+                let outPorts = vm.nodes[wire.output.nodeIndex].ports.filter { $0.dir == .output }
+                let inPorts = vm.nodes[wire.input.nodeIndex].ports.filter { $0.dir == .input }
+                guard wire.output.portIndex < outPorts.count, wire.input.portIndex < inPorts.count else { return }
+                let fromRef = srcId + "." + outPorts[wire.output.portIndex].id
+                let toRef = dstId + "." + inPorts[wire.input.portIndex].id
+                vm.ensureEdge(from: (srcId, outPorts[wire.output.portIndex].id), to: (dstId, inPorts[wire.input.portIndex].id))
+                vm.transientGlowEdge(fromRef: fromRef, toRef: toRef)
+            }
+            .onWireRemoved { wire in
+                let srcId = vm.nodes[wire.output.nodeIndex].id
+                let dstId = vm.nodes[wire.input.nodeIndex].id
+                let outPorts = vm.nodes[wire.output.nodeIndex].ports.filter { $0.dir == .output }
+                let inPorts = vm.nodes[wire.input.nodeIndex].ports.filter { $0.dir == .input }
+                guard wire.output.portIndex < outPorts.count, wire.input.portIndex < inPorts.count else { return }
+                let fromRef = srcId + "." + outPorts[wire.output.portIndex].id
+                let toRef = dstId + "." + inPorts[wire.input.portIndex].id
+                vm.edges.removeAll { $0.from == fromRef && $0.to == toRef }
+            }
+            .onTransformChanged { pan, z in
+                vm.zoom = CGFloat(z)
+                vm.translation = CGPoint(x: pan.width, y: pan.height)
             }
     }
 }

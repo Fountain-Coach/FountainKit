@@ -2,6 +2,7 @@ import Foundation
 import CoreGraphics
 import Flow
 
+@MainActor
 struct FlowBridge {
     static func portType(from pb: String) -> PortType {
         switch pb { case "ump": return .midi; case "data": return .control; default: return .control }
@@ -40,4 +41,3 @@ struct FlowBridge {
         // Edges are handled via onWireAdded/Removed callbacks instead of full diff here.
     }
 }
-

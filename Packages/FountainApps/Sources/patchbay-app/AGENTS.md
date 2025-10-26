@@ -1,85 +1,46 @@
-## AGENT — patchbay-app (macOS)
+## PatchBay Studio — Agent Guide (macOS)
 
-Purpose
-- PatchBay Studio: a thin SwiftUI client for a typed PatchBay service. Nodes are MIDI 2.0 instruments (CI/PE); edges are typed UMP/property links.
+PatchBay Studio is a visual, deterministic patcher for MIDI 2.0 instruments. The app is a thin SwiftUI client that speaks to a typed PatchBay service over OpenAPI. Instruments (discovered via CI and described by PE) appear as nodes on a canvas; connections are explicit, typed links (property↔property and UMP→property). The goal is to make ideas concrete, inspectable, and repeatable — without mystery glue.
 
-Quick Start
-- Run service: `swift run --package-path Packages/FountainApps patchbay-service-server`
-- Run app: `swift run --package-path Packages/FountainApps patchbay-app`
-- One‑shot bind (smoke): `PATCHBAY_ONESHOT=1 swift run --package-path Packages/FountainApps patchbay-service-server`
+Getting started is simple: start the service, then the app. By default, our dev scripts launch the service as part of the core control plane. If you prefer to run it by hand, you can do that too. The service exposes a small set of endpoints for instruments, graph suggestions, link CRUD, store, and corpus snapshots; the app surfaces these as focused tools in the right‑hand inspector.
 
-Key Features
-- Canvas: grid with scale‑aware decimation, snap‑to‑grid, QC‑style wiring (click output → input), Option fan‑out, double‑click to break.
-- Add nodes: double‑click an instrument in the left list; or use toolbar “Add Node” (adds data ports by default; UMP ports when available).
-- Links inspector: Refresh/Apply/Apply All suggestions (`POST /graph/suggest`); list applied links (GET/DELETE `/links`).
-- Keyboard nudge: arrow keys move selected nodes by one grid step; Option moves 5 steps.
-- Store save/load: save current scene to FountainStore; list and load stored graphs.
+### Quick start
 
-APIs (client copy)
-- Spec: `Sources/patchbay-app/openapi.yaml` (mirrors curated `openapi/v1/patchbay.yml`).
-- Core routes: `/instruments`, `/graph/suggest`, `/links`, `/store/graphs`, `/store/graphs/{id}`, `/corpus/snapshot`, `/admin/vendor-identity`.
+Start everything with logs and readiness checks by running `bash Scripts/dev-up --check`. This brings up the core services, including PatchBay on `PATCHBAY_PORT` (defaults to 7090). Then launch the app with `swift run --package-path Packages/FountainApps patchbay-app`. Prefer to run the service manually? Use `swift run --package-path Packages/FountainApps patchbay-service-server` (it falls back to an ephemeral port if 7090 is busy and prints the bound port). For CI smoke, `PATCHBAY_ONESHOT=1` binds and exits.
 
-Tests (focused)
-- App UI logic: `Tests/PatchBayAppUITests` (grid decimation, fit/center, drag/snap, connect/fan‑out, nudge, snapshots).
-- Service handlers: `Tests/PatchBayServiceTests`.
-- Build per‑target to avoid workspace noise.
+### Using the canvas
 
-## Top‑Down Overview
+The canvas behaves like a modern Quartz Composer workspace: a square artboard with a scale‑aware grid, snap‑to‑grid movement, and QC‑style wiring. Double‑click an instrument in the left pane to add it to the canvas (data ports always; UMP ports when available). To connect nodes, toggle “Connect” in the toolbar, click an output, then an input. Hold Option to fan‑out the same output to multiple inputs. Double‑click an input to break a connection. Arrow keys nudge the selection by one grid step; Option nudges by five.
 
-- Components
-  - Service (OpenAPI): instruments, links, discovery (CI/PE), store, corpus, vendor identity. Path: `Sources/patchbay-service/**`.
-  - App (SwiftUI): canvas/editor, inspector, keyboard, store integration. Path: `Sources/patchbay-app/**`.
-  - Client: `openapi.yaml` + `ServiceClient.swift` generate typed calls for suggest, link CRUD, store GET/PUT, snapshots.
-- Runtime Flow
-  - List instruments → add to canvas → wire ports (typed) → apply suggestions → save/load graphs → snapshot corpus.
-  - GraphDoc = deterministic artifact (ETags via FountainStore).
-- Dev/Test Commands
-  - Build app: `swift build --package-path Packages/FountainApps -c debug --target patchbay-app`
-  - Run tests (target): `swift build --package-path Packages/FountainApps -c debug --target PatchBayAppUITests`
-  - Snapshot tests write candidates to `/tmp/` when baselines are missing.
+### Links, actions, and logs
 
-## Agent Builder Excurse — Learnings and Integration Plan
+The Links tab offers two complementary tools. “Suggestions” retrieves proposed links from the service (CI/PE‑grounded auto‑noodling). You can preview the exact JSON of a proposed link before applying it, or apply all at once (with a confirmation). “Applied Links” lists the current links and lets you delete any. A run log summarizes changes (what ran, a short detail, and a simple diff like `links: 2→3`) so work remains auditable.
 
-- What it is
-  - Declarative agent configuration on top of Responses/Realtime + Actions (OpenAPI/JSON Schema) + Knowledge (files) + Memory.
-  - Typed plan→tool‑call loop with hosted runtime, previews, and policy gates.
-- Building blocks
-  - Instructions, Policies; Actions (OpenAPI/JSON Schema with auth); Knowledge; Structured outputs; Memory; Debug/Preview.
-- Runtime pattern
-  - Stateless or stateful runs; model emits typed tool calls; platform executes and streams results back.
-- Why it feels modern
-  - Typed, auditable tools; one runtime contract; built‑in retrieval and memory; human‑in‑the‑loop by design.
-- Alignment vs PatchBay
-  - Shared typed‑edge philosophy. Agent Builder is declarative and hosted; PatchBay is spatial, real‑time, and deterministic (MIDI 2.0, UMP).
-- Borrow for PatchBay
-  - Actions‑first (keep OpenAPI tight); structured outputs; inline approvals/diffs; explicit tool auth + scoping.
-- Synergy
-  - Register PatchBay as an Action tool for agents (suggest, link CRUD, store); export GraphDoc → agent preset for chat/voice control of the same scene.
-- Near‑term actions
-  - Harden Actions; add Links run‑log with diffs/ETags; snapshot baselines for port‑compat; optional “capabilities” form in Inspector.
-- Bottom line
-  - Use Agent Builder’s declarative, audited model; keep PatchBay’s real‑time, canvas‑first strengths.
+### Saving and loading scenes
 
-## Vision — Why PatchBay Studio
+The Corpus tab includes store integration. You can save the current canvas to FountainStore under a chosen ID, list stored graphs, and load any back into the canvas. Under the hood, the app converts your nodes and edges into a `GraphDoc` and keeps positions, sizes, and links deterministic.
 
-- Why this app
-  - Turn interactive instrument ideas into deterministic, inspectable, automatable graphs. QC ergonomics with MIDI 2.0 CI/PE reality.
-- Value to FountainAI
-  - Spec‑first control surface; deterministic artifacts (ETags, Store, Secrets); shared types across kits; bounded action space for safer AI.
-- Value to AudioTalk
-  - Operator home: wire capture/transform/render; reproducible sessions with journals/anchors; fast iteration via auto‑noodling.
-- Value to LLM workflows
-  - Grounded autonomy (typed instruments/links); deterministic feedback via ETags; compact Corpus for reliable RAG; explainable changes.
-- Engineering guarantees
-  - OpenAPI‑first; generated types; deterministic IO; focused tests; one‑shot service for CI smoke.
-- QC heritage, modernized
-  - AppKit/SwiftUI editor; Metal/CI visuals; MIDI 2.0 I/O; inline editing; clips/prefabs; macros.
-- Business & identity
-  - Vendor identity + sub‑IDs in SecretStore; productizable graphs.
-- Why now / success
-  - Robust operator bay; no spec drift; structured AI collaboration. Success = artists patch quickly, CI is green, diffs explain changes.
-- In one line
-  - PatchBay Studio: deterministic, AI‑assisted, MIDI 2.0‑native patching under OpenAPI control.
+### API surface (client copy)
+
+The app’s OpenAPI document lives at `Sources/patchbay-app/openapi.yaml` and mirrors the curated spec at `Packages/FountainSpecCuration/openapi/v1/patchbay.yml`. Core routes: `/instruments`, `/graph/suggest`, `/links` (GET/POST/DELETE), `/store/graphs` and `/store/graphs/{id}` (GET/PUT), `/corpus/snapshot`, `/admin/vendor-identity`. The service copy is the source of truth during development; the curated spec governs schema reviews.
+
+### Tests
+
+Focused tests live under `Tests/PatchBayAppUITests` and cover grid decimation, fit/center math, drag/snap, connect/fan‑out, keyboard nudge, and image snapshots. When a snapshot baseline is missing, tests write candidates to `/tmp/` for approval. Service handler tests sit under `Tests/PatchBayServiceTests`. To avoid workspace noise, build per‑target while iterating.
+
+## Top‑down overview
+
+The service (OpenAPI) exposes instruments, links, discovery (CI/PE), store, corpus, and vendor identity. It lives under `Sources/patchbay-service/**` and is started automatically by `Scripts/dev-up`. The app (SwiftUI) bundles the canvas/editor, inspector, keyboard handling, and store integration under `Sources/patchbay-app/**`. A local client (`openapi.yaml` + `ServiceClient.swift`) generates typed calls for suggestions, link CRUD, store GET/PUT, and snapshots.
+
+At runtime you typically: list instruments, add them to the canvas, wire ports (typed), apply link suggestions, optionally refine/delete links, save to store, and export a corpus snapshot. The `GraphDoc` is your deterministic artifact (positions, sizes, and links) with ETags handled by FountainStore.
+
+## Agent Builder: what we borrow, what we keep
+
+OpenAI’s Agent Builder shows a clean pattern: declarative, typed actions (OpenAPI/JSON Schema), a single runtime contract (Responses/Realtime), built‑in knowledge/memory, and human‑in‑the‑loop previews. We keep our spatial, real‑time canvas and determinism, but borrow the discipline: actions‑first APIs, structured outputs, explicit approvals, and scoped auth. Two synergy points: register PatchBay as an agent tool (suggest, link CRUD, store) and export a minimal agent preset from a `GraphDoc` so artists can flip between canvas and chat/voice control of the same scene.
+
+## Vision — why it matters
+
+PatchBay turns interactive instrument ideas into deterministic, inspectable graphs. It’s QC ergonomics grounded in MIDI 2.0 reality (CI/PE, UMP), with OpenAPI keeping change under control. For FountainAI, it’s a spec‑first control surface with store‑backed artifacts and secrets‑backed identity; for AudioTalk, it’s the operator’s home where routing and behavior stay reproducible. For LLMs, it narrows the action space to typed, auditable changes and returns explainable diffs. Success looks like fast patching, green CI, and changes you can justify.
 
 ## Vision — Why PatchBay Studio
 

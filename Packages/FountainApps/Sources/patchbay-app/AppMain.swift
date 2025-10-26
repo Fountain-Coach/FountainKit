@@ -32,7 +32,11 @@ struct PatchBayStudioApp: App {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if #available(macOS 14.0, *) { NSApp.activate() } else { NSApp.activate(ignoringOtherApps: true) }
+        // Ensure app becomes active and front-most when launched from Terminal
+        NSApp.activate(ignoringOtherApps: true)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            NSApp.windows.first?.makeKeyAndOrderFront(nil)
+        }
         if ProcessInfo.processInfo.environment["PATCHBAY_WRITE_BASELINES"] == "1" {
             Task { @MainActor in
                 await writeBaselinesAndExit()
@@ -776,6 +780,7 @@ struct AssistantPane: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var vm: EditorVM
     @State private var chatInput: String = "What instruments and links are present?"
+    @FocusState private var chatFocused: Bool
     @State private var expanded: Bool = false
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -804,6 +809,7 @@ struct AssistantPane: View {
                                 .stroke(Color(NSColor.separatorColor), lineWidth: 1)
                         )
                         .animation(.easeInOut(duration: 0.2), value: expanded)
+                        .focused($chatFocused)
                     if chatInput.isEmpty {
                         Text("Ask about this scene…")
                             .foregroundColor(.secondary)
@@ -817,6 +823,10 @@ struct AssistantPane: View {
                     Button(expanded ? "Collapse" : "Expand") { withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() } }
                         .help("Toggle input height (Cmd+Return to send)")
                 }
+            }
+            .onAppear {
+                // Autofocus chat when the app first launches; user can click elsewhere to move focus
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { chatFocused = true }
             }
             Divider().padding(.vertical, 6)
             // Keep quick actions visible

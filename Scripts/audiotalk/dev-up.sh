@@ -22,7 +22,8 @@ for a in "$@"; do
   esac
 done
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# Resolve repo root from this script's location (Scripts/audiotalk → ../..)
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 export FOUNTAIN_SKIP_LAUNCHER_SIG=1
 export AUDIOTALK_PORT=${AUDIOTALK_PORT:-8080}
 export TOOLS_FACTORY_PORT=${TOOLS_FACTORY_PORT:-8011}

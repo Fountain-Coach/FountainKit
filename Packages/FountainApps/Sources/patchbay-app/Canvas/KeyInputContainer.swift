@@ -8,7 +8,9 @@ struct KeyInputContainer<Content: View>: NSViewRepresentable {
     class HostView: NSView {
         var onKey: ((NSEvent) -> Void)?
         weak var host: NSHostingView<AnyView>?
-        override var acceptsFirstResponder: Bool { true }
+        // Do not take focus by default; only after an explicit canvas click.
+        private var wantsFocus: Bool = false
+        override var acceptsFirstResponder: Bool { wantsFocus }
         override func keyDown(with event: NSEvent) {
             // Only intercept navigation keys; let typing go to focused controls (e.g., TextEditor)
             let arrows: Set<UInt16> = [123, 124, 125, 126] // left, right, down, up
@@ -20,8 +22,13 @@ struct KeyInputContainer<Content: View>: NSViewRepresentable {
         }
         override func mouseDown(with event: NSEvent) {
             // Click to focus the canvas, so arrow keys work after a click
+            wantsFocus = true
             window?.makeFirstResponder(self)
             super.mouseDown(with: event)
+        }
+        override func resignFirstResponder() -> Bool {
+            wantsFocus = false
+            return super.resignFirstResponder()
         }
     }
 

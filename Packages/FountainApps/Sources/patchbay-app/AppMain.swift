@@ -282,6 +282,27 @@ final class AppState: ObservableObject {
     }
 
     @MainActor
+    func runAllPlannedSteps() async {
+        guard !plannedSteps.isEmpty else { return }
+        let plannerURL = URL(string: ProcessInfo.processInfo.environment["PLANNER_URL"] ?? "http://127.0.0.1:8003")!
+        let planner = MinimalPlannerClient(baseURL: plannerURL)
+        let req = PlannerPlanExecutionRequest(objective: "assistant-plan", steps: plannedSteps)
+        do {
+            _ = try await planner.execute(req)
+            await refreshLinks()
+            addLog(action: "planner-exec-all", detail: "\(plannedSteps.count) steps", diff: "links: \(links.count)")
+        } catch {
+            chat.append(.init(role: "assistant", text: "Execute error: \(error.localizedDescription)"))
+        }
+    }
+
+    @MainActor
+    func removePlannedStep(idx index: Int) {
+        guard index >= 0 && index < plannedSteps.count else { return }
+        plannedSteps.remove(at: index)
+    }
+
+    @MainActor
     private func execute(actions: [OpenAPIAction], vm: EditorVM) async -> String {
         guard let c = api as? PatchBayClient else { return "No API client bound." }
         var applied: [String] = []
@@ -807,6 +828,10 @@ struct AssistantPane: View {
             if !state.plannedSteps.isEmpty {
                 Divider().padding(.vertical, 6)
                 Text("Planned Steps").font(.headline)
+                HStack(spacing: 8) {
+                    Button("Run All") { Task { await state.runAllPlannedSteps() } }
+                    Button("Clear Plan") { withAnimation { state.plannedSteps.removeAll() } }
+                }
                 ForEach(Array(state.plannedSteps.enumerated()), id: \.offset) { pair in
                     let idx = pair.offset
                     let step = pair.element
@@ -818,7 +843,10 @@ struct AssistantPane: View {
                             }
                         }
                         Spacer()
-                        Button("Run") { Task { await state.runPlannedStep(idx: idx) } }
+                        HStack(spacing: 8) {
+                            Button("Run") { Task { await state.runPlannedStep(idx: idx) } }
+                            Button("Remove") { withAnimation { state.removePlannedStep(idx: idx) } }
+                        }
                     }
                     .padding(6)
                     .background(Color(NSColor.controlBackgroundColor))

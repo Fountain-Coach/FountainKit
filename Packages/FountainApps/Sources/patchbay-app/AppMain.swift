@@ -105,6 +105,8 @@ final class AppState: ObservableObject {
     @Published var runLog: [ActionLogItem] = []
     struct ChatMessage: Identifiable { let id = UUID().uuidString; let role: String; let text: String }
     @Published var chat: [ChatMessage] = []
+    @Published var allowedFunctions: [String] = []
+    @Published var plannedSteps: [PlannerFunctionCall] = []
     let api: PatchBayAPI
     init(api: PatchBayAPI = PatchBayClient()) { self.api = api }
     func refresh() async {
@@ -230,24 +232,52 @@ final class AppState: ObservableObject {
                 return
             }
         }
-        // Planner + FunctionCaller (control plane) — default path
+        // Planner (control plane) — default path
         do {
             let plannerURL = URL(string: ProcessInfo.processInfo.environment["PLANNER_URL"] ?? "http://127.0.0.1:8003")!
             let planner = MinimalPlannerClient(baseURL: plannerURL)
-            let objective = "PatchBay Scene (deterministic)\n\n" + summarize() + "\n\nUser: " + question + "\n\nOnly use registered OpenAPI operationIds (tools factory)."
+            // Discover allowed function_ids from ToolsFactory and include as hint
+            if allowedFunctions.isEmpty {
+                if let tfBase = URL(string: ProcessInfo.processInfo.environment["TOOLS_FACTORY_URL"] ?? "http://127.0.0.1:8011") {
+                    let tf = MinimalToolsFactoryClient(baseURL: tfBase)
+                    if let resp = try? await tf.listTools(page: 1, pageSize: 200), let funcs = resp.functions {
+                        let ids = funcs.filter { f in
+                            (f.http_path?.lowercased().contains("/audiotalk/") ?? false) || (f.http_path?.lowercased().contains("/patchbay/") ?? false)
+                        }.map { $0.function_id }
+                        await MainActor.run { self.allowedFunctions = ids }
+                    }
+                }
+            }
+            let hint = allowedFunctions.isEmpty ? "" : "\nAllowed functions: " + allowedFunctions.joined(separator: ", ")
+            let objective = "PatchBay Scene (deterministic)\n\n" + summarize() + "\n\nUser: " + question + "\n\nOnly use registered OpenAPI operationIds. " + hint
             let plan = try await planner.reason(objective: objective)
-            guard let steps = plan.steps, !steps.isEmpty else {
+            if let steps = plan.steps, !steps.isEmpty {
+                await MainActor.run { self.plannedSteps = steps }
+                chat.append(.init(role: "assistant", text: "Plan with \(steps.count) steps ready. Use Run to apply individual steps."))
+                return
+            } else {
                 chat.append(.init(role: "assistant", text: "No plan returned.\n\n" + summarize()))
                 return
             }
-            let execReq = PlannerPlanExecutionRequest(objective: plan.objective ?? question, steps: steps)
-            _ = try await planner.execute(execReq)
-            await refreshLinks()
-            chat.append(.init(role: "assistant", text: "Executed plan with \(steps.count) steps. Links now: \(links.count)."))
-            return
         } catch {
             chat.append(.init(role: "assistant", text: "Planner error: \(error.localizedDescription)\n\n" + summarize()))
             return
+        }
+    }
+
+    @MainActor
+    func runPlannedStep(idx index: Int) async {
+        guard index >= 0 && index < plannedSteps.count else { return }
+        let plannerURL = URL(string: ProcessInfo.processInfo.environment["PLANNER_URL"] ?? "http://127.0.0.1:8003")!
+        let planner = MinimalPlannerClient(baseURL: plannerURL)
+        let step = plannedSteps[index]
+        let req = PlannerPlanExecutionRequest(objective: "assistant-step", steps: [step])
+        do {
+            _ = try await planner.execute(req)
+            await refreshLinks()
+            addLog(action: "planner-exec-step", detail: step.name, diff: "links: \(links.count)")
+        } catch {
+            chat.append(.init(role: "assistant", text: "Execute error: \(error.localizedDescription)"))
         }
     }
 
@@ -751,6 +781,27 @@ struct AssistantPane: View {
                 Button("Suggestions") { Task { await state.autoNoodle(); state.chat.append(.init(role: "assistant", text: "Fetched suggestions (\(state.suggestions.count)).")) } }
                 Button("Apply All") { Task { await state.applyAllSuggestions() } }
                 Button("Corpus Snapshot") { Task { await state.makeSnapshot(); state.chat.append(.init(role: "assistant", text: state.snapshotSummary)) } }
+            }
+            if !state.plannedSteps.isEmpty {
+                Divider().padding(.vertical, 6)
+                Text("Planned Steps").font(.headline)
+                ForEach(Array(state.plannedSteps.enumerated()), id: \.offset) { pair in
+                    let idx = pair.offset
+                    let step = pair.element
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading) {
+                            Text(step.name).font(.system(.body, design: .monospaced))
+                            if let data = try? JSONEncoder().encode(step.arguments.mapValues { $0 }), let json = String(data: data, encoding: .utf8) {
+                                Text(json).font(.system(.caption2, design: .monospaced)).foregroundStyle(.secondary).lineLimit(3)
+                            }
+                        }
+                        Spacer()
+                        Button("Run") { Task { await state.runPlannedStep(idx: idx) } }
+                    }
+                    .padding(6)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(6)
+                }
             }
         }
     }

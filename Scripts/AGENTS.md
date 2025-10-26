@@ -1,38 +1,18 @@
-# AGENT — Scripts (lifecycle + tooling)
+# AGENT — Scripts (lifecycle and tooling)
 
-Scope: `Scripts/**` — lifecycle scripts, smoke tests, registration helpers, and design tooling.
+The `Scripts/**` tree holds our day‑to‑day tooling: lifecycle scripts that start and stop the control plane, smoke tests used by CI, registration helpers, and design utilities. Treat these as part of the product — they should be safe to run repeatedly, explain themselves with a short `Usage:` section, and never rely on a checked‑in `.env`.
 
-Principles
-- Idempotent and safe: port/PID cleanup before start; LAUNCHER_SIGNATURE from Keychain or default.
-- Keychain‑only secrets policy; do not use `.env` in repo.
+How we write scripts
+Scripts are idempotent and defensive. Before starting servers, we check ports and stale PIDs; when we need a launcher signature, we read it from the Keychain (and fall back to a sane default). Keep to POSIX sh when possible, or bash with `set -euo pipefail`. Tests belong next to the scripts they exercise under `Scripts/tests/**` and are used by CI to bring up the stack and probe readiness/routes.
 
-Testing
-- Add bash smoke tests under `Scripts/tests/**` where feasible.
-- CI smoke uses these scripts to bring up full stack and probe health/routes.
+Where things live
+Design and engraving helpers sit in `Scripts/design/` (the source of truth remains `Design/`). Local hooks live in `Scripts/git-hooks/`. Ad‑hoc bash smoke tests live in `Scripts/tests/`. App‑adjacent helpers (e.g., Core ML model fetch/convert) live under `Scripts/apps/`.
 
-Subdirectories (ownership)
-- `design/` — GUI/engraving assets tooling (SVG ↔ PNG, LilyPond rendering). Source of truth lives in `Design/`.
-- `git-hooks/` — pre-commit and local hooks.
-- `tests/` — ad‑hoc bash smoke tests used locally and referenced by CI.
-- `apps/` — app launchers and app-adjacent helpers (e.g., Core ML model fetch/convert utilities).
+Migration
+New scripts should land in the right subdirectory from day one. When legacy paths are still referenced by external tools or CI, keep a thin wrapper in `Scripts/` that delegates to the canonical location.
 
-Migration plan
-- New scripts should live in an appropriate subdirectory.
-- Keep thin wrappers in `Scripts/` if external tools or CI refer to legacy paths.
+Core ML helpers (apps)
+The converter wrapper `Scripts/apps/coreml-convert.sh` bootstraps `.coremlvenv` and runs a Python entry (`Scripts/apps/coreml_convert.py`) to produce `.mlmodel` files. Examples: `… crepe --saved-model <dir> [--frame 1024]`, `… basicpitch --saved-model <dir>`, `… keras --h5 <file.h5>`, `… tflite --tflite <file.tflite>`. Models default to `Public/Models/` and are git‑ignored.
 
-Maintenance
-- Keep usage/help up to date; prefer POSIX sh or bash with `set -euo pipefail`.
-
-Apps helpers (Core ML)
-- `Scripts/apps/coreml-convert.sh`
-  - Idempotent wrapper that bootstraps `.coremlvenv` and runs Python converter:
-    - CREPE: `Scripts/apps/coreml-convert.sh crepe --saved-model <dir> [--frame 1024] [--out Public/Models/CREPE.mlmodel]`
-    - BasicPitch: `Scripts/apps/coreml-convert.sh basicpitch --saved-model <dir> [--out Public/Models/BasicPitch.mlmodel]`
-    - Keras: `Scripts/apps/coreml-convert.sh keras --h5 <file.h5> [--frame 1024] [--out <path>]`
-    - TFLite: `Scripts/apps/coreml-convert.sh tflite --tflite <file.tflite> [--frame 1024] [--out <path>]`
-  - Python entry lives at `Scripts/apps/coreml_convert.py` (uses coremltools; TF installed for SavedModel/Keras).
-  - Models are written under `Public/Models/` by default and are git-ignored.
-
-Curated OpenAPI validation
-- Validator: `Scripts/validate-curated-specs.sh` ensures curated spec list stays in sync with repo paths.
-- Pre‑commit: run `Scripts/install-git-hooks.sh` once to enforce locally.
+Curated OpenAPI
+Keep the curated spec list in sync with the repo using `Scripts/validate-curated-specs.sh`. Install pre‑commit hooks once via `Scripts/install-git-hooks.sh` to enforce checks locally.

@@ -8,7 +8,9 @@ Build and run the server with SwiftPM. In the control plane, `Scripts/dev-up` st
 - Run service: `swift run --package-path Packages/FountainApps patchbay-service-server`
 - Health: `GET /health` (used by dev-up readiness checks)
 
-Specification lives in `Sources/patchbay-service/openapi.yaml` and mirrors the curated source of truth at `Packages/FountainSpecCuration/openapi/v1/patchbay.yml`. Treat schema changes like code: update the curated spec first, then regenerate and build.
+Specification lives in `Sources/patchbay-service/openapi.yaml` and mirrors the curated source of truth at `Packages/FountainSpecCuration/openapi/v1/patchbay.yml`. Treat schema changes like code: update the curated spec first, then regenerate and build. Keep all instruments behind this single PatchBay document—extend `InstrumentKind`, geometry, or `PropertySchema` components as needed instead of creating per-instrument specs so the server and PatchBay app stay in lock-step.
+
+When adding an instrument, describe its knobs through `PropertySchema`, add or reuse enum cases under `InstrumentKind`, and regenerate with `swift build` so `/instruments` and `/instruments/{id}/schema` surface the payload exactly as the client expects. If an instrument needs external services, integrate them behind PatchBay’s existing routes rather than branching new OpenAPI contracts.
 
 Storage and identity are simple by default. FountainStore is addressed via `FOUNTAINSTORE_DIR` (defaults to `.fountain/store`); the corpus id is `PATCHBAY_CORPUS` (defaults to `patchbay`). Vendor identity (manufacturerId/family/model/revision) is stored with SecretStore under service `FountainAI.PatchBay`, key `VendorIdentity`.
 

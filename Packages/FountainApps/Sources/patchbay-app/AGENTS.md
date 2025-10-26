@@ -26,6 +26,93 @@ Notes
   - App UI logic: `Tests/PatchBayAppUITests` (grid decimation, drag/snap, connect/fan‑out).
   - Run isolated builds/tests in Xcode or build per‑target to avoid cross‑package noise.
 
+## Top‑Down Overview
+
+- Purpose
+  - Visual, deterministic MIDI 2.0 instrument patching (nodes = instruments, edges = UMP/property links) with a thin SwiftUI client for a typed OpenAPI service.
+- Components
+  - Service (OpenAPI): `Sources/patchbay-service/**` — instruments, links, discovery, store, corpus, vendor identity.
+  - App UI (SwiftUI): `Sources/patchbay-app/**` — Canvas (grid, snap, connect), Inspector (Instruments | Links | Vendor | Corpus), keyboard nudge, store save/load.
+  - Client (OpenAPI): `Sources/patchbay-app/openapi.yaml` + `ServiceClient.swift` — suggest links, link CRUD, store GET/PUT, corpus snapshot.
+- Runtime flow
+  - Fetch instruments → add to canvas → connect (typed edges) → manage suggestions/applied links → save/load graphs → snapshot corpus.
+  - Auto‑noodling is grounded in CI/PE; GraphDoc is the deterministic artifact (ETags via FountainStore).
+- Dev/test
+  - Build app: `swift build --package-path Packages/FountainApps -c debug --target patchbay-app`
+  - Run app: `swift run --package-path Packages/FountainApps patchbay-app`
+  - Run service: `swift run --package-path Packages/FountainApps patchbay-service-server`
+  - Focused tests: `swift build --package-path Packages/FountainApps -c debug --target PatchBayAppUITests`
+  - Snapshot tests write candidates to `/tmp/` if baselines are missing.
+
+## Agent Builder Excurse — Learnings and Integration Plan
+
+What It Likely Is
+
+- A declarative “agent definition” layer on top of OpenAI’s latest APIs (Responses, Realtime, Tools/Actions, Files/Knowledge).
+- You configure an agent (instructions, safety/policy gates, tools/actions, knowledge/files, memory/recall), then test and ship it with a hosted runtime.
+- A React/Next.js front end that edits a typed agent spec and a backend that persists it and proxies to the platform APIs for runs, streaming, tool calls, and file search.
+
+Building Blocks
+
+- Instructions: system prompt + role policies (guardrails and style).
+- Tools/Actions: typed endpoints via OpenAPI/JSON Schema (aka “Actions”). Auth is handled (API keys, OAuth) and the platform mediates tool-calls → HTTP.
+- Knowledge: files and snippets stored server-side (vector/file search) exposed as a single “File Search” tool.
+- Structured outputs: enforce JSON schemas so downstream code can trust responses.
+- Memory: per-agent or per-session recall (stateful runs/threads).
+- Debug + Preview: streaming runs, visibility into tool-calls and intermediate states.
+
+Runtime Pattern
+
+- Stateless requests (Responses API) or stateful threads/sessions for multi-turn workflows.
+- The model plans; when it “calls a tool,” the platform emits a tool-call event (with typed args). The UI shows the call; the tool runs; results are fed back as new input; the run continues until completion — all streamable.
+- Safety hooks (moderation/policy) and permission prompts around tool calls when needed (OAuth scopes, sensitive actions).
+
+Why It Feels Modern
+
+- Typed, declarative surface: define capabilities via OpenAPI/JSON Schema, not ad-hoc glue. The editor understands types, shows forms, and validates configs.
+- First-class tools orchestration: tool calls are explicit, inspectable steps. Excellent for debugging and auditing.
+- One runtime contract: everything funnels through a single Responses/Tools abstraction (text, JSON, files, realtime).
+- Built-in knowledge + memory: avoids bespoke RAG scaffolding; you opt-in and get consistent retrieval behavior.
+- Seamless human-in-the-loop: previews, approvals, and streaming logs lower the cost of iteration.
+
+How It Competes (and Aligns) With PatchBay
+
+- Competes on “graph-of-capabilities” UX: Agent Builder is a capability patcher, but textual/declarative, not a spatial canvas. PatchBay is a literal node/edge canvas for instruments and mappings.
+- Shared philosophy: typed edges. In Agent Builder, edges are model→action calls with typed parameters. In PatchBay, edges are UMP/property links with typed ports. Both reject vague glue.
+- Hosting + guardrails vs. on‑device: Agent Builder gives managed infra (auth, policy, previews). PatchBay gives live, local, deterministic control of instruments (MIDI 2.0, Metal views, timelines).
+
+Where PatchBay Wins (Domain Strength)
+
+- Real-time instruments: MIDI 2.0 (PE/CI), UMP mapping, anchored timelines, and visual patching ergonomics. This is beyond “agent config” — it’s performance-grade interactive graphing.
+- Determinism and journal: graphs, ETags, reproducible sessions, UMP events — ideal for audio/composer workflows.
+- Auto‑noodling grounded in device capabilities (CI/PE), not generic function matching.
+
+What We Should Borrow
+
+- Actions-first mindset: treat every PatchBay operation (save graph, suggest, link CRUD, corpus snapshot) as a typed Action. We already have OpenAPI; keep scoping and schemas tight.
+- Structured outputs everywhere: keep JSON schemas for suggestions, links, vendor identity, and snapshots — no freeform payloads.
+- Inline preview + approvals: in our Inspector, show “proposed operations” (like Apply Link, Save Graph) and surface diffs/ETags before applying.
+- Tool auth + scoping: if PatchBay invokes external tools (renderers, storage), model them explicitly (OpenAPI + secrets) and scope operations per profile/session.
+
+Synergy: Using Agent Builder With PatchBay
+
+- Register PatchBay’s OpenAPI as an Action tool for an OpenAI Agent:
+  - The agent can Suggest Links, Create/Delete Links, and Save/Load Graphs by calling our service.
+  - The agent becomes a co-pilot in PatchBay, producing deterministic, typed changes the operator can accept.
+- Compile GraphDoc → Agent presets:
+  - A PatchBay scene can export a minimal “agent profile” (instructions + scoped actions) so users can jump between the canvas and a chat/voice agent that manipulates the same scene.
+
+Near-Term Actions For Us
+
+- Harden Actions: ensure PatchBay service spec exposes just-enough endpoints with tight schemas, good errors, and idempotency.
+- UX parity for “approvals”: add a mini “run log” in the Links tab that shows which Actions just executed and the diff/ETag.
+- Structured tests: snapshot baselines for port-compatibility coloring and connect flows (we planned this).
+- Optional builder-like form: a small panel that lists “capabilities” (suggest, link, save, load) with typed forms and live try‑it — inspired by Agent Builder, within our domain.
+
+Bottom line
+
+Agent Builder is a typed, managed agent orchestration surface; PatchBay is a typed, visual instrument/mapping surface. They’re complementary — adopt its declarative, audited tool model; keep our real-time, canvas-first strengths.
+
 ## Vision — Why PatchBay Studio
 
 Why This App

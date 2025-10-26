@@ -247,25 +247,56 @@ struct ContentView: View {
                 .padding(12)
                 .navigationSplitViewColumnWidth(min: 260, ideal: 320, max: 460)
         }
-        .task { await state.refresh() }
+        .task {
+            await state.refresh()
+            await state.refreshStore()
+            // Seed a small welcome scene on first open when canvas is empty.
+            if vm.nodes.isEmpty { seedWelcomeScene() }
+        }
         .environmentObject(vm)
     }
 
-    private func seedVM() -> EditorVM {
-        vm.grid = 24
+    private func seedWelcomeScene() {
+        vm.grid = 16
         vm.zoom = 1.0
-        vm.nodes = [
-            PBNode(id: "A", title: "A", x: 60, y: 60, w: 200, h: 120, ports: [
-                .init(id: "out", side: .right, dir: .output),
-                .init(id: "in", side: .left, dir: .input)
-            ]),
-            PBNode(id: "B", title: "B", x: 360, y: 180, w: 220, h: 140, ports: [
-                .init(id: "in", side: .left, dir: .input),
-                .init(id: "out", side: .right, dir: .output)
-            ]),
+        // Nodes
+        let midiIn = PBNode(
+            id: "midiIn",
+            title: "MIDI In",
+            x: 80, y: 80, w: 200, h: 120,
+            ports: [
+                .init(id: "umpOut", side: .right, dir: .output, type: "ump"),
+                .init(id: "out", side: .right, dir: .output, type: "data")
+            ]
+        )
+        let mapper = PBNode(
+            id: "Mapper_1",
+            title: "Mapper",
+            x: 280, y: 120, w: 220, h: 120,
+            ports: [
+                .init(id: "in", side: .left, dir: .input, type: "data"),
+                .init(id: "out", side: .right, dir: .output, type: "data")
+            ]
+        )
+        let instrument = PBNode(
+            id: "Instrument_1",
+            title: "Instrument",
+            x: 540, y: 140, w: 240, h: 140,
+            ports: [
+                .init(id: "umpIn", side: .left, dir: .input, type: "ump"),
+                .init(id: "in", side: .left, dir: .input, type: "data"),
+                .init(id: "out", side: .right, dir: .output, type: "data")
+            ]
+        )
+        vm.nodes = [midiIn, mapper, instrument]
+        // Edges (UMP and property)
+        vm.edges = [
+            PBEdge(from: "midiIn.umpOut", to: "Instrument_1.umpIn"),
+            PBEdge(from: "Mapper_1.out", to: "Instrument_1.in")
         ]
-        vm.edges = [ PBEdge(from: "A.out", to: "B.in") ]
-        return vm
+        vm.selected = []
+        vm.selection = nil
+        state.addLog(action: "welcome-scene", detail: "seeded", diff: "nodes: 0→\(vm.nodes.count)")
     }
 }
 

@@ -245,7 +245,10 @@ let package = Package(
             dependencies: [
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
-                .product(name: "Flow", package: "Flow")
+                .product(name: "Flow", package: "Flow"),
+                .product(name: "FountainAIAdapters", package: "FountainGatewayKit"),
+                .product(name: "LLMGatewayAPI", package: "FountainAPIClients"),
+                .product(name: "ApiClientsCore", package: "FountainAPIClients")
                 // ScoreKit and RulesKit are available in the workspace; we will gradually adopt them in PatchBay.
                 // .product(name: "ScoreKit", package: "ScoreKit"),
                 // .product(name: "RulesKit", package: "RulesKit-SPM")

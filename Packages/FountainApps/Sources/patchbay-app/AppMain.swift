@@ -1,5 +1,8 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import FountainAIAdapters
+import LLMGatewayAPI
+import ApiClientsCore
 
 @main
 struct PatchBayStudioApp: App {
@@ -197,7 +200,65 @@ final class AppState: ObservableObject {
                 }
             }
         }
+        // Optional LLM Assistant via Gateway (feature-flagged)
+        if ProcessInfo.processInfo.environment["PATCHBAY_ASSISTANT_LLM"] == "1" {
+            let base = ProcessInfo.processInfo.environment["GATEWAY_URL"].flatMap(URL.init(string:)) ?? URL(string: "http://127.0.0.1:8080")!
+            let tokenProvider: GatewayChatClient.TokenProvider = { ProcessInfo.processInfo.environment["GATEWAY_TOKEN"] }
+            let client = GatewayChatClient(baseURL: base, tokenProvider: tokenProvider)
+            let model = ProcessInfo.processInfo.environment["GATEWAY_MODEL"] ?? "gpt-4o-mini"
+            let req = GroundedPromptBuilder.makeChatRequest(model: model, userQuestion: question, nodes: vm.nodes, edges: vm.edges)
+            do {
+                let resp = try await client.complete(request: req)
+                // Try function_call first
+                let actions = OpenAPIActionParser.parse(from: resp.functionCall)
+                if !actions.isEmpty {
+                    let applied = await execute(actions: actions, vm: vm)
+                    chat.append(.init(role: "assistant", text: applied))
+                    return
+                }
+                // Fallback to answer text
+                let inferred = OpenAPIActionParser.parse(fromText: resp.answer)
+                if !inferred.isEmpty {
+                    let applied = await execute(actions: inferred, vm: vm)
+                    chat.append(.init(role: "assistant", text: applied))
+                } else {
+                    chat.append(.init(role: "assistant", text: resp.answer))
+                }
+                return
+            } catch {
+                chat.append(.init(role: "assistant", text: "LLM error: \(error.localizedDescription)\n\n" + summarize()))
+                return
+            }
+        }
         chat.append(.init(role: "assistant", text: summarize()))
+    }
+
+    @MainActor
+    private func execute(actions: [OpenAPIAction], vm: EditorVM) async -> String {
+        guard let c = api as? PatchBayClient else { return "No API client bound." }
+        var applied: [String] = []
+        for a in actions {
+            guard a.service == "patchbay-service" else { continue }
+            switch a.operationId {
+            case "createLink":
+                if let body = a.body, let data = try? JSONEncoder().encode(body), let link = try? JSONDecoder().decode(Components.Schemas.CreateLink.self, from: data) {
+                    _ = try? await c.createLink(link)
+                    await refreshLinks()
+                    if link.kind == .property, let p = link.property, let from = p.from, let to = p.to {
+                        _ = vm.ensureEdge(from: (from.split(separator: ".").first.map(String.init) ?? "", from.split(separator: ".").last.map(String.init) ?? ""),
+                                          to: (to.split(separator: ".").first.map(String.init) ?? "", to.split(separator: ".").last.map(String.init) ?? ""))
+                        vm.transientGlowEdge(fromRef: from, toRef: to)
+                    }
+                    applied.append("createLink")
+                }
+            case "deleteLink":
+                if let id = a.pathParams?["id"] { try? await c.deleteLink(id: id); await refreshLinks(); applied.append("deleteLink:\(id)") }
+            default:
+                continue
+            }
+        }
+        if applied.isEmpty { return "No applicable actions found." }
+        return "Applied actions: \(applied.joined(separator: ", "))."
     }
 }
 

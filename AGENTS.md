@@ -227,6 +227,14 @@ Visual Regression (Snapshot) Tests — mandatory
 - Behavior: on mismatch, tests fail and emit a heatmap diff + numeric report under `.fountain/artifacts/` (CI attaches artifacts). No manual approvals required in PRs.
 - Commands: build tests per target (e.g., `swift build --package-path Packages/FountainApps -c debug --target PatchBayAppUITests`). CI runs these by default; failures block merges.
 
+GUI Code of Conduct — Self‑Healing Visual Tests (Default)
+- Default mode: The agent owns visual correctness. Every GUI change ships with goldens and strict snapshot tests. If a snapshot drifts, the change is blocked until fixed.
+- Self‑healing loop: The snapshot harness writes candidate images to `.fountain/artifacts/` when a baseline is missing. The agent runs `Scripts/ci/ui-rebaseline.sh` to rebaseline (no human approvals) only after numeric invariants pass (fit/center, grid spacing).
+- Numeric invariants: tests must cover fit‑to‑page centering, page‑size/orientation refit, grid mm×zoom pixel spacing, and pane width policies. These live next to the snapshot tests and fail independently.
+- Strict CI: A dedicated job runs `Scripts/ci/ui-snap.sh` (and later the ScoreKit/RulesKit gates). Any visual drift or invariant failure blocks merges and uploads heatmaps + reports.
+- Typical sizes: We maintain golden baselines for 1440×900 and 1280×800 (portrait/landscape) for macOS. The agent adds more sizes as needed and keeps them updated.
+- No approvals from operators: The agent generates, reviews, and commits goldens; maintainers review the PR as usual.
+
 Milestones (high level)
 1) M0 Stabilize/Trim: Full stack default; Control unified; curated specs.
 2) M1 Context Hub: right‑pane segmented (OpenAPI | Routes | Services | Persona | Memory).

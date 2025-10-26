@@ -10,13 +10,18 @@ struct KeyInputContainer<Content: View>: NSViewRepresentable {
         weak var host: NSHostingView<AnyView>?
         override var acceptsFirstResponder: Bool { true }
         override func keyDown(with event: NSEvent) {
-            onKey?(event)
-        }
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            DispatchQueue.main.async { [weak self] in
-                _ = self?.window?.makeFirstResponder(self)
+            // Only intercept navigation keys; let typing go to focused controls (e.g., TextEditor)
+            let arrows: Set<UInt16> = [123, 124, 125, 126] // left, right, down, up
+            if arrows.contains(event.keyCode) {
+                onKey?(event)
+            } else {
+                super.keyDown(with: event)
             }
+        }
+        override func mouseDown(with event: NSEvent) {
+            // Click to focus the canvas, so arrow keys work after a click
+            window?.makeFirstResponder(self)
+            super.mouseDown(with: event)
         }
     }
 
@@ -42,4 +47,3 @@ struct KeyInputContainer<Content: View>: NSViewRepresentable {
         }
     }
 }
-

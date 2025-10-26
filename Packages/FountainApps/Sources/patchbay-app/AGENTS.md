@@ -94,7 +94,7 @@ Business and Identity
 
 Why This Matters Now
 
-- AudioTalk needs a dug‑free, robust bay to prove the promise of QC’s UX with modern MIDI 2.0 and AI. We’ve repeatedly hit friction getting there; this is the systematized answer.
+- AudioTalk needs a bug‑free, robust bay to prove the promise of QC’s UX with modern MIDI 2.0 and AI. We’ve repeatedly hit friction getting there; this is the systematized answer.
 - Spec drift kills velocity. By putting the app behind APIs and leaning on generation, we converge on one rhythm: edit spec → build → run → test → snapshot.
 - LLMs need constraining structure to shine. PatchBay is that structure: small, typed, introspectable — perfect for co‑creation without chaos.
 

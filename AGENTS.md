@@ -22,6 +22,34 @@ Welcome to FountainKit, the modular SwiftPM workspace for the Fountain Coach org
 - Scripts lifecycle — `Scripts/AGENTS.md`.
 - Composer Studio design — `Design/COMPOSER_STUDIO_STORY.md` (full story + SVG prompts). SVGs live in `Design/` and are the UI source of truth.
 
+## Documentation Tone & Style (for humans and LLMs)
+
+Write for a human first, with just enough structure for machines. Use short paragraphs to carry the story; reserve lists for commands, routes, and tight checklists. Prefer “why” before “how”, then link to the exact files and commands.
+
+Principles
+- Narrative first: open each section with 1–3 sentences explaining context and intent.
+- Lists sparingly: switch to bullets only when a reader needs a compact scan (e.g., commands, paths, API routes). Keep lists short.
+- Stable anchors: always include real file paths or products so editors can jump there (e.g., `Packages/FountainApps/Sources/…`, `Scripts/dev-up`).
+- Commands inline: prefer a single line with backticks over fenced blocks unless a snippet is multi‑line.
+- Avoid duplication: if a concept is canonical elsewhere, link or reference the path rather than restating.
+- LLM‑friendly detail: keep identifiers, routes, and schemas accurate and consistent; favor canonical names over prose synonyms.
+
+Format conventions
+- Headings are few and descriptive. Paragraphs come first; lists follow only when they improve scan‑ability.
+- Use backticks for commands, file paths, and code identifiers. Don’t over‑format.
+- When listing API routes, keep them to one line each and group by feature.
+- Prefer “What/Why/How/Where” ordering in docs: what it is, why it exists, how to use it, where the code lives.
+
+Successive rewrites (no content loss)
+We will evolve existing AGENTS.md files toward this style without losing substance. Rewrite order:
+1) `Packages/FountainApps/Sources/patchbay-service/AGENTS.md`
+2) `Scripts/AGENTS.md` and `Scripts/dev/**/AGENTS.md`
+3) `Packages/FountainSpecCuration/openapi/AGENTS.md`
+4) `Packages/FountainApps/Sources/FountainLauncherUI/AGENTS.md`
+5) Remaining package AGENTS in descending usage.
+
+Process per file: capture intent in a brief opening paragraph; collapse long lists into paragraphs; keep essential commands and routes as a short list; remove repetition by linking to source files; preserve all technical facts.
+
 ## Scripts — Spec and Structure (authoritative)
 - Canonical locations live under `Scripts/<area>/` with a scoped AGENTS.md per area. Root‑level paths remain as thin wrappers for compatibility.
 - Areas (current):

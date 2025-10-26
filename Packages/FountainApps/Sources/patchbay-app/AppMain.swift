@@ -30,6 +30,64 @@ struct PatchBayStudioApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         if #available(macOS 14.0, *) { NSApp.activate() } else { NSApp.activate(ignoringOtherApps: true) }
+        if ProcessInfo.processInfo.environment["PATCHBAY_WRITE_BASELINES"] == "1" {
+            Task { @MainActor in
+                await writeBaselinesAndExit()
+            }
+        }
+    }
+
+    @MainActor
+    private func writeBaselinesAndExit() async {
+        let fm = FileManager.default
+        let cwd = URL(fileURLWithPath: fm.currentDirectoryPath)
+        let baseDir = cwd.appendingPathComponent(".fountain/artifacts", isDirectory: true)
+        try? fm.createDirectory(at: baseDir, withIntermediateDirectories: true)
+        // initial-open 1440x900
+        let vm = EditorVM()
+        vm.pageSize = PageSpec.a4Portrait
+        let state = AppState()
+        let content = ContentView(state: state).environmentObject(vm)
+        let host = NSHostingView(rootView: content)
+        host.frame = NSRect(x: 0, y: 0, width: 1440, height: 900)
+        host.layoutSubtreeIfNeeded()
+        try? await Task.sleep(nanoseconds: 60_000_000)
+        if let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) { host.cacheDisplay(in: host.bounds, to: rep)
+            let img = NSImage(size: host.bounds.size); img.addRepresentation(rep)
+            let out = baseDir.appendingPathComponent("patchbay-initial-open.tiff")
+            try? img.tiffRepresentation?.write(to: out)
+            fputs("[snap] wrote \(out.path)\n", stderr)
+        }
+        // initial-open 1280x800 (portrait)
+        let vmP = EditorVM(); vmP.pageSize = PageSpec.a4Portrait
+        let contentP = ContentView(state: AppState()).environmentObject(vmP)
+        let hostP = NSHostingView(rootView: contentP)
+        hostP.frame = NSRect(x: 0, y: 0, width: 1280, height: 800)
+        hostP.layoutSubtreeIfNeeded()
+        if let repP = hostP.bitmapImageRepForCachingDisplay(in: hostP.bounds) {
+            hostP.cacheDisplay(in: hostP.bounds, to: repP)
+            let imgP = NSImage(size: hostP.bounds.size); imgP.addRepresentation(repP)
+            let outP = baseDir.appendingPathComponent("patchbay-initial-open-1280x800-portrait.tiff")
+            try? imgP.tiffRepresentation?.write(to: outP)
+            fputs("[snap] wrote \\ (outP.path)\n", stderr)
+        }
+        // basic-canvas 640x480
+        let vm2 = EditorVM(); vm2.grid = 24; vm2.zoom = 1.0
+        vm2.nodes = [
+            PBNode(id: "A", title: "A", x: 60, y: 60, w: 200, h: 120, ports: [.init(id: "out", side: .right, dir: .output)]),
+            PBNode(id: "B", title: "B", x: 360, y: 180, w: 220, h: 140, ports: [.init(id: "in", side: .left, dir: .input)])
+        ]
+        vm2.edges = [ PBEdge(from: "A.out", to: "B.in") ]
+        let cHost = NSHostingView(rootView: EditorCanvas().environmentObject(vm2))
+        cHost.frame = NSRect(x: 0, y: 0, width: 640, height: 480)
+        cHost.layoutSubtreeIfNeeded()
+        if let rep2 = cHost.bitmapImageRepForCachingDisplay(in: cHost.bounds) { cHost.cacheDisplay(in: cHost.bounds, to: rep2)
+            let img2 = NSImage(size: cHost.bounds.size); img2.addRepresentation(rep2)
+            let out2 = baseDir.appendingPathComponent("patchbay-basic-canvas.tiff")
+            try? img2.tiffRepresentation?.write(to: out2)
+            fputs("[snap] wrote \(out2.path)\n", stderr)
+        }
+        exit(0)
     }
 }
 
@@ -572,8 +630,8 @@ extension InspectorPane {
     struct RuleCheck { let title: String; let ok: Bool; let detail: String }
     func computeRules() -> [RuleCheck] {
         var out: [RuleCheck] = []
-        // PageFit via facade
-        let view = NSScreen.main?.frame.size ?? CGSize(width: 1440, height: 900)
+        // PageFit via facade (use actual center pane size when available)
+        let view = vm.lastViewSize == .zero ? (NSScreen.main?.frame.size ?? CGSize(width: 1440, height: 900)) : vm.lastViewSize
         let pf = RulesKitFacade.checkPageFit(.init(view: view, page: vm.pageSize, zoom: vm.zoom, translation: vm.translation))
         out.append(.init(title: "PageFit(zoom,tx,ty)", ok: pf.ok, detail: pf.detail))
         // MarginWithinPage via facade

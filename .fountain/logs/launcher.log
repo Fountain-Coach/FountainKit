@@ -1,12 +1,12 @@
 [launcher] Starting Fountain services from /Users/benedikteickhoff/Development/Github-Desktop/FountainKit
 [0/3] Compiling _NumericsShims _NumericsShims.c
-[1/11] Compiling writer.c
-[2/11] Compiling reader.c
-[3/11] Compiling parser.c
-[4/11] Compiling api.c
-[5/11] Compiling emitter.c
-[6/11] Compiling scanner.c
-[7/11] Write swift-version--58304C5D6DBC2206.txt
+[1/11] Compiling reader.c
+[2/11] Compiling parser.c
+[3/11] Compiling api.c
+[4/11] Compiling emitter.c
+[5/11] Compiling scanner.c
+[6/11] Write swift-version--58304C5D6DBC2206.txt
+[7/11] Compiling writer.c
 [8/11] Write Objects.LinkFileList
 [9/11] Linking swift-openapi-generator-tool
 [10/11] Applying swift-openapi-generator-tool
@@ -19,7 +19,9 @@ warning: 'fountainapps': found 1 file(s) which are unhandled; explicitly declare
 [0/1] Planning build
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'local-agent-manager' complete! (15.41s)
+Build of product 'local-agent-manager' complete! (14.61s)
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
 Build of product 'local-agent-manager' complete! (0.44s)
+failed to become healthy after 30s; attempting fallback mock-localagent
+mock-localagent started pid 39640

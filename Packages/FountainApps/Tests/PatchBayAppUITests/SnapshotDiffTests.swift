@@ -99,6 +99,34 @@ final class SnapshotDiffTests: XCTestCase {
         XCTAssertLessThan(diff, 5.0, "Initial open snapshot RMSE too large: \(diff)")
     }
 
+    func testInitialOpen1280x800PortraitOrWrites() throws {
+        let bundle = Bundle.module
+        guard let baselineURL = bundle.url(forResource: "initial-open-1280x800-portrait", withExtension: "tiff") else {
+            let vm = EditorVM(); vm.pageSize = PageSpec.a4Portrait
+            let view = ContentView(state: AppState()).environmentObject(vm)
+            let host = NSHostingView(rootView: view); host.frame = NSRect(x: 0, y: 0, width: 1280, height: 800)
+            host.layoutSubtreeIfNeeded()
+            let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds)!
+            host.cacheDisplay(in: host.bounds, to: rep)
+            let img = NSImage(size: host.bounds.size); img.addRepresentation(rep)
+            let out = artifactsDir().appendingPathComponent("patchbay-initial-open-1280x800-portrait.tiff")
+            try? img.tiffRepresentation?.write(to: out)
+            throw XCTSkip("Baseline not found. Wrote candidate: \(out.path)")
+        }
+        let vm = EditorVM(); vm.pageSize = PageSpec.a4Portrait
+        let view = ContentView(state: AppState()).environmentObject(vm)
+        let host = NSHostingView(rootView: view); host.frame = NSRect(x: 0, y: 0, width: 1280, height: 800)
+        host.layoutSubtreeIfNeeded()
+        guard let actual = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { XCTFail("no rep"); return }
+        host.cacheDisplay(in: host.bounds, to: actual)
+        let baseline = NSBitmapImageRep(data: try Data(contentsOf: baselineURL))!
+        let (diff, heatmap) = rmseDiffAndHeatmap(a: baseline, b: actual)
+        if diff > 5.0, let img = heatmap, let data = img.tiffRepresentation {
+            try? data.write(to: artifactsDir().appendingPathComponent("patchbay-initial-open-1280x800-portrait-heatmap.tiff"))
+        }
+        XCTAssertLessThan(diff, 5.0)
+    }
+
     private func rmseDiffAndHeatmap(a: NSBitmapImageRep, b: NSBitmapImageRep) -> (Double, NSImage?) {
         let w = min(a.pixelsWide, b.pixelsWide)
         let h = min(a.pixelsHigh, b.pixelsHigh)

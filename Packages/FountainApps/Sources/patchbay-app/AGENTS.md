@@ -53,6 +53,14 @@ PatchBay is the sketch bay that adopts the same foundations as our engraving sta
 - RulesKit encodes invariant checks (e.g., PageFit, MarginBounds, PaneWidthRange). PatchBay exposes a Rules tab and will call RulesKit for enforcement; CI blocks on failures.
 - AnimationKit will unify timing (connect glow, selection pulse, zoom easing) behind a single, testable DSL.
 
+## Flow adoption (AudioKit)
+
+We embed AudioKit’s Flow NodeEditor as the node/wire editor inside our A4 page.
+- Why: Flow provides a mature, efficient SwiftUI Canvas implementation with proper pan/zoom, marquee selection, node dragging, and typed ports (control/signal/midi/custom).
+- Bridge: `FlowBridge.swift` maps our `EditorVM` nodes/edges ⇄ Flow `Patch`. Node moves snap to the mm grid; wire add/remove call our link service (best‑effort in the first pass).
+- Transforms: we bind Flow’s `transformChanged` to PatchBay’s zoom/translation so the mm grid stays aligned under Flow’s content.
+- Visual regression: existing goldens remain strict. We added goldens for multiple sizes; Flow integration must keep them green.
+
 ## Agent Builder: what we borrow, what we keep
 
 OpenAI’s Agent Builder shows a clean pattern: declarative, typed actions (OpenAPI/JSON Schema), a single runtime contract (Responses/Realtime), built‑in knowledge/memory, and human‑in‑the‑loop previews. We keep our spatial, real‑time canvas and determinism, but borrow the discipline: actions‑first APIs, structured outputs, explicit approvals, and scoped auth. Two synergy points: register PatchBay as an agent tool (suggest, link CRUD, store) and export a minimal agent preset from a `GraphDoc` so artists can flip between canvas and chat/voice control of the same scene.

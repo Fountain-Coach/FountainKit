@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Flow
 import Foundation
 
 enum PBPortSide: String, CaseIterable { case left, right, top, bottom }
@@ -45,6 +46,7 @@ final class EditorVM: ObservableObject {
     @Published var marginMM: CGFloat = 12.0
     @Published var gridMinorMM: CGFloat = 5.0
     @Published var gridMajorMM: CGFloat = 10.0
+    @Published var lastViewSize: CGSize = .zero
 
     func nodeIndex(by id: String) -> Int? { nodes.firstIndex{ $0.id == id } }
     func node(by id: String) -> PBNode? { nodes.first{ $0.id == id } }
@@ -363,18 +365,22 @@ struct EditorCanvas: View {
     @State private var dragStart: CGPoint? = nil
     @State private var marqueeStart: CGPoint? = nil
     @State private var marqueeRect: CGRect? = nil
+    @State private var flowPatch: Patch = Patch(nodes: [], wires: [])
+    @State private var flowSelection: Set<Int> = []
     @State private var didInitialFit: Bool = false
 
     var body: some View {
         GeometryReader { geo in
             // Fixed A4 page as the canvas (portrait by default)
             let docSize = vm.pageSize
-            let padX = (geo.size.width - docSize.width) * 0.5
-            let padY = (geo.size.height - docSize.height) * 0.5
+            // Center the scaled page within the center pane
+            let scaledW = vm.zoom * docSize.width
+            let scaledH = vm.zoom * docSize.height
+            let padX = (geo.size.width - scaledW) * 0.5
+            let padY = (geo.size.height - scaledH) * 0.5
             let transform = CanvasTransform(scale: vm.zoom, translation: vm.translation)
             let toView: (CGPoint)->CGPoint = { p in
-                let v = transform.docToView(p)
-                return CGPoint(x: v.x + padX, y: v.y + padY)
+                return transform.docToView(p)
             }
             // Convert view point to document point reserved for later features
             // let toDoc: (CGPoint)->CGPoint = { p in
@@ -388,60 +394,45 @@ struct EditorCanvas: View {
                     let major = PageSpec.mm(vm.gridMajorMM)
                     let m = EdgeInsets(top: PageSpec.mm(vm.marginMM), leading: PageSpec.mm(vm.marginMM), bottom: PageSpec.mm(vm.marginMM), trailing: PageSpec.mm(vm.marginMM))
                     GridBackground(size: docSize, minorStepPoints: minor, majorStepPoints: major, margin: m, scale: vm.zoom, translation: vm.translation)
-                    ForEach(vm.edges) { e in BezierEdgeView(edge: e, toDoc: toView).environmentObject(vm) }
-                    ForEach(vm.nodes) { n in
-                    let rect = CGRect(x: CGFloat(n.x), y: CGFloat(n.y), width: CGFloat(n.w), height: CGFloat(n.h))
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(vm.selected.contains(n.id) ? Color.accentColor : Color.secondary, lineWidth: vm.selected.contains(n.id) ? 2 : 1)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8).fill(Color(NSColor.windowBackgroundColor))
-                        )
-                        .overlay(alignment: .topLeading) {
-                            Text(n.title ?? n.id).font(.system(size: 11)).padding(4)
-                        }
-                        .frame(width: rect.width, height: rect.height, alignment: .topLeading)
-                        .position(x: toView(rect.origin).x + rect.width/2, y: toView(rect.origin).y + rect.height/2)
-                        .highPriorityGesture(nodeDragGesture(node: n))
-                        .onTapGesture {
-                            #if canImport(AppKit)
-                            let flags = NSApp.currentEvent?.modifierFlags ?? []
-                            if flags.contains(.command) {
-                                if vm.selected.contains(n.id) { vm.selected.remove(n.id) } else { vm.selected.insert(n.id) }
-                            } else {
-                                vm.selected = [n.id]
+                    NodeEditor(patch: $flowPatch, selection: Binding(get: { Set(flowSelection) }, set: { flowSelection = Array($0) as! Set<Int> }))
+                        .onNodeMoved { index, loc in
+                            let g = PageSpec.mm(vm.gridMajorMM)
+                            if let i = vm.nodeIndex(by: vm.nodes[index].id) {
+                                vm.nodes[i].x = Int((round(loc.x / g) * g))
+                                vm.nodes[i].y = Int((round(loc.y / g) * g))
                             }
-                            vm.selection = n.id
-                            #else
-                            vm.selected = [n.id]
-                            vm.selection = n.id
-                            #endif
                         }
-
-                        ForEach(n.ports) { p in
-                            let center = vm.portPosition(node: n, port: p)
-                            let v = toView(center)
-                            let color: Color = {
-                                guard vm.connectMode, let start = vm.pendingFrom else { return Color.accentColor }
-                                if p.dir == .input && start.node != n.id {
-                                    if let sNode = vm.node(by: start.node), let sPort = sNode.ports.first(where: { $0.id == start.port }) {
-                                        return (sPort.dir == .output && sPort.type == p.type) ? Color.green : Color.red.opacity(0.6)
-                                    }
-                                }
-                                return Color.accentColor
-                            }()
-                            Circle().fill(color)
-                                .frame(width: 6, height: 6)
-                                .position(x: v.x, y: v.y)
-                                .onTapGesture {
-                                    let flags = NSApp.currentEvent?.modifierFlags ?? []
-                                    let opt = flags.contains(.option)
-                                    vm.tapPort(nodeId: n.id, portId: p.id, dir: p.dir, optionFanout: opt)
-                                }
-                                .onTapGesture(count: 2) {
-                                    if p.dir == .input { vm.breakConnection(at: n.id, portId: p.id) }
-                                }
+                        .onWireAdded { wire in
+                            let srcId = vm.nodes[wire.output.nodeIndex].id
+                            let dstId = vm.nodes[wire.input.nodeIndex].id
+                            let outPorts = vm.nodes[wire.output.nodeIndex].ports.filter { $0.dir == .output }
+                            let inPorts = vm.nodes[wire.input.nodeIndex].ports.filter { $0.dir == .input }
+                            guard wire.output.portIndex < outPorts.count, wire.input.portIndex < inPorts.count else { return }
+                            let fromRef = srcId + "." + outPorts[wire.output.portIndex].id
+                            let toRef = dstId + "." + inPorts[wire.input.portIndex].id
+                            vm.ensureEdge(from: (srcId, outPorts[wire.output.portIndex].id), to: (dstId, inPorts[wire.input.portIndex].id))
+                            vm.transientGlowEdge(fromRef: fromRef, toRef: toRef)
+                            // Best-effort service call if available
+                            DispatchQueue.main.async {
+                                if let app = NSApplication.shared.delegate as? AppDelegate { /* placeholder */ }
+                            }
                         }
-                    }
+                        .onWireRemoved { wire in
+                            // Remove from vm
+                            let srcId = vm.nodes[wire.output.nodeIndex].id
+                            let dstId = vm.nodes[wire.input.nodeIndex].id
+                            let outPorts = vm.nodes[wire.output.nodeIndex].ports.filter { $0.dir == .output }
+                            let inPorts = vm.nodes[wire.input.nodeIndex].ports.filter { $0.dir == .input }
+                            guard wire.output.portIndex < outPorts.count, wire.input.portIndex < inPorts.count else { return }
+                            let fromRef = srcId + "." + outPorts[wire.output.portIndex].id
+                            let toRef = dstId + "." + inPorts[wire.input.portIndex].id
+                            vm.edges.removeAll { $0.from == fromRef && $0.to == toRef }
+                        }
+                        .transformChanged { pan, z in
+                            vm.zoom = CGFloat(z)
+                            vm.translation = CGPoint(x: pan.width, y: pan.height)
+                        }
+                        .frame(width: docSize.width, height: docSize.height)
                 }
                 .frame(width: docSize.width, height: docSize.height, alignment: .topLeading)
                 .offset(x: padX, y: padY)
@@ -455,6 +446,8 @@ struct EditorCanvas: View {
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .center)
             .contentShape(Rectangle())
+            .onChange(of: geo.size) { newSize in vm.lastViewSize = newSize }
+            .onAppear { vm.lastViewSize = geo.size }
             .gesture(DragGesture(minimumDistance: 4)
                 .onChanged { v in
                     if marqueeStart == nil { marqueeStart = v.startLocation }
@@ -477,11 +470,11 @@ struct EditorCanvas: View {
                 }
             )
             .onReceive(NotificationCenter.default.publisher(for: .pbZoomFit)) { _ in
-                // Fit the page to the available view, then center within the page frame
+                // Fit the page to the available view and reset panning
                 let viewSize = geo.size
                 let content = CGRect(origin: .zero, size: docSize)
                 let z = EditorVM.computeFitZoom(viewSize: viewSize, contentBounds: content)
-                vm.translation = EditorVM.computeFrameCenterTranslation(pageSize: docSize, zoom: z)
+                vm.translation = .zero
                 vm.zoom = z
             }
             .onReceive(NotificationCenter.default.publisher(for: .pbZoomActual)) { _ in
@@ -494,17 +487,19 @@ struct EditorCanvas: View {
                     let viewSize = geo.size
                     let content = CGRect(origin: .zero, size: docSize)
                     let z = EditorVM.computeFitZoom(viewSize: viewSize, contentBounds: content)
-                    vm.translation = EditorVM.computeFrameCenterTranslation(pageSize: docSize, zoom: z)
+                    vm.translation = .zero
                     vm.zoom = z
                     didInitialFit = true
                 }
+                flowPatch = FlowBridge.toFlowPatch(vm: vm)
             }
             .onChange(of: vm.pageSize) { _,_ in
                 let viewSize = geo.size
                 let content = CGRect(origin: .zero, size: vm.pageSize)
                 let z = EditorVM.computeFitZoom(viewSize: viewSize, contentBounds: content)
-                vm.translation = EditorVM.computeFrameCenterTranslation(pageSize: vm.pageSize, zoom: z)
+                vm.translation = .zero
                 vm.zoom = z
+                flowPatch = FlowBridge.toFlowPatch(vm: vm)
             }
             .onReceive(NotificationCenter.default.publisher(for: .pbDelete)) { _ in
                 if !vm.selected.isEmpty {

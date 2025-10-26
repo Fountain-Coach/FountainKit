@@ -1,21 +1,24 @@
-[0/3] Write swift-version--58304C5D6DBC2206.txt
+Another instance of SwiftPM is already running using '/Users/benedikteickhoff/Development/Github-Desktop/FountainKit/Packages/FountainApps/.build', waiting until that process has finished execution...[0/3] Compiling _NumericsShims _NumericsShims.c
+[1/11] Compiling writer.c
+[2/11] Compiling reader.c
+[3/11] Compiling api.c
+[4/11] Compiling parser.c
+[5/11] Compiling emitter.c
+[6/11] Compiling scanner.c
+[7/11] Write swift-version--58304C5D6DBC2206.txt
+[8/11] Write Objects.LinkFileList
+[9/11] Linking swift-openapi-generator-tool
+[10/11] Applying swift-openapi-generator-tool
+warning: 'fountainapps': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
+    /Users/benedikteickhoff/Development/Github-Desktop/FountainKit/Packages/FountainApps/Tests/PatchBayAppUITests/Fixtures/initial-fit-a4-portrait-1200x900.json
+warning: 'fountainapps': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
+    /Users/benedikteickhoff/Development/Github-Desktop/FountainKit/Packages/FountainApps/Sources/qc-mock-service/AGENTS.md
+warning: 'fountainapps': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
+    /Users/benedikteickhoff/Development/Github-Desktop/FountainKit/Packages/FountainApps/Sources/patchbay-service/AGENTS.md
 [0/1] Planning build
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'mock-localagent-server' complete! (12.05s)
+Build of product 'mock-localagent-server' complete! (16.58s)
 [mock-localagent] Failed to start: bind(descriptor:ptr:bytes:): Address already in use) (errno: 48)
-ountainKit/Packages/FountainApps/Sources/FountainLauncherUI/AGENTS.md
-warning: 'fountainapps': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
-    /Users/benedikteickhoff/Development/Github-Desktop/FountainKit/Packages/FountainApps/Sources/llm-doctor/README.md
-warning: 'fountainapps': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
-    /Users/benedikteickhoff/Development/Github-Desktop/FountainKit/Packages/FountainApps/Sources/engraver-direct/README.md
-warning: 'fountainapps': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
-    /Users/benedikteickhoff/Development/Github-Desktop/FountainKit/Packages/FountainApps/Sources/engraver-studio/README.md
-warning: 'fountaintooling': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
-    /Users/benedikteickhoff/Development/Github-Desktop/FountainKit/Packages/FountainTooling/Sources/openapi-curator-service/README.md
-[0/1] Planning build
-Building for debugging...
-[0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'mock-localagent-server' complete! (12.38s)
-[mock-localagent] Failed to start: bind(descriptor:ptr:bytes:): Address already in use) (errno: 48)
+use) (errno: 48)
 ady in use) (errno: 48)

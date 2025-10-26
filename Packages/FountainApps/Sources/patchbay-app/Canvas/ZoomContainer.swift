@@ -56,8 +56,11 @@ struct ZoomContainer<Content: View>: NSViewRepresentable {
             guard let coord, let win = host.window, e.window == win else { return e }
             Task { @MainActor in
                 let s = max(0.0001, coord.parent.zoom)
-                coord.parent.translation.x += -e.scrollingDeltaX / s
-                coord.parent.translation.y += -e.scrollingDeltaY / s
+                // Pan follows trackpad: swipe up -> content moves up
+                // Adjust for device inversion flag so behavior is consistent with system preference
+                let inv: CGFloat = e.isDirectionInvertedFromDevice ? 1.0 : -1.0
+                coord.parent.translation.x += inv * (e.scrollingDeltaX / s)
+                coord.parent.translation.y += inv * (e.scrollingDeltaY / s)
             }
             return e
         }

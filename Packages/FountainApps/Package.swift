@@ -81,6 +81,8 @@ let package = Package(
         .package(path: "../FountainServiceKit-ToolServer"),
         .package(path: "../FountainServiceKit-FKOps"),
         .package(path: "../FountainTooling"),
+        // External UI graph editor used by PatchBay
+        .package(url: "https://github.com/AudioKit/Flow.git", from: "1.0.4"),
         .package(path: "../FountainTelemetryKit"),
         .package(path: "../../Tools/PersistenceSeeder"),
         .package(path: "../../External/TeatroFull"),
@@ -242,7 +244,8 @@ let package = Package(
             name: "patchbay-app",
             dependencies: [
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
-                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
+                .product(name: "Flow", package: "Flow")
                 // ScoreKit and RulesKit are available in the workspace; we will gradually adopt them in PatchBay.
                 // .product(name: "ScoreKit", package: "ScoreKit"),
                 // .product(name: "RulesKit", package: "RulesKit-SPM")
@@ -297,8 +300,14 @@ let package = Package(
             dependencies: ["patchbay-app"],
             path: "Tests/PatchBayAppUITests",
             resources: [
-                .process("Baselines")
+                .process("Baselines"),
+                .process("Fixtures")
             ]
+        ),
+        .executableTarget(
+            name: "patchbay-snapshots",
+            dependencies: ["patchbay-app"],
+            path: "Sources/patchbay-snapshots"
         ),
         .executableTarget(
             name: "qc-mock-service-server",

@@ -12,7 +12,7 @@ final class InitialOpenUITests: XCTestCase {
         vm.translation = .zero
 
         // Host the canvas at a deterministic view size
-        let host = NSHostingView(rootView: EditorCanvas().environmentObject(vm))
+        let host = NSHostingView(rootView: EditorCanvas().environmentObject(vm).environmentObject(AppState()))
         host.frame = NSRect(x: 0, y: 0, width: 1200, height: 900)
         host.layoutSubtreeIfNeeded()
 
@@ -27,4 +27,3 @@ final class InitialOpenUITests: XCTestCase {
         XCTAssertEqual(vm.translation.y, expectedT.y, accuracy: 1.0, "translation.y centers page")
     }
 }
-

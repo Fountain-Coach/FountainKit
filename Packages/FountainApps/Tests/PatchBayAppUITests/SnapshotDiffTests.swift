@@ -25,7 +25,7 @@ final class SnapshotDiffTests: XCTestCase {
                 PBNode(id: "B", title: "B", x: 360, y: 180, w: 220, h: 140, ports: [.init(id: "in", side: .left, dir: .input)])
             ]
             vm.edges = [ PBEdge(from: "A.out", to: "B.in") ]
-            let host = NSHostingView(rootView: EditorCanvas().environmentObject(vm))
+            let host = NSHostingView(rootView: EditorCanvas().environmentObject(vm).environmentObject(AppState()))
             host.frame = NSRect(x: 0, y: 0, width: 640, height: 480)
             let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds)!
             host.cacheDisplay(in: host.bounds, to: rep)
@@ -44,7 +44,7 @@ final class SnapshotDiffTests: XCTestCase {
             PBNode(id: "B", title: "B", x: 360, y: 180, w: 220, h: 140, ports: [.init(id: "in", side: .left, dir: .input)])
         ]
         vm.edges = [ PBEdge(from: "A.out", to: "B.in") ]
-        let host = NSHostingView(rootView: EditorCanvas().environmentObject(vm))
+        let host = NSHostingView(rootView: EditorCanvas().environmentObject(vm).environmentObject(AppState()))
         host.frame = NSRect(x: 0, y: 0, width: 640, height: 480)
         let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds)!
         host.cacheDisplay(in: host.bounds, to: rep)

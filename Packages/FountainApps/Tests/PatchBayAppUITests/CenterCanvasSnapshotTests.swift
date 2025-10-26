@@ -10,7 +10,7 @@ final class CenterCanvasSnapshotTests: XCTestCase {
         vm.pageSize = PageSpec.a4Portrait
         vm.marginMM = 12
         // Host at a known size representing the center pane only
-        let host = NSHostingView(rootView: EditorCanvas().environmentObject(vm))
+        let host = NSHostingView(rootView: EditorCanvas().environmentObject(vm).environmentObject(AppState()))
         host.frame = NSRect(x: 0, y: 0, width: 900, height: 600)
         host.layoutSubtreeIfNeeded()
         // Allow onAppear fit
@@ -43,4 +43,3 @@ final class CenterCanvasSnapshotTests: XCTestCase {
         XCTAssertEqual(pageCenter, viewCenter, accuracy: 4.0, "page not centered horizontally (pageCenter=\(pageCenter), viewCenter=\(viewCenter))")
     }
 }
-

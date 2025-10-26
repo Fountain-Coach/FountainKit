@@ -16,7 +16,7 @@ final class SnapshotHelper: XCTestCase {
         ]
         vm.edges = [ PBEdge(from: "A.out", to: "B.in") ]
 
-        let view = EditorCanvas().environmentObject(vm)
+        let view = EditorCanvas().environmentObject(vm).environmentObject(AppState())
         let host = NSHostingView(rootView: view)
         host.frame = NSRect(x: 0, y: 0, width: 640, height: 480)
         let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds)!
@@ -33,4 +33,3 @@ final class SnapshotHelper: XCTestCase {
     }
 }
 #endif
-

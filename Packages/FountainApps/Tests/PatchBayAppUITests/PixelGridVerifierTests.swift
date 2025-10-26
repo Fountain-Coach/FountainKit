@@ -14,7 +14,7 @@ final class PixelGridVerifierTests: XCTestCase {
         vm.gridMinorMM = 5
         vm.gridMajorMM = 10
 
-        let host = NSHostingView(rootView: EditorCanvas().environmentObject(vm))
+        let host = NSHostingView(rootView: EditorCanvas().environmentObject(vm).environmentObject(AppState()))
         host.frame = NSRect(x: 0, y: 0, width: vm.pageSize.width, height: vm.pageSize.height)
         host.layoutSubtreeIfNeeded()
         let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds)!
@@ -50,4 +50,3 @@ final class PixelGridVerifierTests: XCTestCase {
         XCTAssertEqual(median, expected, accuracy: 2.0, "minor grid spacing off: median=\(median) expected=\(expected)")
     }
 }
-

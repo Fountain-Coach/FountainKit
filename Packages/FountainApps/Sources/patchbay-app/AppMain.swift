@@ -230,7 +230,25 @@ final class AppState: ObservableObject {
                 return
             }
         }
-        chat.append(.init(role: "assistant", text: summarize()))
+        // Planner + FunctionCaller (control plane) — default path
+        do {
+            let plannerURL = URL(string: ProcessInfo.processInfo.environment["PLANNER_URL"] ?? "http://127.0.0.1:8003")!
+            let planner = MinimalPlannerClient(baseURL: plannerURL)
+            let objective = "PatchBay Scene (deterministic)\n\n" + summarize() + "\n\nUser: " + question + "\n\nOnly use registered OpenAPI operationIds (tools factory)."
+            let plan = try await planner.reason(objective: objective)
+            guard let steps = plan.steps, !steps.isEmpty else {
+                chat.append(.init(role: "assistant", text: "No plan returned.\n\n" + summarize()))
+                return
+            }
+            let execReq = PlannerPlanExecutionRequest(objective: plan.objective ?? question, steps: steps)
+            _ = try await planner.execute(execReq)
+            await refreshLinks()
+            chat.append(.init(role: "assistant", text: "Executed plan with \(steps.count) steps. Links now: \(links.count)."))
+            return
+        } catch {
+            chat.append(.init(role: "assistant", text: "Planner error: \(error.localizedDescription)\n\n" + summarize()))
+            return
+        }
     }
 
     @MainActor

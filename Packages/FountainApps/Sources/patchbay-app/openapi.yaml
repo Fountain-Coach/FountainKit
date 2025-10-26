@@ -141,6 +141,12 @@ components:
             properties:
               name: { type: string }
               type: { type: string, enum: [float, int, bool, string, enum] }
+              min: { type: number }
+              max: { type: number }
+              step: { type: number }
+              default: { oneOf: [ { type: number }, { type: integer }, { type: boolean }, { type: string } ] }
+              enumValues: { type: array, items: { type: string } }
+              aliases: { type: array, items: { type: string } }
     Instrument:
       type: object
       required: [id, kind, x, y, w, h, identity, propertySchema]
@@ -154,6 +160,7 @@ components:
         h: { type: integer }
         identity: { $ref: '#/components/schemas/InstrumentIdentity' }
         propertySchema: { $ref: '#/components/schemas/PropertySchema' }
+        propertyDefaults: { type: object, additionalProperties: { oneOf: [ { type: number }, { type: integer }, { type: boolean }, { type: string } ] } }
     GraphDoc:
       type: object
       required: [canvas, instruments, links]

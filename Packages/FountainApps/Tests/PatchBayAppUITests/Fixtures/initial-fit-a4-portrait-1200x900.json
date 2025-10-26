@@ -1,0 +1,11 @@
+{
+  "viewWidth": 1200.0,
+  "viewHeight": 900.0,
+  "pageWidth": 595.28,
+  "pageHeight": 841.89,
+  "expectedZoom": 1.069,
+  "expectedTranslationX": 264.0,
+  "expectedTranslationY": 0.0,
+  "toleranceZoom": 0.02,
+  "toleranceTranslation": 2.0
+}

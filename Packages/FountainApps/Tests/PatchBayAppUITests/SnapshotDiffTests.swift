@@ -6,6 +6,12 @@ import SwiftUI
 
 @MainActor
 final class SnapshotDiffTests: XCTestCase {
+    private func artifactsDir() -> URL {
+        let root = URL(fileURLWithPath: ".fountain/artifacts", isDirectory: true)
+        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        return root
+    }
+
     func testCanvasMatchesBaselineOrWrites() throws {
         let bundle = Bundle.module
         // Try to load baseline from resources
@@ -25,9 +31,9 @@ final class SnapshotDiffTests: XCTestCase {
             host.cacheDisplay(in: host.bounds, to: rep)
             let img = NSImage(size: host.bounds.size)
             img.addRepresentation(rep)
-            let out = URL(fileURLWithPath: "/tmp/patchbay-basic-canvas.tiff")
+            let out = artifactsDir().appendingPathComponent("patchbay-basic-canvas.tiff")
             try? img.tiffRepresentation?.write(to: out)
-            throw XCTSkip("Baseline not found. Wrote candidate to \(out.path). Copy to Baselines/basic-canvas.tiff to enable diff.")
+            throw XCTSkip("Baseline not found. Candidate written to \(out.path)")
         }
         // Create actual snapshot
         let vm = EditorVM()
@@ -47,13 +53,50 @@ final class SnapshotDiffTests: XCTestCase {
         let baselineData = try Data(contentsOf: baselineURL)
         let baseline = NSBitmapImageRep(data: baselineData)!
         let (diff, heatmap) = rmseDiffAndHeatmap(a: baseline, b: actual)
-        if diff > 2.0 {
-            if let img = heatmap, let data = img.tiffRepresentation {
-                let out = URL(fileURLWithPath: "/tmp/patchbay-snapshot-heatmap.tiff")
-                try? data.write(to: out)
-            }
+        if diff > 2.0, let img = heatmap, let data = img.tiffRepresentation {
+            let out = artifactsDir().appendingPathComponent("patchbay-snapshot-heatmap.tiff")
+            try? data.write(to: out)
         }
         XCTAssertLessThan(diff, 2.0, "Snapshot RMSE too large: \(diff)")
+    }
+
+    func testContentViewInitialOpenSnapshotOrWrites() throws {
+        let bundle = Bundle.module
+        guard let baselineURL = bundle.url(forResource: "initial-open", withExtension: "tiff") else {
+            // Build a snapshot candidate
+            let state = AppState(api: AppViewTests.MockAPI())
+            let vm = EditorVM()
+            let view = ContentView(state: state).environmentObject(vm)
+            let host = NSHostingView(rootView: view)
+            host.frame = NSRect(x: 0, y: 0, width: 1440, height: 900)
+            host.layoutSubtreeIfNeeded()
+            // Let async loads settle a moment
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds)!
+            host.cacheDisplay(in: host.bounds, to: rep)
+            let img = NSImage(size: host.bounds.size)
+            img.addRepresentation(rep)
+            let out = artifactsDir().appendingPathComponent("patchbay-initial-open.tiff")
+            try? img.tiffRepresentation?.write(to: out)
+            throw XCTSkip("Baseline not found. Candidate written to \(out.path)")
+        }
+        let state = AppState(api: AppViewTests.MockAPI())
+        let vm = EditorVM()
+        let view = ContentView(state: state).environmentObject(vm)
+        let host = NSHostingView(rootView: view)
+        host.frame = NSRect(x: 0, y: 0, width: 1440, height: 900)
+        host.layoutSubtreeIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        guard let actual = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { XCTFail("no rep"); return }
+        host.cacheDisplay(in: host.bounds, to: actual)
+        let baselineData = try Data(contentsOf: baselineURL)
+        let baseline = NSBitmapImageRep(data: baselineData)!
+        let (diff, heatmap) = rmseDiffAndHeatmap(a: baseline, b: actual)
+        if diff > 5.0, let img = heatmap, let data = img.tiffRepresentation {
+            let out = artifactsDir().appendingPathComponent("patchbay-initial-open-heatmap.tiff")
+            try? data.write(to: out)
+        }
+        XCTAssertLessThan(diff, 5.0, "Initial open snapshot RMSE too large: \(diff)")
     }
 
     private func rmseDiffAndHeatmap(a: NSBitmapImageRep, b: NSBitmapImageRep) -> (Double, NSImage?) {

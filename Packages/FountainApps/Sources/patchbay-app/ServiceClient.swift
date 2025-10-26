@@ -13,10 +13,12 @@ protocol PatchBayAPI {
 final class PatchBayClient: PatchBayAPI {
     private let client: Client
     private let transport: URLSessionTransport
+    let baseURL: URL
 
     init(baseURL: URL = URL(string: "http://127.0.0.1:7090")!) {
         self.transport = URLSessionTransport()
         self.client = Client(serverURL: baseURL, transport: transport)
+        self.baseURL = baseURL
     }
 
     func listInstruments() async throws -> [Components.Schemas.Instrument] {

@@ -220,6 +220,13 @@ Testing & TDD (applies to all)
   minimal set → `Scripts/dev-down`.
 - CI: lint + build + tests gate merges; coverage trend required.
 
+Visual Regression (Snapshot) Tests — mandatory
+- Definition: visual regression testing with snapshot “golden” baselines. We render real views at fixed sizes and compare against versioned TIFF baselines.
+- Scope: any UI surface (apps, editors, inspectors, canvases, dashboards). New or modified UI must add/update snapshots; missing snapshots block.
+- Location: `Tests/<PackageUITests>/Baselines/*.tiff` and helpers under `Tests/<PackageUITests>/*Snapshot*.swift`.
+- Behavior: on mismatch, tests fail and emit a heatmap diff + numeric report under `.fountain/artifacts/` (CI attaches artifacts). No manual approvals required in PRs.
+- Commands: build tests per target (e.g., `swift build --package-path Packages/FountainApps -c debug --target PatchBayAppUITests`). CI runs these by default; failures block merges.
+
 Milestones (high level)
 1) M0 Stabilize/Trim: Full stack default; Control unified; curated specs.
 2) M1 Context Hub: right‑pane segmented (OpenAPI | Routes | Services | Persona | Memory).

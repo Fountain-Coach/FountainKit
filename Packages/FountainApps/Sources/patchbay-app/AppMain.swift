@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 @main
 struct PatchBayStudioApp: App {
@@ -108,20 +109,23 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView(columnVisibility: .constant(.all)) {
             // Instruments list (left)
-            List(state.instruments, id: \.id) { i in
-                HStack(alignment: .center, spacing: 8) {
-                    InstrumentIcon(kind: i.kind.rawValue)
-                        .frame(width: 24, height: 24)
-                        .foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(i.title ?? i.id).font(.body)
-                        Text("Kind: \(i.kind.rawValue)").font(.caption).foregroundColor(.secondary)
+            List(selection: .constant(Optional<String>.none)) {
+                ForEach(state.instruments, id: \.id) { i in
+                    HStack(alignment: .center, spacing: 8) {
+                        InstrumentIcon(kind: i.kind.rawValue)
+                            .frame(width: 24, height: 24)
+                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(i.title ?? i.id).font(.body)
+                            Text("Kind: \(i.kind.rawValue)").font(.caption).foregroundColor(.secondary)
+                        }
                     }
-                }
-                .padding(.vertical, 2)
-                .onTapGesture(count: 2) {
-                    // Double-click instrument to add a node to the canvas
-                    addInstrumentNode(i)
+                    .padding(.vertical, 2)
+                    .onTapGesture(count: 2) {
+                        // Double-click instrument to add a node to the canvas
+                        addInstrumentNode(i)
+                    }
+                    .tag(i.id)
                 }
             }
             .navigationTitle("Instruments")
@@ -156,6 +160,31 @@ struct ContentView: View {
                     HStack(spacing: 4) {
                         Button { vm.zoom = max(0.25, vm.zoom - 0.1) } label: { Image(systemName: "minus.magnifyingglass") }
                         Button { vm.zoom = min(3.0, vm.zoom + 0.1) } label: { Image(systemName: "plus.magnifyingglass") }
+                    }
+                    Menu("Page") {
+                        Button("Fit to Page") { NotificationCenter.default.post(name: .pbZoomFit, object: nil) }
+                        Divider()
+                        Button("A4 Portrait") {
+                            vm.pageSize = PageSpec.a4Portrait
+                            vm.grid = Int(PageSpec.mm(vm.gridMajorMM))
+                            NotificationCenter.default.post(name: .pbZoomFit, object: nil)
+                        }
+                        Button("A4 Landscape") {
+                            vm.pageSize = PageSpec.a4Landscape
+                            vm.grid = Int(PageSpec.mm(vm.gridMajorMM))
+                            NotificationCenter.default.post(name: .pbZoomFit, object: nil)
+                        }
+                        Divider()
+                        Menu("Margins") {
+                            Button("None (0 mm)") { vm.marginMM = 0 }
+                            Button("10 mm") { vm.marginMM = 10 }
+                            Button("12 mm") { vm.marginMM = 12 }
+                            Button("15 mm") { vm.marginMM = 15 }
+                        }
+                        Menu("Grid") {
+                            Button("Minor 5 mm / Major 10 mm") { vm.gridMinorMM = 5; vm.gridMajorMM = 10; vm.grid = Int(PageSpec.mm(vm.gridMajorMM)) }
+                            Button("Minor 2.5 mm / Major 10 mm") { vm.gridMinorMM = 2.5; vm.gridMajorMM = 10; vm.grid = Int(PageSpec.mm(vm.gridMajorMM)) }
+                        }
                     }
                     Button {
                         // Add a generic node near origin, snapped to grid
@@ -198,7 +227,7 @@ struct ContentView: View {
 }
 
 struct InspectorPane: View {
-    enum Tab: String, CaseIterable { case instruments = "Instruments", links = "Links", vendor = "Vendor", corpus = "Corpus" }
+    enum Tab: String, CaseIterable { case instruments = "Instruments", links = "Links", rules = "Rules", vendor = "Vendor", corpus = "Corpus" }
     @EnvironmentObject var state: AppState
     @EnvironmentObject var vm: EditorVM
     @State private var tab: Tab = .links
@@ -218,6 +247,8 @@ struct InspectorPane: View {
                 instrumentsView
             case .links:
                 linksView
+            case .rules:
+                rulesView
             case .vendor:
                 vendorView
             case .corpus:
@@ -225,6 +256,23 @@ struct InspectorPane: View {
             }
         }
         .task { await state.refreshLinks() }
+    }
+    @ViewBuilder var rulesView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Canvas Rules").font(.headline)
+            let checks = computeRules()
+            ForEach(checks, id: \.title) { c in
+                HStack {
+                    Image(systemName: c.ok ? "checkmark.seal.fill" : "xmark.seal.fill")
+                        .foregroundColor(c.ok ? .green : .red)
+                    Text(c.title).font(.system(.body, design: .monospaced))
+                    Spacer()
+                    if !c.detail.isEmpty { Text(c.detail).foregroundColor(.secondary).font(.caption) }
+                }
+            }
+            Text("These local checks will be backed by RulesKit service calls.")
+                .font(.caption).foregroundColor(.secondary)
+        }
     }
     @ViewBuilder var instrumentsView: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -257,14 +305,16 @@ struct InspectorPane: View {
                 Button("Apply All") { showApplyAllConfirm = true }
             }
             if state.suggestions.isEmpty { Text("No suggestions yet").foregroundColor(.secondary) }
-            ScrollView {
-                ForEach(Array(state.suggestions.enumerated()), id: \.0) { _, s in
-                    Text("• \(s.reason) — conf: \(String(format: "%.2f", s.confidence ?? 0))")
-                        .font(.system(.body, design: .monospaced))
-                    if let l = Optional(s.link) {
-                        Button("Apply") { previewLink = l; showPreview = true }
+            ScrollViewReader { proxy in
+                ScrollView {
+                    Color.clear.frame(height: 0).id("suggestions-top")
+                    ForEach(Array(state.suggestions.enumerated()), id: \.0) { _, s in
+                        Text("• \(s.reason) — conf: \(String(format: "%.2f", s.confidence ?? 0))")
+                            .font(.system(.body, design: .monospaced))
+                        if let l = Optional(s.link) { Button("Apply") { previewLink = l; showPreview = true } }
                     }
                 }
+                .onChange(of: state.suggestions.count) { _, _ in withAnimation { proxy.scrollTo("suggestions-top", anchor: .top) } }
             }
             Divider().padding(.vertical, 4)
             HStack {
@@ -273,34 +323,65 @@ struct InspectorPane: View {
                 Button("Refresh") { Task { await state.refreshLinks() } }
             }
             if state.links.isEmpty { Text("No applied links").foregroundColor(.secondary) }
-            ScrollView {
-                ForEach(state.links, id: \.id) { link in
-                    HStack {
-                        Text(linkSummaryNew(link)).font(.system(.body, design: .monospaced))
-                        Spacer()
-                        Button("Delete") { Task { await state.deleteLink(link.id) } }
+            ScrollViewReader { proxy in
+                ScrollView {
+                    Color.clear.frame(height: 0).id("links-top")
+                    ForEach(state.links, id: \.id) { link in
+                        HStack {
+                            Text(linkSummaryNew(link)).font(.system(.body, design: .monospaced))
+                            Spacer()
+                            Button("Delete") { Task { await state.deleteLink(link.id) } }
+                        }
                     }
                 }
+                .onChange(of: state.links.count) { _, _ in withAnimation { proxy.scrollTo("links-top", anchor: .top) } }
             }
             Divider().padding(.vertical, 4)
             Text("Run Log").font(.headline)
             if state.runLog.isEmpty { Text("No actions yet").foregroundColor(.secondary) }
-            ScrollView {
-                ForEach(state.runLog) { item in
-                    HStack(alignment: .top) {
-                        Text(item.action).font(.system(.body, design: .monospaced))
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text(item.detail).font(.system(.caption, design: .monospaced)).foregroundColor(.secondary)
-                            if !item.diff.isEmpty { Text(item.diff).font(.system(.caption, design: .monospaced)) }
+            ScrollViewReader { proxy in
+                ScrollView {
+                    Color.clear.frame(height: 0).id("log-top")
+                    ForEach(state.runLog) { item in
+                        HStack(alignment: .top) {
+                            Text(item.action).font(.system(.body, design: .monospaced))
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text(item.detail).font(.system(.caption, design: .monospaced)).foregroundColor(.secondary)
+                                if !item.diff.isEmpty { Text(item.diff).font(.system(.caption, design: .monospaced)) }
+                            }
                         }
                     }
                 }
+                .onChange(of: state.runLog.count) { _, _ in withAnimation { proxy.scrollTo("log-top", anchor: .top) } }
             }
         }
         .alert("Apply all suggestions?", isPresented: $showApplyAllConfirm) {
             Button("Cancel", role: .cancel) {}
-            Button("Apply All") { Task { await state.applyAllSuggestions() } }
+            Button("Apply All") {
+                Task {
+                    // Apply in service and visualize on canvas
+                    if let c = state.api as? PatchBayClient {
+                        let before = state.links.count
+                        for s in state.suggestions {
+                            let l = s.link
+                            _ = try? await c.createLink(l)
+                            if l.kind == .property, let p = l.property, let a = p.from, let b = p.to {
+                                // Ensure a canvas edge exists and glow it
+                                let fa = a.split(separator: ".", maxSplits: 1).map(String.init)
+                                let fb = b.split(separator: ".", maxSplits: 1).map(String.init)
+                                if fa.count == 2 && fb.count == 2 {
+                                    _ = vm.ensureEdge(from: (fa[0], fa[1]), to: (fb[0], fb[1]))
+                                    vm.transientGlowEdge(fromRef: a, toRef: b, duration: 1.6)
+                                }
+                            }
+                        }
+                        await state.refreshLinks()
+                        let after = state.links.count
+                        state.addLog(action: "apply-all-suggestions", detail: "count=\(state.suggestions.count)", diff: "links: \(before)→\(after)")
+                    }
+                }
+            }
         } message: {
             Text("Count: \(state.suggestions.count)")
         }
@@ -323,6 +404,15 @@ struct InspectorPane: View {
                                 await state.refreshLinks()
                                 let after = state.links.count
                                 state.addLog(action: "create-link", detail: linkSummaryCreate(link), diff: "links: \(before)→\(after)")
+                                // Mirror the new link on the canvas and glow
+                                if link.kind == .property, let p = link.property, let a = p.from, let b = p.to {
+                                    let fa = a.split(separator: ".", maxSplits: 1).map(String.init)
+                                    let fb = b.split(separator: ".", maxSplits: 1).map(String.init)
+                                    if fa.count == 2 && fb.count == 2 {
+                                        _ = vm.ensureEdge(from: (fa[0], fa[1]), to: (fb[0], fb[1]))
+                                        vm.transientGlowEdge(fromRef: a, toRef: b, duration: 1.6)
+                                    }
+                                }
                             }
                             previewLink = nil; showPreview = false
                         }
@@ -385,6 +475,43 @@ struct InspectorPane: View {
                     }
                 }
             }
+            Divider().padding(.vertical, 4)
+            Text("Agent Preset").font(.headline)
+            HStack(spacing: 8) {
+                Button("Export Agent Preset…") {
+                    // Build agent preset from current GraphDoc and save via NSSavePanel
+                    let doc = vm.toGraphDoc(with: state.instruments)
+                    let base = (state.api as? PatchBayClient)?.baseURL ?? URL(string: "http://127.0.0.1:7090")!
+                    let preset = AgentPreset.build(name: "PatchBay Scene (\(storeId))", baseURL: base, graph: doc, notes: "Generated by PatchBay Studio")
+                    let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+                    guard let data = try? enc.encode(preset) else { return }
+                    let panel = NSSavePanel(); if #available(macOS 12.0, *) { panel.allowedContentTypes = [UTType.json] } ; panel.nameFieldStringValue = "agent-preset.json"
+                    panel.begin { resp in
+                        if resp == .OK, let url = panel.url {
+                            do { try data.write(to: url); state.addLog(action: "export-agent-preset", detail: url.lastPathComponent, diff: "") } catch { }
+                        }
+                    }
+                }
+                Text("Exports a lightweight agent config for PatchBay actions.")
+                    .foregroundColor(.secondary)
+            }
+            Divider().padding(.vertical, 4)
+            Text("Export").font(.headline)
+            HStack(spacing: 8) {
+                Button("Export PDF Page…") {
+                    let size = vm.pageSize
+                    let host = NSHostingView(rootView: EditorCanvas().environmentObject(vm))
+                    host.frame = NSRect(x: 0, y: 0, width: size.width, height: size.height)
+                    EngraverExport.exportPDF(from: host, suggestedName: "patchbay-page.pdf") { result in
+                        switch result {
+                        case .success(let url): state.addLog(action: "export-pdf", detail: url.lastPathComponent, diff: "")
+                        case .failure(let err): state.addLog(action: "export-pdf", detail: "error: \(err.localizedDescription)", diff: "")
+                        }
+                    }
+                }
+                Text("Writes an A4 PDF of the current page (Engraver pipeline next).")
+                    .foregroundColor(.secondary)
+            }
         }
     }
 }
@@ -423,10 +550,10 @@ extension ContentView {
         let node = PBNode(
             id: id,
             title: inst.title ?? inst.id,
-            x: inst.x ?? 120,
-            y: inst.y ?? 120,
-            w: inst.w ?? 240,
-            h: inst.h ?? 140,
+            x: inst.x,
+            y: inst.y,
+            w: inst.w,
+            h: inst.h,
             ports: []
         )
         vm.nodes.append(node)
@@ -437,6 +564,25 @@ extension ContentView {
         vm.addPort(to: id, side: .right, dir: .output, id: "out", type: "data")
         vm.selection = id
         vm.selected = [id]
+    }
+}
+
+// MARK: - Local Rules (to be migrated to RulesKit)
+extension InspectorPane {
+    struct RuleCheck { let title: String; let ok: Bool; let detail: String }
+    func computeRules() -> [RuleCheck] {
+        var out: [RuleCheck] = []
+        // PageFit via facade
+        let view = NSScreen.main?.frame.size ?? CGSize(width: 1440, height: 900)
+        let pf = RulesKitFacade.checkPageFit(.init(view: view, page: vm.pageSize, zoom: vm.zoom, translation: vm.translation))
+        out.append(.init(title: "PageFit(zoom,tx,ty)", ok: pf.ok, detail: pf.detail))
+        // MarginWithinPage via facade
+        let mw = RulesKitFacade.checkMarginWithinPage(page: vm.pageSize, marginMM: vm.marginMM)
+        out.append(.init(title: "MarginWithinPage", ok: mw.ok, detail: mw.detail))
+        // Pane width policy placeholder
+        let pw = RulesKitFacade.checkPaneWidthPolicy()
+        out.append(.init(title: "PaneWidthRange(left 200–320, right 260–460)", ok: pw.ok, detail: pw.detail))
+        return out
     }
 }
 

@@ -243,6 +243,9 @@ let package = Package(
             dependencies: [
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
+                // ScoreKit and RulesKit are available in the workspace; we will gradually adopt them in PatchBay.
+                // .product(name: "ScoreKit", package: "ScoreKit"),
+                // .product(name: "RulesKit", package: "RulesKit-SPM")
             ],
             path: "Sources/patchbay-app",
             exclude: ["AGENTS.md"],

@@ -10,15 +10,26 @@ Start everything with logs and readiness checks by running `bash Scripts/dev-up 
 
 ### Using the canvas
 
-The canvas behaves like a modern Quartz Composer workspace: a square artboard with a scale‑aware grid, snap‑to‑grid movement, and QC‑style wiring. Double‑click an instrument in the left pane to add it to the canvas (data ports always; UMP ports when available). To connect nodes, toggle “Connect” in the toolbar, click an output, then an input. Hold Option to fan‑out the same output to multiple inputs. Double‑click an input to break a connection. Arrow keys nudge the selection by one grid step; Option nudges by five.
+The canvas is an A4 page (PDF points) with a scale‑aware mm grid and margin guides. Use the Page menu to switch portrait/landscape, set margins (0/10/12/15 mm), and choose grid spacing (e.g., 5 mm minor / 10 mm major). Double‑click an instrument in the left pane to add it to the page (data ports always; UMP ports when available). To connect nodes, toggle “Connect” in the toolbar, click an output, then an input. Hold Option to fan‑out the same output to multiple inputs. Double‑click an input to break a connection. Arrow keys nudge the selection by one grid step; Option nudges by five.
 
 ### Links, actions, and logs
 
 The Links tab offers two complementary tools. “Suggestions” retrieves proposed links from the service (CI/PE‑grounded auto‑noodling). You can preview the exact JSON of a proposed link before applying it, or apply all at once (with a confirmation). “Applied Links” lists the current links and lets you delete any. A run log summarizes changes (what ran, a short detail, and a simple diff like `links: 2→3`) so work remains auditable.
 
+- Visual feedback: When you apply a property link, the matching edge on the canvas is added (if missing) and glows briefly so you can confirm the change at a glance.
+
 ### Saving and loading scenes
 
 The Corpus tab includes store integration. You can save the current canvas to FountainStore under a chosen ID, list stored graphs, and load any back into the canvas. Under the hood, the app converts your nodes and edges into a `GraphDoc` and keeps positions, sizes, and links deterministic.
+
+Agent presets. The Corpus tab also includes “Export Agent Preset…”. This writes a lightweight JSON file capturing:
+- The PatchBay server `baseURL` used by the app.
+- The current `GraphDoc` (your scene).
+- A minimal set of PatchBay OpenAPI actions (operationIds) to enable chat/voice control of the same scene.
+
+Use this file as a seed for agent tooling (or to register PatchBay actions in a gateway). The format is app‑local and intentionally simple — see `AgentPreset.swift`.
+
+PDF export. The Corpus tab also offers “Export PDF Page…”, which writes the current A4 page to a PDF (UI orientation). This is a stable hand‑off for engraving/printing and matches the mm grid and margins you see on screen.
 
 ### API surface (client copy)
 
@@ -33,6 +44,14 @@ Focused tests live under `Tests/PatchBayAppUITests` and cover grid decimation, f
 The service (OpenAPI) exposes instruments, links, discovery (CI/PE), store, corpus, and vendor identity. It lives under `Sources/patchbay-service/**` and is started automatically by `Scripts/dev-up`. The app (SwiftUI) bundles the canvas/editor, inspector, keyboard handling, and store integration under `Sources/patchbay-app/**`. A local client (`openapi.yaml` + `ServiceClient.swift`) generates typed calls for suggestions, link CRUD, store GET/PUT, and snapshots.
 
 At runtime you typically: list instruments, add them to the canvas, wire ports (typed), apply link suggestions, optionally refine/delete links, save to store, and export a corpus snapshot. The `GraphDoc` is your deterministic artifact (positions, sizes, and links) with ETags handled by FountainStore.
+
+## Alignment with Engraver, ScoreKit, RulesKit, AnimationKit
+
+PatchBay is the sketch bay that adopts the same foundations as our engraving stack:
+- ScoreKit supplies page/grid semantics. PatchBay’s A4 page and mm grid mirror ScoreKit’s units so screen and print agree.
+- Engraver is the print authority. PDF export is wired to NSView today and will route through Engraver next to preserve typography and page metrics 1:1.
+- RulesKit encodes invariant checks (e.g., PageFit, MarginBounds, PaneWidthRange). PatchBay exposes a Rules tab and will call RulesKit for enforcement; CI blocks on failures.
+- AnimationKit will unify timing (connect glow, selection pulse, zoom easing) behind a single, testable DSL.
 
 ## Agent Builder: what we borrow, what we keep
 

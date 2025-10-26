@@ -41,6 +41,10 @@ final class EditorVM: ObservableObject {
     @Published var connectMode: Bool = false
     @Published var pendingFrom: (node: String, port: String)? = nil
     @Published var translation: CGPoint = .zero
+    @Published var pageSize: CGSize = PageSpec.a4Portrait
+    @Published var marginMM: CGFloat = 12.0
+    @Published var gridMinorMM: CGFloat = 5.0
+    @Published var gridMajorMM: CGFloat = 10.0
 
     func nodeIndex(by id: String) -> Int? { nodes.firstIndex{ $0.id == id } }
     func node(by id: String) -> PBNode? { nodes.first{ $0.id == id } }
@@ -72,6 +76,31 @@ final class EditorVM: ObservableObject {
 
     func addEdge(from: (String,String), to: (String,String)) {
         edges.append(.init(from: "\(from.0).\(from.1)", to: "\(to.0).\(to.1)"))
+    }
+
+    // Ensure an edge exists; return true if newly added
+    @discardableResult
+    func ensureEdge(from: (String,String), to: (String,String)) -> Bool {
+        let f = "\(from.0).\(from.1)"
+        let t = "\(to.0).\(to.1)"
+        if edges.contains(where: { $0.from == f && $0.to == t }) { return false }
+        edges.append(.init(from: f, to: t))
+        return true
+    }
+
+    func setGlow(fromRef: String, toRef: String, glow: Bool) {
+        for i in 0..<edges.count {
+            if edges[i].from == fromRef && edges[i].to == toRef {
+                edges[i].glow = glow
+            }
+        }
+    }
+
+    func transientGlowEdge(fromRef: String, toRef: String, duration: TimeInterval = 1.5) {
+        setGlow(fromRef: fromRef, toRef: toRef, glow: true)
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
+            self?.setGlow(fromRef: fromRef, toRef: toRef, glow: false)
+        }
     }
 
     func removeIncomingEdge(to nodeId: String, portId: String) {
@@ -140,7 +169,7 @@ final class EditorVM: ObservableObject {
     }
 
     func applyGraphDoc(_ doc: Components.Schemas.GraphDoc) {
-        self.grid = doc.canvas.grid ?? self.grid
+        self.grid = doc.canvas.grid
         // Build nodes from instruments
         var newNodes: [PBNode] = []
         for i in doc.instruments {
@@ -152,13 +181,13 @@ final class EditorVM: ObservableObject {
             // UMP ports
             if i.identity.hasUMPInput == true { ports.append(.init(id: "umpIn", side: .left, dir: .input, type: "ump")) }
             if i.identity.hasUMPOutput == true { ports.append(.init(id: "umpOut", side: .right, dir: .output, type: "ump")) }
-            let n = PBNode(id: id, title: i.title, x: i.x ?? 0, y: i.y ?? 0, w: i.w ?? 200, h: i.h ?? 120, ports: ports)
+            let n = PBNode(id: id, title: i.title, x: i.x, y: i.y, w: i.w, h: i.h, ports: ports)
             newNodes.append(n)
         }
         self.nodes = newNodes
         // Build edges from property links
         var newEdges: [PBEdge] = []
-        for l in doc.links ?? [] {
+        for l in doc.links {
             if l.kind == .property, let p = l.property {
                 newEdges.append(PBEdge(from: p.from ?? "", to: p.to ?? ""))
             }
@@ -194,43 +223,82 @@ final class EditorVM: ObservableObject {
         return rect
     }
 
-    static func computeFitZoom(viewSize: CGSize, contentBounds: CGRect, minZoom: CGFloat = 0.25, maxZoom: CGFloat = 3.0) -> CGFloat {
+    nonisolated static func computeFitZoom(viewSize: CGSize, contentBounds: CGRect, minZoom: CGFloat = 0.25, maxZoom: CGFloat = 3.0) -> CGFloat {
         let sx = viewSize.width / max(1, contentBounds.width)
         let sy = viewSize.height / max(1, contentBounds.height)
         return max(minZoom, min(maxZoom, min(sx, sy)))
     }
+
+    nonisolated static func computeCenterTranslation(viewSize: CGSize, contentBounds: CGRect, zoom: CGFloat) -> CGPoint {
+        let z = max(0.0001, zoom)
+        let targetX = (viewSize.width - z * contentBounds.width) / 2.0
+        let targetY = (viewSize.height - z * contentBounds.height) / 2.0
+        return CGPoint(x: targetX / z - contentBounds.minX,
+                       y: targetY / z - contentBounds.minY)
+    }
+
+    // When the page view is centered in its container via padding (padX/padY),
+    // use this translation so the scaled page content is centered within the page frame.
+    nonisolated static func computeFrameCenterTranslation(pageSize: CGSize, zoom: CGFloat) -> CGPoint {
+        let z = max(0.0001, zoom)
+        let tx = (pageSize.width * (1.0 - z)) / (2.0 * z)
+        let ty = (pageSize.height * (1.0 - z)) / (2.0 * z)
+        return CGPoint(x: tx, y: ty)
+    }
 }
 
 struct GridBackground: View {
-    var size: CGSize; var grid: CGFloat; var scale: CGFloat
+    var size: CGSize
+    var minorStepPoints: CGFloat
+    var majorStepPoints: CGFloat
+    var margin: EdgeInsets // in points
+    var scale: CGFloat
+    var translation: CGPoint // doc-space translation
+
+    nonisolated static func periodicOffset(_ translation: CGFloat, _ scale: CGFloat, _ stepView: CGFloat) -> CGFloat {
+        let raw = translation * scale
+        let m = stepView
+        if m <= 0 { return 0 }
+        var o = raw.truncatingRemainder(dividingBy: m)
+        if o < 0 { o += m }
+        return o
+    }
+
     var body: some View {
         Canvas { ctx, sz in
             let W = size.width, H = size.height
             let g1 = Color(NSColor.quaternaryLabelColor)
             let g5 = Color(NSColor.tertiaryLabelColor)
-            let minorStepView = grid * max(scale, 0.0001)
-            let majorStepView = minorStepView * 5.0
+            let s = max(scale, 0.0001)
+            let minorStepView = minorStepPoints * s
+            let majorStepView = majorStepPoints * s
             let showMinor = minorStepView >= 8.0
             let showLabels = majorStepView >= 12.0
-            let lw = max(0.5, 1.0 / max(scale, 0.0001))
+            let lw = max(0.5, 1.0 / s)
 
-            var x: CGFloat = 0; var i = 0
+            // Draw page background
+            let pageRect = CGRect(x: 0, y: 0, width: W, height: H)
+            ctx.fill(Path(pageRect), with: .color(Color(NSColor.textBackgroundColor)))
+
+            // Grid lines (full page, Y-down) with translation (panning)
+            let startX = GridBackground.periodicOffset(translation.x, s, minorStepView)
+            let startY = GridBackground.periodicOffset(translation.y, s, minorStepView)
+            let majorRatio = max(1, Int(round(majorStepPoints / max(0.0001, minorStepPoints))))
+            var x: CGFloat = startX; var i = 0
             while x <= W {
-                let isMajor = (i % 5) == 0
-                if isMajor {
+                if (i % majorRatio) == 0 {
                     var path = Path(); path.move(to: CGPoint(x: x, y: 0)); path.addLine(to: CGPoint(x: x, y: H))
                     ctx.stroke(path, with: .color(g5), lineWidth: lw)
-                    if showLabels { let text = Text("\(i)").font(.system(size: 8)); ctx.draw(text, at: CGPoint(x: x+2, y: 8)) }
+                    if showLabels { let text = Text("\(i * majorRatio)").font(.system(size: 8)); ctx.draw(text, at: CGPoint(x: x+2, y: 8)) }
                 } else if showMinor {
                     var path = Path(); path.move(to: CGPoint(x: x, y: 0)); path.addLine(to: CGPoint(x: x, y: H))
                     ctx.stroke(path, with: .color(g1), lineWidth: lw)
                 }
                 x += minorStepView; i += 1
             }
-            var y: CGFloat = 0; i = 0
+            var y: CGFloat = startY; i = 0
             while y <= H {
-                let isMajor = (i % 5) == 0
-                if isMajor {
+                if (i % majorRatio) == 0 {
                     var path = Path(); path.move(to: CGPoint(x: 0, y: y)); path.addLine(to: CGPoint(x: W, y: y))
                     ctx.stroke(path, with: .color(g5), lineWidth: lw)
                 } else if showMinor {
@@ -239,6 +307,11 @@ struct GridBackground: View {
                 }
                 y += minorStepView; i += 1
             }
+
+            // Margin box (guides)
+            let marginRect = CGRect(x: margin.leading, y: margin.top, width: W - margin.leading - margin.trailing, height: H - margin.top - margin.bottom)
+            let mpath = Path(roundedRect: marginRect, cornerSize: .zero)
+            ctx.stroke(mpath, with: .color(Color(NSColor.systemRed).opacity(0.35)), lineWidth: lw)
         }
     }
 }
@@ -248,23 +321,35 @@ struct BezierEdgeView: View {
     var toDoc: (CGPoint) -> CGPoint
     @EnvironmentObject var vm: EditorVM
     var body: some View {
-        Path { p in
-            guard let (n1,p1) = lookup(edge.from), let (n2,p2) = lookup(edge.to) else { return }
-            var a = vm.portPosition(node: n1, port: p1)
-            var b = vm.portPosition(node: n2, port: p2)
-            a = toDoc(a); b = toDoc(b)
-            let radius: CGFloat = 80
-            let c1: CGPoint; let c2: CGPoint
-            switch p1.side {
-            case .left:   c1 = CGPoint(x: a.x - radius, y: a.y); c2 = CGPoint(x: b.x + radius, y: b.y)
-            case .right:  c1 = CGPoint(x: a.x + radius, y: a.y); c2 = CGPoint(x: b.x - radius, y: b.y)
-            case .top:    c1 = CGPoint(x: a.x, y: a.y - radius); c2 = CGPoint(x: b.x, y: b.y + radius)
-            case .bottom: c1 = CGPoint(x: a.x, y: a.y + radius); c2 = CGPoint(x: b.x, y: b.y - radius)
-            }
-            p.move(to: a)
-            p.addCurve(to: b, control1: c1, control2: c2)
+        let path = buildPath()
+        path.stroke(Color.accentColor, lineWidth: CGFloat(edge.width))
+            .overlay(
+                Group {
+                    if edge.glow {
+                        buildPath()
+                            .stroke(Color.yellow.opacity(0.8), lineWidth: CGFloat(edge.width) + 4)
+                            .blur(radius: 0.5)
+                    }
+                }
+            )
+    }
+    func buildPath() -> Path {
+        var p = Path()
+        guard let (n1,p1) = lookup(edge.from), let (n2,p2) = lookup(edge.to) else { return p }
+        var a = vm.portPosition(node: n1, port: p1)
+        var b = vm.portPosition(node: n2, port: p2)
+        a = toDoc(a); b = toDoc(b)
+        let radius: CGFloat = 80
+        let c1: CGPoint; let c2: CGPoint
+        switch p1.side {
+        case .left:   c1 = CGPoint(x: a.x - radius, y: a.y); c2 = CGPoint(x: b.x + radius, y: b.y)
+        case .right:  c1 = CGPoint(x: a.x + radius, y: a.y); c2 = CGPoint(x: b.x - radius, y: b.y)
+        case .top:    c1 = CGPoint(x: a.x, y: a.y - radius); c2 = CGPoint(x: b.x, y: b.y + radius)
+        case .bottom: c1 = CGPoint(x: a.x, y: a.y + radius); c2 = CGPoint(x: b.x, y: b.y - radius)
         }
-        .stroke(Color.accentColor.opacity(edge.glow ? 0.5 : 1.0), lineWidth: CGFloat(edge.width))
+        p.move(to: a)
+        p.addCurve(to: b, control1: c1, control2: c2)
+        return p
     }
     func lookup(_ ref: String) -> (PBNode, PBPort)? {
         let parts = ref.split(separator: ".", maxSplits: 1).map(String.init)
@@ -278,12 +363,12 @@ struct EditorCanvas: View {
     @State private var dragStart: CGPoint? = nil
     @State private var marqueeStart: CGPoint? = nil
     @State private var marqueeRect: CGRect? = nil
+    @State private var didInitialFit: Bool = false
 
     var body: some View {
         GeometryReader { geo in
-            // Keep a square artboard so grid squares remain visually consistent at any pane size
-            let side = floor(min(geo.size.width, geo.size.height))
-            let docSize = CGSize(width: side, height: side)
+            // Fixed A4 page as the canvas (portrait by default)
+            let docSize = vm.pageSize
             let padX = (geo.size.width - docSize.width) * 0.5
             let padY = (geo.size.height - docSize.height) * 0.5
             let transform = CanvasTransform(scale: vm.zoom, translation: vm.translation)
@@ -291,15 +376,18 @@ struct EditorCanvas: View {
                 let v = transform.docToView(p)
                 return CGPoint(x: v.x + padX, y: v.y + padY)
             }
-            // Convert view point to document point, accounting for padding offsets
-            let toDoc: (CGPoint)->CGPoint = { p in
-                let adjusted = CGPoint(x: p.x - padX, y: p.y - padY)
-                return transform.viewToDoc(adjusted)
-            }
+            // Convert view point to document point reserved for later features
+            // let toDoc: (CGPoint)->CGPoint = { p in
+            //     let adjusted = CGPoint(x: p.x - padX, y: p.y - padY)
+            //     return transform.viewToDoc(adjusted)
+            // }
 
             ZStack(alignment: .topLeading) {
                 ZStack(alignment: .topLeading) {
-                    GridBackground(size: docSize, grid: CGFloat(vm.grid), scale: vm.zoom)
+                    let minor = PageSpec.mm(vm.gridMinorMM)
+                    let major = PageSpec.mm(vm.gridMajorMM)
+                    let m = EdgeInsets(top: PageSpec.mm(vm.marginMM), leading: PageSpec.mm(vm.marginMM), bottom: PageSpec.mm(vm.marginMM), trailing: PageSpec.mm(vm.marginMM))
+                    GridBackground(size: docSize, minorStepPoints: minor, majorStepPoints: major, margin: m, scale: vm.zoom, translation: vm.translation)
                     ForEach(vm.edges) { e in BezierEdgeView(edge: e, toDoc: toView).environmentObject(vm) }
                     ForEach(vm.nodes) { n in
                     let rect = CGRect(x: CGFloat(n.x), y: CGFloat(n.y), width: CGFloat(n.w), height: CGFloat(n.h))
@@ -389,18 +477,34 @@ struct EditorCanvas: View {
                 }
             )
             .onReceive(NotificationCenter.default.publisher(for: .pbZoomFit)) { _ in
+                // Fit the page to the available view, then center within the page frame
                 let viewSize = geo.size
-                let content = vm.contentBounds(margin: 40)
+                let content = CGRect(origin: .zero, size: docSize)
                 let z = EditorVM.computeFitZoom(viewSize: viewSize, contentBounds: content)
-                let targetX = (viewSize.width - z * content.width) / 2.0
-                let targetY = (viewSize.height - z * content.height) / 2.0
-                vm.translation = CGPoint(x: targetX / max(0.0001, z) - content.minX,
-                                         y: targetY / max(0.0001, z) - content.minY)
+                vm.translation = EditorVM.computeFrameCenterTranslation(pageSize: docSize, zoom: z)
                 vm.zoom = z
             }
             .onReceive(NotificationCenter.default.publisher(for: .pbZoomActual)) { _ in
                 vm.zoom = 1.0
                 vm.translation = .zero
+            }
+            .onAppear {
+                // Ensure initial open is fit-to-page
+                if !didInitialFit {
+                    let viewSize = geo.size
+                    let content = CGRect(origin: .zero, size: docSize)
+                    let z = EditorVM.computeFitZoom(viewSize: viewSize, contentBounds: content)
+                    vm.translation = EditorVM.computeFrameCenterTranslation(pageSize: docSize, zoom: z)
+                    vm.zoom = z
+                    didInitialFit = true
+                }
+            }
+            .onChange(of: vm.pageSize) { _,_ in
+                let viewSize = geo.size
+                let content = CGRect(origin: .zero, size: vm.pageSize)
+                let z = EditorVM.computeFitZoom(viewSize: viewSize, contentBounds: content)
+                vm.translation = EditorVM.computeFrameCenterTranslation(pageSize: vm.pageSize, zoom: z)
+                vm.zoom = z
             }
             .onReceive(NotificationCenter.default.publisher(for: .pbDelete)) { _ in
                 if !vm.selected.isEmpty {
@@ -433,7 +537,7 @@ struct EditorCanvas: View {
             }
             .onEnded { _ in
                 guard let idx = vm.nodeIndex(by: node.id) else { dragStart = nil; return }
-                let g = CGFloat(max(4, vm.grid))
+                let g = PageSpec.mm(vm.gridMajorMM)
                 let x = CGFloat(vm.nodes[idx].x)
                 let y = CGFloat(vm.nodes[idx].y)
                 vm.nodes[idx].x = Int((round(x / g) * g))

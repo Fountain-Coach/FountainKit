@@ -1,66 +1,13 @@
-# AGENT — Studio (FountainLauncherUI) — DEPRECATED (Learnings)
+# AGENT — Studio (FountainLauncherUI) — DEPRECATED (learnings)
 
-Status: DEPRECATED — kept as a learnings artifact. No new features. Bug fixes only if they unblock builds.
+FountainLauncherUI is a frozen snapshot of the original Control workspace. It covered the three‑pane UI for services, a curated OpenAPI editor, a persona editor, and merged logs/diagnostics. The active product path is the composer‑first app (`composer-studio`); this code remains only to preserve lessons and to unblock builds when needed. Do not add features here; fix only what breaks compilation or tests.
 
-Scope: This file applies to the entire `Packages/FountainApps/Sources/FountainLauncherUI/` subtree.
-It captured the earlier Control workspace (three‑pane UI), OpenAPI editing pipeline, persona editor,
-and diagnostics/merged logs. This implementation is superseded by the fresh Composer‑first app
-(`composer-studio`).
+The composer‑first story remains authoritative: screenplay text (.fountain) becomes a parsed model, then mapped cue plans, then applied notation, and finally a journal (with UMP). Sessions move deterministically through the states “stored (ETag) → parsed → cued → applied → journaled”, and each step exposes visible results (warnings, counts, previews) in a timeline you can explain.
 
-Learnings snapshot (fixed; do not extend)
+What we keep from this codebase are ideas, not UI: the curated OpenAPI editing loop (Save/Revert, Lint/Regenerate/Reload), the local dev lifecycle scripts, and the curated‑list validator. When you need the operator or curator tools, keep them separate from the composer flow — don’t re‑grow this legacy surface.
 
-Composer‑first story (authoritative)
-- Storyline: screenplay text (.fountain) → parsed model → mapped cue plans → applied notation → journal (+ UMP).
-- States: No session → Source stored (ETag) → Parsed → Cued → Applied → Journaled.
-- Guardrails: ETags for determinism, one‑click actions per state, visible results (warnings, counts, previews), journal timeline.
+Testing should focus on the underlying behaviors rather than view chrome. Unit tests cover curated spec mapping, route diffs, persona parsing, memory compute, and pane state; integration tests make sure generator plugins run and a reload hits the gateway; E2E smoke brings the stack up with `Scripts/dev-up --check`, probes health, asserts `/admin/routes` contains the minimal set, and tears down with `Scripts/dev-down`.
 
-Change Now (scope of this agent)
-- Introduce a Screenplay Session flow as default landing:
-  - Create/select session; show current ETag and updated‑at.
-  - Buttons: Parse → Map Cues → Apply, gated by preconditions.
-  - Result cards: parse warnings, cue count, last render status, links to cue sheet/score.
-  - Journal view: stored/parsed/cued/applied with anchors + timestamps.
-- One readiness verdict: Keychain OK + valid Gateway URL + services healthy = Ready.
-- Keep operator (start/stop/logs) and curator (OpenAPI edit) separate from composer flow.
+The curated OpenAPI list for the repo is declared in `Configuration/curated-openapi-specs.json`. Validate with `Scripts/validate-curated-specs.sh` (it checks that paths exist and generator configs are present) and optionally install `Scripts/install-git-hooks.sh` to run it pre‑commit. CI runs the validator in lint jobs and expects no generated sources in VCS; warn on added scans.
 
-## Studio System Introspection & Editing Plan (embedded)
-
-What we keep from here
-- Curated OpenAPI editing concepts (spec Save/Revert, Lint/Regenerate/Reload).
-- Scripts for local dev and service lifecycle.
-- Validator for curated spec list.
-
-Testing & TDD
-- Unit: spec curation mapping; routes diff; persona parser; memory compute; pane state.
-- Integration: plugin generation invoked; reload called successfully.
-- E2E: `Scripts/dev-up --check` → health → `/admin/routes` assert → `Scripts/dev-down`.
-
-Direction of travel
-- Use the new composer‑first app to surface the product story (session → ETag → parse → cues → apply → journal).
-- Keep operator/curator tools as a separate space; do not re‑grow this legacy UI.
-
-Curated specs source of truth (still valid for the repo)
-- The curated OpenAPI list is declared in `Configuration/curated-openapi-specs.json`.
-- Validation: `Scripts/validate-curated-specs.sh` checks that every curated path exists (and generator configs are present) and that all server specs are covered.
-- CI runs the validator in both lint jobs; optionally install the local hook via `Scripts/install-git-hooks.sh` to run it pre‑commit.
-
-What to do here
-- Curated OpenAPI panel
-  - List the core specs; allow edit (Save/Revert), `lint`, `regenerate` (swift build), `reload routes`.
-  - Add tests for curated path mapping and regeneration triggers.
-- Routes viewer
-  - Fetch `/admin/routes`, filter, and diff pre/post reload. Tests cover diff engine.
-- Persona editor
-  - Edit `Configuration/persona.yaml`; show “effective persona”. Tests for YAML ↔ model round‑trip.
-- Logs & services
-  - Add Follow‑tail, merged logs, filters. Tests for filter correctness.
-- Profiles
-  - Default Full; persist setting; use correct health endpoint.
-
-Testing requirements (enforced)
-- Unit tests: curated spec mapping; routes diff; persona parser; log filter.
-- Integration: generator plugins invoked via build; gateway reload handler called.
-- E2E smoke: `Scripts/dev-up --check` → health → `/admin/routes` contains minimal set → `Scripts/dev-down`.
-
-CI
-- Lint + build + tests must pass. No generated sources in VCS. Warn on added scans.
+If you must touch this area, keep the scope tight: the curated OpenAPI panel (list specs, Save/Revert, lint, regenerate via swift build, reload routes), a routes viewer (`/admin/routes` diff pre/post reload), the persona editor (`Configuration/persona.yaml` with an “effective persona” preview), logs/services (follow‑tail and filters), and profile selection (default Full with the correct health endpoint). Add tests alongside each.

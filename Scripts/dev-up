@@ -258,6 +258,7 @@ start_bg bootstrap bootstrap-server Packages/FountainApps
 start_bg planner planner-server Packages/FountainApps
 start_bg function-caller function-caller-server Packages/FountainApps
 start_bg persist persist-server Packages/FountainApps
+start_bg patchbay patchbay-service-server Packages/FountainApps
 start_bg gateway gateway-server Packages/FountainApps
 
 if [[ "$ALL" == "1" ]]; then
@@ -276,6 +277,7 @@ if [[ "$CHECK" == "1" || "${DEV_UP_CHECKS:-0}" == "1" ]]; then
   wait_ready planner            http://127.0.0.1:8003/metrics || true
   wait_ready function-caller    http://127.0.0.1:8004/metrics || true
   wait_ready persist            http://127.0.0.1:8005/metrics || true
+  wait_ready patchbay           http://127.0.0.1:$(port_for patchbay)/health || true
   # Gateway metrics are JSON; verify parsable shape for a stronger signal
   wait_ready_json gateway       http://127.0.0.1:8010/metrics || true
   if [[ "$ALL" == "1" ]]; then

@@ -100,6 +100,8 @@ final class AppState: ObservableObject {
     @Published var snapshotSummary: String = ""
     struct ActionLogItem: Identifiable { let id = UUID().uuidString; let time = Date(); let action: String; let detail: String; let diff: String }
     @Published var runLog: [ActionLogItem] = []
+    struct ChatMessage: Identifiable { let id = UUID().uuidString; let role: String; let text: String }
+    @Published var chat: [ChatMessage] = []
     let api: PatchBayAPI
     init(api: PatchBayAPI = PatchBayClient()) { self.api = api }
     func refresh() async {
@@ -156,6 +158,46 @@ final class AppState: ObservableObject {
     func addLog(action: String, detail: String, diff: String) {
         runLog.insert(.init(action: action, detail: detail, diff: diff), at: 0)
         if runLog.count > 50 { runLog.removeLast(runLog.count - 50) }
+    }
+
+    func ask(question: String, vm: EditorVM) async {
+        chat.append(.init(role: "user", text: question))
+        func summarize() -> String {
+            let nodes = vm.nodes
+            let edges = vm.edges
+            let countUMP = edges.filter { $0.from.contains("ump") || $0.to.contains("ump") }.count
+            let countProp = edges.count - countUMP
+            var s = "Scene: \(nodes.count) nodes; \(edges.count) links (UMP=\(countUMP), property=\(countProp)).\n"
+            if !nodes.isEmpty {
+                s += "Nodes:\n" + nodes.map { "- \($0.id): \($0.title ?? $0.id)" }.joined(separator: "\n") + "\n"
+            }
+            if !edges.isEmpty {
+                s += "Links:\n" + edges.map { "- \($0.from) → \($0.to)" }.joined(separator: "\n")
+            }
+            return s
+        }
+        let q = question.lowercased()
+        if q.contains("apply suggestions") || q.contains("apply all") {
+            await applyAllSuggestions()
+            chat.append(.init(role: "assistant", text: "Applied suggestions. Links now: \(links.count)."))
+            return
+        }
+        if q.contains("suggest") || q.contains("auto") {
+            await autoNoodle()
+            chat.append(.init(role: "assistant", text: "Fetched suggestions (\(suggestions.count)). Type ‘apply suggestions’ to apply all."))
+            return
+        }
+        if q.contains("corpus") || q.contains("snapshot") {
+            if let c = api as? PatchBayClient {
+                if let s = try? await c.createCorpusSnapshot() {
+                    let ic = s.instruments?.count ?? 0
+                    let lc = s.links?.count ?? 0
+                    chat.append(.init(role: "assistant", text: "Corpus snapshot: instruments=\(ic), links=\(lc).\n\n" + summarize()))
+                    return
+                }
+            }
+        }
+        chat.append(.init(role: "assistant", text: summarize()))
     }
 }
 
@@ -242,10 +284,10 @@ struct ContentView: View {
                 }
             }
         } detail: {
-            InspectorPane()
+            AssistantPane()
                 .environmentObject(state)
                 .padding(12)
-                .navigationSplitViewColumnWidth(min: 260, ideal: 320, max: 460)
+                .navigationSplitViewColumnWidth(min: 300, ideal: 360, max: 520)
         }
         .task {
             await state.refresh()
@@ -595,6 +637,42 @@ struct InstrumentIcon: View {
         case "mvk.triangle": Image(systemName: "triangle.fill")
         case "mvk.quad": Image(systemName: "square.inset.filled")
         default: Image(systemName: "circle.grid.3x3")
+        }
+    }
+}
+
+// MARK: - Assistant (AudioTalk-style Q&A)
+struct AssistantPane: View {
+    @EnvironmentObject var state: AppState
+    @EnvironmentObject var vm: EditorVM
+    @State private var chatInput: String = "What instruments and links are present?"
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Assistant").font(.headline)
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 8) {
+                    ForEach(state.chat) { m in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(m.role.uppercased()).font(.caption).foregroundColor(.secondary)
+                            Text(m.text).font(.system(.body, design: .monospaced))
+                        }
+                        .padding(8)
+                        .background(m.role == "user" ? Color(NSColor.windowBackgroundColor) : Color(NSColor.controlBackgroundColor))
+                        .cornerRadius(6)
+                    }
+                }
+            }.frame(minHeight: 220)
+            HStack {
+                TextField("Ask about this scene…", text: $chatInput)
+                Button("Ask") { Task { await state.ask(question: chatInput, vm: vm) } }
+            }
+            Divider().padding(.vertical, 6)
+            // Keep quick actions visible
+            HStack(spacing: 8) {
+                Button("Suggestions") { Task { await state.autoNoodle(); state.chat.append(.init(role: "assistant", text: "Fetched suggestions (\(state.suggestions.count)).")) } }
+                Button("Apply All") { Task { await state.applyAllSuggestions() } }
+                Button("Corpus Snapshot") { Task { await state.makeSnapshot(); state.chat.append(.init(role: "assistant", text: state.snapshotSummary)) } }
+            }
         }
     }
 }

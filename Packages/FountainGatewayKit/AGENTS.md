@@ -1,21 +1,7 @@
-# AGENT — FountainGatewayKit (Gateway Plugins & Orchestrator)
+# AGENT — FountainGatewayKit (gateway plugins and orchestrator)
 
-Scope: `Packages/FountainGatewayKit/**` — gateway persona orchestrator, plugins (auth,
-rate‑limit, policy, security/budget, payload inspection, role health, etc.), and publishing frontend.
+`Packages/FountainGatewayKit/**` contains the gateway persona orchestrator and its plugins (authentication, rate‑limits, policy, security/budget, payload inspection, role health) plus the publishing frontend. Plugins are composable and side‑effect‑free, and the chain must enforce time/size budgets. The reload endpoint `/admin/routes/reload` is a stable contract. Gateway remains OpenAPI‑first — see `Packages/FountainApps/Sources/gateway-server/openapi.yaml`.
 
-Principles
-- Plugins are composable and side‑effect free; enforce time/size budgets.
-- Route reload endpoint `/admin/routes/reload` remains stable.
-- OpenAPI‑first: gateway spec at `Packages/FountainApps/Sources/gateway-server/openapi.yaml`.
+Tests cover plugin behaviors and failure paths (auth, limits, budgets, policy checks). Integration bootstraps the gateway with a real plugin chain and verifies that route reload succeeds; end‑to‑end, a regenerate step leads to `/admin/routes` containing the curated minimal set. CI builds and tests this package; scripts start the server for smoke.
 
-Testing & TDD
-- Unit: plugin behaviors and failure paths (auth, limits, budget, policy checks).
-- Integration: gateway server boots with plugin chain; route reload succeeds.
-- E2E: after regenerate, `/admin/routes` contains curated minimal set.
-
-CI gates
-- Build + tests for this package; gateway server smoke started by scripts.
-
-Maintenance
-- Any new plugin must include tests and be added to curated route exposure rules.
-
+When adding a plugin, include tests and update curated route exposure rules so the control plane stays predictable.

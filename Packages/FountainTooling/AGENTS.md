@@ -1,15 +1,5 @@
-# AGENT — FountainTooling
+# AGENT — FountainTooling (OpenAPI curation and validation)
 
-Scope: `Packages/FountainTooling/**` — OpenAPI curator service/CLI, validation helpers.
+`Packages/FountainTooling/**` contains the OpenAPI curator (service/CLI) and validation helpers. Specs are curated under `Packages/FountainSpecCuration/openapi/**`; avoid ad‑hoc scans. Keep lint scripts deterministic and offline by default.
 
-Principles
-- Curate specs in `Packages/FountainSpecCuration/openapi/**`; no ad‑hoc scans.
-- Lint scripts kept deterministic; no network by default.
-
-Testing & TDD
-- Unit: schema normalization, lint checks.
-- Integration: curator produces expected outputs for fixtures.
-
-CI gates
-- Lint matrix (`openapi-lint.sh`) runs in CI; failures block merge.
-
+Unit tests cover schema normalization and lint checks; integration ensures the curator produces the expected outputs for fixtures. CI runs the lint matrix via `Scripts/openapi/openapi-lint.sh`, and failures block merges.

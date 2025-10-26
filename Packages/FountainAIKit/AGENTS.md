@@ -1,15 +1,5 @@
-# AGENT — FountainAIKit (App-Side Models)
+# AGENT — FountainAIKit (app‑side models)
 
-Scope: `Packages/FountainAIKit/**` — app‑side models (e.g., EngraverChatViewModel), persona/awareness helpers.
+`Packages/FountainAIKit/**` hosts app‑side models (for example, EngraverChatViewModel) and persona/awareness helpers. Keep actor isolation correct and avoid hard dependencies on executables; inject gateway/environment via protocols and defer any secret handling to Keychain helpers.
 
-Principles
-- Actor‑isolation correctness; no hard dependency on executable scripts.
-- Gateway/environment injected via protocols; Keychain use behind helpers.
-
-Testing & TDD
-- Unit: view‑model state transitions, environment controller adapters, persona parsing.
-- Integration: gateway/awareness/bootstrap client calls using test doubles.
-
-CI gates
-- Build + tests for this package.
-
+Unit tests cover view‑model state transitions, environment controller adapters, and persona parsing. Integration exercises gateway/awareness/bootstrap client calls using test doubles. CI builds and tests this package in isolation.

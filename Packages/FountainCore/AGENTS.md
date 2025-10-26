@@ -1,21 +1,7 @@
-# AGENT — FountainCore (Runtime, Store, Transports)
+# AGENT — FountainCore (runtime, store, transports)
 
-Scope: `Packages/FountainCore/**` — core primitives (FountainRuntime, FountainStoreClient,
-LauncherSignature, NIO transports, crypto helpers). This is the stability anchor all stacks depend on.
+`Packages/FountainCore/**` is the stability anchor for everything else: FountainRuntime, FountainStoreClient, LauncherSignature, NIO transports, and small crypto helpers live here. Keep public APIs backward‑compatible and prefer additive changes; where feasible, mark types `Sendable`. Executables shouldn’t bleed into this package — offer protocols and adapters instead.
 
-Principles
-- Back‑compat for public APIs; prefer additive changes. Mark types `Sendable` where feasible.
-- No direct coupling to executable targets; provide protocols and adapters only.
-- OpenAPI‑first applies to services; here we enforce runtime correctness and safety.
+Testing focuses on behavior, not wiring: store capabilities and ETag semantics, HTTP transport behavior, and DNS/crypto helpers. For async APIs, include concurrency and actor‑isolation tests. A minimal NIO server/client loop serves as the integration smoke.
 
-Testing & TDD
-- Unit: store capabilities, ETag semantics, HTTP transport behaviors, DNS/crypto helpers.
-- Concurrency/actor isolation tests for async APIs.
-- Integration smoke: minimal NIO server/client loop.
-
-CI gates
-- `swift build` + `swift test` for this package on PRs; zero generated sources committed.
-
-Maintenance
-- Document any behavior changes in root AGENTS.md master plan and bump minor versions for additive API.
-
+CI must pass `swift build` and `swift test` for this package, and no generated sources are committed. When you change behavior, document it in the root AGENTS.md master plan and bump a minor version for additive API.

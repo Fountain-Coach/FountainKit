@@ -1,15 +1,5 @@
-# AGENT — FountainProviders (LLM Providers)
+# AGENT — FountainProviders (LLM providers)
 
-Scope: `Packages/FountainProviders/**` — OpenAI/gateway/local providers.
+`Packages/FountainProviders/**` hosts OpenAI, gateway, and local providers behind a shared protocol. Document the env‑var policy and prefer Keychain helpers for secrets so tests can run safely.
 
-Principles
-- Env var policy documented; Keychain helper usage recommended for secrets.
-- Pluggable providers implement a common protocol.
-
-Testing & TDD
-- Unit: provider request building; error mapping.
-- Integration: live probes are opt‑in/skipped without keys.
-
-CI gates
-- Build + tests; no live calls without explicit keys in CI.
-
+Unit tests cover request building and error mapping. Integration probes are opt‑in and skipped without keys. CI builds and tests the package and never performs live calls unless keys are explicitly provided.

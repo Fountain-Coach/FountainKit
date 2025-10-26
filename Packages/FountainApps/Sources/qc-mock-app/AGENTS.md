@@ -1,54 +1,9 @@
 ## AGENT — qc-mock-app (macOS) — DEPRECATED
 
-Status
-- Deprecated in favor of the CI/PE‑first instrument sketcher (“PatchBay Studio”).
-- See the new service spec: `Packages/FountainSpecCuration/openapi/v1/patchbay.yml`.
+This app is deprecated in favor of the CI/PE‑first PatchBay Studio. It remains runnable for learnings and export demos. See `Packages/FountainSpecCuration/openapi/v1/patchbay.yml` for the current service.
 
-Purpose
-- A Quartz Composer–inspired macOS tool to mock graphs on a numbered grid.
-- Edit nodes/ports/edges visually, then export LLM‑friendly specs:
-  - JSON (`qc_prompt.json`) and DSL (`qc_prompt.dsl`).
-  - Single‑transform canvas: one scale/translation applied to the entire scene.
+qc‑mock‑app is a Quartz Composer–inspired macOS tool to sketch graphs on a numbered grid and export LLM‑friendly specs — JSON (`qc_prompt.json`) and a compact DSL (`qc_prompt.dsl`). The canvas uses a single transform (`CanvasTransform { scale, translation }`) applied once to the scene; everything renders and snaps in document space. Gestures are native (pan/zoom), edges are qcBezier curves in doc space, and the grid decimates labels as you zoom out.
 
-OpenAPI‑first integration
-- The app must conform to `qc-mock-service` API (see `Sources/qc-mock-service/AGENTS.md`).
-- Do not add UI affordances that are not representable through the service endpoints.
-- Where feasible, route state changes via the service to keep parity (import/export/zoom/pan/CRUD).
+The app conforms to the `qc-mock-service` API (see `Sources/qc-mock-service/AGENTS.md`). Don’t add UI that can’t be represented by service endpoints; when feasible, route state changes via the service to keep parity (import/export/zoom/pan/CRUD). Build and run with `swift run --package-path Packages/FountainApps qc-mock-app`.
 
-Run
-- Build/Run: `swift run --package-path Packages/FountainApps qc-mock-app`
-
-Features
-- Three panes: Outline | Canvas | Inspector. Canvas owns the full middle pane.
-- Native gestures: two‑finger pan, pinch‑to‑zoom (via NSScrollView magnification).
-- Single transform: one doc→view mapping (`CanvasTransform`) that all objects inherit.
-- Nodes with draggable frames, rounded corners, and titles (doc‑space edits; snap on release).
-- Ports on sides (left/right/top/bottom), typed (data/event/audio/midi).
-- Edges (qcBezier) with control points computed in doc space.
-- Numbered grid with scale‑aware decimation (hide minors/labels when zoomed out).
-- Save/Load a “Kit” folder that contains JSON + DSL.
-
-Tips
-- Toggle Connect mode to wire ports; click again to cancel.
-- Use the Inspector to edit node id/title/size/grid step; changes reflect immediately.
-- Export writes two files: `qc_prompt.json` and `qc_prompt.dsl` into the selected folder.
-
-Notes
-- The app focuses on authoring + export; the DSL parser is not included here.
-- The exported JSON matches the QC Prompt Kit schema used by `qclint.py`.
-
-Design — Single Transform & Doc Space
-- Canonical document space (artboard) expressed in logical units.
-- `CanvasTransform { scale, translation }` supplies `docToView` / `viewToDoc` helpers.
-- SceneContainer applies the transform once; Grid/Edges/Nodes render in doc units beneath it.
-- Input converts view deltas to doc deltas via the same transform; snapping is doc‑space.
-- Zoom anchors at the gesture centroid (keeps anchor under fingers).
-- Non‑scaling strokes draw in an overlay or via inverse line width (1/scale).
-
-Implementation roadmap
-1) Introduce `CanvasTransform` and pass through environment.
-2) Move all drawing under a single transformed container (or CALayer/MTKView root).
-3) Convert gestures to use `viewToDoc` deltas for drag; snap in doc space.
-4) Scale‑aware grid decimation and non‑scaling strokes for overlays.
-5) Service integration: wire CRUD/zoom/pan to the OpenAPI client.
-6) Optional: switch Grid/Edges to Metal for dense graphs using the same transform.
+Tips: toggle Connect mode to wire ports; click to cancel. Use the Inspector to edit node id/title/size/grid step. Export writes `qc_prompt.json` and `qc_prompt.dsl` into the chosen folder. The DSL parser is not included here; the JSON matches the QC Prompt Kit schema used by `qclint.py`.

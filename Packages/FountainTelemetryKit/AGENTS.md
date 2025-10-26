@@ -1,14 +1,5 @@
-# AGENT — FountainTelemetryKit (MIDI/Streaming Diagnostics)
+# AGENT — FountainTelemetryKit (MIDI/streaming diagnostics)
 
-Scope: `Packages/FountainTelemetryKit/**` — MIDI 2.0 stack, SSE over MIDI, diagnostics.
+`Packages/FountainTelemetryKit/**` provides the MIDI 2.0 stack, SSE‑over‑MIDI, and diagnostics. Performance constraints must be explicit and buffers sized deterministically so streaming doesn’t regress as we evolve the stack.
 
-Principles
-- Performance constraints documented; streaming buffers sized deterministically.
-
-Testing & TDD
-- Unit: encoder/decoder; timebase consistency.
-- Integration: streaming resilience tests (where feasible, simulated).
-
-CI gates
-- Build + tests; telemetry tests can be skipped on CI where hardware is missing.
-
+Tests cover encoders/decoders and timebase consistency; where hardware isn’t available, simulate long‑running streams to probe resilience. CI builds and tests this package; telemetry tests may be skipped when hardware is absent.

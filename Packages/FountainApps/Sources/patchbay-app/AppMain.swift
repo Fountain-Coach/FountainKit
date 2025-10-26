@@ -43,9 +43,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let cwd = URL(fileURLWithPath: fm.currentDirectoryPath)
         let baseDir = cwd.appendingPathComponent(".fountain/artifacts", isDirectory: true)
         try? fm.createDirectory(at: baseDir, withIntermediateDirectories: true)
-        // initial-open 1440x900
+        // initial-open 1440x900 (infinite artboard)
         let vm = EditorVM()
-        vm.pageSize = PageSpec.a4Portrait
         let state = AppState()
         let content = ContentView(state: state).environmentObject(vm)
         let host = NSHostingView(rootView: content)
@@ -58,8 +57,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? img.tiffRepresentation?.write(to: out)
             fputs("[snap] wrote \(out.path)\n", stderr)
         }
-        // initial-open 1280x800 (portrait)
-        let vmP = EditorVM(); vmP.pageSize = PageSpec.a4Portrait
+        // initial-open 1280x800
+        let vmP = EditorVM()
         let contentP = ContentView(state: AppState()).environmentObject(vmP)
         let hostP = NSHostingView(rootView: contentP)
         hostP.frame = NSRect(x: 0, y: 0, width: 1280, height: 800)
@@ -220,34 +219,14 @@ struct ContentView: View {
                         Button { vm.zoom = max(0.25, vm.zoom - 0.1) } label: { Image(systemName: "minus.magnifyingglass") }
                         Button { vm.zoom = min(3.0, vm.zoom + 0.1) } label: { Image(systemName: "plus.magnifyingglass") }
                     }
-                    Menu("Page") {
-                        Button("Fit to Page") { NotificationCenter.default.post(name: .pbZoomFit, object: nil) }
+                    Menu("Canvas") {
+                        Button("Fit to View") { NotificationCenter.default.post(name: .pbZoomFit, object: nil) }
                         Divider()
-                        Menu("Canvas Mode") {
-                            Button("Infinite Workspace") { vm.workspaceMode = .infinite; NotificationCenter.default.post(name: .pbZoomFit, object: nil) }
-                            Button("A4 Page") { vm.workspaceMode = .pageA4; NotificationCenter.default.post(name: .pbZoomFit, object: nil) }
-                        }
-                        Divider()
-                        Button("A4 Portrait") {
-                            vm.pageSize = PageSpec.a4Portrait
-                            vm.grid = Int(PageSpec.mm(vm.gridMajorMM))
-                            NotificationCenter.default.post(name: .pbZoomFit, object: nil)
-                        }
-                        Button("A4 Landscape") {
-                            vm.pageSize = PageSpec.a4Landscape
-                            vm.grid = Int(PageSpec.mm(vm.gridMajorMM))
-                            NotificationCenter.default.post(name: .pbZoomFit, object: nil)
-                        }
-                        Divider()
-                        Menu("Margins") {
-                            Button("None (0 mm)") { vm.marginMM = 0 }
-                            Button("10 mm") { vm.marginMM = 10 }
-                            Button("12 mm") { vm.marginMM = 12 }
-                            Button("15 mm") { vm.marginMM = 15 }
-                        }
                         Menu("Grid") {
-                            Button("Minor 5 mm / Major 10 mm") { vm.gridMinorMM = 5; vm.gridMajorMM = 10; vm.grid = Int(PageSpec.mm(vm.gridMajorMM)) }
-                            Button("Minor 2.5 mm / Major 10 mm") { vm.gridMinorMM = 2.5; vm.gridMajorMM = 10; vm.grid = Int(PageSpec.mm(vm.gridMajorMM)) }
+                            Button("8 px (major ×5)") { vm.grid = 8; vm.majorEvery = 5 }
+                            Button("12 px (major ×5)") { vm.grid = 12; vm.majorEvery = 5 }
+                            Button("16 px (major ×5)") { vm.grid = 16; vm.majorEvery = 5 }
+                            Button("24 px (major ×5)") { vm.grid = 24; vm.majorEvery = 5 }
                         }
                     }
                     Button {
@@ -559,23 +538,7 @@ struct InspectorPane: View {
                 Text("Exports a lightweight agent config for PatchBay actions.")
                     .foregroundColor(.secondary)
             }
-            Divider().padding(.vertical, 4)
-            Text("Export").font(.headline)
-            HStack(spacing: 8) {
-                Button("Export PDF Page…") {
-                    let size = vm.pageSize
-                    let host = NSHostingView(rootView: EditorCanvas().environmentObject(vm).environmentObject(state))
-                    host.frame = NSRect(x: 0, y: 0, width: size.width, height: size.height)
-                    EngraverExport.exportPDF(from: host, suggestedName: "patchbay-page.pdf") { result in
-                        switch result {
-                        case .success(let url): state.addLog(action: "export-pdf", detail: url.lastPathComponent, diff: "")
-                        case .failure(let err): state.addLog(action: "export-pdf", detail: "error: \(err.localizedDescription)", diff: "")
-                        }
-                    }
-                }
-                Text("Writes an A4 PDF of the current page (Engraver pipeline next).")
-                    .foregroundColor(.secondary)
-            }
+            // Export of a fixed A4 page removed in infinite artboard mode.
         }
     }
 }
@@ -636,19 +599,8 @@ extension InspectorPane {
     struct RuleCheck { let title: String; let ok: Bool; let detail: String }
     func computeRules() -> [RuleCheck] {
         var out: [RuleCheck] = []
-        // PageFit via facade (use actual center pane size when available)
-        if vm.workspaceMode == .pageA4 {
-            let view = vm.lastViewSize == .zero ? (NSScreen.main?.frame.size ?? CGSize(width: 1440, height: 900)) : vm.lastViewSize
-            let pf = RulesKitFacade.checkPageFit(.init(view: view, page: vm.pageSize, zoom: vm.zoom, translation: vm.translation))
-            out.append(.init(title: "PageFit(zoom,tx,ty)", ok: pf.ok, detail: pf.detail))
-        } else {
-            out.append(.init(title: "PageFit(zoom,tx,ty)", ok: true, detail: "infinite-workspace"))
-        }
-        // MarginWithinPage via facade
-        if vm.workspaceMode == .pageA4 {
-            let mw = RulesKitFacade.checkMarginWithinPage(page: vm.pageSize, marginMM: vm.marginMM)
-            out.append(.init(title: "MarginWithinPage", ok: mw.ok, detail: mw.detail))
-        }
+        // Infinite artboard: page fit/margins are not applicable
+        out.append(.init(title: "PageFit", ok: true, detail: "infinite-artboard"))
         // Pane width policy placeholder
         let pw = RulesKitFacade.checkPaneWidthPolicy()
         out.append(.init(title: "PaneWidthRange(left 200–320, right 260–460)", ok: pw.ok, detail: pw.detail))

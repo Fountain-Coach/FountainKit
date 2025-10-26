@@ -17,15 +17,10 @@ enum RulesKitFacade {
         return .init(ok: okZ && okTx && okTy, detail: String(format: "z=%.3f tx=%.1f ty=%.1f", input.zoom, input.translation.x, input.translation.y))
     }
 
-    static func checkMarginWithinPage(page: CGSize, marginMM: CGFloat) -> CheckResult {
-        let m = PageSpec.mm(marginMM)
-        let ok = (m*2 < page.width) && (m*2 < page.height)
-        return .init(ok: ok, detail: ok ? "ok" : "margin too large")
-    }
+    // Page-specific checks removed in infinite artboard mode.
 
     static func checkPaneWidthPolicy() -> CheckResult {
         // Placeholder: wired left/right min/ideal/max in AppMain; measure later via Preferences.
         return .init(ok: true, detail: "policy asserted")
     }
 }
-

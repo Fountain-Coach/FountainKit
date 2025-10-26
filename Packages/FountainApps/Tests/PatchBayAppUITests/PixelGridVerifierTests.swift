@@ -5,17 +5,14 @@ import SwiftUI
 
 @MainActor
 final class PixelGridVerifierTests: XCTestCase {
-    func testMinorGridSpacingMatchesMMWithinTolerance() throws {
+    func testMinorGridSpacingMatchesPixelsWithinTolerance() throws {
         let vm = EditorVM()
-        vm.pageSize = PageSpec.a4Portrait
         vm.zoom = 1.0
         vm.translation = .zero
-        vm.marginMM = 10
-        vm.gridMinorMM = 5
-        vm.gridMajorMM = 10
+        vm.grid = 12
 
         let host = NSHostingView(rootView: EditorCanvas().environmentObject(vm).environmentObject(AppState()))
-        host.frame = NSRect(x: 0, y: 0, width: vm.pageSize.width, height: vm.pageSize.height)
+        host.frame = NSRect(x: 0, y: 0, width: 800, height: 600)
         host.layoutSubtreeIfNeeded()
         let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds)!
         host.cacheDisplay(in: host.bounds, to: rep)
@@ -46,7 +43,7 @@ final class PixelGridVerifierTests: XCTestCase {
         let median = Double(sorted[sorted.count/2])
 
         // Expected minor spacing in view pixels
-        let expected = Double(PageSpec.mm(vm.gridMinorMM) * vm.zoom)
+        let expected = Double(CGFloat(vm.grid) * vm.zoom)
         XCTAssertEqual(median, expected, accuracy: 2.0, "minor grid spacing off: median=\(median) expected=\(expected)")
     }
 }

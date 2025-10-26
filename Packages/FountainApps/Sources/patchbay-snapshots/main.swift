@@ -13,7 +13,6 @@ struct PatchBaySnapshots {
             do {
                 // initial-open 1440x900
                 let vm = EditorVM()
-                vm.pageSize = PageSpec.a4Portrait
                 let content = ContentView(state: AppState()).environmentObject(vm)
                 let host = NSHostingView(rootView: content)
                 host.frame = NSRect(x: 0, y: 0, width: 1440, height: 900)

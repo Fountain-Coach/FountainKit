@@ -10,7 +10,7 @@ Start everything with logs and readiness checks by running `bash Scripts/dev-up 
 
 ### Using the canvas
 
-The canvas defaults to an A4 page (PDF points) with a scale‑aware mm grid and margin guides. Use the Page menu to switch portrait/landscape, set margins (0/10/12/15 mm), and choose grid spacing (e.g., 5 mm minor / 10 mm major). When you prefer an infinite workspace (Flow’s node bed), toggle Canvas Mode → Infinite Workspace; Fit will then center the visible area and skip page constraints. Double‑click an instrument in the left pane to add it to the canvas (data ports always; UMP ports when available). To connect nodes, toggle “Connect” in the toolbar, click an output, then an input. Hold Option to fan‑out the same output to multiple inputs. Double‑click an input to break a connection. Arrow keys nudge the selection by one grid step; Option nudges by five.
+The canvas is an infinite artboard with an adaptive grid. Use the Canvas menu to “Fit to View” (resets zoom and centering) and pick a grid density (e.g., 12/16/24 px minor; major every 5). Double‑click an instrument in the left pane to add it to the canvas (data ports always; UMP ports when available). To connect nodes, toggle “Connect” in the toolbar, click an output, then an input. Hold Option to fan‑out the same output to multiple inputs. Double‑click an input to break a connection. Arrow keys nudge the selection by one grid step; Option nudges by five.
 
 ### Links, actions, and logs
 
@@ -29,7 +29,7 @@ Agent presets. The Corpus tab also includes “Export Agent Preset…”. This w
 
 Use this file as a seed for agent tooling (or to register PatchBay actions in a gateway). The format is app‑local and intentionally simple — see `AgentPreset.swift`.
 
-PDF export. The Corpus tab also offers “Export PDF Page…”, which writes the current A4 page to a PDF (UI orientation). This is a stable hand‑off for engraving/printing and matches the mm grid and margins you see on screen.
+Export. Page-centric PDF export has been removed with the shift to an infinite artboard. A future export will snapshot the visible scene.
 
 ### API surface (client copy)
 
@@ -48,14 +48,14 @@ At runtime you typically: list instruments, add them to the canvas, wire ports (
 ## Alignment with Engraver, ScoreKit, RulesKit, AnimationKit
 
 PatchBay is the sketch bay that adopts the same foundations as our engraving stack:
-- ScoreKit supplies page/grid semantics. PatchBay’s A4 page and mm grid mirror ScoreKit’s units so screen and print agree.
+- Flow supplies the node/wire editor. PatchBay’s grid is pixel‑based and tuned for interaction.
 - Engraver is the print authority. PDF export is wired to NSView today and will route through Engraver next to preserve typography and page metrics 1:1.
 - RulesKit encodes invariant checks (e.g., PageFit, MarginBounds, PaneWidthRange). PatchBay exposes a Rules tab and will call RulesKit for enforcement; CI blocks on failures.
 - AnimationKit will unify timing (connect glow, selection pulse, zoom easing) behind a single, testable DSL.
 
 ## Flow adoption (AudioKit)
 
-We embed AudioKit’s Flow NodeEditor as the node/wire editor inside our A4 page.
+We embed AudioKit’s Flow NodeEditor as the node/wire editor inside our infinite artboard.
 - Why: Flow provides a mature, efficient SwiftUI Canvas implementation with proper pan/zoom, marquee selection, node dragging, and typed ports (control/signal/midi/custom).
 - Bridge: `FlowBridge.swift` maps our `EditorVM` nodes/edges ⇄ Flow `Patch`. Node moves snap to the mm grid; wire add/remove call our link service (best‑effort in the first pass).
 - Transforms: we bind Flow’s `transformChanged` to PatchBay’s zoom/translation so the mm grid stays aligned under Flow’s content.

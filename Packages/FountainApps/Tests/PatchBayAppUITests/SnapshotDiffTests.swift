@@ -102,7 +102,7 @@ final class SnapshotDiffTests: XCTestCase {
     func testInitialOpen1280x800PortraitOrWrites() throws {
         let bundle = Bundle.module
         guard let baselineURL = bundle.url(forResource: "initial-open-1280x800-portrait", withExtension: "tiff") else {
-            let vm = EditorVM(); vm.pageSize = PageSpec.a4Portrait
+            let vm = EditorVM()
             let view = ContentView(state: AppState()).environmentObject(vm)
             let host = NSHostingView(rootView: view); host.frame = NSRect(x: 0, y: 0, width: 1280, height: 800)
             host.layoutSubtreeIfNeeded()
@@ -113,7 +113,7 @@ final class SnapshotDiffTests: XCTestCase {
             try? img.tiffRepresentation?.write(to: out)
             throw XCTSkip("Baseline not found. Wrote candidate: \(out.path)")
         }
-        let vm = EditorVM(); vm.pageSize = PageSpec.a4Portrait
+        let vm = EditorVM()
         let view = ContentView(state: AppState()).environmentObject(vm)
         let host = NSHostingView(rootView: view); host.frame = NSRect(x: 0, y: 0, width: 1280, height: 800)
         host.layoutSubtreeIfNeeded()

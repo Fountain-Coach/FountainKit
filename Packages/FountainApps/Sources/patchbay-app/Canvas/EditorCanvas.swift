@@ -31,8 +31,6 @@ struct PBEdge: Identifiable, Hashable {
     var glow: Bool = false
 }
 
-enum WorkspaceMode: String, CaseIterable { case infinite, pageA4 }
-
 @MainActor
 final class EditorVM: ObservableObject {
     @Published var nodes: [PBNode] = []
@@ -44,12 +42,9 @@ final class EditorVM: ObservableObject {
     @Published var connectMode: Bool = false
     @Published var pendingFrom: (node: String, port: String)? = nil
     @Published var translation: CGPoint = .zero
-    @Published var pageSize: CGSize = PageSpec.a4Portrait
-    @Published var marginMM: CGFloat = 12.0
-    @Published var gridMinorMM: CGFloat = 5.0
-    @Published var gridMajorMM: CGFloat = 10.0
     @Published var lastViewSize: CGSize = .zero
-    @Published var workspaceMode: WorkspaceMode = .pageA4
+    // Grid spacing in points (minor). Major lines are drawn every `majorEvery` minors.
+    @Published var majorEvery: Int = 5
 
     func nodeIndex(by id: String) -> Int? { nodes.firstIndex{ $0.id == id } }
     func node(by id: String) -> PBNode? { nodes.first{ $0.id == id } }
@@ -256,7 +251,6 @@ struct GridBackground: View {
     var size: CGSize
     var minorStepPoints: CGFloat
     var majorStepPoints: CGFloat
-    var margin: EdgeInsets // in points
     var scale: CGFloat
     var translation: CGPoint // doc-space translation
 
@@ -281,9 +275,9 @@ struct GridBackground: View {
             let showLabels = majorStepView >= 12.0
             let lw = max(0.5, 1.0 / s)
 
-            // Draw page background
-            let pageRect = CGRect(x: 0, y: 0, width: W, height: H)
-            ctx.fill(Path(pageRect), with: .color(Color(NSColor.textBackgroundColor)))
+            // Background fill
+            let rect = CGRect(x: 0, y: 0, width: W, height: H)
+            ctx.fill(Path(rect), with: .color(Color(NSColor.textBackgroundColor)))
 
             // Grid lines (full page, Y-down) with translation (panning)
             let startX = GridBackground.periodicOffset(translation.x, s, minorStepView)
@@ -313,10 +307,7 @@ struct GridBackground: View {
                 y += minorStepView; i += 1
             }
 
-            // Margin box (guides)
-            let marginRect = CGRect(x: margin.leading, y: margin.top, width: W - margin.leading - margin.trailing, height: H - margin.top - margin.bottom)
-            let mpath = Path(roundedRect: marginRect, cornerSize: .zero)
-            ctx.stroke(mpath, with: .color(Color(NSColor.systemRed).opacity(0.35)), lineWidth: lw)
+            // No page margins in infinite artboard mode
         }
     }
 }
@@ -375,14 +366,10 @@ struct EditorCanvas: View {
 
     var body: some View {
         GeometryReader { geo in
-            // Workspace mode: infinite (fill) or fixed A4 page
-            let isInfinite = (vm.workspaceMode == .infinite)
-            let docSize = isInfinite ? geo.size : vm.pageSize
-            // Center the scaled page within the center pane
-            let scaledW = vm.zoom * docSize.width
-            let scaledH = vm.zoom * docSize.height
-            let padX = isInfinite ? 0 : (geo.size.width - scaledW) * 0.5
-            let padY = isInfinite ? 0 : (geo.size.height - scaledH) * 0.5
+            // Infinite artboard: the document matches the visible size; no page padding.
+            let docSize = geo.size
+            let padX: CGFloat = 0
+            let padY: CGFloat = 0
             let transform = CanvasTransform(scale: vm.zoom, translation: vm.translation)
             let toView: (CGPoint)->CGPoint = { p in
                 // Include page-centering padding when in page mode so marquee/select math aligns
@@ -397,10 +384,9 @@ struct EditorCanvas: View {
 
             ZStack(alignment: .topLeading) {
                 ZStack(alignment: .topLeading) {
-                    let minor = PageSpec.mm(vm.gridMinorMM)
-                    let major = PageSpec.mm(vm.gridMajorMM)
-                    let m = EdgeInsets(top: PageSpec.mm(vm.marginMM), leading: PageSpec.mm(vm.marginMM), bottom: PageSpec.mm(vm.marginMM), trailing: PageSpec.mm(vm.marginMM))
-                    GridBackground(size: docSize, minorStepPoints: minor, majorStepPoints: major, margin: m, scale: vm.zoom, translation: vm.translation)
+                    let minor = CGFloat(vm.grid)
+                    let major = CGFloat(vm.grid * max(1, vm.majorEvery))
+                    GridBackground(size: docSize, minorStepPoints: minor, majorStepPoints: major, scale: vm.zoom, translation: vm.translation)
                     flowEditorOverlay(docSize: docSize)
                         .frame(width: docSize.width, height: docSize.height)
                 }
@@ -440,35 +426,17 @@ struct EditorCanvas: View {
                 }
             )
             .onReceive(NotificationCenter.default.publisher(for: .pbZoomFit)) { _ in
-                // Fit content to view and reset panning
-                let viewSize = geo.size
-                let content = CGRect(origin: .zero, size: isInfinite ? viewSize : vm.pageSize)
-                let z = EditorVM.computeFitZoom(viewSize: viewSize, contentBounds: content)
+                // Infinite artboard: fitting resets zoom to 1 and centers translation.
                 vm.translation = .zero
-                vm.zoom = z
+                vm.zoom = 1.0
             }
             .onReceive(NotificationCenter.default.publisher(for: .pbZoomActual)) { _ in
                 vm.zoom = 1.0
                 vm.translation = .zero
             }
             .onAppear {
-                // Ensure initial open is fit-to-view
-                if !didInitialFit {
-                    let viewSize = geo.size
-                    let content = CGRect(origin: .zero, size: isInfinite ? viewSize : vm.pageSize)
-                    let z = EditorVM.computeFitZoom(viewSize: viewSize, contentBounds: content)
-                    vm.translation = .zero
-                    vm.zoom = z
-                    didInitialFit = true
-                }
-                flowPatch = FlowBridge.toFlowPatch(vm: vm)
-            }
-            .onChange(of: vm.pageSize) { _,_ in
-                let viewSize = geo.size
-                let content = CGRect(origin: .zero, size: vm.pageSize)
-                let z = EditorVM.computeFitZoom(viewSize: viewSize, contentBounds: content)
-                vm.translation = .zero
-                vm.zoom = z
+                // Initial open: reset to a sensible default for infinite artboard
+                if !didInitialFit { vm.translation = .zero; vm.zoom = 1.0; didInitialFit = true }
                 flowPatch = FlowBridge.toFlowPatch(vm: vm)
             }
             .onChange(of: vm.nodes) { _ in
@@ -508,7 +476,7 @@ struct EditorCanvas: View {
             }
             .onEnded { _ in
                 guard let idx = vm.nodeIndex(by: node.id) else { dragStart = nil; return }
-                let g = PageSpec.mm(vm.gridMajorMM)
+                let g = CGFloat(vm.grid)
                 let x = CGFloat(vm.nodes[idx].x)
                 let y = CGFloat(vm.nodes[idx].y)
                 vm.nodes[idx].x = Int((round(x / g) * g))
@@ -521,7 +489,7 @@ struct EditorCanvas: View {
     private func flowEditorOverlay(docSize: CGSize) -> some View {
         NodeEditor(patch: $flowPatch, selection: $flowSelection)
             .onNodeMoved { index, loc in
-                let g = PageSpec.mm(vm.gridMajorMM)
+                let g = CGFloat(vm.grid)
                 if let i = vm.nodeIndex(by: vm.nodes[index].id) {
                     vm.nodes[i].x = Int((round(loc.x / g) * g))
                     vm.nodes[i].y = Int((round(loc.y / g) * g))

@@ -5,11 +5,10 @@ import SwiftUI
 
 @MainActor
 final class InitialOpenUITests: XCTestCase {
-    func testEditorCanvasFitsA4OnAppear() async throws {
+    func testEditorCanvasInitialOpenResetsZoomAndCenter() async throws {
         let vm = EditorVM()
-        vm.pageSize = PageSpec.a4Portrait
         vm.zoom = 0.5
-        vm.translation = .zero
+        vm.translation = CGPoint(x: 123, y: -77)
 
         // Host the canvas at a deterministic view size
         let host = NSHostingView(rootView: EditorCanvas().environmentObject(vm).environmentObject(AppState()))
@@ -19,11 +18,9 @@ final class InitialOpenUITests: XCTestCase {
         // Give SwiftUI a short moment to deliver onAppear/GeometryReader updates
         try await Task.sleep(nanoseconds: 50_000_000) // 50ms
 
-        let expectedZ = EditorVM.computeFitZoom(viewSize: host.bounds.size, contentBounds: CGRect(origin: .zero, size: vm.pageSize))
-        let expectedT = EditorVM.computeCenterTranslation(viewSize: host.bounds.size, contentBounds: CGRect(origin: .zero, size: vm.pageSize), zoom: expectedZ)
-
-        XCTAssertEqual(vm.zoom, expectedZ, accuracy: 0.01, "zoom should fit page on appear")
-        XCTAssertEqual(vm.translation.x, expectedT.x, accuracy: 1.0, "translation.x centers page")
-        XCTAssertEqual(vm.translation.y, expectedT.y, accuracy: 1.0, "translation.y centers page")
+        // Infinite artboard: expect zoom=1 and translation reset to zero.
+        XCTAssertEqual(vm.zoom, 1.0, accuracy: 0.01)
+        XCTAssertEqual(vm.translation.x, 0, accuracy: 0.5)
+        XCTAssertEqual(vm.translation.y, 0, accuracy: 0.5)
     }
 }

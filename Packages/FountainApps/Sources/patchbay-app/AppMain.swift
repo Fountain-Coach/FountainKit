@@ -40,6 +40,8 @@ final class AppState: ObservableObject {
     @Published var stored: [Components.Schemas.StoredGraph] = []
     @Published var vendor: Components.Schemas.VendorIdentity? = nil
     @Published var snapshotSummary: String = ""
+    struct ActionLogItem: Identifiable { let id = UUID().uuidString; let time = Date(); let action: String; let detail: String; let diff: String }
+    @Published var runLog: [ActionLogItem] = []
     let api: PatchBayAPI
     init(api: PatchBayAPI = PatchBayClient()) { self.api = api }
     func refresh() async {
@@ -54,6 +56,7 @@ final class AppState: ObservableObject {
     func saveVendor() async {
         guard let v = vendor, let c = api as? PatchBayClient else { return }
         try? await c.putVendorIdentity(v)
+        addLog(action: "put-vendor-identity", detail: "saved", diff: "")
     }
     func makeSnapshot() async {
         guard let c = api as? PatchBayClient else { return }
@@ -65,11 +68,14 @@ final class AppState: ObservableObject {
     }
     func applyAllSuggestions() async {
         guard let c = api as? PatchBayClient else { return }
+        let before = links.count
         for s in suggestions {
             let l = s.link
             _ = try? await c.createLink(l)
         }
         await refreshLinks()
+        let after = links.count
+        addLog(action: "apply-all-suggestions", detail: "count=\(suggestions.count)", diff: "links: \(before)→\(after)")
     }
 
     func refreshLinks() async {
@@ -78,13 +84,20 @@ final class AppState: ObservableObject {
     }
     func deleteLink(_ id: String) async {
         guard let c = api as? PatchBayClient else { return }
+        let before = links.count
         try? await c.deleteLink(id: id)
         await refreshLinks()
+        let after = links.count
+        addLog(action: "delete-link", detail: id, diff: "links: \(before)→\(after)")
     }
 
     func refreshStore() async {
         guard let c = api as? PatchBayClient else { return }
         if let list = try? await c.listStoredGraphs() { stored = list }
+    }
+    func addLog(action: String, detail: String, diff: String) {
+        runLog.insert(.init(action: action, detail: detail, diff: diff), at: 0)
+        if runLog.count > 50 { runLog.removeLast(runLog.count - 50) }
     }
 }
 
@@ -191,6 +204,9 @@ struct InspectorPane: View {
     @State private var tab: Tab = .links
     @State private var selectedInstrumentIndex: Int = 0
     @State private var storeId: String = "scene-1"
+    @State private var previewLink: Components.Schemas.CreateLink? = nil
+    @State private var showPreview: Bool = false
+    @State private var showApplyAllConfirm: Bool = false
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Picker("", selection: $tab) {
@@ -238,7 +254,7 @@ struct InspectorPane: View {
                 Text("Suggestions").font(.headline)
                 Spacer()
                 Button("Refresh") { Task { await state.autoNoodle() } }
-                Button("Apply All") { Task { await state.applyAllSuggestions() } }
+                Button("Apply All") { showApplyAllConfirm = true }
             }
             if state.suggestions.isEmpty { Text("No suggestions yet").foregroundColor(.secondary) }
             ScrollView {
@@ -246,10 +262,7 @@ struct InspectorPane: View {
                     Text("• \(s.reason) — conf: \(String(format: "%.2f", s.confidence ?? 0))")
                         .font(.system(.body, design: .monospaced))
                     if let l = Optional(s.link) {
-                        Button("Apply") { Task {
-                            if let c = state.api as? PatchBayClient { _ = try? await c.createLink(l) }
-                            await state.refreshLinks()
-                        } }
+                        Button("Apply") { previewLink = l; showPreview = true }
                     }
                 }
             }
@@ -269,6 +282,54 @@ struct InspectorPane: View {
                     }
                 }
             }
+            Divider().padding(.vertical, 4)
+            Text("Run Log").font(.headline)
+            if state.runLog.isEmpty { Text("No actions yet").foregroundColor(.secondary) }
+            ScrollView {
+                ForEach(state.runLog) { item in
+                    HStack(alignment: .top) {
+                        Text(item.action).font(.system(.body, design: .monospaced))
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(item.detail).font(.system(.caption, design: .monospaced)).foregroundColor(.secondary)
+                            if !item.diff.isEmpty { Text(item.diff).font(.system(.caption, design: .monospaced)) }
+                        }
+                    }
+                }
+            }
+        }
+        .alert("Apply all suggestions?", isPresented: $showApplyAllConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Apply All") { Task { await state.applyAllSuggestions() } }
+        } message: {
+            Text("Count: \(state.suggestions.count)")
+        }
+        .sheet(isPresented: $showPreview) {
+            let link = previewLink
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Preview Link (JSON)").font(.headline)
+                ScrollView {
+                    Text(link.map(jsonString(of:)) ?? "{}").font(.system(.caption, design: .monospaced))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                HStack {
+                    Spacer()
+                    Button("Cancel") { previewLink = nil; showPreview = false }
+                    Button("Apply") {
+                        Task {
+                            if let c = state.api as? PatchBayClient, let link = previewLink {
+                                let before = state.links.count
+                                _ = try? await c.createLink(link)
+                                await state.refreshLinks()
+                                let after = state.links.count
+                                state.addLog(action: "create-link", detail: linkSummaryCreate(link), diff: "links: \(before)→\(after)")
+                            }
+                            previewLink = nil; showPreview = false
+                        }
+                    }
+                }
+            }
+            .padding(12)
         }
     }
     @ViewBuilder var vendorView: some View {
@@ -396,6 +457,30 @@ private func linkSummaryNew(_ l: Components.Schemas.Link) -> String {
     default:
         return l.id
     }
+}
+
+private func linkSummaryCreate(_ l: Components.Schemas.CreateLink) -> String {
+    switch l.kind {
+    case .property:
+        let a = l.property?.from ?? "?"
+        let b = l.property?.to ?? "?"
+        return "prop: \(a) → \(b)"
+    case .ump:
+        if let m = l.ump {
+            let s = m.source
+            let msg = s.message.rawValue
+            return "ump: ep=\(s.endpointId) g=\(s.group) ch=\(s.channel) \(msg) → \(m.to)"
+        }
+        return "ump: (incomplete)"
+    default:
+        return "create-link"
+    }
+}
+
+private func jsonString<T: Encodable>(of value: T) -> String {
+    let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+    if let data = try? enc.encode(value), let s = String(data: data, encoding: .utf8) { return s }
+    return "{ }"
 }
 private func linkSummary(_ l: Components.Schemas.Link) -> String {
     switch l.kind {

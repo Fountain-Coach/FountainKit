@@ -77,6 +77,7 @@ port_for() {
     semantic-browser) echo "${SEMANTIC_BROWSER_PORT:-8007}" ;;
     tools-factory) echo "${TOOLS_FACTORY_PORT:-8011}" ;;
     tool-server) echo "${PORT:-8012}" ;;
+    patchbay) echo "${PATCHBAY_PORT:-7090}" ;;
     *) echo 0 ;;
   esac
 }
@@ -265,6 +266,7 @@ if [[ "$ALL" == "1" ]]; then
   start_bg tools-factory tools-factory-server Packages/FountainApps
   start_bg tool-server tool-server Packages/FountainApps
   start_bg publishing-frontend publishing-frontend Packages/FountainApps
+  start_bg patchbay patchbay-service-server Packages/FountainApps
 fi
 
 if [[ "$CHECK" == "1" || "${DEV_UP_CHECKS:-0}" == "1" ]]; then
@@ -281,6 +283,7 @@ if [[ "$CHECK" == "1" || "${DEV_UP_CHECKS:-0}" == "1" ]]; then
     wait_ready tool-server      http://127.0.0.1:8012/_health || true
     # semantic-browser exposes /metrics per its README; may depend on env, so mark optional
     wait_ready semantic-browser http://127.0.0.1:8007/metrics || true
+    wait_ready patchbay         http://127.0.0.1:$(port_for patchbay)/health || true
   fi
 fi
 

@@ -50,8 +50,14 @@ struct Main {
         } else {
             Task {
                 do {
-                    _ = try await server.start(port: port)
-                    print("patchbay-service listening on :\(port)")
+                    var bound: Int
+                    do {
+                        bound = try await server.start(port: port)
+                    } catch {
+                        // Fallback: bind on an ephemeral port when preferred port is busy
+                        bound = try await server.start(port: 0)
+                    }
+                    print("patchbay-service listening on :\(bound)")
                 } catch {
                     FileHandle.standardError.write(Data("[patchbay-service] failed to start: \(error)\n".utf8))
                 }

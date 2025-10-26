@@ -340,7 +340,7 @@ struct ContentView: View {
     @StateObject var vm = EditorVM()
     init(state: AppState = AppState()) { _state = StateObject(wrappedValue: state) }
     var body: some View {
-        NavigationSplitView(columnVisibility: .constant(.all)) {
+        NavigationSplitView(columnVisibility: .constant(.automatic)) {
             // Instruments list (left)
             List(selection: .constant(Optional<String>.none)) {
                 ForEach(state.instruments, id: \.id) { i in
@@ -366,7 +366,7 @@ struct ContentView: View {
                 ToolbarItem { Button("Auto‑noodle (CI/PE)") { Task { await state.autoNoodle() } } }
             }
             .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
-        } content: {
+        } detail: {
             // Canvas center with zoom container (pinch/scroll) and key input (arrow-keys nudge)
             KeyInputContainer(onKey: { event in
                 let flags = event.modifierFlags
@@ -417,11 +417,6 @@ struct ContentView: View {
                     } label: { Label("Add Node", systemImage: "plus.square.on.square") }
                 }
             }
-        } detail: {
-            AssistantPane()
-                .environmentObject(state)
-                .padding(12)
-                .navigationSplitViewColumnWidth(min: 300, ideal: 360, max: 520)
         }
         .task {
             await state.refresh()

@@ -58,6 +58,36 @@ paths:
       operationId: deleteLink
       responses:
         '204': { description: Deleted }
+  /store/graphs:
+    get:
+      operationId: listStoredGraphs
+      responses:
+        '200':
+          description: Stored graphs
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/StoredGraph' }
+  /store/graphs/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getStoredGraph
+      responses:
+        '200': { description: Stored Graph, content: { application/json: { schema: { $ref: '#/components/schemas/StoredGraph' } } } }
+    put:
+      operationId: putStoredGraph
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StoredGraph' }
+      responses:
+        '204': { description: Upserted }
   /admin/vendor-identity:
     get:
       operationId: getVendorIdentity
@@ -124,6 +154,29 @@ components:
         h: { type: integer }
         identity: { $ref: '#/components/schemas/InstrumentIdentity' }
         propertySchema: { $ref: '#/components/schemas/PropertySchema' }
+    GraphDoc:
+      type: object
+      required: [canvas, instruments, links]
+      properties:
+        canvas:
+          type: object
+          required: [width, height, theme, grid]
+          properties:
+            width: { type: integer }
+            height: { type: integer }
+            theme: { type: string, enum: [light, dark] }
+            grid: { type: integer }
+        instruments: { type: array, items: { $ref: '#/components/schemas/Instrument' } }
+        links: { type: array, items: { $ref: '#/components/schemas/Link' } }
+    StoredGraph:
+      type: object
+      required: [id, doc]
+      properties:
+        id: { type: string }
+        doc: { $ref: '#/components/schemas/GraphDoc' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        etag: { type: string }
     PropertyRef:
       type: string
     PropertyLink:

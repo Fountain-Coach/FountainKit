@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Foundation
 
 enum PBPortSide: String, CaseIterable { case left, right, top, bottom }
 enum PBPortDir: String, CaseIterable { case input = "in", output = "out" }
@@ -111,6 +112,58 @@ final class EditorVM: ObservableObject {
                 nodes[i].y += dy * g
             }
         }
+    }
+
+    // MARK: - GraphDoc mapping
+    func toGraphDoc(with instruments: [Components.Schemas.Instrument]) -> Components.Schemas.GraphDoc {
+        let content = contentBounds(margin: 40)
+        let canvas = Components.Schemas.GraphDoc.canvasPayload(width: Int(max(1, content.width)), height: Int(max(1, content.height)), theme: .light, grid: grid)
+        // Map instruments by id if a node with same id exists; otherwise include instrument as-is
+        let instById = Dictionary(uniqueKeysWithValues: instruments.map { ($0.id, $0) })
+        var mapped: [Components.Schemas.Instrument] = []
+        for n in nodes {
+            if var i = instById[n.id] {
+                i.x = n.x; i.y = n.y; i.w = n.w; i.h = n.h
+                mapped.append(i)
+            }
+        }
+        // Add any instruments not on canvas
+        for (id, i) in instById where !nodes.contains(where: { $0.id == id }) {
+            mapped.append(i)
+        }
+        // Map edges to property links
+        let links: [Components.Schemas.Link] = edges.enumerated().map { idx, e in
+            let prop = Components.Schemas.PropertyLink(from: e.from, to: e.to, direction: .a_to_b)
+            return Components.Schemas.Link(id: "edge-\(idx)", kind: .property, property: prop, ump: nil)
+        }
+        return Components.Schemas.GraphDoc(canvas: canvas, instruments: mapped, links: links)
+    }
+
+    func applyGraphDoc(_ doc: Components.Schemas.GraphDoc) {
+        self.grid = doc.canvas.grid ?? self.grid
+        // Build nodes from instruments
+        var newNodes: [PBNode] = []
+        for i in doc.instruments {
+            let id = i.id
+            var ports: [PBPort] = []
+            // Default data ports
+            ports.append(.init(id: "in", side: .left, dir: .input, type: "data"))
+            ports.append(.init(id: "out", side: .right, dir: .output, type: "data"))
+            // UMP ports
+            if i.identity.hasUMPInput == true { ports.append(.init(id: "umpIn", side: .left, dir: .input, type: "ump")) }
+            if i.identity.hasUMPOutput == true { ports.append(.init(id: "umpOut", side: .right, dir: .output, type: "ump")) }
+            let n = PBNode(id: id, title: i.title, x: i.x ?? 0, y: i.y ?? 0, w: i.w ?? 200, h: i.h ?? 120, ports: ports)
+            newNodes.append(n)
+        }
+        self.nodes = newNodes
+        // Build edges from property links
+        var newEdges: [PBEdge] = []
+        for l in doc.links ?? [] {
+            if l.kind == .property, let p = l.property {
+                newEdges.append(PBEdge(from: p.from ?? "", to: p.to ?? ""))
+            }
+        }
+        self.edges = newEdges
     }
 
     // Logic helpers for tests

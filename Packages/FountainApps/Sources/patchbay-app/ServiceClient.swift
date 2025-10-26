@@ -70,4 +70,22 @@ final class PatchBayClient: PatchBayAPI {
     func deleteLink(id: String) async throws {
         _ = try await client.deleteLink(.init(path: .init(id: id)))
     }
+
+    // Store
+    func listStoredGraphs() async throws -> [Components.Schemas.StoredGraph] {
+        switch try await client.listStoredGraphs(.init()) {
+        case .ok(let ok): return try ok.body.json
+        default: return []
+        }
+    }
+    func getStoredGraph(id: String) async throws -> Components.Schemas.StoredGraph? {
+        switch try await client.getStoredGraph(.init(path: .init(id: id))) {
+        case .ok(let ok): return try ok.body.json
+        default: return nil
+        }
+    }
+    func putStoredGraph(id: String, doc: Components.Schemas.GraphDoc) async throws {
+        let sg = Components.Schemas.StoredGraph(id: id, doc: doc, createdAt: nil, updatedAt: nil, etag: nil)
+        _ = try await client.putStoredGraph(.init(path: .init(id: id), body: .json(sg)))
+    }
 }

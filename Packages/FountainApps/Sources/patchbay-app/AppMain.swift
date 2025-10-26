@@ -37,6 +37,7 @@ final class AppState: ObservableObject {
     @Published var instruments: [Components.Schemas.Instrument] = []
     @Published var suggestions: [Components.Schemas.SuggestedLink] = []
     @Published var links: [Components.Schemas.Link] = []
+    @Published var stored: [Components.Schemas.StoredGraph] = []
     @Published var vendor: Components.Schemas.VendorIdentity? = nil
     @Published var snapshotSummary: String = ""
     let api: PatchBayAPI
@@ -80,6 +81,11 @@ final class AppState: ObservableObject {
         try? await c.deleteLink(id: id)
         await refreshLinks()
     }
+
+    func refreshStore() async {
+        guard let c = api as? PatchBayClient else { return }
+        if let list = try? await c.listStoredGraphs() { stored = list }
+    }
 }
 
 struct ContentView: View {
@@ -111,11 +117,23 @@ struct ContentView: View {
             }
             .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
         } content: {
-            // Canvas center with zoom container (pinch/scroll)
-            ZoomContainer(zoom: $vm.zoom, translation: $vm.translation) {
-                EditorCanvas()
-                    .environmentObject(vm)
-                    .background(Color(NSColor.textBackgroundColor))
+            // Canvas center with zoom container (pinch/scroll) and key input (arrow-keys nudge)
+            KeyInputContainer(onKey: { event in
+                let flags = event.modifierFlags
+                let stepMult = flags.contains(.option) ? 5 : 1
+                switch event.keyCode {
+                case 123: vm.nudgeSelected(dx: -1 * stepMult, dy: 0)
+                case 124: vm.nudgeSelected(dx: 1 * stepMult, dy: 0)
+                case 125: vm.nudgeSelected(dx: 0, dy: 1 * stepMult)
+                case 126: vm.nudgeSelected(dx: 0, dy: -1 * stepMult)
+                default: break
+                }
+            }) {
+                ZoomContainer(zoom: $vm.zoom, translation: $vm.translation) {
+                    EditorCanvas()
+                        .environmentObject(vm)
+                        .background(Color(NSColor.textBackgroundColor))
+                }
             }
             .navigationTitle("PatchBay Canvas")
             .navigationSplitViewColumnWidth(min: 600, ideal: 900, max: .infinity)
@@ -169,8 +187,10 @@ struct ContentView: View {
 struct InspectorPane: View {
     enum Tab: String, CaseIterable { case instruments = "Instruments", links = "Links", vendor = "Vendor", corpus = "Corpus" }
     @EnvironmentObject var state: AppState
+    @EnvironmentObject var vm: EditorVM
     @State private var tab: Tab = .links
     @State private var selectedInstrumentIndex: Int = 0
+    @State private var storeId: String = "scene-1"
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Picker("", selection: $tab) {
@@ -272,6 +292,38 @@ struct InspectorPane: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack { Text("Corpus Snapshot").font(.headline); Spacer(); Button("Create Snapshot") { Task { await state.makeSnapshot() } } }
             if !state.snapshotSummary.isEmpty { Text(state.snapshotSummary).font(.system(.body, design: .monospaced)) }
+            Divider().padding(.vertical, 4)
+            Text("Store (Save/Load)").font(.headline)
+            HStack {
+                TextField("Graph ID", text: $storeId).frame(width: 160)
+                Button("Save Current") {
+                    Task {
+                        if let c = state.api as? PatchBayClient {
+                            let doc = vm.toGraphDoc(with: state.instruments)
+                            try? await c.putStoredGraph(id: storeId, doc: doc)
+                            await state.refreshStore()
+                        }
+                    }
+                }
+                Spacer()
+                Button("Refresh List") { Task { await state.refreshStore() } }
+            }
+            if state.stored.isEmpty { Text("No stored graphs").foregroundColor(.secondary) }
+            ScrollView {
+                ForEach(state.stored, id: \.id) { item in
+                    HStack {
+                        Text(item.id).font(.system(.body, design: .monospaced))
+                        Spacer()
+                        Button("Load") {
+                            Task {
+                                if let c = state.api as? PatchBayClient, let sg = try? await c.getStoredGraph(id: item.id) {
+                                    vm.applyGraphDoc(sg.doc)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

@@ -1,15 +1,5 @@
 # AGENT — ToolServer Service
 
-Scope: `Packages/FountainServiceKit-ToolServer/**` — direct tool execution.
-Spec: `Packages/FountainServiceKit-ToolServer/Sources/ToolServer/openapi.yaml`.
+ToolServer executes tools directly. Spec: `Packages/FountainServiceKit-ToolServer/Sources/ToolServer/openapi.yaml`. Safety is paramount: enforce input size/time budgets and sandbox when required.
 
-Principles
-- Safety: input size/time budgets, sandboxing as required.
-
-Testing & TDD
-- Unit: request validation and safety guards.
-- Integration: minimal tool runs; health.
-
-CI gates
-- Build + tests; Studio smoke optional.
-
+Unit tests cover request validation and safety guards; integration runs a minimal tool set and checks health. CI builds and tests this package; Studio smoke is optional.

@@ -1,15 +1,5 @@
 # AGENT — ToolsFactory Service
 
-Scope: `Packages/FountainServiceKit-ToolsFactory/**` — tools catalog and registration.
-Spec: `Packages/FountainServiceKit-ToolsFactory/Sources/ToolsFactoryService/openapi.yaml`.
+ToolsFactory catalogs and registers tools. Spec: `Packages/FountainServiceKit-ToolsFactory/Sources/ToolsFactoryService/openapi.yaml`. Tool lists are corpus‑scoped; registration is idempotent; list formats are stable.
 
-Principles
-- Corpus‑scoped tool lists; idempotent register; stable list format.
-
-Testing & TDD
-- Unit: registration normalization; corpus filtering.
-- Integration: register AudioTalk spec; list contains expected entries.
-
-CI gates
-- Build + tests; Studio autostart registers AudioTalk tools.
-
+Unit tests cover registration normalization and corpus filtering. Integration registers the AudioTalk spec and asserts the list contains expected entries. CI builds and tests this package; Studio autostart registers AudioTalk tools during dev.

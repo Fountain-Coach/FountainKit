@@ -1,15 +1,5 @@
 # AGENT — Semantic Browser Service
 
-Scope: `Packages/FountainServiceKit-SemanticBrowser/**` — browser API for indexing/seed.
-Spec: `Packages/FountainServiceKit-SemanticBrowser/Sources/SemanticBrowserService/openapi.yaml`.
+Semantic Browser exposes a browser API for indexing and seed. Spec: `Packages/FountainServiceKit-SemanticBrowser/Sources/SemanticBrowserService/openapi.yaml`. Indexing modes are deterministic (quick/standard/deep), and labels/collections are clear and consistent.
 
-Principles
-- Deterministic indexing modes (quick/standard/deep). Clear labels/collections.
-
-Testing & TDD
-- Unit: URL normalization and label handling.
-- Integration: seed flows and page/segment/entity endpoints.
-
-CI gates
-- Build + tests; optional smoke for seed list.
-
+Unit tests cover URL normalization and label handling; integration exercises seed flows and page/segment/entity endpoints. CI builds and tests this package; an optional smoke checks the seed list.

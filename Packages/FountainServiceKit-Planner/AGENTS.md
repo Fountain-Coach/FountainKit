@@ -1,17 +1,5 @@
 # AGENT — Planner Service
 
-Scope: `Packages/FountainServiceKit-Planner/**` — reasoning to tool steps.
-Spec: `Packages/FountainServiceKit-Planner/Sources/PlannerService/openapi.yaml`.
+Planner turns objectives into tool steps. The spec sits at `Packages/FountainServiceKit-Planner/Sources/PlannerService/openapi.yaml`. Profiles constrain which tools are available, step shapes are deterministic, and unsafe operations are rejected up front. Prompts/configurations are versioned and testable.
 
-Principles
-- Profiles constrain tool set; deterministic step shapes; reject unsafe operations.
-- Keep prompts/configurations versioned and testable.
-
-Testing & TDD
-- Unit: objective → steps mapping for AudioTalk tasks (golden tests).
-- Integration: steps executed by FunctionCaller deterministically.
-- E2E: full AudioTalk scenario (parse → map → apply) planned via service.
-
-CI gates
-- Build + tests; planner profiles must include tests for new patterns.
-
+Unit tests use golden fixtures for objective→steps mapping (AudioTalk tasks). Integration verifies that steps execute deterministically via FunctionCaller. End‑to‑end, the service plans a complete AudioTalk flow (parse → map → apply). CI builds and tests this package; new planner profiles must land alongside tests for their patterns.

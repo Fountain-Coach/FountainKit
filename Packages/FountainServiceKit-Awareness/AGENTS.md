@@ -1,15 +1,5 @@
 # AGENT — Baseline Awareness Service
 
-Scope: `Packages/FountainServiceKit-Awareness/**` — baseline metrics/events.
-Spec: `Packages/FountainServiceKit-Awareness/Sources/AwarenessService/openapi.yaml`.
+Baseline Awareness provides baseline metrics/events. Spec: `Packages/FountainServiceKit-Awareness/Sources/AwarenessService/openapi.yaml`. Event timelines are delivered via SSE with documented privacy constraints.
 
-Principles
-- Event timelines; SSE; privacy constraints documented.
-
-Testing & TDD
-- Unit: event models and summarizers.
-- Integration: SSE streaming without buffering (chunked NIO path).
-
-CI gates
-- Build + tests; SSE smoke scenario.
-
+Unit tests cover event models and summarizers; integration ensures SSE streams without buffering (chunked NIO). CI builds and tests this package and includes an SSE smoke scenario.

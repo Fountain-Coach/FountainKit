@@ -1,17 +1,5 @@
 # AGENT — FunctionCaller Service
 
-Scope: `Packages/FountainServiceKit-FunctionCaller/**` — function catalog + execution surface.
-Spec: `Packages/FountainServiceKit-FunctionCaller/Sources/FunctionCallerService/openapi.yaml`.
+FunctionCaller is the function catalog and execution surface. The OpenAPI spec lives at `Packages/FountainServiceKit-FunctionCaller/Sources/FunctionCallerService/openapi.yaml`. Keep a curated catalog schema, use templated paths, and honor a base prefix via `FUNCTION_CALLER_BASE_URL`. Registration is idempotent and errors follow a consistent shape.
 
-Principles
-- Curated function catalog schema; templated paths; base prefix via `FUNCTION_CALLER_BASE_URL`.
-- Idempotent registration; consistent error shapes.
-
-Testing & TDD
-- Unit: path templating, arg validation (where implemented), base prefix logic.
-- Integration: register/list/execute flows; persistence of catalog if applicable.
-- E2E: Planner → FunctionCaller → target service execution in AudioTalk.
-
-CI gates
-- Build + tests; smoke targets run in Studio autostart or CI smoke.
-
+Tests cover path templating, argument validation (where implemented), and base‑prefix logic. Integration exercises register/list/execute flows and catalog persistence (if present). End‑to‑end, a Planner → FunctionCaller → target service scenario runs in AudioTalk. CI builds and tests this package; smoke targets run via Studio autostart or CI smoke.

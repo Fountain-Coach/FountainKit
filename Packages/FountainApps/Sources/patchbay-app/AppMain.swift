@@ -207,6 +207,7 @@ struct ContentView: View {
                 ZoomContainer(zoom: $vm.zoom, translation: $vm.translation) {
                     EditorCanvas()
                         .environmentObject(vm)
+                        .environmentObject(state)
                         .background(Color(NSColor.textBackgroundColor))
                 }
             }
@@ -221,6 +222,11 @@ struct ContentView: View {
                     }
                     Menu("Page") {
                         Button("Fit to Page") { NotificationCenter.default.post(name: .pbZoomFit, object: nil) }
+                        Divider()
+                        Menu("Canvas Mode") {
+                            Button("Infinite Workspace") { vm.workspaceMode = .infinite; NotificationCenter.default.post(name: .pbZoomFit, object: nil) }
+                            Button("A4 Page") { vm.workspaceMode = .pageA4; NotificationCenter.default.post(name: .pbZoomFit, object: nil) }
+                        }
                         Divider()
                         Button("A4 Portrait") {
                             vm.pageSize = PageSpec.a4Portrait
@@ -558,7 +564,7 @@ struct InspectorPane: View {
             HStack(spacing: 8) {
                 Button("Export PDF Page…") {
                     let size = vm.pageSize
-                    let host = NSHostingView(rootView: EditorCanvas().environmentObject(vm))
+                    let host = NSHostingView(rootView: EditorCanvas().environmentObject(vm).environmentObject(state))
                     host.frame = NSRect(x: 0, y: 0, width: size.width, height: size.height)
                     EngraverExport.exportPDF(from: host, suggestedName: "patchbay-page.pdf") { result in
                         switch result {
@@ -631,12 +637,18 @@ extension InspectorPane {
     func computeRules() -> [RuleCheck] {
         var out: [RuleCheck] = []
         // PageFit via facade (use actual center pane size when available)
-        let view = vm.lastViewSize == .zero ? (NSScreen.main?.frame.size ?? CGSize(width: 1440, height: 900)) : vm.lastViewSize
-        let pf = RulesKitFacade.checkPageFit(.init(view: view, page: vm.pageSize, zoom: vm.zoom, translation: vm.translation))
-        out.append(.init(title: "PageFit(zoom,tx,ty)", ok: pf.ok, detail: pf.detail))
+        if vm.workspaceMode == .pageA4 {
+            let view = vm.lastViewSize == .zero ? (NSScreen.main?.frame.size ?? CGSize(width: 1440, height: 900)) : vm.lastViewSize
+            let pf = RulesKitFacade.checkPageFit(.init(view: view, page: vm.pageSize, zoom: vm.zoom, translation: vm.translation))
+            out.append(.init(title: "PageFit(zoom,tx,ty)", ok: pf.ok, detail: pf.detail))
+        } else {
+            out.append(.init(title: "PageFit(zoom,tx,ty)", ok: true, detail: "infinite-workspace"))
+        }
         // MarginWithinPage via facade
-        let mw = RulesKitFacade.checkMarginWithinPage(page: vm.pageSize, marginMM: vm.marginMM)
-        out.append(.init(title: "MarginWithinPage", ok: mw.ok, detail: mw.detail))
+        if vm.workspaceMode == .pageA4 {
+            let mw = RulesKitFacade.checkMarginWithinPage(page: vm.pageSize, marginMM: vm.marginMM)
+            out.append(.init(title: "MarginWithinPage", ok: mw.ok, detail: mw.detail))
+        }
         // Pane width policy placeholder
         let pw = RulesKitFacade.checkPaneWidthPolicy()
         out.append(.init(title: "PaneWidthRange(left 200–320, right 260–460)", ok: pw.ok, detail: pw.detail))

@@ -31,6 +31,8 @@ struct PBEdge: Identifiable, Hashable {
     var glow: Bool = false
 }
 
+enum WorkspaceMode: String, CaseIterable { case infinite, pageA4 }
+
 @MainActor
 final class EditorVM: ObservableObject {
     @Published var nodes: [PBNode] = []
@@ -47,6 +49,7 @@ final class EditorVM: ObservableObject {
     @Published var gridMinorMM: CGFloat = 5.0
     @Published var gridMajorMM: CGFloat = 10.0
     @Published var lastViewSize: CGSize = .zero
+    @Published var workspaceMode: WorkspaceMode = .pageA4
 
     func nodeIndex(by id: String) -> Int? { nodes.firstIndex{ $0.id == id } }
     func node(by id: String) -> PBNode? { nodes.first{ $0.id == id } }
@@ -362,6 +365,7 @@ struct BezierEdgeView: View {
 
 struct EditorCanvas: View {
     @EnvironmentObject var vm: EditorVM
+    @EnvironmentObject var state: AppState
     @State private var dragStart: CGPoint? = nil
     @State private var marqueeStart: CGPoint? = nil
     @State private var marqueeRect: CGRect? = nil
@@ -371,16 +375,19 @@ struct EditorCanvas: View {
 
     var body: some View {
         GeometryReader { geo in
-            // Fixed A4 page as the canvas (portrait by default)
-            let docSize = vm.pageSize
+            // Workspace mode: infinite (fill) or fixed A4 page
+            let isInfinite = (vm.workspaceMode == .infinite)
+            let docSize = isInfinite ? geo.size : vm.pageSize
             // Center the scaled page within the center pane
             let scaledW = vm.zoom * docSize.width
             let scaledH = vm.zoom * docSize.height
-            let padX = (geo.size.width - scaledW) * 0.5
-            let padY = (geo.size.height - scaledH) * 0.5
+            let padX = isInfinite ? 0 : (geo.size.width - scaledW) * 0.5
+            let padY = isInfinite ? 0 : (geo.size.height - scaledH) * 0.5
             let transform = CanvasTransform(scale: vm.zoom, translation: vm.translation)
             let toView: (CGPoint)->CGPoint = { p in
-                return transform.docToView(p)
+                // Include page-centering padding when in page mode so marquee/select math aligns
+                let v = transform.docToView(p)
+                return CGPoint(x: v.x + padX, y: v.y + padY)
             }
             // Convert view point to document point reserved for later features
             // let toDoc: (CGPoint)->CGPoint = { p in
@@ -433,9 +440,9 @@ struct EditorCanvas: View {
                 }
             )
             .onReceive(NotificationCenter.default.publisher(for: .pbZoomFit)) { _ in
-                // Fit the page to the available view and reset panning
+                // Fit content to view and reset panning
                 let viewSize = geo.size
-                let content = CGRect(origin: .zero, size: docSize)
+                let content = CGRect(origin: .zero, size: isInfinite ? viewSize : vm.pageSize)
                 let z = EditorVM.computeFitZoom(viewSize: viewSize, contentBounds: content)
                 vm.translation = .zero
                 vm.zoom = z
@@ -445,10 +452,10 @@ struct EditorCanvas: View {
                 vm.translation = .zero
             }
             .onAppear {
-                // Ensure initial open is fit-to-page
+                // Ensure initial open is fit-to-view
                 if !didInitialFit {
                     let viewSize = geo.size
-                    let content = CGRect(origin: .zero, size: docSize)
+                    let content = CGRect(origin: .zero, size: isInfinite ? viewSize : vm.pageSize)
                     let z = EditorVM.computeFitZoom(viewSize: viewSize, contentBounds: content)
                     vm.translation = .zero
                     vm.zoom = z
@@ -530,6 +537,15 @@ struct EditorCanvas: View {
                 let toRef = dstId + "." + inPorts[wire.input.portIndex].id
                 vm.ensureEdge(from: (srcId, outPorts[wire.output.portIndex].id), to: (dstId, inPorts[wire.input.portIndex].id))
                 vm.transientGlowEdge(fromRef: fromRef, toRef: toRef)
+                // Mirror to service (CreateLink property)
+                Task { @MainActor in
+                    if let c = state.api as? PatchBayClient {
+                        let prop = Components.Schemas.PropertyLink(from: fromRef, to: toRef, direction: .a_to_b)
+                        let create = Components.Schemas.CreateLink(kind: .property, property: prop, ump: nil)
+                        _ = try? await c.createLink(create)
+                        await state.refreshLinks()
+                    }
+                }
             }
             .onWireRemoved { wire in
                 let srcId = vm.nodes[wire.output.nodeIndex].id
@@ -540,6 +556,18 @@ struct EditorCanvas: View {
                 let fromRef = srcId + "." + outPorts[wire.output.portIndex].id
                 let toRef = dstId + "." + inPorts[wire.input.portIndex].id
                 vm.edges.removeAll { $0.from == fromRef && $0.to == toRef }
+                // Try to delete the corresponding link in the service (best-effort by match)
+                Task { @MainActor in
+                    if let c = state.api as? PatchBayClient {
+                        // Refresh and find a matching Link to delete
+                        if let list = try? await c.listLinks() {
+                            if let match = list.first(where: { $0.kind == .property && $0.property?.from == fromRef && $0.property?.to == toRef }) {
+                                try? await c.deleteLink(id: match.id)
+                                await state.refreshLinks()
+                            }
+                        }
+                    }
+                }
             }
             .onTransformChanged { pan, z in
                 vm.zoom = CGFloat(z)

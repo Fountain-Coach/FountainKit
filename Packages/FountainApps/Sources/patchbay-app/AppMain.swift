@@ -755,6 +755,7 @@ struct AssistantPane: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var vm: EditorVM
     @State private var chatInput: String = "What instruments and links are present?"
+    @State private var expanded: Bool = false
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Assistant").font(.headline)
@@ -771,9 +772,30 @@ struct AssistantPane: View {
                     }
                 }
             }.frame(minHeight: 220)
-            HStack {
-                TextField("Ask about this scene…", text: $chatInput)
-                Button("Ask") { Task { await state.ask(question: chatInput, vm: vm) } }
+            VStack(alignment: .leading, spacing: 6) {
+                ZStack(alignment: .topLeading) {
+                    // Multiline, expandable input
+                    TextEditor(text: $chatInput)
+                        .font(.body)
+                        .frame(minHeight: expanded ? 140 : 44, maxHeight: expanded ? 220 : 60)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                        )
+                        .animation(.easeInOut(duration: 0.2), value: expanded)
+                    if chatInput.isEmpty {
+                        Text("Ask about this scene…")
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 8)
+                    }
+                }
+                HStack(spacing: 8) {
+                    Button("Send") { Task { await state.ask(question: chatInput, vm: vm) } }
+                        .keyboardShortcut(.return, modifiers: [.command])
+                    Button(expanded ? "Collapse" : "Expand") { withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() } }
+                        .help("Toggle input height (Cmd+Return to send)")
+                }
             }
             Divider().padding(.vertical, 6)
             // Keep quick actions visible

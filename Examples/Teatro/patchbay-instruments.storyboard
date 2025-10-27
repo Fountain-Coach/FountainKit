@@ -1,0 +1,26 @@
+Scene: Canvas
+Text: 1200x800 grid 24 theme light
+Transition: crossfade 4
+Scene: Triangle Added
+Text: tri_1 mvk.triangle at (120,120) 220x160
+Transition: tween 6
+Scene: Triangle Tweaked
+Text: zoom 1.5 tint 1.0 0.8 0.6
+Transition: crossfade 4
+Scene: Quad Placed
+Text: quad_1 mvk.quad at (420,220) 260x180
+Transition: tween 8
+Scene: Quad Rotating
+Text: rotationSpeed 1.2 zoom 1.0
+Transition: tween 8
+Scene: Quad Zoomed
+Text: rotationSpeed 1.2 zoom 1.8
+Transition: crossfade 6
+Scene: Chat Default
+Text: chat_1 audiotalk.chat provider gateway model gpt-4o-mini
+Transition: crossfade 6
+Scene: Chat Model Changed
+Text: provider gateway model o4-mini stream true
+Transition: crossfade 4
+Scene: Links Summary
+Text: 0 property links 0 ump links

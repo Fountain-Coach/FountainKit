@@ -27,7 +27,10 @@ struct FocusTextView: NSViewRepresentable {
         var f = nsView.frame
         f.size.height = max(minHeight, f.size.height)
         nsView.frame = f
-        if initialFocus { FocusManager.ensureFocus(tv) }
+        if initialFocus {
+            FocusManager.ensureFocus(tv)
+            FocusManager.guardModalFocus(tv)
+        }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -39,4 +42,3 @@ struct FocusTextView: NSViewRepresentable {
         }
     }
 }
-

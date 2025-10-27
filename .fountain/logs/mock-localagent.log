@@ -6,11 +6,15 @@ warning: 'fountainapps': found 1 file(s) which are unhandled; explicitly declare
 [0/1] Planning build
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'mock-localagent-server' complete! (13.01s)
+Build of product 'mock-localagent-server' complete! (13.35s)
 [mock-localagent] Failed to start: bind(descriptor:ptr:bytes:): Address already in use) (errno: 48)
-ayAppUITests/Fixtures/initial-fit-a4-portrait-1200x900.json
-warning: 'fountainapps': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
-    /Users/benedikteickhoff/Development/Github-Desktop/FountainKit/Packages/FountainApps/Sources/qc-mock-service/AGENTS.md
+.swift
+[5/8] Write Objects.LinkFileList
+[6/8] Linking mock-localagent-server
+[7/8] Applying mock-localagent-server
+Build of product 'mock-localagent-server' complete! (17.25s)
+[mock-localagent] Failed to start: bind(descriptor:ptr:bytes:): Address already in use) (errno: 48)
+ources/qc-mock-service/AGENTS.md
 warning: 'fountainapps': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
     /Users/benedikteickhoff/Development/Github-Desktop/FountainKit/Packages/FountainApps/Sources/patchbay-service/AGENTS.md
 [0/1] Planning build

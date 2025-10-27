@@ -51,7 +51,7 @@ with open(path, 'w') as f:
 PY
 fi
 
-echo "[register] Registering with ToolsFactory at $TOOLS_FACTORY_URL…"
+echo "[register] Registering with ToolsFactory at $TOOLS_FACTORY_URL"
 curl -fsSL -X POST -H 'Content-Type: application/json' \
   --data-binary @"$TMP_JSON" \
   "$TOOLS_FACTORY_URL/tools/register?$QUERY"

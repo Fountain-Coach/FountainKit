@@ -21,7 +21,10 @@ struct FocusTextField: NSViewRepresentable {
     func updateNSView(_ nsView: NSTextField, context: Context) {
         if nsView.stringValue != text { nsView.stringValue = text }
         nsView.placeholderString = placeholder
-        if initialFocus { FocusManager.ensureFocus(nsView) }
+        if initialFocus {
+            FocusManager.ensureFocus(nsView)
+            FocusManager.guardModalFocus(nsView)
+        }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }

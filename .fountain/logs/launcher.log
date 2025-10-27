@@ -1,5 +1,15 @@
 [launcher] Starting Fountain services from /Users/benedikteickhoff/Development/Github-Desktop/FountainKit
 [0/3] Write swift-version--58304C5D6DBC2206.txt
+[1/4] Compiling _NumericsShims _NumericsShims.c
+[2/5] Compiling api.c
+[3/11] Compiling writer.c
+[4/11] Compiling reader.c
+[5/11] Compiling parser.c
+[6/11] Compiling emitter.c
+[7/11] Compiling scanner.c
+[8/11] Write Objects.LinkFileList
+[9/11] Linking swift-openapi-generator-tool
+[10/11] Applying swift-openapi-generator-tool
 warning: 'fountainapps': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
     /Users/benedikteickhoff/Development/Github-Desktop/FountainKit/Packages/FountainApps/Sources/qc-mock-service/AGENTS.md
 warning: 'fountainapps': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
@@ -7,9 +17,9 @@ warning: 'fountainapps': found 1 file(s) which are unhandled; explicitly declare
 [0/1] Planning build
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'local-agent-manager' complete! (12.90s)
+Build of product 'local-agent-manager' complete! (14.53s)
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'local-agent-manager' complete! (0.44s)
+Build of product 'local-agent-manager' complete! (0.45s)
 failed to become healthy after 30s; attempting fallback mock-localagent
-mock-localagent started pid 93609
+mock-localagent started pid 51909

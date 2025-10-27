@@ -17,13 +17,13 @@ http_200() {
   curl -sf --max-time 3 "$1" >/dev/null 2>&1
 }
 
-echo "[tg-smoke] Checking ToolsFactory at $TOOLS_FACTORY_URL…"
+echo "[tg-smoke] Checking ToolsFactory at $TOOLS_FACTORY_URL"
 if ! http_200 "$TOOLS_FACTORY_URL/metrics"; then
   echo "[tg-smoke] ToolsFactory not reachable: $TOOLS_FACTORY_URL" >&2
   exit 2
 fi
 
-echo "[tg-smoke] Registering Teatro Prompt Field Guide tools (corpus=$CORPUS_ID)…"
+echo "[tg-smoke] Registering Teatro Prompt Field Guide tools (corpus=$CORPUS_ID)"
 if [[ -n "$BASE_URL" ]]; then BASE_ARGS=(--base "$BASE_URL"); else BASE_ARGS=(); fi
 bash "$ROOT_DIR/Scripts/openapi/register-teatro-guide-as-tools.sh" \
   --spec "$SPEC_URL" \

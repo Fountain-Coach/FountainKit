@@ -18,57 +18,9 @@ final class PatchBayCore: @unchecked Sendable {
             theme: .light,
             transform: .init(scale: 1.0, translation: .init(x: 0, y: 0))
         )
-        // Seed with a couple of MVK kinds
-        let tri = Components.Schemas.Instrument(
-            id: "tri_1",
-            kind: .init(rawValue: "mvk.triangle")!,
-            title: "Triangle",
-            x: 120, y: 120, w: 220, h: 160,
-            identity: .init(
-                manufacturer: "Fountain",
-                product: "MetalTriangle",
-                displayName: "MetalTriangleView#A1",
-                instanceId: "tri_1",
-                muid28: 0x00123456,
-                hasUMPInput: true,
-                hasUMPOutput: true
-            ),
-            propertySchema: .init(version: 1, properties: [
-                .init(name: "zoom", _type: .float, min: 0.1, max: 4.0, step: 0.05, _default: .case1(1.0), enumValues: nil, aliases: nil),
-                .init(name: "tint.r", _type: .float, min: 0.0, max: 1.0, step: 0.01, _default: .case1(1.0), enumValues: nil, aliases: ["tint"]),
-                .init(name: "tint.g", _type: .float, min: 0.0, max: 1.0, step: 0.01, _default: .case1(1.0), enumValues: nil, aliases: nil),
-                .init(name: "tint.b", _type: .float, min: 0.0, max: 1.0, step: 0.01, _default: .case1(1.0), enumValues: nil, aliases: nil)
-            ]),
-            propertyDefaults: .init(additionalProperties: ["zoom": .case1(1.0)])
-        )
-        let quad = Components.Schemas.Instrument(
-            id: "quad_1",
-            kind: .init(rawValue: "mvk.quad")!,
-            title: "Textured Quad",
-            x: 420, y: 220, w: 260, h: 180,
-            identity: .init(
-                manufacturer: "Fountain",
-                product: "MetalQuad",
-                displayName: "MetalTexturedQuadView#B1",
-                instanceId: "quad_1",
-                muid28: 0x00123457,
-                hasUMPInput: true,
-                hasUMPOutput: true
-            ),
-            propertySchema: .init(version: 1, properties: [
-                .init(name: "rotationSpeed", _type: .float, min: 0.0, max: 4.0, step: 0.01, _default: .case1(0.35), enumValues: nil, aliases: nil),
-                .init(name: "zoom", _type: .float, min: 0.1, max: 4.0, step: 0.05, _default: .case1(1.0), enumValues: nil, aliases: nil),
-                .init(name: "tint.r", _type: .float, min: 0.0, max: 1.0, step: 0.01, _default: .case1(1.0), enumValues: nil, aliases: ["tint"]),
-                .init(name: "tint.g", _type: .float, min: 0.0, max: 1.0, step: 0.01, _default: .case1(1.0), enumValues: nil, aliases: nil),
-                .init(name: "tint.b", _type: .float, min: 0.0, max: 1.0, step: 0.01, _default: .case1(1.0), enumValues: nil, aliases: nil)
-            ]),
-            propertyDefaults: .init(additionalProperties: ["rotationSpeed": .case1(0.35)])
-        )
-        instruments[tri.id] = tri
-        instruments[quad.id] = quad
-        // Also seed AudioTalk Chat via provider (if enum present)
+        // Seed only an AudioTalk Chat instrument as default
         if let chatKind = Components.Schemas.InstrumentKind(rawValue: "audiotalk.chat") {
-            let chat = InstrumentProviders.makeInstrument(id: "chat_1", kind: chatKind, title: "AudioTalk Chat", x: 760, y: 140, w: 280, h: 180)
+            let chat = InstrumentProviders.makeInstrument(id: "chat_1", kind: chatKind, title: "AudioTalk Chat", x: 360, y: 160, w: 300, h: 180)
             instruments[chat.id] = chat
         }
     }

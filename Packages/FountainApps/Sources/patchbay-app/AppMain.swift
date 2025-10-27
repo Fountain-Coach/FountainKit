@@ -26,17 +26,31 @@ struct PatchBayStudioApp: App {
                     Button("Delete") { NotificationCenter.default.post(name: .pbDelete, object: nil) }
                         .keyboardShortcut(.delete, modifiers: [])
                 }
+                CommandMenu("Debug") {
+                    Button("Dump Focus State") {
+                        FocusManager.dumpFocus(label: "dump")
+                    }
+                }
             }
     }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Ensure app becomes active and front-most when launched from Terminal
-        NSApp.activate(ignoringOtherApps: true)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            NSApp.windows.first?.makeKeyAndOrderFront(nil)
+        // Ensure app becomes a regular, foreground app even when launched via `swift run` from Terminal.
+        NSApp.setActivationPolicy(.regular)
+        func attemptActivate(_ remaining: Int) {
+            guard remaining >= 0 else { return }
+            // Try both activation paths (Apple deprecates the flag on macOS 14, but plain activate still works)
+            NSApp.activate(ignoringOtherApps: true)
+            NSRunningApplication.current.activate(options: [])
+            if let win = NSApp.keyWindow ?? NSApp.windows.first {
+                win.makeKeyAndOrderFront(nil)
+            }
+            if NSApp.isActive, NSApp.keyWindow != nil { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { attemptActivate(remaining - 1) }
         }
+        attemptActivate(12) // ~1s
         if ProcessInfo.processInfo.environment["PATCHBAY_WRITE_BASELINES"] == "1" {
             Task { @MainActor in
                 await writeBaselinesAndExit()
@@ -138,10 +152,104 @@ final class AppState: ObservableObject {
     @Published var chat: [ChatMessage] = []
     @Published var allowedFunctions: [String] = []
     @Published var plannedSteps: [PlannerFunctionCall] = []
+    // Templates (left panel library)
+    private let templatesStore = InstrumentTemplatesStore()
+    @Published var templates: [InstrumentTemplate] = []
+    // Latest Teatro Guide artifact surfaced for preview/apply flows
+    @Published var latestArtifactETag: String? = nil
+    @Published var latestArtifactPath: URL? = nil
     let api: PatchBayAPI
-    init(api: PatchBayAPI = PatchBayClient()) { self.api = api }
+    init(api: PatchBayAPI = PatchBayClient()) {
+        self.api = api
+        self.templates = templatesStore.load()
+    }
     func refresh() async {
         if let list = try? await api.listInstruments() { instruments = list }
+    }
+    func refreshArtifacts() {
+        // Scan .fountain/artifacts for newest response + etag pair (best-effort)
+        let fm = FileManager.default
+        let cwd = URL(fileURLWithPath: fm.currentDirectoryPath)
+        let art = cwd.appendingPathComponent(".fountain/artifacts", isDirectory: true)
+        guard let items = try? fm.contentsOfDirectory(at: art, includingPropertiesForKeys: [.contentModificationDateKey], options: [.skipsHiddenFiles]) else { return }
+        // Prefer teatro-guide.*.response, fall back to any *.response
+        let candidates = items.filter { $0.lastPathComponent.hasSuffix(".response") }
+        guard !candidates.isEmpty else { return }
+        let sorted = candidates.sorted { (a, b) -> Bool in
+            let da = (try? a.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            let db = (try? b.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            return da > db
+        }
+        if let newest = sorted.first {
+            latestArtifactPath = newest
+            // Try sibling .etag
+            let etagURL = newest.deletingPathExtension().appendingPathExtension("etag")
+            if let etag = try? String(contentsOf: etagURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines) {
+                latestArtifactETag = etag
+            } else {
+                latestArtifactETag = nil
+            }
+        }
+    }
+    func openLatestArtifact() {
+        guard let url = latestArtifactPath else { return }
+        NSWorkspace.shared.open(url)
+    }
+    func applyLatestArtifactToCanvas(vm: EditorVM) async -> String {
+        guard let url = latestArtifactPath else { return "No artifact found." }
+        do {
+            let data = try Data(contentsOf: url)
+            // Attempt to decode a GraphDoc from the artifact. If it succeeds, reflect it locally on the canvas.
+            let doc = try JSONDecoder().decode(Components.Schemas.GraphDoc.self, from: data)
+            await MainActor.run {
+                // Clear and rebuild nodes from instruments
+                vm.nodes.removeAll()
+                vm.edges.removeAll()
+                for inst in doc.instruments ?? [] {
+                    // Reuse existing helper to map instrument → node + default ports
+                    let id = inst.id
+                    let node = PBNode(
+                        id: id,
+                        title: inst.title ?? inst.id,
+                        x: inst.x,
+                        y: inst.y,
+                        w: inst.w,
+                        h: inst.h,
+                        ports: []
+                    )
+                    vm.nodes.append(node)
+                    if inst.identity.hasUMPInput == true { vm.addPort(to: id, side: .left, dir: .input, id: "umpIn", type: "ump") }
+                    if inst.identity.hasUMPOutput == true { vm.addPort(to: id, side: .right, dir: .output, id: "umpOut", type: "ump") }
+                    vm.addPort(to: id, side: .left, dir: .input, id: "in", type: "data")
+                    vm.addPort(to: id, side: .right, dir: .output, id: "out", type: "data")
+                }
+                // Build visual links. For property links, route out→in; for UMP, route umpOut→umpIn.
+                for link in doc.links ?? [] {
+                    switch link.kind {
+                    case .property:
+                        if let f = link.property?.from, let t = link.property?.to {
+                            let fromId = String((f.split(separator: ".").first) ?? "")
+                            let toId = String((t.split(separator: ".").first) ?? "")
+                            vm.edges.append(PBEdge(from: "\(fromId).out", to: "\(toId).in"))
+                        }
+                    case .ump:
+                        if let to = link.ump?.to {
+                            let toId = String((to.split(separator: ".").first) ?? "")
+                            // Heuristic: link from a virtual MIDI source "midiIn" if present, else no-op
+                            if vm.nodes.contains(where: { $0.id == "midiIn" }) {
+                                vm.edges.append(PBEdge(from: "midiIn.umpOut", to: "\(toId).umpIn"))
+                            }
+                        }
+                    default:
+                        break
+                    }
+                }
+            }
+            addLog(action: "apply-artifact", detail: latestArtifactETag ?? url.lastPathComponent, diff: "nodes=\(vm.nodes.count), links=\(vm.edges.count)")
+            return "Applied artifact to canvas."
+        } catch {
+            return "Artifact is not a GraphDoc (or failed to parse)."
+        }
     }
     func autoNoodle() async {
         if let s = try? await api.suggestLinks(nodeIds: instruments.map { $0.id }) { suggestions = s }
@@ -296,6 +404,11 @@ final class AppState: ObservableObject {
         }
     }
 
+    // MARK: - Templates API
+    func renameTemplate(id: String, to: String) { templatesStore.rename(id: id, to: to, in: &templates) }
+    func toggleHiddenTemplate(id: String) { templatesStore.toggleHidden(id: id, in: &templates) }
+    func moveTemplates(fromOffsets: IndexSet, toOffset: Int) { templatesStore.move(fromOffsets: fromOffsets, toOffset: toOffset, items: &templates) }
+
     @MainActor
     func runPlannedStep(idx index: Int) async {
         guard index >= 0 && index < plannedSteps.count else { return }
@@ -368,31 +481,14 @@ struct ContentView: View {
     init(state: AppState = AppState()) { _state = StateObject(wrappedValue: state) }
     var body: some View {
         NavigationSplitView(columnVisibility: .constant(.automatic)) {
-            // Instruments list (left)
-            List(selection: .constant(Optional<String>.none)) {
-                ForEach(state.instruments, id: \.id) { i in
-                    HStack(alignment: .center, spacing: 8) {
-                        InstrumentIcon(kind: i.kind.rawValue)
-                            .frame(width: 24, height: 24)
-                            .foregroundStyle(.secondary)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(i.title ?? i.id).font(.body)
-                            Text("Kind: \(i.kind.rawValue)").font(.caption).foregroundColor(.secondary)
-                        }
-                    }
-                    .padding(.vertical, 2)
-                    .onTapGesture(count: 2) {
-                        // Double-click instrument to add a node to the canvas
-                        addInstrumentNode(i)
-                    }
-                    .tag(i.id)
-                }
-            }
-            .navigationTitle("Instruments")
-            .toolbar { AddInstrumentToolbar(state: state, vm: vm) }
-            .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
+            // Left: Template Library
+            TemplateLibraryView()
+                .environmentObject(state)
+                .environmentObject(vm)
+                .navigationTitle("Templates")
+                .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 360)
         } detail: {
-            // Canvas center with zoom container (pinch/scroll) and key input (arrow-keys nudge)
+            // Center: Canvas; Right: Inspector (scrollable)
             KeyInputContainer(onKey: { event in
                 let flags = event.modifierFlags
                 let stepMult = flags.contains(.option) ? 5 : 1
@@ -404,11 +500,27 @@ struct ContentView: View {
                 default: break
                 }
             }) {
-                ZoomContainer(zoom: $vm.zoom, translation: $vm.translation) {
-                    EditorCanvas()
-                        .environmentObject(vm)
-                        .environmentObject(state)
-                        .background(Color(NSColor.textBackgroundColor))
+                HStack(spacing: 0) {
+                    // Canvas with drop target
+                    ZoomContainer(zoom: $vm.zoom, translation: $vm.translation) {
+                        EditorCanvas()
+                            .environmentObject(vm)
+                            .environmentObject(state)
+                            .background(Color(NSColor.textBackgroundColor))
+                    }
+                    .onDrop(of: [UTType.json], isTargeted: .constant(false)) { providers, location in
+                        handleDrop(providers: providers, location: location)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    Divider()
+                    // Right Inspector pane
+                    ScrollView {
+                        InspectorPane()
+                            .environmentObject(state)
+                            .environmentObject(vm)
+                            .padding(8)
+                    }
+                    .frame(minWidth: 280, idealWidth: 320, maxWidth: 360)
                 }
             }
             .navigationTitle("PatchBay Canvas")
@@ -457,53 +569,71 @@ struct ContentView: View {
         .task {
             await state.refresh()
             await state.refreshStore()
-            // Seed a small welcome scene on first open when canvas is empty.
-            if vm.nodes.isEmpty { seedWelcomeScene() }
+            state.refreshArtifacts()
+            // On first open, place the default chat instrument on the canvas and select it.
+            if vm.nodes.isEmpty {
+                if let chat = state.instruments.first(where: { $0.kind.rawValue == "audiotalk.chat" }) {
+                    addInstrumentNode(chat)
+                }
+            }
         }
         .environmentObject(vm)
     }
 
-    private func seedWelcomeScene() {
-        vm.grid = 16
-        vm.zoom = 1.0
-        // Nodes
-        let midiIn = PBNode(
-            id: "midiIn",
-            title: "MIDI In",
-            x: 80, y: 80, w: 200, h: 120,
-            ports: [
-                .init(id: "umpOut", side: .right, dir: .output, type: "ump"),
-                .init(id: "out", side: .right, dir: .output, type: "data")
-            ]
-        )
-        let mapper = PBNode(
-            id: "Mapper_1",
-            title: "Mapper",
-            x: 280, y: 120, w: 220, h: 120,
-            ports: [
-                .init(id: "in", side: .left, dir: .input, type: "data"),
-                .init(id: "out", side: .right, dir: .output, type: "data")
-            ]
-        )
-        let instrument = PBNode(
-            id: "Instrument_1",
-            title: "Instrument",
-            x: 540, y: 140, w: 240, h: 140,
-            ports: [
-                .init(id: "umpIn", side: .left, dir: .input, type: "ump"),
-                .init(id: "in", side: .left, dir: .input, type: "data"),
-                .init(id: "out", side: .right, dir: .output, type: "data")
-            ]
-        )
-        vm.nodes = [midiIn, mapper, instrument]
-        // Edges (UMP and property)
-        vm.edges = [
-            PBEdge(from: "midiIn.umpOut", to: "Instrument_1.umpIn"),
-            PBEdge(from: "Mapper_1.out", to: "Instrument_1.in")
-        ]
-        vm.selected = []
-        vm.selection = nil
-        state.addLog(action: "welcome-scene", detail: "seeded", diff: "nodes: 0→\(vm.nodes.count)")
+    private func seedWelcomeScene() { /* removed in chat‑only startup */ }
+
+    private func handleDrop(providers: [NSItemProvider], location: CGPoint) -> Bool {
+        guard let prov = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.json.identifier) }) else { return false }
+        _ = prov.loadDataRepresentation(forTypeIdentifier: UTType.json.identifier) { data, _ in
+            guard let data = data else { return }
+            struct Payload: Codable { let templateId: String; let kind: String; let title: String; let w: Int; let h: Int }
+            guard let p = try? JSONDecoder().decode(Payload.self, from: data) else { return }
+            Task { @MainActor in
+                let kind = Components.Schemas.InstrumentKind(rawValue: p.kind) ?? .init(rawValue: p.kind)!
+                let base = baseForKind(p.kind, title: p.title)
+                let id = nextId(base: base)
+                // Convert drop location (view coords) → doc coords, snap to grid
+                let z = max(0.0001, vm.zoom)
+                let docX = Int((location.x / z) - vm.translation.x)
+                let docY = Int((location.y / z) - vm.translation.y)
+                let g = max(1, vm.grid)
+                let snap: (Int) -> Int = { ((($0 + g/2) / g) * g) }
+                let x = snap(docX)
+                let y = snap(docY)
+                if let c = state.api as? PatchBayClient {
+                    do {
+                        if let inst = try await c.createInstrument(id: id, kind: kind, title: p.title, x: x, y: y, w: p.w, h: p.h) {
+                            var node = PBNode(id: inst.id, title: inst.title, x: inst.x, y: inst.y, w: inst.w, h: inst.h, ports: [])
+                            node.ports.append(.init(id: "in", side: .left, dir: .input, type: "data"))
+                            node.ports.append(.init(id: "out", side: .right, dir: .output, type: "data"))
+                            if inst.identity.hasUMPInput == true { node.ports.append(.init(id: "umpIn", side: .left, dir: .input, type: "ump")) }
+                            if inst.identity.hasUMPOutput == true { node.ports.append(.init(id: "umpOut", side: .right, dir: .output, type: "ump")) }
+                            vm.nodes.append(node)
+                            vm.selection = inst.id
+                            vm.selected = [inst.id]
+                        }
+                    } catch { }
+                }
+            }
+        }
+        return true
+    }
+
+    private func baseForKind(_ kind: String, title: String) -> String {
+        if kind == "audiotalk.chat" { return "chat" }
+        if kind == "mvk.triangle" { return "tri" }
+        if kind == "mvk.quad" { return "quad" }
+        if kind == "external.coremidi" { return "midi" }
+        let cleaned = title.lowercased().replacingOccurrences(of: " ", with: "-")
+        return cleaned.isEmpty ? "inst" : cleaned
+    }
+
+    private func nextId(base: String) -> String {
+        var n = 1
+        let existing = state.instruments.map { $0.id }
+        var candidate = "\(base)_\(n)"
+        while existing.contains(candidate) { n += 1; candidate = "\(base)_\(n)" }
+        return candidate
     }
 }
 
@@ -514,9 +644,158 @@ struct AddInstrumentToolbar: View {
     @ObservedObject var vm: EditorVM
     @State private var showSheet: Bool = false
     var body: some View {
-        Button { NSApp.activate(ignoringOtherApps: true); if let w = NSApp.keyWindow ?? NSApp.windows.first { w.makeKeyAndOrderFront(nil) }; showSheet = true } label: { Label("Add Instrument", systemImage: "plus") }
+        Button {
+            // Double activation to withstand Terminal launches
+            NSApp.activate(ignoringOtherApps: true)
+            NSRunningApplication.current.activate(options: [])
+            if let w = NSApp.keyWindow ?? NSApp.windows.first { w.makeKeyAndOrderFront(nil) }
+            showSheet = true
+        } label: { Label("Add Instrument", systemImage: "plus") }
             .sheet(isPresented: $showSheet) { AddInstrumentSheet(state: state, vm: vm, dismiss: { showSheet = false }) }
             .help("Create an instrument on the PatchBay service and place it on the canvas")
+    }
+}
+
+// MARK: - Template Library (left panel)
+struct TemplateLibraryView: View {
+    @EnvironmentObject var state: AppState
+    @EnvironmentObject var vm: EditorVM
+    @State private var search: String = ""
+    @State private var editMode: Bool = false
+    @State private var hiddenExpanded: Bool = true
+
+    private func icon(for kind: String) -> Image {
+        switch kind {
+        case "mvk.triangle": return Image(systemName: "triangle.fill")
+        case "mvk.quad": return Image(systemName: "square.inset.filled")
+        case "audiotalk.chat": return Image(systemName: "text.bubble")
+        default: return Image(systemName: "circle.grid.3x3")
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                TextField("Search", text: $search)
+                Spacer()
+                Button(editMode ? "Done" : "Edit") { withAnimation { editMode.toggle() } }
+            }
+            List {
+                Section(header: Text("Library")) {
+                    let visible = state.templates.filter { !$0.hidden && (search.isEmpty || $0.title.localizedCaseInsensitiveContains(search)) }
+                    ForEach(visible, id: \.id) { t in
+                        TemplateRow(template: t, editMode: editMode)
+                            .environmentObject(state)
+                            .environmentObject(vm)
+                    }
+                    .onMove { idx, off in state.moveTemplates(fromOffsets: idx, toOffset: off) }
+                }
+                Section(header: HStack { Button(action: { withAnimation { hiddenExpanded.toggle() } }) { Image(systemName: hiddenExpanded ? "chevron.down" : "chevron.right") }; Text("Hidden Templates") }) {
+                    if hiddenExpanded {
+                        ForEach(state.templates.filter { $0.hidden }, id: \.id) { t in
+                            HStack {
+                                icon(for: t.kind.rawValue).frame(width: 20)
+                                Text(t.title).foregroundColor(.secondary)
+                                Spacer()
+                                Button { state.toggleHiddenTemplate(id: t.id) } label: { Image(systemName: "eye") }
+                                    .buttonStyle(.plain)
+                                    .help("Restore")
+                            }
+                        }
+                        if !state.templates.filter({ $0.hidden }).isEmpty {
+                            Button("Restore All") {
+                                for t in state.templates where t.hidden { state.toggleHiddenTemplate(id: t.id) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .padding([.top, .horizontal], 8)
+    }
+}
+
+struct TemplateRow: View {
+    @EnvironmentObject var state: AppState
+    @EnvironmentObject var vm: EditorVM
+    var template: InstrumentTemplate
+    var editMode: Bool
+    @State private var draftTitle: String = ""
+
+    private func icon(for kind: String) -> Image {
+        switch kind {
+        case "mvk.triangle": return Image(systemName: "triangle.fill")
+        case "mvk.quad": return Image(systemName: "square.inset.filled")
+        case "audiotalk.chat": return Image(systemName: "text.bubble")
+        default: return Image(systemName: "circle.grid.3x3")
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            icon(for: template.kind.rawValue).frame(width: 20)
+            if editMode {
+                TextField("Title", text: Binding(get: { draftTitle.isEmpty ? template.title : draftTitle }, set: { draftTitle = $0 }))
+                    .onSubmit { state.renameTemplate(id: template.id, to: draftTitle.isEmpty ? template.title : draftTitle); draftTitle = "" }
+            } else {
+                Text(template.title)
+            }
+            Spacer()
+            if editMode {
+                Button { state.toggleHiddenTemplate(id: template.id) } label: { Image(systemName: "eye.slash") }
+                    .buttonStyle(.plain).help("Hide")
+            }
+        }
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) { createNearOrigin(template: template) }
+        .onDrag { dragPayload(for: template) }
+    }
+
+    private func dragPayload(for t: InstrumentTemplate) -> NSItemProvider {
+        struct Payload: Codable { let templateId: String; let kind: String; let title: String; let w: Int; let h: Int }
+        let p = Payload(templateId: t.id, kind: t.kind.rawValue, title: t.title, w: t.defaultWidth, h: t.defaultHeight)
+        let data = (try? JSONEncoder().encode(p)) ?? Data()
+        return NSItemProvider(item: data as NSData, typeIdentifier: UTType.json.identifier)
+    }
+
+    private func base(for kind: String, title: String) -> String {
+        if kind == "audiotalk.chat" { return "chat" }
+        if kind == "mvk.triangle" { return "tri" }
+        if kind == "mvk.quad" { return "quad" }
+        if kind == "external.coremidi" { return "midi" }
+        let cleaned = title.lowercased().replacingOccurrences(of: " ", with: "-")
+        return cleaned.isEmpty ? "inst" : cleaned
+    }
+
+    private func nextId(base: String) -> String {
+        var n = 1
+        let existing = state.instruments.map { $0.id }
+        var candidate = "\(base)_\(n)"
+        while existing.contains(candidate) { n += 1; candidate = "\(base)_\(n)" }
+        return candidate
+    }
+
+    private func createNearOrigin(template t: InstrumentTemplate) {
+        guard let c = state.api as? PatchBayClient else { return }
+        Task { @MainActor in
+            let baseId = base(for: t.kind.rawValue, title: t.title)
+            let id = nextId(base: baseId)
+            let g = max(4, vm.grid)
+            let x = g * 5, y = g * 5
+            do {
+                if let inst = try await c.createInstrument(id: id, kind: t.kind, title: t.title, x: x, y: y, w: t.defaultWidth, h: t.defaultHeight) {
+                    var node = PBNode(id: inst.id, title: inst.title, x: inst.x, y: inst.y, w: inst.w, h: inst.h, ports: [])
+                    node.ports.append(.init(id: "in", side: .left, dir: .input, type: "data"))
+                    node.ports.append(.init(id: "out", side: .right, dir: .output, type: "data"))
+                    if inst.identity.hasUMPInput == true { node.ports.append(.init(id: "umpIn", side: .left, dir: .input, type: "ump")) }
+                    if inst.identity.hasUMPOutput == true { node.ports.append(.init(id: "umpOut", side: .right, dir: .output, type: "ump")) }
+                    vm.nodes.append(node)
+                    vm.selection = inst.id
+                    vm.selected = [inst.id]
+                }
+            } catch { }
+        }
     }
 }
 
@@ -612,7 +891,16 @@ struct InspectorPane: View {
                 corpusView
             }
         }
-        .task { await state.refreshLinks() }
+        .task { await state.refreshLinks(); syncSelection() }
+        .onChange(of: vm.selection) { _ in syncSelection() }
+        .onChange(of: state.instruments.count) { _ in syncSelection() }
+    }
+    private func syncSelection() {
+        if let sel = vm.selection, let idx = state.instruments.firstIndex(where: { $0.id == sel }) {
+            selectedInstrumentIndex = idx
+        } else if !state.instruments.isEmpty {
+            selectedInstrumentIndex = 0
+        }
     }
     @ViewBuilder var rulesView: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -941,6 +1229,23 @@ struct AssistantPane: View {
                 Button("Suggestions") { Task { await state.autoNoodle(); state.chat.append(.init(role: "assistant", text: "Fetched suggestions (\(state.suggestions.count)).")) } }
                 Button("Apply All") { Task { await state.applyAllSuggestions() } }
                 Button("Corpus Snapshot") { Task { await state.makeSnapshot(); state.chat.append(.init(role: "assistant", text: state.snapshotSummary)) } }
+            }
+            // Field‑Guide tool result (artifact + ETag) — Preview/Apply controls
+            if let etag = state.latestArtifactETag, let path = state.latestArtifactPath {
+                Divider().padding(.vertical, 6)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Guide Result").font(.headline)
+                    Text("ETag: \(etag)").font(.system(.caption2, design: .monospaced)).foregroundStyle(.secondary)
+                    Text(path.lastPathComponent).font(.system(.caption, design: .monospaced))
+                    HStack(spacing: 8) {
+                        Button("Preview Artifact") { state.openLatestArtifact() }
+                        Button("Apply to Canvas") { Task { let msg = await state.applyLatestArtifactToCanvas(vm: vm); state.chat.append(.init(role: "assistant", text: msg)) } }
+                        Button("Refresh Artifacts") { state.refreshArtifacts() }
+                    }
+                }
+                .padding(6)
+                .background(Color(NSColor.controlBackgroundColor))
+                .cornerRadius(6)
             }
             if !state.plannedSteps.isEmpty {
                 Divider().padding(.vertical, 6)

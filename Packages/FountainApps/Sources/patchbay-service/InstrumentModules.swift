@@ -80,16 +80,15 @@ struct AudioTalkChat: InstrumentProvider {
         .init(version: 1, properties: [
             .init(name: "draft", _type: .string, min: nil, max: nil, step: nil, _default: .case4(""), enumValues: nil, aliases: nil),
             .init(name: "provider", _type: .string, min: nil, max: nil, step: nil, _default: .case4("gateway"), enumValues: ["gateway","openai","local"], aliases: nil),
-            .init(name: "model", _type: .string, min: nil, max: nil, step: nil, _default: .case4("gpt-4o-mini"), enumValues: nil, aliases: nil),
+            .init(name: "model", _type: .string, min: nil, max: nil, step: nil, _default: .case4("o4-mini"), enumValues: nil, aliases: nil),
             .init(name: "stream", _type: .bool, min: nil, max: nil, step: nil, _default: .case3(true), enumValues: nil, aliases: nil)
         ])
     }
     func makeDefaults() -> Components.Schemas.Instrument.propertyDefaultsPayload? {
         .init(additionalProperties: [
             "provider": .case4("gateway"),
-            "model": .case4("gpt-4o-mini"),
+            "model": .case4("o4-mini"),
             "stream": .case3(true)
         ])
     }
 }
-

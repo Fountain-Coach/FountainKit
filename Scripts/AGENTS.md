@@ -23,3 +23,7 @@ Register external OpenAPI as tools
   - `TOOLS_FACTORY_URL` (default `http://127.0.0.1:8011`)
   - `TEATRO_GUIDE_CORPUS` (default `teatro-guide`)
   - `TEATRO_GUIDE_BASE_URL` used to resolve absolute `http_path` if the spec lacks `servers[0].url`.
+
+CI smoke for Prompt Field Guide
+- Script: `Scripts/ci/teatro-guide-smoke.sh` registers the guide tools (idempotent), picks one function, invokes it via FunctionCaller, and writes an ETag under `.fountain/artifacts/`.
+- Inputs: `TOOLS_FACTORY_URL`, `FUNCTION_CALLER_URL`, `TEATRO_GUIDE_CORPUS`, `TEATRO_GUIDE_SPEC`, `TEATRO_GUIDE_BASE_URL` (all optional; have sensible defaults).

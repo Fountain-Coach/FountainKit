@@ -1,0 +1,19 @@
+openapi: 3.1.0
+info:
+  title: Teatro Prompt Field Guide (Stub)
+  version: 0.0.1
+servers:
+  - url: http://127.0.0.1:8011
+paths:
+  /metrics:
+    get:
+      summary: Preview (stub)
+      description: Stub preview endpoint mapped to ToolsFactory metrics for demo purposes.
+      operationId: teatro_preview
+      responses:
+        '200':
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string

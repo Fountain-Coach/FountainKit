@@ -31,6 +31,27 @@ struct PBEdge: Identifiable, Hashable {
     var glow: Bool = false
 }
 
+// Canonical ports sort: inputs -> [in, umpIn, ...]; outputs -> [out, umpOut, ...]
+func canonicalSortPorts(_ ports: [PBPort]) -> [PBPort] {
+    func rank(_ p: PBPort) -> (Int, String) {
+        switch p.dir {
+        case .input:
+            if p.id == "in" { return (0, "") }
+            if p.id == "umpIn" { return (1, "") }
+            return (2, p.id)
+        case .output:
+            if p.id == "out" { return (0, "") }
+            if p.id == "umpOut" { return (1, "") }
+            return (2, p.id)
+        }
+    }
+    return ports.sorted { a, b in
+        let ra = rank(a), rb = rank(b)
+        if ra.0 != rb.0 { return ra.0 < rb.0 }
+        return ra.1 < rb.1
+    }
+}
+
 @MainActor
 final class EditorVM: ObservableObject {
     @Published var nodes: [PBNode] = []
@@ -402,6 +423,11 @@ struct EditorCanvas: View {
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .center)
             .contentShape(Rectangle())
+            .contextMenu {
+                if !(vm.selected.isEmpty && vm.selection == nil) {
+                    Button("Delete") { NotificationCenter.default.post(name: .pbDelete, object: nil) }
+                }
+            }
             .onChange(of: geo.size) { newSize in vm.lastViewSize = newSize }
             .onAppear { vm.lastViewSize = geo.size }
             .gesture(DragGesture(minimumDistance: 4)

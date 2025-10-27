@@ -10,8 +10,8 @@ struct FlowBridge {
 
     static func toFlowPatch(vm: EditorVM) -> Patch {
         let nodes: [Flow.Node] = vm.nodes.enumerated().map { idx, n in
-            let inputs = n.ports.filter { $0.dir == .input }.map { Flow.Port(name: $0.id, type: portType(from: $0.type)) }
-            let outputs = n.ports.filter { $0.dir == .output }.map { Flow.Port(name: $0.id, type: portType(from: $0.type)) }
+            let inputs = canonicalSortPorts(n.ports.filter { $0.dir == .input }).map { Flow.Port(name: $0.id, type: portType(from: $0.type)) }
+            let outputs = canonicalSortPorts(n.ports.filter { $0.dir == .output }).map { Flow.Port(name: $0.id, type: portType(from: $0.type)) }
             return Flow.Node(name: n.title ?? n.id,
                              position: CGPoint(x: n.x, y: n.y),
                              inputs: inputs,

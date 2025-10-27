@@ -497,6 +497,8 @@ struct ContentView: View {
                 case 124: vm.nudgeSelected(dx: 1 * stepMult, dy: 0)
                 case 125: vm.nudgeSelected(dx: 0, dy: 1 * stepMult)
                 case 126: vm.nudgeSelected(dx: 0, dy: -1 * stepMult)
+                case 51, 117:
+                    NotificationCenter.default.post(name: .pbDelete, object: nil)
                 default: break
                 }
             }) {
@@ -1295,11 +1297,11 @@ extension ContentView {
             ports: []
         )
         vm.nodes.append(node)
-        // Ports: UMP based on identity + generic data pair
-        if inst.identity.hasUMPInput == true { vm.addPort(to: id, side: .left, dir: .input, id: "umpIn", type: "ump") }
-        if inst.identity.hasUMPOutput == true { vm.addPort(to: id, side: .right, dir: .output, id: "umpOut", type: "ump") }
+        // Ports: deterministic order (left: in, umpIn; right: out, umpOut)
         vm.addPort(to: id, side: .left, dir: .input, id: "in", type: "data")
+        if inst.identity.hasUMPInput == true { vm.addPort(to: id, side: .left, dir: .input, id: "umpIn", type: "ump") }
         vm.addPort(to: id, side: .right, dir: .output, id: "out", type: "data")
+        if inst.identity.hasUMPOutput == true { vm.addPort(to: id, side: .right, dir: .output, id: "umpOut", type: "ump") }
         vm.selection = id
         vm.selected = [id]
     }

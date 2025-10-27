@@ -18,8 +18,8 @@ struct KeyInputContainer<Content: View>: NSViewRepresentable {
                 return
             }
             // Only intercept navigation keys; let typing go to focused controls (e.g., TextEditor)
-            let arrows: Set<UInt16> = [123, 124, 125, 126] // left, right, down, up
-            if arrows.contains(event.keyCode) {
+            let handled: Set<UInt16> = [123, 124, 125, 126, 51, 117] // arrows + backspace + forward delete
+            if handled.contains(event.keyCode) {
                 onKey?(event)
             } else {
                 super.keyDown(with: event)

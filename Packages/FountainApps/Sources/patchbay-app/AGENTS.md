@@ -31,6 +31,13 @@ Use this file as a seed for agent tooling (or to register PatchBay actions in a 
 
 Export. Page-centric PDF export has been removed with the shift to an infinite artboard. A future export will snapshot the visible scene.
 
+Teatro DSL workflow
+Use Teatro’s Storyboard and MIDI 2.0 DSLs to produce deterministic previews and educational demos of PatchBay scenes. This gives us portable, CI‑friendly animations without touching app UI code. See `External/TeatroPromptFieldGuide/README.md` for the upstream prompt field guide and `External/TeatroFull` for the engine.
+
+- Preview: export the current canvas as a sequence of Teatro Storyboard scenes (blank → nodes placed → links applied). Render animated SVG via `External/TeatroFull`.
+- Sync audio: derive a `MIDISequence` from link events to drive `TeatroPlayerView` playback alongside frames.
+- Teach/test: include concise storyboard snippets in docs and tests so agents can reason about intended flows before UI implementation.
+
 ### API surface (client copy)
 
 The app’s OpenAPI document lives at `Sources/patchbay-app/openapi.yaml` and mirrors the curated spec at `Packages/FountainSpecCuration/openapi/v1/patchbay.yml`. Core routes: `/instruments`, `/graph/suggest`, `/links` (GET/POST/DELETE), `/store/graphs` and `/store/graphs/{id}` (GET/PUT), `/corpus/snapshot`, `/admin/vendor-identity`. The service copy is the source of truth during development; the curated spec governs schema reviews.

@@ -28,6 +28,14 @@ Core routes (OpenAPI)
 Operator UX parity
 The PatchBay app treats this service like AudioTalk’s operator surface: readiness with a single verdict, a three‑pane layout, and deterministic artifacts (ETags) for reproducible sessions. Suggestions and link CRUD stay typed end‑to‑end so actions are explainable.
 
+Teatro DSL integration
+The Teatro view/storyboard and MIDI 2.0 DSLs provide a deterministic way to preview PatchBay graphs and author demos. Use them for exports and CI snapshots rather than bespoke renderers. The external prompt guide lives at `External/TeatroPromptFieldGuide/README.md`.
+
+- Export storyboard: map canvas states into Teatro Storyboard scenes (e.g., initial canvas → nodes placed → links added), then render animated SVG with `External/TeatroFull`.
+- Export MIDI: derive a `MIDISequence` from instrument timing or link activity to drive `TeatroPlayerView` playback alongside the storyboard.
+- Import ideas: accept storyboard text to seed graphs via `/import/dsl` when sensible (treat as a convenience, not the canonical graph format).
+- CI: generate storyboard from a seeded graph and compare rendered frames to baselines (ties into `Scripts/ci/ui-snap.sh`).
+
 ### Instrument Addition Checklist (spec‑first)
 
 Add a new instrument without breaking the app/service contract.

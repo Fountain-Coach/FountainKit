@@ -6,13 +6,11 @@ ART_DIR="$ROOT_DIR/.fountain/artifacts"
 BASE_DIR="$ROOT_DIR/Packages/FountainApps/Tests/PatchBayAppUITests/Baselines"
 mkdir -p "$ART_DIR" "$BASE_DIR"
 
-echo "[vrt] building UI tests"
-swift build --package-path "$ROOT_DIR/Packages/FountainApps" -c debug --target PatchBayAppUITests >/dev/null
+echo "[vrt] building patchbay-app"
+swift build --package-path "$ROOT_DIR/Packages/FountainApps" -c debug --target patchbay-app >/dev/null
 
-echo "[vrt] generating candidates by running snapshot tests (they will Skip and write to artifacts)"
-set +e
-swift test --package-path "$ROOT_DIR/Packages/FountainApps" -c debug --filter 'SnapshotDiffTests/test*SnapshotOrWrites' || true
-set -e
+echo "[vrt] generating candidates by running app snapshot writer"
+PATCHBAY_WRITE_BASELINES=1 swift run --package-path "$ROOT_DIR/Packages/FountainApps" -c debug patchbay-app >/dev/null
 
 echo "[vrt] copying generated candidates to baselines"
 shopt -s nullglob

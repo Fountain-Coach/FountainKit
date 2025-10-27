@@ -46,13 +46,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @MainActor
     private func writeBaselinesAndExit() async {
+        // Local mock API to keep app-rendered snapshots identical to test baselines
+        struct SnapMockAPI: PatchBayAPI {
+            func listInstruments() async throws -> [Components.Schemas.Instrument] {
+                let schema = Components.Schemas.PropertySchema(version: 1, properties: [
+                    .init(name: "zoom", _type: .float)
+                ])
+                let ident = Components.Schemas.InstrumentIdentity(
+                    manufacturer: "Fountain", product: "Mock", displayName: "Mock#1", instanceId: "m1", muid28: 0,
+                    hasUMPInput: true, hasUMPOutput: true
+                )
+                let a = Components.Schemas.Instrument(
+                    id: "A", kind: .init(rawValue: "mvk.triangle")!, title: "A",
+                    x: 0, y: 0, w: 100, h: 80, identity: ident, propertySchema: schema
+                )
+                let b = Components.Schemas.Instrument(
+                    id: "B", kind: .init(rawValue: "mvk.quad")!, title: "B",
+                    x: 0, y: 0, w: 100, h: 80, identity: ident, propertySchema: schema
+                )
+                return [a, b]
+            }
+            func suggestLinks(nodeIds: [String]) async throws -> [Components.Schemas.SuggestedLink] {
+                let l = Components.Schemas.CreateLink(kind: .property, property: .init(from: "A.zoom", to: "B.zoom", direction: .a_to_b), ump: nil)
+                return [.init(link: l, reason: "matched property zoom", confidence: 0.9)]
+            }
+            // Unused in snapshots
+            func createInstrument(id: String, kind: Components.Schemas.InstrumentKind, title: String?, x: Int, y: Int, w: Int, h: Int) async throws -> Components.Schemas.Instrument? { nil }
+        }
         let fm = FileManager.default
         let cwd = URL(fileURLWithPath: fm.currentDirectoryPath)
         let baseDir = cwd.appendingPathComponent(".fountain/artifacts", isDirectory: true)
         try? fm.createDirectory(at: baseDir, withIntermediateDirectories: true)
         // initial-open 1440x900 (infinite artboard)
         let vm = EditorVM()
-        let state = AppState()
+        let state = AppState(api: SnapMockAPI())
         let content = ContentView(state: state).environmentObject(vm)
         let host = NSHostingView(rootView: content)
         host.frame = NSRect(x: 0, y: 0, width: 1440, height: 900)
@@ -66,7 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // initial-open 1280x800
         let vmP = EditorVM()
-        let contentP = ContentView(state: AppState()).environmentObject(vmP)
+        let contentP = ContentView(state: AppState(api: SnapMockAPI())).environmentObject(vmP)
         let hostP = NSHostingView(rootView: contentP)
         hostP.frame = NSRect(x: 0, y: 0, width: 1280, height: 800)
         hostP.layoutSubtreeIfNeeded()
@@ -75,7 +102,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let imgP = NSImage(size: hostP.bounds.size); imgP.addRepresentation(repP)
             let outP = baseDir.appendingPathComponent("patchbay-initial-open-1280x800-portrait.tiff")
             try? imgP.tiffRepresentation?.write(to: outP)
-            fputs("[snap] wrote \\ (outP.path)\n", stderr)
+            fputs("[snap] wrote \(outP.path)\n", stderr)
         }
         // basic-canvas 640x480
         let vm2 = EditorVM(); vm2.grid = 24; vm2.zoom = 1.0
@@ -487,7 +514,7 @@ struct AddInstrumentToolbar: View {
     @ObservedObject var vm: EditorVM
     @State private var showSheet: Bool = false
     var body: some View {
-        Button { showSheet = true } label: { Label("Add Instrument", systemImage: "plus") }
+        Button { NSApp.activate(ignoringOtherApps: true); if let w = NSApp.keyWindow ?? NSApp.windows.first { w.makeKeyAndOrderFront(nil) }; showSheet = true } label: { Label("Add Instrument", systemImage: "plus") }
             .sheet(isPresented: $showSheet) { AddInstrumentSheet(state: state, vm: vm, dismiss: { showSheet = false }) }
             .help("Create an instrument on the PatchBay service and place it on the canvas")
     }

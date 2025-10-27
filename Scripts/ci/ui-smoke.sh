@@ -65,5 +65,3 @@ if [[ $fail -ne 0 ]]; then
 fi
 
 echo "[ui-smoke] OK"
-exit 0
-

@@ -58,6 +58,8 @@ public struct ToolsFactoryOpenAPI: APIProtocol, @unchecked Sendable {
             return b + p
         }
         let corpus = input.query.corpusId ?? "tools-factory"
+        // Ensure corpus exists, so other services (FunctionCaller) enumerate it.
+        _ = try? await persistence.createCorpus(corpus)
         let paths = obj["paths"] as? [String: Any] ?? [:]
         var registered: [Components.Schemas.FunctionInfo] = []
         for (path, methodsAny) in paths {

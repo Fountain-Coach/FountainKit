@@ -17,7 +17,8 @@ struct FlowBridge {
                              inputs: inputs,
                              outputs: outputs)
         }
-        let indexById = Dictionary(uniqueKeysWithValues: vm.nodes.enumerated().map { ($0.element.id, $0.offset) })
+        // Be tolerant of duplicate node ids (should not happen, but avoid traps): last wins
+        let indexById = Dictionary(vm.nodes.enumerated().map { ($0.element.id, $0.offset) }, uniquingKeysWith: { _, new in new })
         var wires = Set<Wire>()
         for e in vm.edges {
             let partsF = e.from.split(separator: ".", maxSplits: 1).map(String.init)

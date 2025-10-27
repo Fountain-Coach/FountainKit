@@ -192,6 +192,7 @@ start_bg() {
   local log_file="$LOG_DIR/$name.log"
   local port
   port=$(port_for "$name")
+  local store_dir="$REPO_ROOT/.fountain/store"
   if [[ -f "$pid_file" ]] && kill -0 "$(cat "$pid_file" 2>/dev/null)" 2>/dev/null; then
     echo "[dev-up] $name already running (pid $(cat "$pid_file"))"
     return 0
@@ -212,10 +213,10 @@ start_bg() {
         return 1
       }
     fi
-    nohup env LAUNCHER_SIGNATURE="$SIG" \
+    nohup env LAUNCHER_SIGNATURE="$SIG" FOUNTAINSTORE_DIR="$store_dir" \
       "$bin_dir/$target" >>"$log_file" 2>&1 &
   else
-    nohup env LAUNCHER_SIGNATURE="$SIG" \
+    nohup env LAUNCHER_SIGNATURE="$SIG" FOUNTAINSTORE_DIR="$store_dir" \
       swift run --package-path "$pkg_path" "$target" \
         >>"$log_file" 2>&1 &
   fi
@@ -305,6 +306,12 @@ if [[ "${REGISTER_TEATRO_GUIDE:-0}" == "1" ]]; then
   TF_URL="${TOOLS_FACTORY_URL:-http://127.0.0.1:$(port_for tools-factory)}"
   if http_200 "$TF_URL/metrics"; then
     echo "[dev-up] Registering Teatro Prompt Field Guide tools (corpus=${TEATRO_GUIDE_CORPUS:-teatro-guide})…"
+    # Ensure corpus exists via Persist before registration so FunctionCaller can discover it
+    if http_200 "http://127.0.0.1:$(port_for persist)/metrics"; then
+      curl -s -X POST -H 'Content-Type: application/json' \
+        "http://127.0.0.1:$(port_for persist)/corpora" \
+        --data '{"corpusId":"'"${TEATRO_GUIDE_CORPUS:-teatro-guide}"'"}' >/dev/null 2>&1 || true
+    fi
     BASE_ARG=()
     if [[ -n "${TEATRO_GUIDE_BASE_URL:-}" ]]; then BASE_ARG=(--base "${TEATRO_GUIDE_BASE_URL}"); fi
     bash "$REPO_ROOT/Scripts/openapi/register-teatro-guide-as-tools.sh" \

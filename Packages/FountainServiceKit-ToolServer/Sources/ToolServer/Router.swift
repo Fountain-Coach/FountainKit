@@ -81,7 +81,8 @@ public struct Router {
         let page = max(Int(qp["page"] ?? "1") ?? 1, 1)
         let pageSize = min(max(Int(qp["page_size"] ?? "20") ?? 20, 1), 100)
         let offset = (page - 1) * pageSize
-        let (total, functions) = try await svc.listFunctions(corpusId: defaultCorpusId, limit: pageSize, offset: offset)
+        let corpus = qp["corpusId"] ?? defaultCorpusId
+        let (total, functions) = try await svc.listFunctions(corpusId: corpus, limit: pageSize, offset: offset)
         let items: [[String: Any]] = functions.map { f in
             [
                 "function_id": f.functionId,
@@ -110,6 +111,12 @@ public struct Router {
         // Parse corpusId from query, default to configured corpus
         let qp = parseQuery(request.path)
         let corpus = qp["corpusId"] ?? defaultCorpusId
+        // Ensure corpus exists so downstream list/lookups see it.
+        if let svc = persistence {
+            if (try? await svc.getCorpus(corpus)) == nil {
+                _ = try? await svc.createCorpus(corpus)
+            }
+        }
         // Optional: resolve base URL from query override or servers[0].url
         let baseOverride = qp["base"]
 

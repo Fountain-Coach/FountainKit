@@ -25,6 +25,9 @@ final class AppViewTests: XCTestCase {
             let l = Components.Schemas.CreateLink(kind: .property, property: .init(from: "A.zoom", to: "B.zoom", direction: .a_to_b), ump: nil)
             return [.init(link: l, reason: "matched property zoom", confidence: 0.9)]
         }
+        func createInstrument(id: String, kind: Components.Schemas.InstrumentKind, title: String?, x: Int, y: Int, w: Int, h: Int) async throws -> Components.Schemas.Instrument? {
+            return nil
+        }
     }
 
     func testAutoNoodleProducesSuggestions() async throws {

@@ -54,6 +54,7 @@ struct ZoomContainer<Content: View>: NSViewRepresentable {
         // Trackpad scroll to pan in doc space
         NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak coord = context.coordinator] e in
             guard let coord, let win = host.window, e.window == win else { return e }
+            if NSApp.modalWindow != nil || win.attachedSheet != nil { return e }
             Task { @MainActor in
                 let s = max(0.0001, coord.parent.zoom)
                 // Pan follows trackpad: swipe up -> content moves up

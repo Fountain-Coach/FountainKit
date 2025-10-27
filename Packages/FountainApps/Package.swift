@@ -313,6 +313,12 @@ let package = Package(
             path: "Sources/patchbay-snapshots"
         ),
         .executableTarget(
+            name: "img-rmse",
+            dependencies: [],
+            path: "Sources/img-rmse"
+        ),
+        
+        .executableTarget(
             name: "qc-mock-service-server",
             dependencies: [
                 "qc-mock-service",

@@ -71,6 +71,7 @@ struct GatewayConsole {
         }
     }
 
+    @MainActor
     static func start() async {
         let root = ProcessInfo.processInfo.environment["FOUNTAINKIT_ROOT"].flatMap { URL(fileURLWithPath: $0) }
         let env = EnvironmentControllerAdapter(fountainRepoRoot: root)
@@ -79,6 +80,7 @@ struct GatewayConsole {
         print("Environment: \(env.overallState)")
     }
 
+    @MainActor
     static func stop() async {
         let root = ProcessInfo.processInfo.environment["FOUNTAINKIT_ROOT"].flatMap { URL(fileURLWithPath: $0) }
         let env = EnvironmentControllerAdapter(fountainRepoRoot: root)
@@ -86,6 +88,7 @@ struct GatewayConsole {
         print("Environment: stopped")
     }
 
+    @MainActor
     static func status() async {
         let root = ProcessInfo.processInfo.environment["FOUNTAINKIT_ROOT"].flatMap { URL(fileURLWithPath: $0) }
         let env = EnvironmentControllerAdapter(fountainRepoRoot: root)
@@ -137,4 +140,3 @@ ENV:
         )
     }
 }
-

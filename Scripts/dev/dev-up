@@ -86,6 +86,7 @@ port_for() {
     semantic-browser) echo "${SEMANTIC_BROWSER_PORT:-8007}" ;;
     tools-factory) echo "${TOOLS_FACTORY_PORT:-8011}" ;;
     tool-server) echo "${PORT:-8012}" ;;
+    patchbay) echo "${PATCHBAY_PORT:-7090}" ;;
     *) echo 0 ;;
   esac
 }
@@ -265,3 +266,19 @@ start_bg function-caller function-caller-server Packages/FountainApps
 start_bg persist persist-server Packages/FountainApps
 start_bg gateway gateway-server Packages/FountainApps
 start_bg patchbay patchbay-service-server Packages/FountainApps
+if [[ "$CHECK" == "1" ]]; then
+  wait_ready patchbay "http://127.0.0.1:$(port_for patchbay)/health" 20 || true
+fi
+
+# Build PatchBay app and its GUI tests (compile-time gate for UI focus invariants)
+echo "[dev-up] Building PatchBay app (compile only)…"
+swift build --package-path "$REPO_ROOT/Packages/FountainApps" --configuration "$CONFIGURATION" --target patchbay-app
+echo "[dev-up] Building PatchBayAppUITests (compile only)…"
+swift build --package-path "$REPO_ROOT/Packages/FountainApps" --configuration "$CONFIGURATION" --target PatchBayAppUITests
+if [[ "$CHECK" == "1" ]]; then
+  echo "[dev-up] UI smoke (PatchBay goldens)…"
+  bash "$REPO_ROOT/Scripts/ci/ui-smoke.sh" || {
+    echo "[dev-up] UI smoke failed (see .fountain/artifacts)." >&2
+    exit 3
+  }
+fi

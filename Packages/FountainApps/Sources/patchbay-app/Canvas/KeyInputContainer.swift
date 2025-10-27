@@ -12,6 +12,11 @@ struct KeyInputContainer<Content: View>: NSViewRepresentable {
         private var wantsFocus: Bool = false
         override var acceptsFirstResponder: Bool { wantsFocus }
         override func keyDown(with event: NSEvent) {
+            // If a modal/sheet is present, do not intercept; let controls receive typing
+            if NSApp.modalWindow != nil || self.window?.attachedSheet != nil {
+                super.keyDown(with: event)
+                return
+            }
             // Only intercept navigation keys; let typing go to focused controls (e.g., TextEditor)
             let arrows: Set<UInt16> = [123, 124, 125, 126] // left, right, down, up
             if arrows.contains(event.keyCode) {

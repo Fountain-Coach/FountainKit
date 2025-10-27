@@ -501,6 +501,7 @@ struct AddInstrumentSheet: View {
     @State private var title: String = ""
     @State private var working: Bool = false
     @State private var errorText: String = ""
+    @FocusState private var titleFocused: Bool
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack { Text("Add Instrument").font(.title3).bold(); Spacer(); Button("Close") { dismiss() } }
@@ -510,13 +511,18 @@ struct AddInstrumentSheet: View {
                 Text("AudioTalk Chat (audiotalk.chat)").tag("audiotalk.chat")
                 Text("External CoreMIDI (external.coremidi)").tag("external.coremidi")
             }
-            TextField("Title (optional)", text: $title)
-                .textFieldStyle(.roundedBorder)
+            FocusTextField(text: $title, placeholder: "Title (optional)", initialFocus: true)
+                .frame(height: 22)
             if !errorText.isEmpty { Text(errorText).foregroundColor(.red).font(.caption) }
             HStack { Spacer(); Button(working ? "Creating…" : "Create") { Task { await create() } }.disabled(working) }
         }
         .padding(14)
         .frame(minWidth: 420)
+        .onAppear {
+            // Ensure app is active and the sheet captures typing
+            NSApp.activate(ignoringOtherApps: true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { titleFocused = true }
+        }
     }
     @MainActor
     private func create() async {

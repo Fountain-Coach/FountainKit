@@ -91,9 +91,7 @@ struct ChatInstrumentView: View {
     private var composer: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Message").font(.caption).foregroundStyle(.secondary)
-            TextEditor(text: $input)
-                .focused($inputFocused)
-                .font(.body)
+            FocusTextView(text: $input, initialFocus: true, minHeight: 120)
                 .frame(minHeight: 120)
                 .overlay(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)

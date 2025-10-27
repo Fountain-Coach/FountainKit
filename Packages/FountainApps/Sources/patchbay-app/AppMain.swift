@@ -408,6 +408,29 @@ final class AppState: ObservableObject {
     func renameTemplate(id: String, to: String) { templatesStore.rename(id: id, to: to, in: &templates) }
     func toggleHiddenTemplate(id: String) { templatesStore.toggleHidden(id: id, in: &templates) }
     func moveTemplates(fromOffsets: IndexSet, toOffset: Int) { templatesStore.move(fromOffsets: fromOffsets, toOffset: toOffset, items: &templates) }
+    func resetTemplates() { templates = templatesStore.reset() }
+    func restoreAllTemplates() {
+        var items = templates
+        var changed = false
+        for i in items.indices where items[i].hidden {
+            items[i].hidden = false
+            changed = true
+        }
+        if changed { templates = items; templatesStore.save(templates) }
+    }
+
+    // Corpus quick overview (computed from current state as a fallback)
+    func corpusOverviewLine() -> String {
+        let tri = instruments.filter { $0.kind.rawValue == "mvk.triangle" }.count
+        let quad = instruments.filter { $0.kind.rawValue == "mvk.quad" }.count
+        let chat = instruments.filter { $0.kind.rawValue == "audiotalk.chat" }.count
+        let core = instruments.filter { $0.kind.rawValue == "external.coremidi" }.count
+        let totalI = instruments.count
+        let prop = links.filter { $0.kind == .property }.count
+        let ump = links.filter { $0.kind == .ump }.count
+        let totalL = links.count
+        return "Instruments: \(totalI) [tri \(tri), quad \(quad), chat \(chat), coremidi \(core)] · Links: \(totalL) [property \(prop), ump \(ump)]"
+    }
 
     @MainActor
     func runPlannedStep(idx index: Int) async {
@@ -680,21 +703,34 @@ struct TemplateLibraryView: View {
             HStack {
                 TextField("Search", text: $search)
                 Spacer()
+                Button("Reset Defaults") { state.resetTemplates() }
                 Button(editMode ? "Done" : "Edit") { withAnimation { editMode.toggle() } }
             }
             List {
                 Section(header: Text("Library")) {
                     let visible = state.templates.filter { !$0.hidden && (search.isEmpty || $0.title.localizedCaseInsensitiveContains(search)) }
-                    ForEach(visible, id: \.id) { t in
-                        TemplateRow(template: t, editMode: editMode)
-                            .environmentObject(state)
-                            .environmentObject(vm)
+                    if visible.isEmpty {
+                        VStack(alignment: .center) {
+                            Text("No templates. Reset to Defaults?").foregroundColor(.secondary)
+                            Button("Reset Defaults") { state.resetTemplates() }
+                        }
+                        .frame(maxWidth: .infinity)
+                    } else {
+                        ForEach(visible, id: \.id) { t in
+                            TemplateRow(template: t, editMode: editMode)
+                                .environmentObject(state)
+                                .environmentObject(vm)
+                        }
+                        .onMove { idx, off in state.moveTemplates(fromOffsets: idx, toOffset: off) }
                     }
-                    .onMove { idx, off in state.moveTemplates(fromOffsets: idx, toOffset: off) }
                 }
                 Section(header: HStack { Button(action: { withAnimation { hiddenExpanded.toggle() } }) { Image(systemName: hiddenExpanded ? "chevron.down" : "chevron.right") }; Text("Hidden Templates") }) {
                     if hiddenExpanded {
-                        ForEach(state.templates.filter { $0.hidden }, id: \.id) { t in
+                        let hidden = state.templates.filter { $0.hidden }
+                        if !hidden.isEmpty {
+                            Button("Restore All") { state.restoreAllTemplates() }
+                        }
+                        ForEach(hidden, id: \.id) { t in
                             HStack {
                                 icon(for: t.kind.rawValue).frame(width: 20)
                                 Text(t.title).foregroundColor(.secondary)
@@ -702,11 +738,6 @@ struct TemplateLibraryView: View {
                                 Button { state.toggleHiddenTemplate(id: t.id) } label: { Image(systemName: "eye") }
                                     .buttonStyle(.plain)
                                     .help("Restore")
-                            }
-                        }
-                        if !state.templates.filter({ $0.hidden }).isEmpty {
-                            Button("Restore All") {
-                                for t in state.templates where t.hidden { state.toggleHiddenTemplate(id: t.id) }
                             }
                         }
                     }
@@ -865,7 +896,7 @@ struct AddInstrumentSheet: View {
     }
 }
 struct InspectorPane: View {
-    enum Tab: String, CaseIterable { case instruments = "Instruments", links = "Links", rules = "Rules", vendor = "Vendor", corpus = "Corpus" }
+    enum Tab: String, CaseIterable { case instruments = "Instruments", links = "Links", rules = "Rules", vendor = "Vendor", corpus = "Corpus", chat = "Chat" }
     @EnvironmentObject var state: AppState
     @EnvironmentObject var vm: EditorVM
     @State private var tab: Tab = .links
@@ -891,6 +922,8 @@ struct InspectorPane: View {
                 vendorView
             case .corpus:
                 corpusView
+            case .chat:
+                AssistantPane(seedQuestion: "What's in the corpus?", autoSendOnAppear: true)
             }
         }
         .task { await state.refreshLinks(); syncSelection() }
@@ -938,6 +971,13 @@ struct InspectorPane: View {
                             .font(.system(.body, design: .monospaced))
                     }
                 } }
+                Divider().padding(.vertical, 4)
+                HStack {
+                    Text("Corpus Overview").font(.headline)
+                    Spacer()
+                    Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(state.corpusOverviewLine(), forType: .string) }
+                }
+                Text(state.corpusOverviewLine()).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
             } else {
                 Text("No instrument selected").foregroundColor(.secondary)
             }
@@ -1088,8 +1128,15 @@ struct InspectorPane: View {
     }
     @ViewBuilder var corpusView: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack { Text("Corpus Snapshot").font(.headline); Spacer(); Button("Create Snapshot") { Task { await state.makeSnapshot() } } }
-            if !state.snapshotSummary.isEmpty { Text(state.snapshotSummary).font(.system(.body, design: .monospaced)) }
+            HStack {
+                Text("Corpus Snapshot").font(.headline)
+                Spacer()
+                Button("Refresh Snapshot") { Task { await state.makeSnapshot() } }
+                Button("Copy Summary") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(state.snapshotSummary.isEmpty ? state.corpusOverviewLine() : state.snapshotSummary, forType: .string) }
+            }
+            let line = state.snapshotSummary.isEmpty ? state.corpusOverviewLine() : state.snapshotSummary
+            Text(line).font(.system(.body, design: .monospaced))
+            if state.snapshotSummary.isEmpty { Text("Snapshot unavailable; showing live overview.").font(.caption).foregroundStyle(.secondary) }
             Divider().padding(.vertical, 4)
             Text("Store (Save/Load)").font(.headline)
             HStack {
@@ -1176,6 +1223,8 @@ struct InstrumentIcon: View {
 struct AssistantPane: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var vm: EditorVM
+    var seedQuestion: String? = nil
+    var autoSendOnAppear: Bool = false
     @State private var chatInput: String = "What instruments and links are present?"
     @FocusState private var chatFocused: Bool
     @State private var expanded: Bool = false
@@ -1275,6 +1324,14 @@ struct AssistantPane: View {
                     .padding(6)
                     .background(Color(NSColor.controlBackgroundColor))
                     .cornerRadius(6)
+                }
+            }
+        }
+        .onAppear {
+            if state.chat.isEmpty, let s = seedQuestion {
+                chatInput = s
+                if autoSendOnAppear {
+                    Task { await state.ask(question: chatInput, vm: vm) }
                 }
             }
         }

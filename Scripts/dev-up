@@ -311,6 +311,14 @@ if [[ "${REGISTER_TEATRO_GUIDE:-0}" == "1" ]]; then
       --tools-factory "$TF_URL" \
       --corpus "${TEATRO_GUIDE_CORPUS:-teatro-guide}" \
       "${BASE_ARG[@]}" || true
+    # Verify planner sees the corpus (presence only)
+    if http_200 "http://127.0.0.1:$(port_for planner)/metrics"; then
+      if curl -sf --max-time 3 "http://127.0.0.1:$(port_for planner)/planner/corpora" | grep -q "${TEATRO_GUIDE_CORPUS:-teatro-guide}"; then
+        echo "[dev-up] Planner lists corpus '${TEATRO_GUIDE_CORPUS:-teatro-guide}'"
+      else
+        echo "[dev-up] WARN: Planner did not list corpus '${TEATRO_GUIDE_CORPUS:-teatro-guide}' yet" >&2
+      fi
+    fi
   else
     echo "[dev-up] WARN: ToolsFactory not reachable at $TF_URL; skipping Teatro guide registration." >&2
   fi

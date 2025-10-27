@@ -384,6 +384,8 @@ struct EditorCanvas: View {
     @State private var flowPatch: Patch = Patch(nodes: [], wires: [])
     @State private var flowSelection: Set<NodeIndex> = []
     @State private var didInitialFit: Bool = false
+    @State private var trashRectView: CGRect = .zero
+    @State private var trashHover: Bool = false
 
     var body: some View {
         GeometryReader { geo in
@@ -420,6 +422,26 @@ struct EditorCanvas: View {
                         .frame(width: rect.width, height: rect.height)
                         .position(x: rect.midX, y: rect.midY)
                 }
+                // Garbage can (always on): bottom-right, fixed size
+                let trashSize: CGFloat = 64
+                let trashPadding: CGFloat = 16
+                let trashX = geo.size.width - trashPadding - trashSize/2
+                let trashY = geo.size.height - trashPadding - trashSize/2
+                Color.clear
+                    .frame(width: trashSize, height: trashSize)
+                    .background(
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 12)
+                                .strokeBorder(trashHover ? Color.red : Color.secondary, lineWidth: trashHover ? 3 : 1)
+                                .background(RoundedRectangle(cornerRadius: 12).fill(Color(NSColor.windowBackgroundColor).opacity(0.6)))
+                            Image(systemName: trashHover ? "trash.fill" : "trash")
+                                .font(.system(size: 24, weight: .regular))
+                                .foregroundColor(trashHover ? .red : .secondary)
+                        }
+                    )
+                    .position(x: trashX, y: trashY)
+                    .onAppear { trashRectView = CGRect(x: geo.size.width - trashPadding - trashSize, y: geo.size.height - trashPadding - trashSize, width: trashSize, height: trashSize) }
+                    .onChange(of: geo.size) { _ in trashRectView = CGRect(x: geo.size.width - trashPadding - trashSize, y: geo.size.height - trashPadding - trashSize, width: trashSize, height: trashSize) }
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .center)
             .contentShape(Rectangle())
@@ -513,12 +535,27 @@ struct EditorCanvas: View {
 
     @ViewBuilder
     private func flowEditorOverlay(docSize: CGSize) -> some View {
+        let transform = CanvasTransform(scale: vm.zoom, translation: vm.translation)
         NodeEditor(patch: $flowPatch, selection: $flowSelection)
             .onNodeMoved { index, loc in
                 let g = CGFloat(vm.grid)
                 if let i = vm.nodeIndex(by: vm.nodes[index].id) {
                     vm.nodes[i].x = Int((round(loc.x / g) * g))
                     vm.nodes[i].y = Int((round(loc.y / g) * g))
+                    // Trash hit testing in view-space
+                    let originView = transform.docToView(CGPoint(x: CGFloat(vm.nodes[i].x), y: CGFloat(vm.nodes[i].y)))
+                    let rectView = CGRect(x: originView.x, y: originView.y, width: CGFloat(vm.nodes[i].w) * vm.zoom, height: CGFloat(vm.nodes[i].h) * vm.zoom)
+                    let intersects = rectView.intersects(trashRectView)
+                    if trashHover != intersects { trashHover = intersects }
+                    // If center entered trash box, delete immediately
+                    if intersects {
+                        let id = vm.nodes[i].id
+                        vm.nodes.removeAll { $0.id == id }
+                        vm.edges.removeAll { $0.from.hasPrefix(id+".") || $0.to.hasPrefix(id+".") }
+                        vm.selection = nil
+                        vm.selected.removeAll()
+                        trashHover = false
+                    }
                 }
             }
             .onWireAdded { wire in

@@ -35,6 +35,16 @@ Export. Page-centric PDF export has been removed with the shift to an infinite a
 
 The app’s OpenAPI document lives at `Sources/patchbay-app/openapi.yaml` and mirrors the curated spec at `Packages/FountainSpecCuration/openapi/v1/patchbay.yml`. Core routes: `/instruments`, `/graph/suggest`, `/links` (GET/POST/DELETE), `/store/graphs` and `/store/graphs/{id}` (GET/PUT), `/corpus/snapshot`, `/admin/vendor-identity`. The service copy is the source of truth during development; the curated spec governs schema reviews.
 
+### Instrument Addition Checklist (app side)
+
+Keep the app in lock‑step with the service when adding instruments.
+
+- Mirror the curated spec: Edit `Sources/patchbay-app/openapi.yaml` to match changes made in `Packages/FountainSpecCuration/openapi/v1/patchbay.yml` (e.g., new `InstrumentKind` case, property schema fields/names).
+- Regenerate types: `swift build --package-path Packages/FountainApps -c debug --target patchbay-app` (Apple’s generator writes to `.build/plugins/outputs/…/OpenAPIGenerator`).
+- Verify UI: Run the app, ensure the new instrument appears in the left pane and its properties show under schema/links views as expected.
+- Snapshot if UI changed: Add or update goldens under `Tests/PatchBayAppUITests/Baselines` and run the UI tests. Use `PATCHBAY_WRITE_BASELINES=1 swift run --package-path Packages/FountainApps patchbay-app` then `Scripts/ci/ui-rebaseline.sh` to commit updated images.
+- Don’t hand‑edit generated Swift: Keep changes to `openapi.yaml`, `ServiceClient.swift`, and view code only.
+
 ### Tests
 
 Focused tests live under `Tests/PatchBayAppUITests` and cover grid decimation, fit/center math, drag/snap, connect/fan‑out, keyboard nudge, and image snapshots. When a snapshot baseline is missing, tests write candidates to `/tmp/` for approval. Service handler tests sit under `Tests/PatchBayServiceTests`. To avoid workspace noise, build per‑target while iterating.

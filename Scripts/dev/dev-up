@@ -64,6 +64,16 @@ if [[ -n "${OPENAI_API_KEY:-}" && -z "${LLM_BACKEND:-}" ]]; then
   export LLM_BACKEND=openai
 fi
 
+# Spec sync check (PatchBay InstrumentKind) — fail fast in dev if drift
+if [[ -x "$REPO_ROOT/Scripts/ci/check-patchbay-spec-sync.sh" ]]; then
+  echo "[dev-up] Checking PatchBay spec sync (InstrumentKind)…"
+  if ! bash "$REPO_ROOT/Scripts/ci/check-patchbay-spec-sync.sh" >/dev/null; then
+    echo "[dev-up] ERROR: PatchBay spec drift detected. See Scripts/ci/check-patchbay-spec-sync.sh output." >&2
+    bash "$REPO_ROOT/Scripts/ci/check-patchbay-spec-sync.sh" || true
+    exit 2
+  fi
+fi
+
 # Helpers
 port_for() {
   case "$1" in
@@ -254,4 +264,4 @@ start_bg planner planner-server Packages/FountainApps
 start_bg function-caller function-caller-server Packages/FountainApps
 start_bg persist persist-server Packages/FountainApps
 start_bg gateway gateway-server Packages/FountainApps
-
+start_bg patchbay patchbay-service-server Packages/FountainApps

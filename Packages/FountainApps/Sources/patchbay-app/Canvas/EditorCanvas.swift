@@ -375,6 +375,28 @@ struct BezierEdgeView: View {
     }
 }
 
+// Transient puff animation when a node is deleted via trash
+struct PuffItem: Identifiable { let id = UUID(); var center: CGPoint }
+struct PuffView: View {
+    var center: CGPoint
+    @State private var scale: CGFloat = 0.2
+    @State private var opacity: Double = 0.7
+    var body: some View {
+        Circle()
+            .fill(Color.red)
+            .frame(width: 20, height: 20)
+            .scaleEffect(scale)
+            .opacity(opacity)
+            .position(center)
+            .onAppear {
+                withAnimation(.easeOut(duration: 0.35)) {
+                    scale = 1.8
+                    opacity = 0.0
+                }
+            }
+    }
+}
+
 struct EditorCanvas: View {
     @EnvironmentObject var vm: EditorVM
     @EnvironmentObject var state: AppState
@@ -386,6 +408,7 @@ struct EditorCanvas: View {
     @State private var didInitialFit: Bool = false
     @State private var trashRectView: CGRect = .zero
     @State private var trashHover: Bool = false
+    @State private var puffItems: [PuffItem] = []
 
     var body: some View {
         GeometryReader { geo in
@@ -440,8 +463,12 @@ struct EditorCanvas: View {
                         }
                     )
                     .position(x: trashX, y: trashY)
+                    .help("Drag a node here to delete it")
                     .onAppear { trashRectView = CGRect(x: geo.size.width - trashPadding - trashSize, y: geo.size.height - trashPadding - trashSize, width: trashSize, height: trashSize) }
                     .onChange(of: geo.size) { _ in trashRectView = CGRect(x: geo.size.width - trashPadding - trashSize, y: geo.size.height - trashPadding - trashSize, width: trashSize, height: trashSize) }
+
+                // Puff animations overlay
+                ForEach(puffItems) { item in PuffView(center: item.center) }
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .center)
             .contentShape(Rectangle())
@@ -555,6 +582,10 @@ struct EditorCanvas: View {
                         vm.selection = nil
                         vm.selected.removeAll()
                         trashHover = false
+                        let center = CGPoint(x: rectView.midX, y: rectView.midY)
+                        let puff = PuffItem(center: center)
+                        puffItems.append(puff)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { puffItems.removeAll { $0.id == puff.id } }
                     }
                 }
             }

@@ -66,6 +66,11 @@ final class PatchBayCore: @unchecked Sendable {
         )
         instruments[tri.id] = tri
         instruments[quad.id] = quad
+        // Also seed AudioTalk Chat via provider (if enum present)
+        if let chatKind = Components.Schemas.InstrumentKind(rawValue: "audiotalk.chat") {
+            let chat = InstrumentProviders.makeInstrument(id: "chat_1", kind: chatKind, title: "AudioTalk Chat", x: 760, y: 140, w: 280, h: 180)
+            instruments[chat.id] = chat
+        }
     }
 }
 
@@ -147,30 +152,7 @@ final class PatchBayHandlers: APIProtocol, @unchecked Sendable {
     func createInstrument(_ input: Operations.createInstrument.Input) async throws -> Operations.createInstrument.Output {
         guard case let .json(body) = input.body else { return .undocumented(statusCode: 400, .init()) }
         let id = body.id
-        let schema: Components.Schemas.PropertySchema
-        switch body.kind.rawValue {
-        case "mvk.triangle":
-            schema = .init(version: 1, properties: [
-                .init(name: "zoom", _type: .float, min: 0.1, max: 4.0, step: 0.05, _default: .case1(1.0), enumValues: nil, aliases: nil),
-                .init(name: "tint.r", _type: .float, min: 0.0, max: 1.0, step: 0.01, _default: .case1(1.0), enumValues: nil, aliases: ["tint"]),
-                .init(name: "tint.g", _type: .float, min: 0.0, max: 1.0, step: 0.01, _default: .case1(1.0), enumValues: nil, aliases: nil),
-                .init(name: "tint.b", _type: .float, min: 0.0, max: 1.0, step: 0.01, _default: .case1(1.0), enumValues: nil, aliases: nil)
-            ])
-        default:
-            schema = .init(version: 1, properties: [
-                .init(name: "rotationSpeed", _type: .float, min: 0.0, max: 4.0, step: 0.01, _default: .case1(0.35), enumValues: nil, aliases: nil),
-                .init(name: "zoom", _type: .float, min: 0.1, max: 4.0, step: 0.05, _default: .case1(1.0), enumValues: nil, aliases: nil)
-            ])
-        }
-        let inst = Components.Schemas.Instrument(
-            id: id,
-            kind: body.kind,
-            title: body.title,
-            x: body.x, y: body.y, w: body.w, h: body.h,
-            identity: body.identity ?? .init(manufacturer: "Fountain", product: "Instrument", displayName: id, instanceId: id, muid28: 0, hasUMPInput: true, hasUMPOutput: true),
-            propertySchema: schema,
-            propertyDefaults: nil
-        )
+        let inst = InstrumentProviders.makeInstrument(id: id, kind: body.kind, title: body.title, x: body.x, y: body.y, w: body.w, h: body.h)
         core.instruments[id] = inst
         return .created(.init(body: .json(inst)))
     }

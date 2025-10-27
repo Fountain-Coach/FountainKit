@@ -36,8 +36,19 @@ echo "[register] Fetching and normalizing OpenAPI → JSON…"
 swift run --package-path "$ROOT_DIR/Packages/FountainTooling" -c debug openapi-jsonify --spec "$SPEC_URL" > "$TMP_JSON"
 
 QUERY="corpusId=$CORPUS_ID"
+
+# If a base override is provided, inject it as servers[0].url into the JSON
 if [[ -n "$BASE_OVERRIDE" ]]; then
-  QUERY="$QUERY&base=$(python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$BASE_OVERRIDE")"
+  echo "[register] Injecting base URL into OpenAPI servers: $BASE_OVERRIDE"
+  python3 - "$TMP_JSON" "$BASE_OVERRIDE" <<'PY'
+import sys, json
+path, base = sys.argv[1], sys.argv[2]
+with open(path, 'rb') as f:
+    obj = json.load(f)
+obj['servers'] = [{ 'url': base }]
+with open(path, 'w') as f:
+    json.dump(obj, f)
+PY
 fi
 
 echo "[register] Registering with ToolsFactory at $TOOLS_FACTORY_URL…"
@@ -47,4 +58,3 @@ curl -fsSL -X POST -H 'Content-Type: application/json' \
 
 echo
 echo "[register] Done. List tools with: curl -fsSL '$TOOLS_FACTORY_URL/tools?page=1&page_size=100' | jq ."
-

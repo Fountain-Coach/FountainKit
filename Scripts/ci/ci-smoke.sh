@@ -32,8 +32,16 @@ echo "[ci-smoke] Exercising gateway ChatKit flows via generated client…"
 GATEWAY_BASE_URL=${GATEWAY_BASE_URL:-http://127.0.0.1:8010} \
   swift run --package-path "$ROOT/Packages/FountainApps" gateway-ci-smoke
 
+# Optional: exercise Teatro Prompt Field Guide tools via FunctionCaller
+if [[ "${CI_TG_SMOKE:-0}" == "1" ]]; then
+  echo "[ci-smoke] Exercising Teatro Prompt Field Guide tools…"
+  REGISTER_TEATRO_GUIDE=1 TOOLS_FACTORY_URL=http://127.0.0.1:8011 \
+    bash "$ROOT/Scripts/openapi/register-teatro-guide-as-tools.sh" || true
+  TOOLS_FACTORY_URL=http://127.0.0.1:8011 FUNCTION_CALLER_URL=http://127.0.0.1:8004 \
+    bash "$ROOT/Scripts/ci/teatro-guide-smoke.sh" || true
+fi
+
 echo "[ci-smoke] Shutting down…"
 bash "$ROOT/Scripts/dev-down" --force
 
 echo "[ci-smoke] OK"
-

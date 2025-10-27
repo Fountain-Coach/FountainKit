@@ -38,6 +38,11 @@ Use Teatro’s Storyboard and MIDI 2.0 DSLs to produce deterministic previews an
 - Sync audio: derive a `MIDISequence` from link events to drive `TeatroPlayerView` playback alongside frames.
 - Teach/test: include concise storyboard snippets in docs and tests so agents can reason about intended flows before UI implementation.
 
+PR checklist (app-side quick gate)
+- Spec sync: run `bash Scripts/ci/check-patchbay-spec-sync.sh` and confirm InstrumentKind matches curated/service/app.
+- Visuals: run `bash Scripts/ci/ui-smoke.sh` and verify RMSE within thresholds; rebaseline intentionally changed goldens with `bash Scripts/ci/ui-rebaseline.sh`.
+- Prompt Field Guide tools: run `bash Scripts/ci/teatro-guide-smoke.sh` (idempotent) to register tools via ToolsFactory and invoke one endpoint through FunctionCaller; inspect `.fountain/artifacts/teatro-guide.*` for response + ETag.
+
 ### API surface (client copy)
 
 The app’s OpenAPI document lives at `Sources/patchbay-app/openapi.yaml` and mirrors the curated spec at `Packages/FountainSpecCuration/openapi/v1/patchbay.yml`. Core routes: `/instruments`, `/graph/suggest`, `/links` (GET/POST/DELETE), `/store/graphs` and `/store/graphs/{id}` (GET/PUT), `/corpus/snapshot`, `/admin/vendor-identity`. The service copy is the source of truth during development; the curated spec governs schema reviews.

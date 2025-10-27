@@ -13,6 +13,7 @@ let package = Package(
     dependencies: [
         .package(path: "../FountainCore"),
         .package(path: "../FountainTooling"),
+        .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
         .package(url: "https://github.com/apple/swift-atomics.git", from: "1.3.0"),
         .package(url: "https://github.com/apple/swift-numerics.git", from: "1.0.0"),
         .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
@@ -24,7 +25,8 @@ let package = Package(
             dependencies: [
                 .product(name: "Atomics", package: "swift-atomics"),
                 .product(name: "FountainStoreClient", package: "FountainCore"),
-                .product(name: "Numerics", package: "swift-numerics")
+                .product(name: "Numerics", package: "swift-numerics"),
+                "Yams"
             ],
             exclude: ["Dockerfile"],
             resources: [

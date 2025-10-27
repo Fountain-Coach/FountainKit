@@ -10,6 +10,7 @@ let package = Package(
         .library(name: "OpenAPICurator", targets: ["OpenAPICurator"]),
         .executable(name: "openapi-curator-cli", targets: ["openapi-curator-cli"]),
         .executable(name: "openapi-curator-service", targets: ["openapi-curator-service"]),
+        .executable(name: "openapi-jsonify", targets: ["openapi-jsonify"]),
         .executable(name: "clientgen-service", targets: ["clientgen-service"]),
         .executable(name: "sse-client", targets: ["sse-client"]),
         .plugin(name: "EnsureOpenAPIConfigPlugin", targets: ["EnsureOpenAPIConfigPlugin"])
@@ -39,6 +40,12 @@ let package = Package(
                 .product(name: "LauncherSignature", package: "FountainCore")
             ],
             exclude: ["README.md"]
+        ),
+        .executableTarget(
+            name: "openapi-jsonify",
+            dependencies: [
+                "Yams"
+            ]
         ),
         .executableTarget(
             name: "clientgen-service",

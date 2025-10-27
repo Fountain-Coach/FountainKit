@@ -1,5 +1,6 @@
 import Foundation
 import FountainStoreClient
+import Yams
 
 public protocol ToolAdapter {
     var tool: String { get }
@@ -109,8 +110,29 @@ public struct Router {
         // Parse corpusId from query, default to configured corpus
         let qp = parseQuery(request.path)
         let corpus = qp["corpusId"] ?? defaultCorpusId
-        // Decode OpenAPI doc as generic JSON
-        let obj = try JSONSerialization.jsonObject(with: request.body) as? [String: Any] ?? [:]
+        // Optional: resolve base URL from query override or servers[0].url
+        let baseOverride = qp["base"]
+
+        // Decode OpenAPI (JSON first; fallback to YAML)
+        let obj: [String: Any]
+        if let jsonObj = try? JSONSerialization.jsonObject(with: request.body) as? [String: Any] {
+            obj = jsonObj
+        } else if let text = String(data: request.body, encoding: .utf8),
+                  let yamlObj = try? Yams.load(yaml: text) as? [String: Any] {
+            obj = yamlObj
+        } else {
+            let err = ["error_code": "invalid_openapi", "message": "Body must be OpenAPI JSON or YAML"]
+            let data = try JSONSerialization.data(withJSONObject: err)
+            return HTTPResponse(status: 422, headers: ["Content-Type": "application/json"], body: data)
+        }
+
+        // Resolve base URL
+        var baseURL: String? = baseOverride
+        if baseURL == nil, let servers = obj["servers"] as? [[String: Any]],
+           let first = servers.first, let urlStr = first["url"] as? String, !urlStr.isEmpty {
+            baseURL = urlStr
+        }
+
         let pathMap = obj["paths"] as? [String: Any] ?? [:]
         var registered: [[String: Any]] = []
         for (path, methodsAny) in pathMap {
@@ -122,7 +144,22 @@ public struct Router {
                 guard let opId = op["operationId"] as? String else { continue }
                 let name = (op["summary"] as? String) ?? opId
                 let desc = (op["description"] as? String) ?? ""
-                let f = FunctionModel(corpusId: corpus, functionId: opId, name: name, description: desc, httpMethod: method, httpPath: path)
+                // Build absolute httpPath when possible
+                let httpPath: String
+                if path.hasPrefix("http://") || path.hasPrefix("https://") {
+                    httpPath = path
+                } else if let base = baseURL, !base.isEmpty {
+                    if base.hasSuffix("/") && path.hasPrefix("/") {
+                        httpPath = base + String(path.dropFirst())
+                    } else if !base.hasSuffix("/") && !path.hasPrefix("/") {
+                        httpPath = base + "/" + path
+                    } else {
+                        httpPath = base + path
+                    }
+                } else {
+                    httpPath = path
+                }
+                let f = FunctionModel(corpusId: corpus, functionId: opId, name: name, description: desc, httpMethod: method, httpPath: httpPath)
                 _ = try await svc.addFunction(f)
                 registered.append([
                     "function_id": f.functionId,

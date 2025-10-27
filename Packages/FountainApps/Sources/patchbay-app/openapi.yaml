@@ -14,6 +14,12 @@ paths:
     get:
       operationId: listInstruments
       responses: { '200': { description: Instruments, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Instrument' } } } } } }
+    post:
+      operationId: createInstrument
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateInstrument' } } }
+      responses: { '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Instrument' } } } } }
   /graph/suggest:
     post:
       operationId: suggestLinks
@@ -161,6 +167,18 @@ components:
         identity: { $ref: '#/components/schemas/InstrumentIdentity' }
         propertySchema: { $ref: '#/components/schemas/PropertySchema' }
         propertyDefaults: { type: object, additionalProperties: { oneOf: [ { type: number }, { type: integer }, { type: boolean }, { type: string } ] } }
+    CreateInstrument:
+      type: object
+      required: [id, kind, x, y, w, h]
+      properties:
+        id: { type: string }
+        kind: { $ref: '#/components/schemas/InstrumentKind' }
+        title: { type: string }
+        x: { type: integer }
+        y: { type: integer }
+        w: { type: integer }
+        h: { type: integer }
+        identity: { $ref: '#/components/schemas/InstrumentIdentity' }
     GraphDoc:
       type: object
       required: [canvas, instruments, links]

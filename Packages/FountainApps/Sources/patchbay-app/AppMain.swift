@@ -362,7 +362,7 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("Instruments")
-            
+            .toolbar { AddInstrumentToolbar(state: state, vm: vm) }
             .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 320)
         } detail: {
             // Canvas center with zoom container (pinch/scroll) and key input (arrow-keys nudge)
@@ -414,15 +414,15 @@ struct ContentView: View {
                         }
                     } label: { Label("Add Node", systemImage: "plus.square.on.square") }
                     Button {
-                        // Open AudioTalk Chat window for selected chat instrument
-                        if let sel = vm.selection, let inst = state.instruments.first(where: { $0.id == sel }), inst.kind.rawValue == "audiotalk.chat" {
-                            ChatInstrumentManager.shared.open(for: sel, preferredProvider: nil, model: nil)
+                        // Open instrument preview (e.g., chat window) via registry
+                        if let sel = vm.selection, let inst = state.instruments.first(where: { $0.id == sel }), let module = AppInstrumentRegistry.module(for: inst.kind.rawValue) {
+                            module.openPreviewIfAvailable(id: sel, state: state, vm: vm)
                         }
-                    } label: { Label("Open Chat", systemImage: "bubble.left.and.bubble.right") }
-                    .help("Open the AudioTalk Chat instrument window for the selected node")
+                    } label: { Label("Open", systemImage: "rectangle.badge.plus") }
+                    .help("Open instrument UI/preview when available")
                     .disabled({ () -> Bool in
                         guard let sel = vm.selection, let inst = state.instruments.first(where: { $0.id == sel }) else { return true }
-                        return inst.kind.rawValue != "audiotalk.chat"
+                        return AppInstrumentRegistry.module(for: inst.kind.rawValue) == nil
                     }())
                 }
             }
@@ -480,6 +480,76 @@ struct ContentView: View {
     }
 }
 
+// MARK: - Add Instrument UI
+
+struct AddInstrumentToolbar: View {
+    @ObservedObject var state: AppState
+    @ObservedObject var vm: EditorVM
+    @State private var showSheet: Bool = false
+    var body: some View {
+        Button { showSheet = true } label: { Label("Add Instrument", systemImage: "plus") }
+            .sheet(isPresented: $showSheet) { AddInstrumentSheet(state: state, vm: vm, dismiss: { showSheet = false }) }
+            .help("Create an instrument on the PatchBay service and place it on the canvas")
+    }
+}
+
+struct AddInstrumentSheet: View {
+    @ObservedObject var state: AppState
+    @ObservedObject var vm: EditorVM
+    var dismiss: () -> Void
+    @State private var kind: String = "mvk.triangle"
+    @State private var title: String = ""
+    @State private var working: Bool = false
+    @State private var errorText: String = ""
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack { Text("Add Instrument").font(.title3).bold(); Spacer(); Button("Close") { dismiss() } }
+            Picker("Kind", selection: $kind) {
+                Text("Triangle (mvk.triangle)").tag("mvk.triangle")
+                Text("Textured Quad (mvk.quad)").tag("mvk.quad")
+                Text("AudioTalk Chat (audiotalk.chat)").tag("audiotalk.chat")
+                Text("External CoreMIDI (external.coremidi)").tag("external.coremidi")
+            }
+            TextField("Title (optional)", text: $title)
+                .textFieldStyle(.roundedBorder)
+            if !errorText.isEmpty { Text(errorText).foregroundColor(.red).font(.caption) }
+            HStack { Spacer(); Button(working ? "Creating…" : "Create") { Task { await create() } }.disabled(working) }
+        }
+        .padding(14)
+        .frame(minWidth: 420)
+    }
+    @MainActor
+    private func create() async {
+        guard let c = state.api as? PatchBayClient else { return }
+        working = true; defer { working = false }
+        let id = "inst_\(Int(Date().timeIntervalSince1970))"
+        let g = max(4, vm.grid)
+        let (x,y,w,h): (Int,Int,Int,Int)
+        switch kind {
+        case "mvk.quad": (x,y,w,h) = (g*20, g*14, 260, 180)
+        case "audiotalk.chat": (x,y,w,h) = (g*32, g*9, 280, 180)
+        case "external.coremidi": (x,y,w,h) = (g*12, g*8, 220, 140)
+        default: (x,y,w,h) = (g*10, g*10, 220, 160)
+        }
+        let k = Components.Schemas.InstrumentKind(rawValue: kind) ?? .init(rawValue: "mvk.triangle")!
+        do {
+            if let inst = try await c.createInstrument(id: id, kind: k, title: title.isEmpty ? nil : title, x: x, y: y, w: w, h: h) {
+                await state.refresh()
+                var ports: [PBPort] = []
+                ports.append(.init(id: "in", side: .left, dir: .input, type: "data"))
+                ports.append(.init(id: "out", side: .right, dir: .output, type: "data"))
+                if inst.identity.hasUMPInput == true { ports.append(.init(id: "umpIn", side: .left, dir: .input, type: "ump")) }
+                if inst.identity.hasUMPOutput == true { ports.append(.init(id: "umpOut", side: .right, dir: .output, type: "ump")) }
+                let node = PBNode(id: inst.id, title: inst.title, x: inst.x, y: inst.y, w: inst.w, h: inst.h, ports: ports)
+                vm.nodes.append(node)
+                vm.selection = inst.id
+                dismiss()
+            } else {
+                errorText = "Service did not return instrument"
+            }
+        } catch { errorText = error.localizedDescription }
+    }
+}
 struct InspectorPane: View {
     enum Tab: String, CaseIterable { case instruments = "Instruments", links = "Links", rules = "Rules", vendor = "Vendor", corpus = "Corpus" }
     @EnvironmentObject var state: AppState

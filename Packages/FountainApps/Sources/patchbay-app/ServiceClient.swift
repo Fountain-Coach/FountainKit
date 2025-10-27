@@ -7,6 +7,7 @@ import OpenAPIURLSession
 protocol PatchBayAPI {
     func listInstruments() async throws -> [Components.Schemas.Instrument]
     func suggestLinks(nodeIds: [String]) async throws -> [Components.Schemas.SuggestedLink]
+    func createInstrument(id: String, kind: Components.Schemas.InstrumentKind, title: String?, x: Int, y: Int, w: Int, h: Int) async throws -> Components.Schemas.Instrument?
 }
 
 @MainActor
@@ -71,6 +72,15 @@ final class PatchBayClient: PatchBayAPI {
     }
     func deleteLink(id: String) async throws {
         _ = try await client.deleteLink(.init(path: .init(id: id)))
+    }
+
+    // Instruments
+    func createInstrument(id: String, kind: Components.Schemas.InstrumentKind, title: String?, x: Int, y: Int, w: Int, h: Int) async throws -> Components.Schemas.Instrument? {
+        let payload = Components.Schemas.CreateInstrument(id: id, kind: kind, title: title, x: x, y: y, w: w, h: h, identity: nil)
+        switch try await client.createInstrument(.init(body: .json(payload))) {
+        case .created(let c): return try c.body.json
+        default: return nil
+        }
     }
 
     // Store

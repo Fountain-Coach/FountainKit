@@ -16,3 +16,10 @@ The converter wrapper `Scripts/apps/coreml-convert.sh` bootstraps `.coremlvenv` 
 
 Curated OpenAPI
 Keep the curated spec list in sync with the repo using `Scripts/validate-curated-specs.sh`. Install pre‑commit hooks once via `Scripts/install-git-hooks.sh` to enforce checks locally.
+
+Register external OpenAPI as tools
+- Script: `Scripts/openapi/register-teatro-guide-as-tools.sh` normalizes the Teatro Prompt Field Guide OpenAPI and registers its operations via ToolsFactory.
+- Dev‑up integration: set `REGISTER_TEATRO_GUIDE=1` to auto‑register on boot when ToolsFactory is reachable. Optional envs:
+  - `TOOLS_FACTORY_URL` (default `http://127.0.0.1:8011`)
+  - `TEATRO_GUIDE_CORPUS` (default `teatro-guide`)
+  - `TEATRO_GUIDE_BASE_URL` used to resolve absolute `http_path` if the spec lacks `servers[0].url`.

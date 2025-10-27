@@ -300,5 +300,21 @@ if [[ "${DEV_UP_AUTO_SEED_SCRIPTS:-1}" == "1" ]]; then
   fi
 fi
 
+# Optional: register Teatro Prompt Field Guide tools in ToolsFactory
+if [[ "${REGISTER_TEATRO_GUIDE:-0}" == "1" ]]; then
+  TF_URL="${TOOLS_FACTORY_URL:-http://127.0.0.1:$(port_for tools-factory)}"
+  if http_200 "$TF_URL/metrics"; then
+    echo "[dev-up] Registering Teatro Prompt Field Guide tools (corpus=${TEATRO_GUIDE_CORPUS:-teatro-guide})…"
+    BASE_ARG=()
+    if [[ -n "${TEATRO_GUIDE_BASE_URL:-}" ]]; then BASE_ARG=(--base "${TEATRO_GUIDE_BASE_URL}"); fi
+    bash "$REPO_ROOT/Scripts/openapi/register-teatro-guide-as-tools.sh" \
+      --tools-factory "$TF_URL" \
+      --corpus "${TEATRO_GUIDE_CORPUS:-teatro-guide}" \
+      "${BASE_ARG[@]}" || true
+  else
+    echo "[dev-up] WARN: ToolsFactory not reachable at $TF_URL; skipping Teatro guide registration." >&2
+  fi
+fi
+
 echo "[dev-up] Done. Logs under .fountain/logs; pids under .fountain/pids"
 echo "[dev-up] Tip: 'source Scripts/dev-up env' to export LAUNCHER_SIGNATURE into your shell"

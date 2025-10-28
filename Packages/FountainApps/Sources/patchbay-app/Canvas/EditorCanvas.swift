@@ -64,6 +64,7 @@ final class EditorVM: ObservableObject {
     @Published var pendingFrom: (node: String, port: String)? = nil
     @Published var translation: CGPoint = .zero
     @Published var lastViewSize: CGSize = .zero
+    @Published var showZonesOverlay: Bool = false
     // Grid spacing in points (minor). Major lines are drawn every `majorEvery` minors.
     @Published var majorEvery: Int = 5
 
@@ -433,6 +434,7 @@ struct EditorCanvas: View {
                     let minor = CGFloat(vm.grid)
                     let major = CGFloat(vm.grid * max(1, vm.majorEvery))
                     GridBackground(size: docSize, minorStepPoints: minor, majorStepPoints: major, scale: vm.zoom, translation: vm.translation)
+                    if vm.showZonesOverlay { zonesOverlay(docSize: docSize) }
                     flowEditorOverlay(docSize: docSize)
                         .frame(width: docSize.width, height: docSize.height)
                 }
@@ -635,5 +637,35 @@ struct EditorCanvas: View {
                 vm.zoom = CGFloat(z)
                 vm.translation = CGPoint(x: pan.width, y: pan.height)
             }
+    }
+
+    @ViewBuilder
+    private func zonesOverlay(docSize: CGSize) -> some View {
+        // Three soft zones: Host, Device A, Device B
+        let pad: CGFloat = 12
+        let gap: CGFloat = 8
+        let zoneWidth = (docSize.width - pad*2 - gap*2)
+        let col = zoneWidth / 3.0
+        HStack(spacing: gap) {
+            ForEach(0..<3) { idx in
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color(NSColor.windowBackgroundColor).opacity(0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(Color(NSColor.separatorColor).opacity(0.4), lineWidth: 1)
+                    )
+                    .overlay(
+                        Text(idx == 0 ? "Host" : (idx == 1 ? "Device A" : "Device B"))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(6)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    )
+                    .frame(width: col, height: docSize.height - pad*2)
+            }
+        }
+        .padding(.horizontal, pad)
+        .padding(.vertical, pad)
+        .allowsHitTesting(false)
     }
 }

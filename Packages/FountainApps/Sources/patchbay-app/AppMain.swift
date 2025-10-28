@@ -566,6 +566,7 @@ struct ContentView: View {
                             Button("16 px (major ×5)") { vm.grid = 16; vm.majorEvery = 5 }
                             Button("24 px (major ×5)") { vm.grid = 24; vm.majorEvery = 5 }
                         }
+                        Toggle("Zones Overlay", isOn: $vm.showZonesOverlay)
                     }
                     Button {
                         // Add a generic node near origin, snapped to grid
@@ -611,11 +612,25 @@ struct ContentView: View {
         guard let prov = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.json.identifier) }) else { return false }
         _ = prov.loadDataRepresentation(forTypeIdentifier: UTType.json.identifier) { data, _ in
             guard let data = data else { return }
-            struct Payload: Codable { let templateId: String; let kind: String; let title: String; let w: Int; let h: Int }
-            guard let p = try? JSONDecoder().decode(Payload.self, from: data) else { return }
+            struct TemplatePayload: Codable { let templateId: String?; let kind: String?; let title: String?; let w: Int?; let h: Int? }
+            struct FlowPayload: Codable { let flowKind: String? }
+            let decoder = JSONDecoder()
+            if let fp = try? decoder.decode(FlowPayload.self, from: data), let flowKind = fp.flowKind {
+                Task { @MainActor in
+                    let kind = FlowNodeKind(rawValue: flowKind) ?? .analyzer
+                    let z = max(0.0001, vm.zoom)
+                    let docX = Int((location.x / z) - vm.translation.x)
+                    let docY = Int((location.y / z) - vm.translation.y)
+                    let g = max(1, vm.grid)
+                    let snap: (Int) -> Int = { ((($0 + g/2) / g) * g) }
+                    addFlowNode(kind: kind, title: flowKind, x: snap(docX), y: snap(docY))
+                }
+                return
+            }
+            guard let p = try? decoder.decode(TemplatePayload.self, from: data), let kindStr = p.kind, let title = p.title, let w = p.w, let h = p.h else { return }
             Task { @MainActor in
-                let kind = Components.Schemas.InstrumentKind(rawValue: p.kind) ?? .init(rawValue: p.kind)!
-                let base = baseForKind(p.kind, title: p.title)
+                let kind = Components.Schemas.InstrumentKind(rawValue: kindStr) ?? .init(rawValue: kindStr)!
+                let base = baseForKind(kindStr, title: title)
                 let id = nextId(base: base)
                 // Convert drop location (view coords) → doc coords, snap to grid
                 let z = max(0.0001, vm.zoom)
@@ -627,7 +642,7 @@ struct ContentView: View {
                 let y = snap(docY)
                 if let c = state.api as? PatchBayClient {
                     do {
-                        if let inst = try await c.createInstrument(id: id, kind: kind, title: p.title, x: x, y: y, w: p.w, h: p.h) {
+                        if let inst = try await c.createInstrument(id: id, kind: kind, title: title, x: x, y: y, w: w, h: h) {
                             var node = PBNode(id: inst.id, title: inst.title, x: inst.x, y: inst.y, w: inst.w, h: inst.h, ports: [])
                             node.ports.append(.init(id: "in", side: .left, dir: .input, type: "data"))
                             node.ports.append(.init(id: "out", side: .right, dir: .output, type: "data"))
@@ -659,6 +674,28 @@ struct ContentView: View {
         var candidate = "\(base)_\(n)"
         while existing.contains(candidate) { n += 1; candidate = "\(base)_\(n)" }
         return candidate
+    }
+
+    private func addFlowNode(kind: FlowNodeKind, title: String, x: Int, y: Int) {
+        let base: String = {
+            switch kind { case .audioInput: return "audioIn"; case .analyzer: return "analyzer"; case .noteProcessor: return "noteProc" }
+        }()
+        let id = nextId(base: base)
+        var ports: [PBPort] = []
+        switch kind {
+        case .audioInput:
+            ports.append(.init(id: "out", side: .right, dir: .output, type: "data"))
+        case .analyzer:
+            ports.append(.init(id: "in", side: .left, dir: .input, type: "data"))
+            ports.append(.init(id: "out", side: .right, dir: .output, type: "data"))
+        case .noteProcessor:
+            ports.append(.init(id: "in", side: .left, dir: .input, type: "data"))
+            ports.append(.init(id: "umpOut", side: .right, dir: .output, type: "ump"))
+        }
+        let node = PBNode(id: id, title: title, x: x, y: y, w: 220, h: 120, ports: canonicalSortPorts(ports))
+        vm.nodes.append(node)
+        vm.selection = id
+        vm.selected = [id]
     }
 }
 
@@ -723,6 +760,14 @@ struct TemplateLibraryView: View {
                         }
                         .onMove { idx, off in state.moveTemplates(fromOffsets: idx, toOffset: off) }
                     }
+                }
+                Section(header: Text("Flow Nodes")) {
+                    FlowNodeRow(title: "Audio Input", flowKind: .audioInput)
+                        .environmentObject(state).environmentObject(vm)
+                    FlowNodeRow(title: "Analyzer", flowKind: .analyzer)
+                        .environmentObject(state).environmentObject(vm)
+                    FlowNodeRow(title: "Note Processor", flowKind: .noteProcessor)
+                        .environmentObject(state).environmentObject(vm)
                 }
                 Section(header: HStack { Button(action: { withAnimation { hiddenExpanded.toggle() } }) { Image(systemName: hiddenExpanded ? "chevron.down" : "chevron.right") }; Text("Hidden Templates") }) {
                     if hiddenExpanded {
@@ -829,6 +874,55 @@ struct TemplateRow: View {
                 }
             } catch { }
         }
+    }
+}
+
+enum FlowNodeKind: String, Codable { case audioInput, analyzer, noteProcessor }
+
+struct FlowNodeRow: View {
+    @EnvironmentObject var state: AppState
+    @EnvironmentObject var vm: EditorVM
+    var title: String
+    var flowKind: FlowNodeKind
+    var body: some View {
+        HStack { Image(systemName: iconName()); Text(title); Spacer() }
+            .padding(.vertical, 2)
+            .contentShape(Rectangle())
+            .onTapGesture(count: 2) { createNearOrigin() }
+            .onDrag { dragPayload() }
+    }
+    private func iconName() -> String {
+        switch flowKind { case .audioInput: return "waveform"; case .analyzer: return "chart.bar"; case .noteProcessor: return "pianokeys" }
+    }
+    private func dragPayload() -> NSItemProvider {
+        struct Payload: Codable { let flowKind: String }
+        let data = try? JSONEncoder().encode(Payload(flowKind: flowKind.rawValue))
+        return NSItemProvider(item: (data ?? Data()) as NSData, typeIdentifier: UTType.json.identifier)
+    }
+    private func createNearOrigin() {
+        let g = max(4, vm.grid)
+        let x = g * 5, y = g * 5
+        let base: String = {
+            switch flowKind { case .audioInput: return "audioIn"; case .analyzer: return "analyzer"; case .noteProcessor: return "noteProc" }
+        }()
+        var id = base
+        var n = 1
+        while vm.node(by: id) != nil { n += 1; id = base + "_\(n)" }
+        var ports: [PBPort] = []
+        switch flowKind {
+        case .audioInput:
+            ports.append(.init(id: "out", side: .right, dir: .output, type: "data"))
+        case .analyzer:
+            ports.append(.init(id: "in", side: .left, dir: .input, type: "data"))
+            ports.append(.init(id: "out", side: .right, dir: .output, type: "data"))
+        case .noteProcessor:
+            ports.append(.init(id: "in", side: .left, dir: .input, type: "data"))
+            ports.append(.init(id: "umpOut", side: .right, dir: .output, type: "ump"))
+        }
+        let node = PBNode(id: id, title: title, x: x, y: y, w: 220, h: 120, ports: canonicalSortPorts(ports))
+        vm.nodes.append(node)
+        vm.selection = id
+        vm.selected = [id]
     }
 }
 

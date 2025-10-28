@@ -410,6 +410,7 @@ struct EditorCanvas: View {
     @State private var trashRectView: CGRect = .zero
     @State private var trashHover: Bool = false
     @State private var puffItems: [PuffItem] = []
+    // Dashboard executor staged off for composition-only mode
 
     var body: some View {
         GeometryReader { geo in
@@ -515,7 +516,7 @@ struct EditorCanvas: View {
                 // Initial open: reset to a sensible default for infinite artboard
                 if !didInitialFit { vm.translation = .zero; vm.zoom = 1.0; didInitialFit = true }
                 flowPatch = FlowBridge.toFlowPatch(vm: vm)
-                // dashboard rebuild disabled in this pass
+                // dashboard exec rebuild disabled (composition-only)
             }
             .onChange(of: vm.nodes) { _, _ in
                 flowPatch = FlowBridge.toFlowPatch(vm: vm)
@@ -525,7 +526,7 @@ struct EditorCanvas: View {
                 flowPatch = FlowBridge.toFlowPatch(vm: vm)
                 // exec.rebuild(vm: vm, registry: state.dashboard)
             }
-            // dashboard exec loop disabled in this pass
+            // dashboard exec loop disabled
             .onReceive(NotificationCenter.default.publisher(for: .pbDelete)) { _ in
                 if !vm.selected.isEmpty {
                     let ids = vm.selected
@@ -654,7 +655,7 @@ struct EditorCanvas: View {
             }
     }
 
-    // Panels overlay is temporarily disabled in this pass
+    // Panels overlay disabled in composition-only mode
 
     // Overlays (zones/notes/health) removed in monitor mode
 }

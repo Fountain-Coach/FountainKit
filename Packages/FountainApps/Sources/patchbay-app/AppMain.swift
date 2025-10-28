@@ -183,6 +183,7 @@ final class AppState: ObservableObject {
     @Published var serversMeta: [String:ServerMeta] = [:]
     private let dashboardKey = "pb.dashboard.v1"
     private let serversKey = "pb.serversMeta.v1"
+    @Published var pendingEditNodeId: String? = nil
     init(api: PatchBayAPI = PatchBayClient()) {
         self.api = api
         self.templates = templatesStore.load()
@@ -892,6 +893,7 @@ final class AppState: ObservableObject {
 struct ContentView: View {
     @StateObject var state: AppState
     @StateObject var vm = EditorVM()
+    @State private var showDashEditor: Bool = false
     init(state: AppState = AppState()) { _state = StateObject(wrappedValue: state) }
     var body: some View {
         NavigationSplitView(columnVisibility: .constant(.automatic)) {
@@ -997,6 +999,12 @@ struct ContentView: View {
             state.loadLLMModel()
             state.loadGatewayURL()
             if vm.nodes.isEmpty { state.clearCanvas(vm: vm) }
+        }
+        .onChange(of: state.pendingEditNodeId) { _, new in showDashEditor = (new != nil) }
+        .sheet(isPresented: $showDashEditor) {
+            if let id = state.pendingEditNodeId, let dash = state.dashboard[id] {
+                DashEditSheet(state: state, vm: vm, id: id, dash: dash) { state.pendingEditNodeId = nil }
+            }
         }
         .environmentObject(vm)
     }
@@ -1197,6 +1205,67 @@ struct ContentView: View {
         vm.nodes.append(node)
         vm.selection = id
         vm.selected = [id]
+    }
+}
+
+struct DashEditSheet: View {
+    @ObservedObject var state: AppState
+    @ObservedObject var vm: EditorVM
+    let id: String
+    let dash: DashNode
+    var dismiss: () -> Void
+    @State private var baseURL: String = "http://127.0.0.1:9090"
+    @State private var promQL: String = ""
+    @State private var rangeSeconds: String = "300"
+    @State private var stepSeconds: String = "15"
+    @State private var refreshSeconds: String = "10"
+    @State private var title: String = ""
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack { Text("Edit \(dash.kind.rawValue)").font(.title3).bold(); Spacer(); Button("Close") { dismiss() } }
+            switch dash.kind {
+            case .datasource:
+                TextField("Base URL", text: $baseURL)
+            case .query:
+                TextField("PromQL", text: $promQL)
+                HStack { TextField("Range (s)", text: $rangeSeconds); TextField("Step (s)", text: $stepSeconds); TextField("Refresh (s)", text: $refreshSeconds) }
+            case .panelLine:
+                TextField("Title", text: $title)
+            case .transform:
+                Text("Transform properties pending").foregroundStyle(.secondary)
+            case .panelStat:
+                Text("Stat panel properties pending").foregroundStyle(.secondary)
+            }
+            HStack { Spacer(); Button("Save") { save(); dismiss() } }
+        }
+        .padding(14)
+        .frame(minWidth: 480)
+        .onAppear { load() }
+    }
+    private func load() {
+        let p = dash.props
+        baseURL = p["baseURL"] ?? baseURL
+        promQL = p["promQL"] ?? promQL
+        rangeSeconds = p["rangeSeconds"] ?? rangeSeconds
+        stepSeconds = p["stepSeconds"] ?? stepSeconds
+        refreshSeconds = p["refreshSeconds"] ?? refreshSeconds
+        title = p["title"] ?? dash.kind.rawValue
+    }
+    private func save() {
+        var p = dash.props
+        switch dash.kind {
+        case .datasource:
+            p["baseURL"] = baseURL
+        case .query:
+            p["promQL"] = promQL
+            p["rangeSeconds"] = rangeSeconds
+            p["stepSeconds"] = stepSeconds
+            p["refreshSeconds"] = refreshSeconds
+        case .panelLine:
+            p["title"] = title
+        default: break
+        }
+        state.updateDashProps(id: id, props: p)
     }
 }
 
@@ -1515,7 +1584,8 @@ struct DashNodeRow: View {
         .onTapGesture(count: 2) {
             let g = max(4, vm.grid)
             let x = g * 6, y = g * 6
-            create(kind: dashKind, props: defaultProps, x: x, y: y)
+            let id = create(kind: dashKind, props: defaultProps, x: x, y: y)
+            DispatchQueue.main.async { state.pendingEditNodeId = id }
         }
         .onDrag {
             struct DashPayload: Codable { let dashKind: String; let props: [String:String] }
@@ -1524,7 +1594,8 @@ struct DashNodeRow: View {
             return NSItemProvider(item: data as NSData, typeIdentifier: UTType.json.identifier)
         }
     }
-    private func create(kind: DashKind, props: [String:String], x: Int, y: Int) {
+    @discardableResult
+    private func create(kind: DashKind, props: [String:String], x: Int, y: Int) -> String {
         let base: String = { switch kind { case .datasource: return "ds"; case .query: return "q"; case .transform: return "xf"; case .panelLine: return "p"; case .panelStat: return "ps" } }()
         func nextId(base: String) -> String { var n = 1; let ids = Set(vm.nodes.map { $0.id }); var c = "\(base)_\(n)"; while ids.contains(c) { n += 1; c = "\(base)_\(n)" }; return c }
         let id = nextId(base: base)
@@ -1534,6 +1605,7 @@ struct DashNodeRow: View {
         vm.nodes.append(node)
         state.registerDashNode(id: id, kind: kind, props: props)
         vm.selection = id; vm.selected = [id]
+        return id
     }
     private func titleFrom(_ k: DashKind) -> String { switch k { case .datasource: return "prom.datasource"; case .query: return "prom.query"; case .transform: return "prom.transform"; case .panelLine: return "prom.panel.line"; case .panelStat: return "prom.panel.stat" } }
     private func iconName(for k: DashKind) -> String { switch k { case .datasource: return "bolt.horizontal"; case .query: return "text.magnifyingglass"; case .transform: return "arrow.triangle.2.circlepath"; case .panelLine: return "chart.line.uptrend.xyaxis"; case .panelStat: return "gauge" } }

@@ -37,7 +37,8 @@ struct ZoomContainer<Content: View>: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeNSView(context: Context) -> NSView {
-        let host = NSHostingView(rootView: AnyView(content()))
+        // Defer building content until next runloop to avoid early env-object access during init
+        let host = NSHostingView(rootView: AnyView(EmptyView()))
         context.coordinator.host = host
         let view = NSView()
         view.addSubview(host)
@@ -64,6 +65,10 @@ struct ZoomContainer<Content: View>: NSViewRepresentable {
                 coord.parent.translation.y += inv * (e.scrollingDeltaY / s)
             }
             return e
+        }
+        // Install content after view is set up
+        DispatchQueue.main.async {
+            host.rootView = AnyView(content())
         }
         return view
     }

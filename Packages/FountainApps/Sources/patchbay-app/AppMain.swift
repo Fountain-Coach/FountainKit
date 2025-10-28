@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 import FountainAIAdapters
 import LLMGatewayAPI
 import ApiClientsCore
+import TutorDashboard
 
 @main
 struct PatchBayStudioApp: App {
@@ -155,13 +156,150 @@ final class AppState: ObservableObject {
     // Templates (left panel library)
     private let templatesStore = InstrumentTemplatesStore()
     @Published var templates: [InstrumentTemplate] = []
+    enum LeftMode { case templates, openAPIs }
+    @Published var leftMode: LeftMode = .templates
+    private let leftModeKey = "pb.leftMode.v1"
+    func loadLeftMode() {
+        if let raw = UserDefaults.standard.string(forKey: leftModeKey), raw == "openAPIs" { leftMode = .openAPIs } else { leftMode = .templates }
+    }
+    func saveLeftMode() { UserDefaults.standard.set(leftMode == .openAPIs ? "openAPIs" : "templates", forKey: leftModeKey) }
     // Latest Teatro Guide artifact surfaced for preview/apply flows
     @Published var latestArtifactETag: String? = nil
     @Published var latestArtifactPath: URL? = nil
+    // LLM usage preference (default ON); persisted
+    @Published var useLLM: Bool = true
+    @Published var llmModel: String = "gpt-4o-mini"
+    @Published var gatewayURL: URL = URL(string: "http://127.0.0.1:8010")!
+    enum GatewayStatus { case unknown, checking, ok, bad(String) }
+    @Published var gatewayStatus: GatewayStatus = .unknown
+    enum ServiceStatus: String { case unknown, checking, ok, bad }
+    @Published var serviceHealth: [String: ServiceStatus] = [:]
+    private let useLLMKey = "pb.useLLM.v1"
+    private let llmModelKey = "pb.llmModel.v1"
+    private let gatewayURLKey = "pb.gatewayURL.v1"
     let api: PatchBayAPI
     init(api: PatchBayAPI = PatchBayClient()) {
         self.api = api
         self.templates = templatesStore.load()
+    }
+    func loadUseLLM() {
+        if UserDefaults.standard.object(forKey: useLLMKey) == nil {
+            // Default to ON unless env explicitly disables
+            let envOff = ProcessInfo.processInfo.environment["PATCHBAY_ASSISTANT_LLM"] == "0"
+            useLLM = !envOff
+        } else {
+            useLLM = UserDefaults.standard.bool(forKey: useLLMKey)
+        }
+    }
+    func saveUseLLM() { UserDefaults.standard.set(useLLM, forKey: useLLMKey) }
+    func loadLLMModel() {
+        if let s = UserDefaults.standard.string(forKey: llmModelKey), !s.isEmpty {
+            llmModel = s
+            return
+        }
+        if let fromEnv = ProcessInfo.processInfo.environment["GATEWAY_MODEL"], !fromEnv.isEmpty {
+            llmModel = fromEnv
+        }
+    }
+    func saveLLMModel() { UserDefaults.standard.set(llmModel, forKey: llmModelKey) }
+    func loadGatewayURL() {
+        if let s = UserDefaults.standard.string(forKey: gatewayURLKey), let u = URL(string: s) { gatewayURL = u; return }
+        if let s = ProcessInfo.processInfo.environment["GATEWAY_URL"], let u = URL(string: s) { gatewayURL = u }
+    }
+    func saveGatewayURL() { UserDefaults.standard.set(gatewayURL.absoluteString, forKey: gatewayURLKey) }
+    func checkGateway() async {
+        await MainActor.run { gatewayStatus = .checking }
+        var url = normalizedGatewayBase()
+        url.append(path: "/openapi.yaml")
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        do {
+            let (_, resp) = try await URLSession.shared.data(for: req)
+            if let http = resp as? HTTPURLResponse, 200..<300 ~= http.statusCode {
+                await MainActor.run { gatewayStatus = .ok }
+            } else {
+                let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+                await MainActor.run { gatewayStatus = .bad("status \(code)") }
+            }
+        } catch {
+            await MainActor.run { gatewayStatus = .bad(error.localizedDescription) }
+        }
+    }
+    private func normalizedGatewayBaseIfAvailable(envURL: URL?) -> URL {
+        if let u = envURL { self.gatewayURL = u }
+        return normalizedGatewayBase()
+    }
+
+    @MainActor
+    func checkServicesHealth(vm: EditorVM) async {
+        let fm = FileManager.default
+        let cwd = URL(fileURLWithPath: fm.currentDirectoryPath)
+        let root = cwd.appendingPathComponent("Packages/FountainSpecCuration/openapi/v1", isDirectory: true)
+        let discovery = ServiceDiscovery(openAPIRoot: root)
+        let services = (try? discovery.loadServices()) ?? []
+        func norm(_ s: String) -> String { s.lowercased().replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "-", with: "").replacingOccurrences(of: "_", with: "") }
+        let byNode: [(PBNode, ServiceDescriptor?)] = vm.nodes.map { n in
+            let m = services.first { sd in
+                let t = norm(sd.title)
+                let idn = norm(n.title ?? n.id)
+                return t.contains(idn) || idn.contains(t)
+            }
+            return (n, m)
+        }
+        // Mark checking
+        for (n, _) in byNode { serviceHealth[n.id] = .checking }
+        // Probe concurrently
+        await withTaskGroup(of: (String, ServiceStatus).self) { group in
+            for (n, svc) in byNode {
+                group.addTask {
+                    guard let svc else { return (n.id, .unknown) }
+                    let base = svc.servers.first ?? URL(string: "http://127.0.0.1:\(svc.port)")!
+                    var url = base
+                    // Normalize base (strip /api/v1), then choose a healthish path
+                    var comps = URLComponents(url: url, resolvingAgainstBaseURL: false) ?? URLComponents()
+                    let path = comps.path
+                    if path.hasSuffix("/api/v1") { comps.path = String(path.dropLast("/api/v1".count)) }
+                    if path.hasSuffix("/v1") { comps.path = String(path.dropLast("/v1".count)) }
+                    url = comps.url ?? base
+                    let healthPath = svc.healthPaths.first ?? "/health"
+                    url.append(path: healthPath)
+                    var req = URLRequest(url: url)
+                    req.httpMethod = "GET"
+                    do {
+                        let (_, resp) = try await URLSession.shared.data(for: req)
+                        if let http = resp as? HTTPURLResponse, 200..<300 ~= http.statusCode {
+                            return (n.id, .ok)
+                        } else {
+                            return (n.id, .bad)
+                        }
+                    } catch {
+                        return (n.id, .bad)
+                    }
+                }
+            }
+            for await (id, st) in group { serviceHealth[id] = st }
+        }
+    }
+
+    /// Returns a sanitized base URL without path suffixes like "/api/v1" or trailing slashes.
+    func normalizedGatewayBase() -> URL {
+        var url = gatewayURL
+        // Strip common suffixes like /api/v1 or /v1
+        var comps = URLComponents(url: url, resolvingAgainstBaseURL: false) ?? URLComponents()
+        let path = comps.path
+        let trimmed: String = {
+            if path.hasSuffix("/api/v1") { return String(path.dropLast("/api/v1".count)) }
+            if path.hasSuffix("/v1") { return String(path.dropLast("/v1".count)) }
+            return path
+        }()
+        comps.path = trimmed
+        if let u = comps.url { url = u }
+        // Remove trailing slash
+        if url.absoluteString.hasSuffix("/") {
+            let s = String(url.absoluteString.dropLast())
+            if let u = URL(string: s) { url = u }
+        }
+        return url
     }
     func refresh() async {
         if let list = try? await api.listInstruments() { instruments = list }
@@ -195,6 +333,14 @@ final class AppState: ObservableObject {
         guard let url = latestArtifactPath else { return }
         NSWorkspace.shared.open(url)
     }
+
+    // MARK: - Monitor: Prometheus
+    func buildPrometheusOverviewCanvas(vm: EditorVM) async {
+        PrometheusCanvas.buildPrometheusOverviewCanvas(vm: vm)
+    }
+    func clearCanvas(vm: EditorVM) {
+        vm.nodes.removeAll(); vm.edges.removeAll(); vm.selection = nil; vm.selected.removeAll()
+    }
     func applyLatestArtifactToCanvas(vm: EditorVM) async -> String {
         guard let url = latestArtifactPath else { return "No artifact found." }
         do {
@@ -205,7 +351,7 @@ final class AppState: ObservableObject {
                 // Clear and rebuild nodes from instruments
                 vm.nodes.removeAll()
                 vm.edges.removeAll()
-                for inst in doc.instruments ?? [] {
+                for inst in doc.instruments {
                     // Reuse existing helper to map instrument → node + default ports
                     let id = inst.id
                     let node = PBNode(
@@ -224,7 +370,7 @@ final class AppState: ObservableObject {
                     vm.addPort(to: id, side: .right, dir: .output, id: "out", type: "data")
                 }
                 // Build visual links. For property links, route out→in; for UMP, route umpOut→umpIn.
-                for link in doc.links ?? [] {
+                for link in doc.links {
                     switch link.kind {
                     case .property:
                         if let f = link.property?.from, let t = link.property?.to {
@@ -240,8 +386,6 @@ final class AppState: ObservableObject {
                                 vm.edges.append(PBEdge(from: "midiIn.umpOut", to: "\(toId).umpIn"))
                             }
                         }
-                    default:
-                        break
                     }
                 }
             }
@@ -269,6 +413,155 @@ final class AppState: ObservableObject {
             let lc = s.links?.count ?? 0
             snapshotSummary = "instruments=\(ic), links=\(lc)"
         }
+    }
+
+    // Build an OpenAPI service network on the canvas from curated specs
+    @MainActor
+    func switchToOpenAPICuration(into vm: EditorVM, grid: Int = 24) {
+        leftMode = .openAPIs
+        saveLeftMode()
+        let fm = FileManager.default
+        let cwd = URL(fileURLWithPath: fm.currentDirectoryPath)
+        let root = cwd.appendingPathComponent("Packages/FountainSpecCuration/openapi/v1", isDirectory: true)
+        let discovery = ServiceDiscovery(openAPIRoot: root)
+        guard let services = try? discovery.loadServices(), !services.isEmpty else {
+            chat.append(.init(role: "assistant", text: "OpenAPI Curation: no specs found under \(root.path)"))
+            return
+        }
+        vm.nodes.removeAll(); vm.edges.removeAll(); vm.grid = max(4, grid)
+        // Layout services in a grid; stable order by file name
+        let sorted = services.sorted { $0.fileName < $1.fileName }
+        let colW = vm.grid * 14
+        let rowH = vm.grid * 10
+        var col = 0, row = 0
+        func norm(_ s: String) -> String {
+            let lowered = s.lowercased()
+            let allowed = lowered.map { ($0.isLetter || $0.isNumber) ? $0 : "-" }
+            return String(allowed).replacingOccurrences(of: "--", with: "-")
+        }
+        for svc in sorted {
+            let idBase = svc.binaryName ?? svc.title
+            let id = norm(idBase)
+            let x = vm.grid * 4 + col * colW
+            let y = vm.grid * 4 + row * rowH
+            let node = PBNode(
+                id: id,
+                title: svc.title,
+                x: x,
+                y: y,
+                w: 240,
+                h: 120,
+                ports: canonicalSortPorts([
+                    .init(id: "in", side: .left, dir: .input, type: "data"),
+                    .init(id: "out", side: .right, dir: .output, type: "data")
+                ])
+            )
+            vm.nodes.append(node)
+            col += 1
+            if col >= 5 { col = 0; row += 1 }
+        }
+        // Simple backbone: gateway -> all; planner -> function-caller; tools-factory -> tool-server
+        func id(_ name: String) -> String? {
+            let lowered = name.lowercased()
+            return vm.nodes.first(where: { ($0.id == lowered) || ($0.title?.lowercased() == lowered) || $0.id.contains(lowered) })?.id
+        }
+        if let g = id("gateway") {
+            for n in vm.nodes.map({ $0.id }) where n != g { _ = vm.ensureEdge(from: (g, "out"), to: (n, "in")) }
+        }
+        if let p = id("planner"), let f = id("function-caller") { _ = vm.ensureEdge(from: (p, "out"), to: (f, "in")) }
+        if let t = id("tools-factory"), let s = id("tool-server") { _ = vm.ensureEdge(from: (t, "out"), to: (s, "in")) }
+        chat.append(.init(role: "assistant", text: "Switched to corpus ‘OpenAPI Curation’. Placed \(vm.nodes.count) services."))
+    }
+
+    // Build a network reflecting only services that are actually reachable (true running state)
+    @MainActor
+    func switchToOpenAPIRunning(into vm: EditorVM, grid: Int = 24) async {
+        leftMode = .openAPIs
+        saveLeftMode()
+        let fm = FileManager.default
+        let cwd = URL(fileURLWithPath: fm.currentDirectoryPath)
+        let root = cwd.appendingPathComponent("Packages/FountainSpecCuration/openapi/v1", isDirectory: true)
+        let discovery = ServiceDiscovery(openAPIRoot: root)
+        guard let services = try? discovery.loadServices(), !services.isEmpty else {
+            chat.append(.init(role: "assistant", text: "OpenAPI Curation: no specs found under \(root.path)"))
+            return
+        }
+        // Probe each service for readiness (/openapi.yaml or /health)
+        struct ProbeResult { let svc: ServiceDescriptor; let ok: Bool }
+        var results: [ProbeResult] = []
+        await withTaskGroup(of: ProbeResult.self) { group in
+            for svc in services {
+                group.addTask {
+                    let base = svc.servers.first ?? URL(string: "http://127.0.0.1:\(svc.port)")!
+                    // Normalize base (strip common suffixes)
+                    var comps = URLComponents(url: base, resolvingAgainstBaseURL: false) ?? URLComponents()
+                    let path = comps.path
+                    if path.hasSuffix("/api/v1") { comps.path = String(path.dropLast("/api/v1".count)) }
+                    if path.hasSuffix("/v1") { comps.path = String(path.dropLast("/v1".count)) }
+                    let url = comps.url ?? base
+                    // Try /openapi.yaml then /health
+                    var req = URLRequest(url: url.appending(path: "/openapi.yaml")); req.httpMethod = "GET"
+                    do {
+                        let (_, resp) = try await URLSession.shared.data(for: req)
+                        let ok = (resp as? HTTPURLResponse).map { (200..<300).contains($0.statusCode) } ?? false
+                        if ok { return ProbeResult(svc: svc, ok: true) }
+                    } catch { }
+                    req = URLRequest(url: url.appending(path: "/health")); req.httpMethod = "GET"
+                    do {
+                        let (_, resp) = try await URLSession.shared.data(for: req)
+                        let ok = (resp as? HTTPURLResponse).map { (200..<300).contains($0.statusCode) } ?? false
+                        return ProbeResult(svc: svc, ok: ok)
+                    } catch {
+                        return ProbeResult(svc: svc, ok: false)
+                    }
+                }
+            }
+            for await r in group { results.append(r) }
+        }
+        let healthy = results.filter { $0.ok }.map { $0.svc }
+        vm.nodes.removeAll(); vm.edges.removeAll(); vm.grid = max(4, grid)
+        // Layout
+        let sorted = healthy.sorted { $0.fileName < $1.fileName }
+        let colW = vm.grid * 14
+        let rowH = vm.grid * 10
+        var col = 0, row = 0
+        func norm(_ s: String) -> String {
+            let lowered = s.lowercased()
+            let allowed = lowered.map { ($0.isLetter || $0.isNumber) ? $0 : "-" }
+            return String(allowed).replacingOccurrences(of: "--", with: "-")
+        }
+        for svc in sorted {
+            let idBase = svc.binaryName ?? svc.title
+            let id = norm(idBase)
+            let x = vm.grid * 4 + col * colW
+            let y = vm.grid * 4 + row * rowH
+            let node = PBNode(
+                id: id,
+                title: svc.title,
+                x: x,
+                y: y,
+                w: 240,
+                h: 120,
+                ports: canonicalSortPorts([
+                    .init(id: "in", side: .left, dir: .input, type: "data"),
+                    .init(id: "out", side: .right, dir: .output, type: "data")
+                ])
+            )
+            vm.nodes.append(node)
+            col += 1
+            if col >= 5 { col = 0; row += 1 }
+        }
+        // Edges reflecting baseline wiring but only among reachable nodes
+        func has(_ name: String) -> String? {
+            let lowered = name.lowercased()
+            return vm.nodes.first(where: { ($0.id == lowered) || ($0.title?.lowercased() == lowered) || $0.id.contains(lowered) })?.id
+        }
+        if let g = has("gateway") {
+            for n in vm.nodes.map({ $0.id }) where n != g { _ = vm.ensureEdge(from: (g, "out"), to: (n, "in")) }
+        }
+        if let p = has("planner"), let f = has("function-caller") { _ = vm.ensureEdge(from: (p, "out"), to: (f, "in")) }
+        if let t = has("tools-factory"), let s = has("tool-server") { _ = vm.ensureEdge(from: (t, "out"), to: (s, "in")) }
+        chat.append(.init(role: "assistant", text: "Detected \(vm.nodes.count) running services; canvas reflects live state."))
     }
     func applyAllSuggestions() async {
         guard let c = api as? PatchBayClient else { return }
@@ -320,7 +613,52 @@ final class AppState: ObservableObject {
             }
             return s
         }
+        // Selection/service-aware Q&A for what you see on the canvas
+        func normalize(_ s: String) -> String { s.lowercased().replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "-", with: "").replacingOccurrences(of: "_", with: "") }
+        func servicesFromCuration() -> [ServiceDescriptor] {
+            let fm = FileManager.default
+            let cwd = URL(fileURLWithPath: fm.currentDirectoryPath)
+            let root = cwd.appendingPathComponent("Packages/FountainSpecCuration/openapi/v1", isDirectory: true)
+            let discovery = ServiceDiscovery(openAPIRoot: root)
+            return (try? discovery.loadServices()) ?? []
+        }
+        func describe(node n: PBNode, services: [ServiceDescriptor]) -> String {
+            let inNeighbors = vm.edges.filter { $0.to.hasPrefix(n.id+".") }.compactMap { $0.from.split(separator: ".").first }.map(String.init)
+            let outNeighbors = vm.edges.filter { $0.from.hasPrefix(n.id+".") }.compactMap { $0.to.split(separator: ".").first }.map(String.init)
+            let svc = services.first { sd in
+                let t = normalize(sd.title)
+                let idn = normalize(n.title ?? n.id)
+                return t.contains(idn) || idn.contains(t)
+            }
+            var lines: [String] = []
+            lines.append("Service: \(n.title ?? n.id) (id=\(n.id))")
+            if let s = svc {
+                lines.append("Port: \(s.port)")
+                if !s.servers.isEmpty { lines.append("Servers: \(s.servers.map{ $0.absoluteString }.joined(separator: ", "))") }
+                if !s.healthPaths.isEmpty { lines.append("Health: \(s.healthPaths.joined(separator: ", "))") }
+                if !s.capabilityPaths.isEmpty { lines.append("Capabilities: \(s.capabilityPaths.joined(separator: ", "))") }
+                lines.append("Spec: openapi/v1/\(s.fileName)")
+            }
+            if !inNeighbors.isEmpty { lines.append("Incoming from: \(inNeighbors.joined(separator: ", "))") }
+            if !outNeighbors.isEmpty { lines.append("Outgoing to: \(outNeighbors.joined(separator: ", "))") }
+            return lines.joined(separator: "\n")
+        }
         let q = question.lowercased()
+        if q.contains("what") || q.contains("describe") || q.contains("about") || q.contains("info") {
+            // Prefer selection if present
+            if let sel = vm.selection, let node = vm.node(by: sel) {
+                let text = describe(node: node, services: servicesFromCuration())
+                chat.append(.init(role: "assistant", text: text))
+                return
+            }
+            // Fuzzy match query → node title/id
+            let normQ = normalize(question)
+            if let node = vm.nodes.first(where: { let t = normalize($0.title ?? $0.id); return normQ.contains(t) || t.contains(normQ) }) {
+                let text = describe(node: node, services: servicesFromCuration())
+                chat.append(.init(role: "assistant", text: text))
+                return
+            }
+        }
         if q.contains("apply suggestions") || q.contains("apply all") {
             await applyAllSuggestions()
             chat.append(.init(role: "assistant", text: "Applied suggestions. Links now: \(links.count)."))
@@ -341,34 +679,38 @@ final class AppState: ObservableObject {
                 }
             }
         }
-        // Optional LLM Assistant via Gateway (feature-flagged)
-        if ProcessInfo.processInfo.environment["PATCHBAY_ASSISTANT_LLM"] == "1" {
-            let base = ProcessInfo.processInfo.environment["GATEWAY_URL"].flatMap(URL.init(string:)) ?? URL(string: "http://127.0.0.1:8080")!
+        // LLM Assistant via Gateway (default ON); toggle via state.useLLM
+        if useLLM {
+            // Prefer user-configured gateway URL; fall back to env only when unset
+            let envURL = ProcessInfo.processInfo.environment["GATEWAY_URL"].flatMap(URL.init(string:))
+            let base = normalizedGatewayBaseIfAvailable(envURL: envURL)
             let tokenProvider: GatewayChatClient.TokenProvider = { ProcessInfo.processInfo.environment["GATEWAY_TOKEN"] }
             let client = GatewayChatClient(baseURL: base, tokenProvider: tokenProvider)
-            let model = ProcessInfo.processInfo.environment["GATEWAY_MODEL"] ?? "gpt-4o-mini"
+            let model = self.llmModel.isEmpty ? (ProcessInfo.processInfo.environment["GATEWAY_MODEL"] ?? "gpt-4o-mini") : self.llmModel
             let req = GroundedPromptBuilder.makeChatRequest(model: model, userQuestion: question, nodes: vm.nodes, edges: vm.edges)
             do {
-                let resp = try await client.complete(request: req)
-                // Try function_call first
-                let actions = OpenAPIActionParser.parse(from: resp.functionCall)
-                if !actions.isEmpty {
-                    let applied = await execute(actions: actions, vm: vm)
-                    chat.append(.init(role: "assistant", text: applied))
-                    return
+                var accum = ""
+                var finalResponse: GatewayChatResponse? = nil
+                var assistantIndex: Int? = nil
+                for try await chunk in client.stream(request: req, preferStreaming: true) {
+                    if !chunk.text.isEmpty { accum += chunk.text }
+                    await MainActor.run {
+                        if assistantIndex == nil { chat.append(.init(role: "assistant", text: "")); assistantIndex = chat.count - 1 }
+                        if let i = assistantIndex { chat[i] = .init(role: "assistant", text: accum) }
+                    }
+                    if chunk.isFinal { finalResponse = chunk.response }
                 }
-                // Fallback to answer text
-                let inferred = OpenAPIActionParser.parse(fromText: resp.answer)
-                if !inferred.isEmpty {
-                    let applied = await execute(actions: inferred, vm: vm)
-                    chat.append(.init(role: "assistant", text: applied))
-                } else {
-                    chat.append(.init(role: "assistant", text: resp.answer))
+                if let resp = finalResponse {
+                    let actions = OpenAPIActionParser.parse(from: resp.functionCall)
+                    if !actions.isEmpty {
+                        let applied = await execute(actions: actions, vm: vm)
+                        chat.append(.init(role: "assistant", text: applied))
+                        return
+                    }
                 }
                 return
             } catch {
-                chat.append(.init(role: "assistant", text: "LLM error: \(error.localizedDescription)\n\n" + summarize()))
-                return
+                chat.append(.init(role: "assistant", text: "LLM error: \(error.localizedDescription). Falling back…"))
             }
         }
         // Planner (control plane) — default path
@@ -511,7 +853,7 @@ struct ContentView: View {
                 .navigationTitle("Templates")
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 360)
         } detail: {
-            // Center: Canvas; Right: Inspector (scrollable)
+            // Center: Canvas only (right pane removed)
             KeyInputContainer(onKey: { event in
                 let flags = event.modifierFlags
                 let stepMult = flags.contains(.option) ? 5 : 1
@@ -537,15 +879,6 @@ struct ContentView: View {
                         handleDrop(providers: providers, location: location)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    Divider()
-                    // Right Inspector pane
-                    ScrollView {
-                        InspectorPane()
-                            .environmentObject(state)
-                            .environmentObject(vm)
-                            .padding(8)
-                    }
-                    .frame(minWidth: 280, idealWidth: 320, maxWidth: 360)
                 }
             }
             .navigationTitle("PatchBay Canvas")
@@ -566,7 +899,20 @@ struct ContentView: View {
                             Button("16 px (major ×5)") { vm.grid = 16; vm.majorEvery = 5 }
                             Button("24 px (major ×5)") { vm.grid = 24; vm.majorEvery = 5 }
                         }
-                        Toggle("Zones Overlay", isOn: $vm.showZonesOverlay)
+                    }
+                    Menu("Monitor") {
+                        Menu("Prometheus") {
+                            Button("Build Overview") { Task { await state.buildPrometheusOverviewCanvas(vm: vm) } }
+                            Button("Clear") { state.clearCanvas(vm: vm) }
+                        }
+                    }
+                    Menu("Left Pane") {
+                        Button(action: { state.leftMode = .openAPIs; state.saveLeftMode(); if vm.nodes.isEmpty { state.switchToOpenAPICuration(into: vm) } }) {
+                            if state.leftMode == .openAPIs { Image(systemName: "checkmark"); Text("OpenAPI Services") } else { Text("OpenAPI Services") }
+                        }
+                        Button(action: { state.leftMode = .templates; state.saveLeftMode() }) {
+                            if state.leftMode == .templates { Image(systemName: "checkmark"); Text("Templates Library") } else { Text("Templates Library") }
+                        }
                     }
                     Button {
                         // Add a generic node near origin, snapped to grid
@@ -596,12 +942,11 @@ struct ContentView: View {
             await state.refresh()
             await state.refreshStore()
             state.refreshArtifacts()
-            // On first open, place the default chat instrument on the canvas and select it.
-            if vm.nodes.isEmpty {
-                if let chat = state.instruments.first(where: { $0.kind.rawValue == "audiotalk.chat" }) {
-                    addInstrumentNode(chat)
-                }
-            }
+            state.loadLeftMode()
+            state.loadUseLLM()
+            state.loadLLMModel()
+            state.loadGatewayURL()
+            if vm.nodes.isEmpty { state.clearCanvas(vm: vm) }
         }
         .environmentObject(vm)
     }
@@ -678,7 +1023,12 @@ struct ContentView: View {
 
     private func addFlowNode(kind: FlowNodeKind, title: String, x: Int, y: Int) {
         let base: String = {
-            switch kind { case .audioInput: return "audioIn"; case .analyzer: return "analyzer"; case .noteProcessor: return "noteProc" }
+            switch kind {
+            case .audioInput: return "audioIn"
+            case .analyzer: return "analyzer"
+            case .noteProcessor: return "noteProc"
+            case .transportEndpoint: return "endpoint"
+            }
         }()
         let id = nextId(base: base)
         var ports: [PBPort] = []
@@ -691,8 +1041,13 @@ struct ContentView: View {
         case .noteProcessor:
             ports.append(.init(id: "in", side: .left, dir: .input, type: "data"))
             ports.append(.init(id: "umpOut", side: .right, dir: .output, type: "ump"))
+        case .transportEndpoint:
+            ports.append(.init(id: "ciIn", side: .left, dir: .input, type: "ci"))
+            ports.append(.init(id: "ciOut", side: .right, dir: .output, type: "ci"))
+            ports.append(.init(id: "umpIn", side: .left, dir: .input, type: "ump"))
+            ports.append(.init(id: "umpOut", side: .right, dir: .output, type: "ump"))
         }
-        let node = PBNode(id: id, title: title, x: x, y: y, w: 220, h: 120, ports: canonicalSortPorts(ports))
+        let node = PBNode(id: id, title: title, x: x, y: y, w: kind == .transportEndpoint ? 260 : 220, h: 120, ports: canonicalSortPorts(ports))
         vm.nodes.append(node)
         vm.selection = id
         vm.selected = [id]
@@ -725,6 +1080,8 @@ struct TemplateLibraryView: View {
     @State private var search: String = ""
     @State private var editMode: Bool = false
     @State private var hiddenExpanded: Bool = true
+    private enum LeftSection: String, CaseIterable { case library = "Library", flow = "Flow Nodes", hidden = "Hidden Templates" }
+    @State private var leftSections: [LeftSection] = LeftSection.allCases
 
     private func icon(for kind: String) -> Image {
         switch kind {
@@ -736,6 +1093,9 @@ struct TemplateLibraryView: View {
     }
 
     var body: some View {
+        if state.leftMode == .openAPIs {
+            OpenAPIServicesLibrary()
+        } else {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 TextField("Search", text: $search)
@@ -744,45 +1104,50 @@ struct TemplateLibraryView: View {
                 Button(editMode ? "Done" : "Edit") { withAnimation { editMode.toggle() } }
             }
             List {
-                Section(header: Text("Library")) {
-                    let visible = state.templates.filter { !$0.hidden && (search.isEmpty || $0.title.localizedCaseInsensitiveContains(search)) }
-                    if visible.isEmpty {
-                        VStack(alignment: .center) {
-                            Text("No templates. Reset to Defaults?").foregroundColor(.secondary)
-                            Button("Reset Defaults") { state.resetTemplates() }
-                        }
-                        .frame(maxWidth: .infinity)
-                    } else {
-                        ForEach(visible, id: \.id) { t in
-                            TemplateRow(template: t, editMode: editMode)
-                                .environmentObject(state)
-                                .environmentObject(vm)
-                        }
-                        .onMove { idx, off in state.moveTemplates(fromOffsets: idx, toOffset: off) }
-                    }
-                }
-                Section(header: Text("Flow Nodes")) {
-                    FlowNodeRow(title: "Audio Input", flowKind: .audioInput)
-                        .environmentObject(state).environmentObject(vm)
-                    FlowNodeRow(title: "Analyzer", flowKind: .analyzer)
-                        .environmentObject(state).environmentObject(vm)
-                    FlowNodeRow(title: "Note Processor", flowKind: .noteProcessor)
-                        .environmentObject(state).environmentObject(vm)
-                }
-                Section(header: HStack { Button(action: { withAnimation { hiddenExpanded.toggle() } }) { Image(systemName: hiddenExpanded ? "chevron.down" : "chevron.right") }; Text("Hidden Templates") }) {
-                    if hiddenExpanded {
-                        let hidden = state.templates.filter { $0.hidden }
-                        if !hidden.isEmpty {
-                            Button("Restore All") { state.restoreAllTemplates() }
-                        }
-                        ForEach(hidden, id: \.id) { t in
-                            HStack {
-                                icon(for: t.kind.rawValue).frame(width: 20)
-                                Text(t.title).foregroundColor(.secondary)
-                                Spacer()
-                                Button { state.toggleHiddenTemplate(id: t.id) } label: { Image(systemName: "eye") }
-                                    .buttonStyle(.plain)
-                                    .help("Restore")
+                ForEach(leftSections, id: \.self) { sec in
+                    Section(header: sectionHeader(sec)) {
+                        switch sec {
+                        case .library:
+                            let visible = state.templates.filter { !$0.hidden && (search.isEmpty || $0.title.localizedCaseInsensitiveContains(search)) }
+                            if visible.isEmpty {
+                                VStack(alignment: .center) {
+                                    Text("No templates. Reset to Defaults?").foregroundColor(.secondary)
+                                    Button("Reset Defaults") { state.resetTemplates() }
+                                }
+                                .frame(maxWidth: .infinity)
+                            } else {
+                                ForEach(visible, id: \.id) { t in
+                                    TemplateRow(template: t, editMode: editMode)
+                                        .environmentObject(state)
+                                        .environmentObject(vm)
+                                }
+                                .onMove { idx, off in state.moveTemplates(fromOffsets: idx, toOffset: off) }
+                            }
+                        case .flow:
+                            FlowNodeRow(title: "Audio Input", flowKind: .audioInput)
+                                .environmentObject(state).environmentObject(vm)
+                            FlowNodeRow(title: "Analyzer", flowKind: .analyzer)
+                                .environmentObject(state).environmentObject(vm)
+                            FlowNodeRow(title: "Note Processor", flowKind: .noteProcessor)
+                                .environmentObject(state).environmentObject(vm)
+                            FlowNodeRow(title: "Transport Endpoint", flowKind: .transportEndpoint)
+                                .environmentObject(state).environmentObject(vm)
+                        case .hidden:
+                            if hiddenExpanded {
+                                let hidden = state.templates.filter { $0.hidden }
+                                if !hidden.isEmpty {
+                                    Button("Restore All") { state.restoreAllTemplates() }
+                                }
+                                ForEach(hidden, id: \.id) { t in
+                                    HStack {
+                                        icon(for: t.kind.rawValue).frame(width: 20)
+                                        Text(t.title).foregroundColor(.secondary)
+                                        Spacer()
+                                        Button { state.toggleHiddenTemplate(id: t.id) } label: { Image(systemName: "eye") }
+                                            .buttonStyle(.plain)
+                                            .help("Restore")
+                                    }
+                                }
                             }
                         }
                     }
@@ -790,6 +1155,110 @@ struct TemplateLibraryView: View {
             }
         }
         .padding([.top, .horizontal], 8)
+        .onAppear { loadLeftOrder() }
+        .onChange(of: leftSections) { _, _ in saveLeftOrder() }
+        }
+    }
+
+    private func sectionHeader(_ sec: LeftSection) -> some View {
+        HStack {
+            if sec == .hidden {
+                Button(action: { withAnimation { hiddenExpanded.toggle() } }) {
+                    Image(systemName: hiddenExpanded ? "chevron.down" : "chevron.right")
+                }
+                .buttonStyle(.plain)
+            }
+            Text(sec.rawValue)
+                .font(.headline)
+                .onDrag { NSItemProvider(object: NSString(string: sec.rawValue)) }
+                .onDrop(of: [UTType.text], isTargeted: .constant(false)) { providers in
+                    guard let provider = providers.first else { return false }
+                    provider.loadDataRepresentation(forTypeIdentifier: UTType.text.identifier) { data, _ in
+                        guard let data = data, let name = String(data: data, encoding: .utf8), let from = LeftSection(rawValue: name) else { return }
+                        DispatchQueue.main.async {
+                            if let fromIndex = leftSections.firstIndex(of: from), let toIndex = leftSections.firstIndex(of: sec), fromIndex != toIndex {
+                                var arr = leftSections
+                                let item = arr.remove(at: fromIndex)
+                                arr.insert(item, at: toIndex)
+                                leftSections = arr
+                                saveLeftOrder()
+                            }
+                        }
+                    }
+                    return true
+                }
+            Spacer()
+        }
+    }
+
+    private func loadLeftOrder() {
+        let key = "pb.leftSections.v1"
+        if let raw = UserDefaults.standard.array(forKey: key) as? [String] {
+            let mapped = raw.compactMap(LeftSection.init(rawValue:))
+            if !mapped.isEmpty { leftSections = mapped }
+        }
+    }
+    private func saveLeftOrder() {
+        let key = "pb.leftSections.v1"
+        UserDefaults.standard.set(leftSections.map { $0.rawValue }, forKey: key)
+    }
+}
+
+// MARK: - OpenAPI Services Library (left panel when in curation mode)
+struct OpenAPIServicesLibrary: View {
+    @EnvironmentObject var state: AppState
+    @EnvironmentObject var vm: EditorVM
+    @State private var search: String = ""
+    @State private var services: [ServiceDescriptor] = []
+    private func reload() {
+        let fm = FileManager.default
+        let cwd = URL(fileURLWithPath: fm.currentDirectoryPath)
+        let root = cwd.appendingPathComponent("Packages/FountainSpecCuration/openapi/v1", isDirectory: true)
+        let discovery = ServiceDiscovery(openAPIRoot: root)
+        services = (try? discovery.loadServices()) ?? []
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                TextField("Filter services…", text: $search)
+                Spacer()
+                Button("Refresh") { reload() }
+            }
+            List {
+                Section(header: Text("OpenAPI Services")) {
+                    ForEach(filtered(), id: \.fileName) { svc in
+                        HStack {
+                            Image(systemName: "square.stack.3d.down.right")
+                            VStack(alignment: .leading) { Text(svc.title); Text("\(svc.port)").font(.caption).foregroundColor(.secondary) }
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture(count: 2) { placeService(svc) }
+                    }
+                }
+            }
+        }
+        .padding([.top, .horizontal], 8)
+        .onAppear { reload() }
+    }
+    private func filtered() -> [ServiceDescriptor] {
+        let q = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        if q.isEmpty { return services }
+        return services.filter { $0.title.localizedCaseInsensitiveContains(q) || $0.fileName.localizedCaseInsensitiveContains(q) }
+    }
+    private func placeService(_ svc: ServiceDescriptor) {
+        // Synthesize a node id and position near origin; use same canonical ports as network builder.
+        let g = max(4, vm.grid)
+        let x = g * 5, y = g * 5
+        let id = svc.binaryName?.lowercased() ?? svc.title.lowercased().replacingOccurrences(of: " ", with: "-")
+        if vm.node(by: id) != nil { vm.selection = id; vm.selected = [id]; return }
+        let node = PBNode(id: id, title: svc.title, x: x, y: y, w: 240, h: 120, ports: canonicalSortPorts([
+            .init(id: "in", side: .left, dir: .input, type: "data"),
+            .init(id: "out", side: .right, dir: .output, type: "data")
+        ]))
+        vm.nodes.append(node)
+        vm.selection = id
+        vm.selected = [id]
     }
 }
 
@@ -877,7 +1346,7 @@ struct TemplateRow: View {
     }
 }
 
-enum FlowNodeKind: String, Codable { case audioInput, analyzer, noteProcessor }
+enum FlowNodeKind: String, Codable { case audioInput, analyzer, noteProcessor, transportEndpoint }
 
 struct FlowNodeRow: View {
     @EnvironmentObject var state: AppState
@@ -892,7 +1361,7 @@ struct FlowNodeRow: View {
             .onDrag { dragPayload() }
     }
     private func iconName() -> String {
-        switch flowKind { case .audioInput: return "waveform"; case .analyzer: return "chart.bar"; case .noteProcessor: return "pianokeys" }
+        switch flowKind { case .audioInput: return "waveform"; case .analyzer: return "chart.bar"; case .noteProcessor: return "pianokeys"; case .transportEndpoint: return "dot.radiowaves.left.and.right" }
     }
     private func dragPayload() -> NSItemProvider {
         struct Payload: Codable { let flowKind: String }
@@ -903,7 +1372,7 @@ struct FlowNodeRow: View {
         let g = max(4, vm.grid)
         let x = g * 5, y = g * 5
         let base: String = {
-            switch flowKind { case .audioInput: return "audioIn"; case .analyzer: return "analyzer"; case .noteProcessor: return "noteProc" }
+            switch flowKind { case .audioInput: return "audioIn"; case .analyzer: return "analyzer"; case .noteProcessor: return "noteProc"; case .transportEndpoint: return "endpoint" }
         }()
         var id = base
         var n = 1
@@ -918,8 +1387,13 @@ struct FlowNodeRow: View {
         case .noteProcessor:
             ports.append(.init(id: "in", side: .left, dir: .input, type: "data"))
             ports.append(.init(id: "umpOut", side: .right, dir: .output, type: "ump"))
+        case .transportEndpoint:
+            ports.append(.init(id: "ciIn", side: .left, dir: .input, type: "ci"))
+            ports.append(.init(id: "ciOut", side: .right, dir: .output, type: "ci"))
+            ports.append(.init(id: "umpIn", side: .left, dir: .input, type: "ump"))
+            ports.append(.init(id: "umpOut", side: .right, dir: .output, type: "ump"))
         }
-        let node = PBNode(id: id, title: title, x: x, y: y, w: 220, h: 120, ports: canonicalSortPorts(ports))
+        let node = PBNode(id: id, title: title, x: x, y: y, w: flowKind == .transportEndpoint ? 260 : 220, h: 120, ports: canonicalSortPorts(ports))
         vm.nodes.append(node)
         vm.selection = id
         vm.selected = [id]
@@ -989,18 +1463,19 @@ struct AddInstrumentSheet: View {
         } catch { errorText = error.localizedDescription }
     }
 }
-struct InspectorPane: View {
-    enum Tab: String, CaseIterable { case instruments = "Instruments", corpus = "Corpus", chat = "Chat" }
+/* struct InspectorPane: View {
+    enum Tab: String, CaseIterable { case chat = "Chat", corpus = "Stellwerk" }
     @EnvironmentObject var state: AppState
     @EnvironmentObject var vm: EditorVM
-    @State private var tab: Tab = .instruments
+    @State private var tab: Tab = .chat
     @State private var tabsOrder: [Tab] = Tab.allCases
-    @State private var selectedInstrumentIndex: Int = 0
-    @State private var storeId: String = "scene-1"
+    @State private var storeId: String = "openapi-curation"
     @State private var previewLink: Components.Schemas.CreateLink? = nil
     @State private var showPreview: Bool = false
     @State private var showApplyAllConfirm: Bool = false
     @State private var diffSummary: String = ""
+    enum StellwerkSection: String, CaseIterable { case summary = "Summary", disconnected = "Disconnected", diff = "Diff vs Store", coverage = "CI/PE Coverage", mappings = "Mappings", health = "Health", store = "Store" }
+    @State private var stellwerkSections: [StellwerkSection] = StellwerkSection.allCases
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
@@ -1019,8 +1494,7 @@ struct InspectorPane: View {
                         .onDrag { NSItemProvider(object: NSString(string: t.rawValue)) }
                         .onDrop(of: [UTType.text], isTargeted: .constant(false)) { providers in
                             guard let provider = providers.first else { return false }
-                            var ok = false
-                            let _ = provider.loadDataRepresentation(forTypeIdentifier: UTType.text.identifier) { data, _ in
+                            provider.loadDataRepresentation(forTypeIdentifier: UTType.text.identifier) { data, _ in
                                 guard let data = data, let name = String(data: data, encoding: .utf8), let fromTab = Tab(rawValue: name) else { return }
                                 DispatchQueue.main.async {
                                     if let fromIndex = tabsOrder.firstIndex(of: fromTab), let toIndex = tabsOrder.firstIndex(of: t), fromIndex != toIndex {
@@ -1031,33 +1505,21 @@ struct InspectorPane: View {
                                         saveTabsOrder()
                                     }
                                 }
-                                ok = true
                             }
-                            return ok
+                            return true
                         }
                 }
                 Spacer()
             }
             switch tab {
-            case .instruments:
-                instrumentsView
             case .corpus:
                 corpusView
             case .chat:
                 AssistantPane(seedQuestion: "What's in the corpus?", autoSendOnAppear: true)
             }
         }
-        .task { await state.refreshLinks(); syncSelection(); loadTabsOrder() }
-        .onChange(of: vm.selection) { _ in syncSelection() }
-        .onChange(of: state.instruments.count) { _ in syncSelection() }
-        .onChange(of: tabsOrder) { _ in saveTabsOrder() }
-    }
-    private func syncSelection() {
-        if let sel = vm.selection, let idx = state.instruments.firstIndex(where: { $0.id == sel }) {
-            selectedInstrumentIndex = idx
-        } else if !state.instruments.isEmpty {
-            selectedInstrumentIndex = 0
-        }
+        .task { await state.refreshLinks(); loadTabsOrder() }
+        .onChange(of: tabsOrder) { _, _ in saveTabsOrder() }
     }
     private func computeDisconnected(vm: EditorVM) -> [String] {
         var deg: [String: Int] = Dictionary(uniqueKeysWithValues: vm.nodes.map { ($0.id, 0) })
@@ -1093,11 +1555,10 @@ struct InspectorPane: View {
                     if let note = u.source.note { parts.append("note=\(note)") }
                     var mapStr = ""
                     if let m = u.map { mapStr = " scale=\(m.scale ?? 1.0) offset=\(m.offset ?? 0.0)" }
-                    let to = u.to ?? "?"
+                    let to = u.to
                     return parts.joined(separator: " ") + " -> \(to)" + mapStr
                 }
                 return nil
-            default: return nil
             }
         }
     }
@@ -1159,7 +1620,7 @@ struct InspectorPane: View {
                 .font(.caption).foregroundColor(.secondary)
         }
     }
-    @ViewBuilder var instrumentsView: some View {
+    /* @ViewBuilder var instrumentsView: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Instruments (\(state.instruments.count))").font(.headline)
             Picker("Instrument", selection: $selectedInstrumentIndex) {
@@ -1209,6 +1670,7 @@ struct InspectorPane: View {
             }
         }
     }
+    */
     @ViewBuilder var linksView: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
@@ -1353,60 +1815,95 @@ struct InspectorPane: View {
         }
     }
     @ViewBuilder var corpusView: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Summary
-            HStack { Text("Summary").font(.headline); Spacer()
+        ScrollView { VStack(alignment: .leading, spacing: 8) {
+            ForEach(stellwerkSections, id: \.self) { sec in
+                sectionHeader(sec)
+                    .onDrag { NSItemProvider(object: NSString(string: sec.rawValue)) }
+                    .onDrop(of: [UTType.text], isTargeted: .constant(false)) { providers in
+                        guard let provider = providers.first else { return false }
+                        provider.loadDataRepresentation(forTypeIdentifier: UTType.text.identifier) { data, _ in
+                            guard let data = data, let name = String(data: data, encoding: .utf8), let from = StellwerkSection(rawValue: name) else { return }
+                            DispatchQueue.main.async {
+                                if let fromIndex = stellwerkSections.firstIndex(of: from), let toIndex = stellwerkSections.firstIndex(of: sec), fromIndex != toIndex {
+                                    var arr = stellwerkSections
+                                    let item = arr.remove(at: fromIndex)
+                                    arr.insert(item, at: toIndex)
+                                    stellwerkSections = arr
+                                    saveStellwerkOrder()
+                                }
+                            }
+                        }
+                        return true
+                    }
+                sectionBody(sec)
+                Divider().padding(.vertical, 4)
+            }
+        } }
+        .onAppear { loadStellwerkOrder() }
+    }
+    private func sectionHeader(_ sec: StellwerkSection) -> some View {
+        HStack { Text(sec.rawValue).font(.headline); Spacer()
+            switch sec {
+            case .summary:
                 Button("Refresh") { Task { await state.refresh(); await state.refreshLinks(); await state.makeSnapshot() } }
                 Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(state.corpusOverviewLine(), forType: .string) }
                 Button("Send to Chat") { Task { await state.ask(question: "Describe current corpus.\n\n" + state.corpusOverviewLine(), vm: vm) } }
-            }
-            Text(state.corpusOverviewLine()).font(.system(.body, design: .monospaced))
-            Divider().padding(.vertical, 4)
-
-            // Disconnected
-            HStack { Text("Disconnected").font(.headline); Spacer(); Button("Select") { selectDisconnected(vm: vm) } }
-            let disconnected = computeDisconnected(vm: vm)
-            if disconnected.isEmpty { Text("All nodes connected").foregroundColor(.secondary) }
-            else { Text(disconnected.joined(separator: ", ")).font(.system(.caption, design: .monospaced)) }
-            Divider().padding(.vertical, 4)
-
-            // Diff vs stored
-            HStack { Text("Diff vs Store").font(.headline); Spacer()
+            case .disconnected:
+                Button("Select") { selectDisconnected(vm: vm) }
+            case .diff:
                 TextField("Graph ID", text: $storeId).frame(width: 160)
                 Button("Compute") { Task { diffSummary = await computeDiff(storeId: storeId, vm: vm) } }
                 Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(diffSummary, forType: .string) }
-            }
-            if !diffSummary.isEmpty { Text(diffSummary).font(.system(.caption, design: .monospaced)) }
-            Divider().padding(.vertical, 4)
-
-            // CI/PE Coverage (best-effort from app state)
-            HStack { Text("CI/PE Coverage").font(.headline); Spacer() }
-            let coverage = computeCoverage()
-            Text(coverage).font(.system(.caption, design: .monospaced))
-            Divider().padding(.vertical, 4)
-
-            // Mappings (service links)
-            HStack { Text("Mappings").font(.headline); Spacer(); Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(mappingLines().joined(separator: "\n"), forType: .string) } }
-            ScrollView { VStack(alignment: .leading, spacing: 2) { ForEach(mappingLines(), id: \.self) { Text($0).font(.system(.caption, design: .monospaced)) } } }.frame(maxHeight: 120)
-            Divider().padding(.vertical, 4)
-
-            // Health
-            HStack { Text("Health").font(.headline); Spacer() }
-            let health = computeHealth(vm: vm)
-            Text(health).font(.system(.caption, design: .monospaced))
-            Divider().padding(.vertical, 4)
-
-            // Store
-            Text("Store (Save/Load)").font(.headline)
-            HStack {
-                TextField("Graph ID", text: $storeId).frame(width: 160)
-                Button("Save Current") { Task { await saveCurrent(storeId: storeId, vm: vm) } }
-                Spacer()
+            case .coverage:
+                EmptyView()
+            case .mappings:
+                Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(mappingLines().joined(separator: "\n"), forType: .string) }
+            case .health:
+                EmptyView()
+            case .store:
                 Button("Refresh List") { Task { await state.refreshStore() } }
             }
-            if state.stored.isEmpty { Text("No stored graphs").foregroundColor(.secondary) }
-            ScrollView { ForEach(state.stored, id: \.id) { item in HStack { Text(item.id).font(.system(.body, design: .monospaced)); Spacer(); Button("Load") { Task { await loadStored(id: item.id, vm: vm) } } } } }
         }
+    }
+    @ViewBuilder private func sectionBody(_ sec: StellwerkSection) -> some View {
+        switch sec {
+        case .summary:
+            Text(state.corpusOverviewLine()).font(.system(.body, design: .monospaced))
+        case .disconnected:
+            let disconnected = computeDisconnected(vm: vm)
+            if disconnected.isEmpty { Text("All nodes connected").foregroundColor(.secondary) }
+            else { Text(disconnected.joined(separator: ", ")).font(.system(.caption, design: .monospaced)) }
+        case .diff:
+            if !diffSummary.isEmpty { Text(diffSummary).font(.system(.caption, design: .monospaced)) }
+        case .coverage:
+            Text(computeCoverage()).font(.system(.caption, design: .monospaced))
+        case .mappings:
+            ScrollView { VStack(alignment: .leading, spacing: 2) { ForEach(mappingLines(), id: \.self) { Text($0).font(.system(.caption, design: .monospaced)) } } }.frame(maxHeight: 120)
+        case .health:
+            Text(computeHealth(vm: vm)).font(.system(.caption, design: .monospaced))
+        case .store:
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Store (Save/Load)").font(.subheadline)
+                HStack {
+                    TextField("Graph ID", text: $storeId).frame(width: 160)
+                    Button("Save Current") { Task { await saveCurrent(storeId: storeId, vm: vm) } }
+                    Spacer()
+                }
+                if state.stored.isEmpty { Text("No stored graphs").foregroundColor(.secondary) }
+                ScrollView { ForEach(state.stored, id: \.id) { item in HStack { Text(item.id).font(.system(.body, design: .monospaced)); Spacer(); Button("Load") { Task { await loadStored(id: item.id, vm: vm) } } } } }
+            }
+        }
+    }
+    private func loadStellwerkOrder() {
+        let key = "pb.stellwerkOrder.v1"
+        if let raw = UserDefaults.standard.array(forKey: key) as? [String] {
+            let mapped = raw.compactMap(StellwerkSection.init(rawValue:))
+            if !mapped.isEmpty { stellwerkSections = mapped }
+        }
+    }
+    private func saveStellwerkOrder() {
+        let key = "pb.stellwerkOrder.v1"
+        UserDefaults.standard.set(stellwerkSections.map { $0.rawValue }, forKey: key)
     }
 }
 
@@ -1444,9 +1941,71 @@ struct AssistantPane: View {
     @State private var chatInput: String = "What instruments and links are present?"
     @FocusState private var chatFocused: Bool
     @State private var expanded: Bool = false
+    @State private var showModelSheet: Bool = false
+    @State private var customModel: String = ""
+    @State private var showGatewaySheet: Bool = false
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Assistant").font(.headline)
+            HStack {
+                Text("Assistant").font(.headline)
+                Spacer()
+                Button(action: { state.useLLM.toggle(); state.saveUseLLM() }) {
+                    HStack(spacing: 6) {
+                        let color: Color = {
+                            if !state.useLLM { return .gray }
+                            switch state.gatewayStatus { case .ok: return .green; case .checking: return .yellow; case .bad: return .red; case .unknown: return .gray }
+                        }()
+                        Circle().fill(color).frame(width: 8, height: 8)
+                        let label: String = {
+                            if !state.useLLM { return "LLM: Off" }
+                            switch state.gatewayStatus { case .ok: return "LLM: On"; case .checking: return "LLM: Checking"; case .bad(let e): return "LLM: Error (\(e))"; case .unknown: return "LLM: Unknown" }
+                        }()
+                        Text(label).font(.caption)
+                    }
+                    .padding(.vertical, 4).padding(.horizontal, 8)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color(NSColor.controlBackgroundColor)))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(NSColor.separatorColor), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .help("Toggle LLM usage (persists)")
+                Menu("Model: \(state.llmModel)") {
+                    ForEach(["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "o4-mini"], id: \.self) { name in
+                        Button(action: { state.llmModel = name; state.saveLLMModel() }) {
+                            if state.llmModel == name { Image(systemName: "checkmark") }
+                            Text(name)
+                        }
+                    }
+                    Divider()
+                    Button("Custom…") { showModelSheet = true }
+                }
+                .menuStyle(.borderlessButton)
+                .help("Choose Gateway model (persists)")
+                Menu("Gateway") {
+                    Button("Test Connectivity") { Task { await state.checkGateway() } }
+                    Button("Set URL…") { showGatewaySheet = true }
+                    Text("Current: \(state.gatewayURL.absoluteString)").font(.caption)
+                }
+            }
+            .sheet(isPresented: $showModelSheet) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Set Custom Model").font(.headline)
+                    TextField("model id", text: $customModel)
+                        .frame(width: 260)
+                    HStack { Spacer(); Button("Cancel") { showModelSheet = false }; Button("Save") { state.llmModel = customModel.trimmingCharacters(in: .whitespacesAndNewlines); state.saveLLMModel(); showModelSheet = false } }
+                }
+                .padding(14)
+                .frame(width: 320)
+            }
+            .sheet(isPresented: $showGatewaySheet) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Set Gateway URL").font(.headline)
+                    TextField("http://127.0.0.1:8010", text: Binding(get: { state.gatewayURL.absoluteString }, set: { if let u = URL(string: $0) { state.gatewayURL = u } }))
+                        .frame(width: 360)
+                    HStack { Spacer(); Button("Cancel") { showGatewaySheet = false }; Button("Save") { state.saveGatewayURL(); Task { await state.checkGateway() }; showGatewaySheet = false } }
+                }
+                .padding(14)
+                .frame(width: 400)
+            }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 8) {
                     ForEach(state.chat) { m in
@@ -1484,6 +2043,16 @@ struct AssistantPane: View {
                         .keyboardShortcut(.return, modifiers: [.command])
                     Button(expanded ? "Collapse" : "Expand") { withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() } }
                         .help("Toggle input height (Cmd+Return to send)")
+                    Button("Describe Selection") { Task {
+                        if let sel = vm.selection, let node = vm.node(by: sel) {
+                            // Use the same path as `ask` would, but synthesize a question so history captures it.
+                            let q = "Describe \(node.title ?? node.id)"
+                            await state.ask(question: q, vm: vm)
+                        } else {
+                            NSPasteboard.general.clearContents();
+                            NSPasteboard.general.setString("Select a node to describe.", forType: .string)
+                        }
+                    } }
                 }
             }
             .onAppear {
@@ -1591,6 +2160,7 @@ extension InspectorPane {
         return out
     }
 }
+*/
 
 private func linkSummaryNew(_ l: Components.Schemas.Link) -> String {
     switch l.kind {
@@ -1606,8 +2176,6 @@ private func linkSummaryNew(_ l: Components.Schemas.Link) -> String {
             return "ump: ep=\(s.endpointId) g=\(s.group) ch=\(s.channel) \(msg) → \(to)"
         }
         return "ump: (incomplete)"
-    default:
-        return l.id
     }
 }
 
@@ -1624,8 +2192,6 @@ private func linkSummaryCreate(_ l: Components.Schemas.CreateLink) -> String {
             return "ump: ep=\(s.endpointId) g=\(s.group) ch=\(s.channel) \(msg) → \(m.to)"
         }
         return "ump: (incomplete)"
-    default:
-        return "create-link"
     }
 }
 
@@ -1646,7 +2212,5 @@ private func linkSummary(_ l: Components.Schemas.Link) -> String {
             return "ump: ep=\(s.endpointId) g=\(s.group) ch=\(s.channel) \(msg) → \(to)"
         }
         return "ump: (incomplete)"
-    default:
-        return l.id
     }
 }

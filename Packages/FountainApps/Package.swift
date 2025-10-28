@@ -248,7 +248,8 @@ let package = Package(
                 .product(name: "Flow", package: "Flow"),
                 .product(name: "FountainAIAdapters", package: "FountainGatewayKit"),
                 .product(name: "LLMGatewayAPI", package: "FountainAPIClients"),
-                .product(name: "ApiClientsCore", package: "FountainAPIClients")
+                .product(name: "ApiClientsCore", package: "FountainAPIClients"),
+                .product(name: "TutorDashboard", package: "FountainAPIClients")
                 // ScoreKit and RulesKit are available in the workspace; we will gradually adopt them in PatchBay.
                 // .product(name: "ScoreKit", package: "ScoreKit"),
                 // .product(name: "RulesKit", package: "RulesKit-SPM")

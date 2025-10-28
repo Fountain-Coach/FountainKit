@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fountain.ai/patchbay/flow.schema.json",
+  "title": "PatchBay Flow Graph",
+  "type": "object",
+  "required": ["nodes", "edges"],
+  "properties": {
+    "nodes": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/Node" }
+    },
+    "edges": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/Edge" }
+    },
+    "meta": { "type": "object" }
+  },
+  "definitions": {
+    "Node": {
+      "type": "object",
+      "required": ["id", "kind", "x", "y", "w", "h", "ports"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string" },
+        "title": { "type": "string" },
+        "x": { "type": "integer" },
+        "y": { "type": "integer" },
+        "w": { "type": "integer", "minimum": 1 },
+        "h": { "type": "integer", "minimum": 1 },
+        "ports": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/Port" }
+        }
+      }
+    },
+    "Port": {
+      "type": "object",
+      "required": ["id", "side", "dir", "type"],
+      "properties": {
+        "id": { "type": "string" },
+        "side": { "type": "string", "enum": ["left", "right", "top", "bottom"] },
+        "dir": { "type": "string", "enum": ["in", "out"] },
+        "type": { "type": "string", "enum": ["data", "ump", "ci", "pe"] }
+      }
+    },
+    "Edge": {
+      "type": "object",
+      "required": ["id", "kind", "from", "to"],
+      "properties": {
+        "id": { "type": "string" },
+        "kind": { "type": "string", "enum": ["property", "ump", "ci", "map"] },
+        "from": { "type": "string", "pattern": "^[^\\.]+\\.[^\\.]+$" },
+        "to": { "type": "string", "pattern": "^[^\\.]+\\.[^\\.]+$" },
+        "label": { "type": "string" }
+      }
+    }
+  }
+}
+

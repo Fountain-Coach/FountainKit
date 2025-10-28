@@ -919,17 +919,15 @@ struct ContentView: View {
                 }
             }) {
                 HStack(spacing: 0) {
-                    // Canvas with drop target
-                    ZoomContainer(zoom: $vm.zoom, translation: $vm.translation) {
-                        EditorCanvas()
-                            .environmentObject(vm)
-                            .environmentObject(state)
-                            .background(Color(NSColor.textBackgroundColor))
-                    }
-                    .onDrop(of: [UTType.json], isTargeted: .constant(false)) { providers, location in
-                        handleDrop(providers: providers, location: location)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // Canvas with drop target (direct hosting; ZoomContainer removed for stability)
+                    EditorCanvas()
+                        .environmentObject(vm)
+                        .environmentObject(state)
+                        .background(Color(NSColor.textBackgroundColor))
+                        .onDrop(of: [UTType.json], isTargeted: .constant(false)) { providers, location in
+                            handleDrop(providers: providers, location: location)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .navigationTitle("PatchBay Canvas")

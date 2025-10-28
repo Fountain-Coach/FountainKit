@@ -74,7 +74,9 @@ struct ZoomContainer<Content: View>: NSViewRepresentable {
     }
 
     func updateNSView(_ view: NSView, context: Context) {
-        if let host = context.coordinator.host {
+        guard let host = context.coordinator.host else { return }
+        // Defer updating the hosted rootView to avoid re-entrancy during SwiftUI updates
+        DispatchQueue.main.async {
             host.rootView = AnyView(content())
         }
     }

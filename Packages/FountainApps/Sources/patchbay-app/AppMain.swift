@@ -994,6 +994,7 @@ struct InspectorPane: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var vm: EditorVM
     @State private var tab: Tab = .instruments
+    @State private var tabsOrder: [Tab] = Tab.allCases
     @State private var selectedInstrumentIndex: Int = 0
     @State private var storeId: String = "scene-1"
     @State private var previewLink: Components.Schemas.CreateLink? = nil
@@ -1001,10 +1002,41 @@ struct InspectorPane: View {
     @State private var showApplyAllConfirm: Bool = false
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker("", selection: $tab) {
-                ForEach(Tab.allCases, id: \.self) { t in Text(t.rawValue).tag(t as Tab?) }
+            HStack(spacing: 6) {
+                ForEach(tabsOrder, id: \.self) { t in
+                    Text(t.rawValue)
+                        .font(.callout)
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 10)
+                        .background(tab == t ? Color.accentColor.opacity(0.2) : Color(NSColor.controlBackgroundColor))
+                        .cornerRadius(6)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(tab == t ? Color.accentColor : Color(NSColor.separatorColor).opacity(0.6), lineWidth: tab == t ? 1.5 : 1)
+                        )
+                        .onTapGesture { tab = t }
+                        .onDrag { NSItemProvider(object: NSString(string: t.rawValue)) }
+                        .onDrop(of: [UTType.text], isTargeted: .constant(false)) { providers in
+                            guard let provider = providers.first else { return false }
+                            var ok = false
+                            let _ = provider.loadDataRepresentation(forTypeIdentifier: UTType.text.identifier) { data, _ in
+                                guard let data = data, let name = String(data: data, encoding: .utf8), let fromTab = Tab(rawValue: name) else { return }
+                                DispatchQueue.main.async {
+                                    if let fromIndex = tabsOrder.firstIndex(of: fromTab), let toIndex = tabsOrder.firstIndex(of: t), fromIndex != toIndex {
+                                        var arr = tabsOrder
+                                        let item = arr.remove(at: fromIndex)
+                                        arr.insert(item, at: toIndex)
+                                        tabsOrder = arr
+                                        saveTabsOrder()
+                                    }
+                                }
+                                ok = true
+                            }
+                            return ok
+                        }
+                }
+                Spacer()
             }
-            .pickerStyle(.segmented)
             switch tab {
             case .instruments:
                 instrumentsView
@@ -1014,9 +1046,10 @@ struct InspectorPane: View {
                 AssistantPane(seedQuestion: "What's in the corpus?", autoSendOnAppear: true)
             }
         }
-        .task { await state.refreshLinks(); syncSelection() }
+        .task { await state.refreshLinks(); syncSelection(); loadTabsOrder() }
         .onChange(of: vm.selection) { _ in syncSelection() }
         .onChange(of: state.instruments.count) { _ in syncSelection() }
+        .onChange(of: tabsOrder) { _ in saveTabsOrder() }
     }
     private func syncSelection() {
         if let sel = vm.selection, let idx = state.instruments.firstIndex(where: { $0.id == sel }) {
@@ -1024,6 +1057,17 @@ struct InspectorPane: View {
         } else if !state.instruments.isEmpty {
             selectedInstrumentIndex = 0
         }
+    }
+    private func loadTabsOrder() {
+        let key = "pb.tabsOrder.v1"
+        if let raw = UserDefaults.standard.array(forKey: key) as? [String] {
+            let mapped = raw.compactMap(Tab.init(rawValue:))
+            if !mapped.isEmpty { tabsOrder = mapped }
+        }
+    }
+    private func saveTabsOrder() {
+        let key = "pb.tabsOrder.v1"
+        UserDefaults.standard.set(tabsOrder.map { $0.rawValue }, forKey: key)
     }
     @ViewBuilder var rulesView: some View {
         VStack(alignment: .leading, spacing: 8) {

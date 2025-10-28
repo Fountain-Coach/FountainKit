@@ -406,6 +406,7 @@ struct EditorCanvas: View {
     @State private var marqueeRect: CGRect? = nil
     @State private var flowPatch: Patch = Patch(nodes: [], wires: [])
     @State private var flowSelection: Set<NodeIndex> = []
+    @State private var flowNodeIds: [String] = []
     @State private var didInitialFit: Bool = false
     @State private var trashRectView: CGRect = .zero
     @State private var trashHover: Bool = false
@@ -512,14 +513,21 @@ struct EditorCanvas: View {
                 // Initial open: reset to a sensible default for infinite artboard
                 if !didInitialFit { vm.translation = .zero; vm.zoom = 1.0; didInitialFit = true }
                 flowPatch = FlowBridge.toFlowPatch(vm: vm)
+                flowNodeIds = vm.nodes.map { $0.id }
                 // dashboard exec rebuild disabled (composition-only)
             }
             .onChange(of: vm.nodes) { _, _ in
-                flowPatch = FlowBridge.toFlowPatch(vm: vm)
+                // Rebuild flow patch only when structure (IDs) changes; ignore position-only drags to keep NodeEditor stable
+                let ids = vm.nodes.map { $0.id }
+                if ids != flowNodeIds {
+                    flowPatch = FlowBridge.toFlowPatch(vm: vm)
+                    flowNodeIds = ids
+                }
                 // exec.rebuild(vm: vm, registry: state.dashboard)
             }
             .onChange(of: vm.edges) { _, _ in
                 flowPatch = FlowBridge.toFlowPatch(vm: vm)
+                flowNodeIds = vm.nodes.map { $0.id }
                 // exec.rebuild(vm: vm, registry: state.dashboard)
             }
             // dashboard exec loop disabled
@@ -556,38 +564,28 @@ struct EditorCanvas: View {
         let transform = CanvasTransform(scale: vm.zoom, translation: vm.translation)
         NodeEditor(patch: $flowPatch, selection: $flowSelection)
             .onNodeMoved { index, loc in
+                guard index >= 0, index < flowNodeIds.count else { return }
+                let nodeId = flowNodeIds[index]
+                guard let i = vm.nodeIndex(by: nodeId) else { return }
                 let g = CGFloat(vm.grid)
-                if let i = vm.nodeIndex(by: vm.nodes[index].id) {
-                    vm.nodes[i].x = Int((round(loc.x / g) * g))
-                    vm.nodes[i].y = Int((round(loc.y / g) * g))
-                    // Trash hit testing in view-space
-                    let originView = transform.docToView(CGPoint(x: CGFloat(vm.nodes[i].x), y: CGFloat(vm.nodes[i].y)))
-                    let rectView = CGRect(x: originView.x, y: originView.y, width: CGFloat(vm.nodes[i].w) * vm.zoom, height: CGFloat(vm.nodes[i].h) * vm.zoom)
-                    let intersects = rectView.intersects(trashRectView)
-                    if trashHover != intersects { trashHover = intersects }
-                    // If center entered trash box, delete immediately (single or multi-selection)
-                    if intersects {
-                        let id = vm.nodes[i].id
-                        let idsToDelete: Set<String> = {
-                            if !vm.selected.isEmpty, vm.selected.contains(id) { return vm.selected }
-                            return [id]
-                        }()
-                        vm.nodes.removeAll { idsToDelete.contains($0.id) }
-                        vm.edges.removeAll { edge in
-                            let fromNode = edge.from.split(separator: ".").first.map(String.init) ?? ""
-                            let toNode = edge.to.split(separator: ".").first.map(String.init) ?? ""
-                            return idsToDelete.contains(fromNode) || idsToDelete.contains(toNode)
-                        }
-                        vm.selection = nil
-                        vm.selected.removeAll()
-                        trashHover = false
-                        let center = CGPoint(x: rectView.midX, y: rectView.midY)
-                        let puff = PuffItem(center: center)
-                        puffItems.append(puff)
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { puffItems.removeAll { $0.id == puff.id } }
-                        // Clean registries
-                        for did in idsToDelete { state.removeDashNode(id: did); state.removeServerNode(id: did) }
-                    }
+                vm.nodes[i].x = Int((round(loc.x / g) * g))
+                vm.nodes[i].y = Int((round(loc.y / g) * g))
+                // Trash hit testing in view-space
+                let originView = transform.docToView(CGPoint(x: CGFloat(vm.nodes[i].x), y: CGFloat(vm.nodes[i].y)))
+                let rectView = CGRect(x: originView.x, y: originView.y, width: CGFloat(vm.nodes[i].w) * vm.zoom, height: CGFloat(vm.nodes[i].h) * vm.zoom)
+                let intersects = rectView.intersects(trashRectView)
+                if trashHover != intersects { trashHover = intersects }
+                // If center entered trash box, delete immediately (single or multi-selection)
+                if intersects {
+                    let id = vm.nodes[i].id
+                    let idsToDelete: Set<String> = (!vm.selected.isEmpty && vm.selected.contains(id)) ? vm.selected : [id]
+                    vm.deleteNodes(ids: idsToDelete)
+                    trashHover = false
+                    let center = CGPoint(x: rectView.midX, y: rectView.midY)
+                    let puff = PuffItem(center: center)
+                    puffItems.append(puff)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { puffItems.removeAll { $0.id == puff.id } }
+                    for did in idsToDelete { state.removeDashNode(id: did); state.removeServerNode(id: did) }
                 }
             }
             .onWireAdded { wire in

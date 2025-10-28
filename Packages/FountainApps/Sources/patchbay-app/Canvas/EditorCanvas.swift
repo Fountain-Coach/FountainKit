@@ -407,6 +407,13 @@ struct EditorCanvas: View {
     @State private var flowPatch: Patch = Patch(nodes: [], wires: [])
     @State private var flowSelection: Set<NodeIndex> = []
     @State private var flowNodeIds: [String] = []
+    private func syncFlowSelectionFromVM() {
+        let indexById = Dictionary(uniqueKeysWithValues: flowNodeIds.enumerated().map { ($1, $0) })
+        var sel: Set<NodeIndex> = []
+        for id in vm.selected { if let idx = indexById[id] { sel.insert(idx) } }
+        if let id = vm.selection, let idx = indexById[id] { sel.insert(idx) }
+        flowSelection = sel
+    }
     @State private var didInitialFit: Bool = false
     @State private var trashRectView: CGRect = .zero
     @State private var trashHover: Bool = false
@@ -514,6 +521,7 @@ struct EditorCanvas: View {
                 if !didInitialFit { vm.translation = .zero; vm.zoom = 1.0; didInitialFit = true }
                 flowPatch = FlowBridge.toFlowPatch(vm: vm)
                 flowNodeIds = vm.nodes.map { $0.id }
+                syncFlowSelectionFromVM()
                 // dashboard exec rebuild disabled (composition-only)
             }
             .onChange(of: vm.nodes) { _, _ in
@@ -522,12 +530,14 @@ struct EditorCanvas: View {
                 if ids != flowNodeIds {
                     flowPatch = FlowBridge.toFlowPatch(vm: vm)
                     flowNodeIds = ids
+                    syncFlowSelectionFromVM()
                 }
                 // exec.rebuild(vm: vm, registry: state.dashboard)
             }
             .onChange(of: vm.edges) { _, _ in
                 flowPatch = FlowBridge.toFlowPatch(vm: vm)
                 flowNodeIds = vm.nodes.map { $0.id }
+                syncFlowSelectionFromVM()
                 // exec.rebuild(vm: vm, registry: state.dashboard)
             }
             // dashboard exec loop disabled

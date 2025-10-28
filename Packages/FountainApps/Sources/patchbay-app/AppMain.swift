@@ -178,9 +178,16 @@ final class AppState: ObservableObject {
     private let llmModelKey = "pb.llmModel.v1"
     private let gatewayURLKey = "pb.gatewayURL.v1"
     let api: PatchBayAPI
+    // Dashboard registry and servers metadata
+    @Published var dashboard: [String:DashNode] = [:]
+    @Published var serversMeta: [String:ServerMeta] = [:]
+    private let dashboardKey = "pb.dashboard.v1"
+    private let serversKey = "pb.serversMeta.v1"
     init(api: PatchBayAPI = PatchBayClient()) {
         self.api = api
         self.templates = templatesStore.load()
+        loadDashboard()
+        loadServersMeta()
     }
     func loadUseLLM() {
         if UserDefaults.standard.object(forKey: useLLMKey) == nil {
@@ -332,6 +339,48 @@ final class AppState: ObservableObject {
     func openLatestArtifact() {
         guard let url = latestArtifactPath else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    // MARK: - Dashboard registry
+    func registerDashNode(id: String, kind: DashKind, props: [String:String]) {
+        dashboard[id] = DashNode(id: id, kind: kind, props: props)
+        saveDashboard()
+    }
+    func updateDashProps(id: String, props: [String:String]) {
+        guard var n = dashboard[id] else { return }
+        n.props = props
+        dashboard[id] = n
+        saveDashboard()
+    }
+    func removeDashNode(id: String) {
+        dashboard.removeValue(forKey: id)
+        saveDashboard()
+    }
+    private func loadDashboard() {
+        if let data = UserDefaults.standard.data(forKey: dashboardKey), let map = try? JSONDecoder().decode([String:DashNode].self, from: data) {
+            dashboard = map
+        }
+    }
+    private func saveDashboard() {
+        if let data = try? JSONEncoder().encode(dashboard) { UserDefaults.standard.set(data, forKey: dashboardKey) }
+    }
+
+    // MARK: - Servers metadata
+    func registerServerNode(id: String, meta: ServerMeta) {
+        serversMeta[id] = meta
+        saveServersMeta()
+    }
+    func removeServerNode(id: String) {
+        serversMeta.removeValue(forKey: id)
+        saveServersMeta()
+    }
+    private func loadServersMeta() {
+        if let data = UserDefaults.standard.data(forKey: serversKey), let map = try? JSONDecoder().decode([String:ServerMeta].self, from: data) {
+            serversMeta = map
+        }
+    }
+    private func saveServersMeta() {
+        if let data = try? JSONEncoder().encode(serversMeta) { UserDefaults.standard.set(data, forKey: serversKey) }
     }
 
     // MARK: - Monitor: Prometheus
@@ -901,8 +950,9 @@ struct ContentView: View {
                         }
                     }
                     Menu("Monitor") {
-                        Menu("Prometheus") {
-                            Button("Build Overview") { Task { await state.buildPrometheusOverviewCanvas(vm: vm) } }
+                        Menu("Prometheus Dashboard") {
+                            Button("Build Example") { buildPrometheusExample() }
+                            Divider()
                             Button("Clear") { state.clearCanvas(vm: vm) }
                         }
                     }
@@ -951,6 +1001,41 @@ struct ContentView: View {
         .environmentObject(vm)
     }
 
+    private func buildPrometheusExample() {
+        // Clear canvas; compose datasource -> 3 queries -> 3 panels
+        state.clearCanvas(vm: vm)
+        let g = max(4, vm.grid)
+        func place(_ id: String, _ title: String, _ x: Int, _ y: Int, _ w: Int = 260, _ h: Int = 160) {
+            let node = PBNode(id: id, title: title, x: x, y: y, w: w, h: h, ports: canonicalSortPorts([
+                .init(id: "in", side: .left, dir: .input, type: "data"),
+                .init(id: "out", side: .right, dir: .output, type: "data")
+            ]))
+            vm.nodes.append(node)
+        }
+        // Nodes
+        place("ds_1", "prom.datasource", g*6, g*4)
+        state.registerDashNode(id: "ds_1", kind: .datasource, props: ["baseURL": "http://127.0.0.1:9090"])    
+        place("q_rps", "prom.query", g*18, g*4)
+        state.registerDashNode(id: "q_rps", kind: .query, props: ["promQL":"sum(rate(http_requests_total[5m]))","rangeSeconds":"300","stepSeconds":"15","refreshSeconds":"10"]) 
+        place("q_p99", "prom.query", g*18, g*12)
+        state.registerDashNode(id: "q_p99", kind: .query, props: ["promQL":"histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))","rangeSeconds":"300","stepSeconds":"15","refreshSeconds":"10"]) 
+        place("q_err", "prom.query", g*18, g*20)
+        state.registerDashNode(id: "q_err", kind: .query, props: ["promQL":"(sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m]))) * 100","rangeSeconds":"300","stepSeconds":"15","refreshSeconds":"10"]) 
+        place("p_rps", "prom.panel.line", g*30, g*4)
+        state.registerDashNode(id: "p_rps", kind: .panelLine, props: ["title":"RPS"]) 
+        place("p_p99", "prom.panel.line", g*30, g*12)
+        state.registerDashNode(id: "p_p99", kind: .panelLine, props: ["title":"P99 Latency"]) 
+        place("p_err", "prom.panel.line", g*30, g*20)
+        state.registerDashNode(id: "p_err", kind: .panelLine, props: ["title":"Error %"]) 
+        // Wires
+        _ = vm.ensureEdge(from: ("ds_1","out"), to: ("q_rps","in"))
+        _ = vm.ensureEdge(from: ("ds_1","out"), to: ("q_p99","in"))
+        _ = vm.ensureEdge(from: ("ds_1","out"), to: ("q_err","in"))
+        _ = vm.ensureEdge(from: ("q_rps","out"), to: ("p_rps","in"))
+        _ = vm.ensureEdge(from: ("q_p99","out"), to: ("p_p99","in"))
+        _ = vm.ensureEdge(from: ("q_err","out"), to: ("p_err","in"))
+    }
+
     private func seedWelcomeScene() { /* removed in chat‑only startup */ }
 
     private func handleDrop(providers: [NSItemProvider], location: CGPoint) -> Bool {
@@ -959,7 +1044,38 @@ struct ContentView: View {
             guard let data = data else { return }
             struct TemplatePayload: Codable { let templateId: String?; let kind: String?; let title: String?; let w: Int?; let h: Int? }
             struct FlowPayload: Codable { let flowKind: String? }
+            struct ServerPayload: Codable { let serverId: String?; let title: String?; let port: Int?; let spec: String? }
+            struct DashPayload: Codable { let dashKind: String?; let props: [String:String]? }
             let decoder = JSONDecoder()
+            if let sp = try? decoder.decode(ServerPayload.self, from: data), let sid = sp.serverId, let title = sp.title, let port = sp.port {
+                Task { @MainActor in
+                    let z = max(0.0001, vm.zoom)
+                    let docX = Int((location.x / z) - vm.translation.x)
+                    let docY = Int((location.y / z) - vm.translation.y)
+                    let g = max(1, vm.grid)
+                    let snap: (Int) -> Int = { ((($0 + g/2) / g) * g) }
+                    let id = normalizeServerId(sid)
+                    let node = PBNode(id: id, title: title, x: snap(docX), y: snap(docY), w: 240, h: 120, ports: canonicalSortPorts([
+                        .init(id: "in", side: .left, dir: .input, type: "data"), .init(id: "out", side: .right, dir: .output, type: "data")
+                    ]))
+                    vm.nodes.append(node)
+                    state.registerServerNode(id: id, meta: ServerMeta(serviceId: id, title: title, port: port, specRelativePath: sp.spec ?? ""))
+                    vm.selection = id; vm.selected = [id]
+                }
+                return
+            }
+            if let dp = try? decoder.decode(DashPayload.self, from: data), let kindRaw = dp.dashKind {
+                Task { @MainActor in
+                    let z = max(0.0001, vm.zoom)
+                    let docX = Int((location.x / z) - vm.translation.x)
+                    let docY = Int((location.y / z) - vm.translation.y)
+                    let g = max(1, vm.grid)
+                    let snap: (Int) -> Int = { ((($0 + g/2) / g) * g) }
+                    let kind = DashKind(rawValue: kindRaw) ?? .transform
+                    createDashNode(kind: kind, props: dp.props ?? [:], x: snap(docX), y: snap(docY))
+                }
+                return
+            }
             if let fp = try? decoder.decode(FlowPayload.self, from: data), let flowKind = fp.flowKind {
                 Task { @MainActor in
                     let kind = FlowNodeKind(rawValue: flowKind) ?? .analyzer
@@ -1015,10 +1131,40 @@ struct ContentView: View {
 
     private func nextId(base: String) -> String {
         var n = 1
-        let existing = state.instruments.map { $0.id }
+        let existing = Set(vm.nodes.map { $0.id })
         var candidate = "\(base)_\(n)"
         while existing.contains(candidate) { n += 1; candidate = "\(base)_\(n)" }
         return candidate
+    }
+
+    private func createDashNode(kind: DashKind, props: [String:String], x: Int, y: Int) {
+        let base: String = {
+            switch kind {
+            case .datasource: return "ds"
+            case .query: return "q"
+            case .transform: return "xf"
+            case .panelLine: return "p"
+            case .panelStat: return "ps"
+            }
+        }()
+        let id = nextId(base: base)
+        var ports: [PBPort] = []
+        // All have in/out; panels need only input, datasource needs only output
+        switch kind {
+        case .datasource:
+            ports.append(.init(id: "out", side: .right, dir: .output, type: "data"))
+        case .panelLine, .panelStat:
+            ports.append(.init(id: "in", side: .left, dir: .input, type: "data"))
+        default:
+            ports.append(.init(id: "in", side: .left, dir: .input, type: "data"))
+            ports.append(.init(id: "out", side: .right, dir: .output, type: "data"))
+        }
+        let node = PBNode(id: id, title: {
+            switch kind { case .datasource: return "prom.datasource"; case .query: return "prom.query"; case .transform: return "prom.transform"; case .panelLine: return "prom.panel.line"; case .panelStat: return "prom.panel.stat" }
+        }(), x: x, y: y, w: 260, h: (kind == .panelLine || kind == .panelStat) ? 180 : 140, ports: canonicalSortPorts(ports))
+        vm.nodes.append(node)
+        state.registerDashNode(id: id, kind: kind, props: props)
+        vm.selection = id; vm.selected = [id]
     }
 
     private func addFlowNode(kind: FlowNodeKind, title: String, x: Int, y: Int) {
@@ -1080,7 +1226,7 @@ struct TemplateLibraryView: View {
     @State private var search: String = ""
     @State private var editMode: Bool = false
     @State private var hiddenExpanded: Bool = true
-    private enum LeftSection: String, CaseIterable { case library = "Library", flow = "Flow Nodes", hidden = "Hidden Templates" }
+    private enum LeftSection: String, CaseIterable { case library = "Library", dashboard = "Dashboard Nodes", servers = "Servers", hidden = "Hidden Templates" }
     @State private var leftSections: [LeftSection] = LeftSection.allCases
 
     private func icon(for kind: String) -> Image {
@@ -1123,15 +1269,13 @@ struct TemplateLibraryView: View {
                                 }
                                 .onMove { idx, off in state.moveTemplates(fromOffsets: idx, toOffset: off) }
                             }
-                        case .flow:
-                            FlowNodeRow(title: "Audio Input", flowKind: .audioInput)
-                                .environmentObject(state).environmentObject(vm)
-                            FlowNodeRow(title: "Analyzer", flowKind: .analyzer)
-                                .environmentObject(state).environmentObject(vm)
-                            FlowNodeRow(title: "Note Processor", flowKind: .noteProcessor)
-                                .environmentObject(state).environmentObject(vm)
-                            FlowNodeRow(title: "Transport Endpoint", flowKind: .transportEndpoint)
-                                .environmentObject(state).environmentObject(vm)
+                        case .dashboard:
+                            DashNodeRow(title: "Datasource (Prometheus)", dashKind: .datasource, defaultProps: ["baseURL":"http://127.0.0.1:9090"]).environmentObject(state).environmentObject(vm)
+                            DashNodeRow(title: "Query (PromQL)", dashKind: .query, defaultProps: ["promQL":"","rangeSeconds":"300","stepSeconds":"15","refreshSeconds":"10"]).environmentObject(state).environmentObject(vm)
+                            DashNodeRow(title: "Transform (scale/offset)", dashKind: .transform, defaultProps: [:]).environmentObject(state).environmentObject(vm)
+                            DashNodeRow(title: "Panel (Line)", dashKind: .panelLine, defaultProps: ["title":"Line"]).environmentObject(state).environmentObject(vm)
+                        case .servers:
+                            OpenAPIServicesLibrary().environmentObject(state).environmentObject(vm)
                         case .hidden:
                             if hiddenExpanded {
                                 let hidden = state.templates.filter { $0.hidden }
@@ -1234,6 +1378,13 @@ struct OpenAPIServicesLibrary: View {
                         }
                         .contentShape(Rectangle())
                         .onTapGesture(count: 2) { placeService(svc) }
+                        .onDrag {
+                            struct ServerPayload: Codable { let serverId: String; let title: String; let port: Int; let spec: String }
+                            let id = svc.binaryName ?? svc.title
+                            let p = ServerPayload(serverId: id, title: svc.title, port: svc.port, spec: "openapi/v1/\(svc.fileName)")
+                            let data = (try? JSONEncoder().encode(p)) ?? Data()
+                            return NSItemProvider(item: data as NSData, typeIdentifier: UTType.json.identifier)
+                        }
                     }
                 }
             }
@@ -1250,13 +1401,14 @@ struct OpenAPIServicesLibrary: View {
         // Synthesize a node id and position near origin; use same canonical ports as network builder.
         let g = max(4, vm.grid)
         let x = g * 5, y = g * 5
-        let id = svc.binaryName?.lowercased() ?? svc.title.lowercased().replacingOccurrences(of: " ", with: "-")
+        let id = normalizeServerId(svc.binaryName ?? svc.title)
         if vm.node(by: id) != nil { vm.selection = id; vm.selected = [id]; return }
         let node = PBNode(id: id, title: svc.title, x: x, y: y, w: 240, h: 120, ports: canonicalSortPorts([
             .init(id: "in", side: .left, dir: .input, type: "data"),
             .init(id: "out", side: .right, dir: .output, type: "data")
         ]))
         vm.nodes.append(node)
+        state.registerServerNode(id: id, meta: ServerMeta(serviceId: id, title: svc.title, port: svc.port, specRelativePath: "openapi/v1/\(svc.fileName)"))
         vm.selection = id
         vm.selected = [id]
     }
@@ -1344,6 +1496,47 @@ struct TemplateRow: View {
             } catch { }
         }
     }
+}
+
+struct DashNodeRow: View {
+    @EnvironmentObject var state: AppState
+    @EnvironmentObject var vm: EditorVM
+    var title: String
+    var dashKind: DashKind
+    var defaultProps: [String:String]
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: iconName(for: dashKind)).frame(width: 20)
+            Text(title)
+            Spacer()
+        }
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            let g = max(4, vm.grid)
+            let x = g * 6, y = g * 6
+            create(kind: dashKind, props: defaultProps, x: x, y: y)
+        }
+        .onDrag {
+            struct DashPayload: Codable { let dashKind: String; let props: [String:String] }
+            let p = DashPayload(dashKind: dashKind.rawValue, props: defaultProps)
+            let data = (try? JSONEncoder().encode(p)) ?? Data()
+            return NSItemProvider(item: data as NSData, typeIdentifier: UTType.json.identifier)
+        }
+    }
+    private func create(kind: DashKind, props: [String:String], x: Int, y: Int) {
+        let base: String = { switch kind { case .datasource: return "ds"; case .query: return "q"; case .transform: return "xf"; case .panelLine: return "p"; case .panelStat: return "ps" } }()
+        func nextId(base: String) -> String { var n = 1; let ids = Set(vm.nodes.map { $0.id }); var c = "\(base)_\(n)"; while ids.contains(c) { n += 1; c = "\(base)_\(n)" }; return c }
+        let id = nextId(base: base)
+        var ports: [PBPort] = []
+        switch kind { case .datasource: ports.append(.init(id: "out", side: .right, dir: .output)); case .panelLine, .panelStat: ports.append(.init(id: "in", side: .left, dir: .input)); default: ports.append(.init(id: "in", side: .left, dir: .input)); ports.append(.init(id: "out", side: .right, dir: .output)) }
+        let node = PBNode(id: id, title: titleFrom(kind), x: x, y: y, w: 260, h: (kind == .panelLine || kind == .panelStat) ? 180 : 140, ports: canonicalSortPorts(ports))
+        vm.nodes.append(node)
+        state.registerDashNode(id: id, kind: kind, props: props)
+        vm.selection = id; vm.selected = [id]
+    }
+    private func titleFrom(_ k: DashKind) -> String { switch k { case .datasource: return "prom.datasource"; case .query: return "prom.query"; case .transform: return "prom.transform"; case .panelLine: return "prom.panel.line"; case .panelStat: return "prom.panel.stat" } }
+    private func iconName(for k: DashKind) -> String { switch k { case .datasource: return "bolt.horizontal"; case .query: return "text.magnifyingglass"; case .transform: return "arrow.triangle.2.circlepath"; case .panelLine: return "chart.line.uptrend.xyaxis"; case .panelStat: return "gauge" } }
 }
 
 enum FlowNodeKind: String, Codable { case audioInput, analyzer, noteProcessor, transportEndpoint }

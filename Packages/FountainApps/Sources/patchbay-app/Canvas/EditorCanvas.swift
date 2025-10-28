@@ -436,6 +436,7 @@ struct EditorCanvas: View {
                     GridBackground(size: docSize, minorStepPoints: minor, majorStepPoints: major, scale: vm.zoom, translation: vm.translation)
                     flowEditorOverlay(docSize: docSize)
                         .frame(width: docSize.width, height: docSize.height)
+                        // Panels overlay temporarily disabled to reduce type-check complexity; will be reintroduced as separate layer
                 }
                 .frame(width: docSize.width, height: docSize.height, alignment: .topLeading)
                 .offset(x: padX, y: padY)
@@ -514,13 +515,17 @@ struct EditorCanvas: View {
                 // Initial open: reset to a sensible default for infinite artboard
                 if !didInitialFit { vm.translation = .zero; vm.zoom = 1.0; didInitialFit = true }
                 flowPatch = FlowBridge.toFlowPatch(vm: vm)
+                // dashboard rebuild disabled in this pass
             }
             .onChange(of: vm.nodes) { _, _ in
                 flowPatch = FlowBridge.toFlowPatch(vm: vm)
+                // exec.rebuild(vm: vm, registry: state.dashboard)
             }
             .onChange(of: vm.edges) { _, _ in
                 flowPatch = FlowBridge.toFlowPatch(vm: vm)
+                // exec.rebuild(vm: vm, registry: state.dashboard)
             }
+            // dashboard exec loop disabled in this pass
             .onReceive(NotificationCenter.default.publisher(for: .pbDelete)) { _ in
                 if !vm.selected.isEmpty {
                     let ids = vm.selected
@@ -528,10 +533,14 @@ struct EditorCanvas: View {
                     vm.edges.removeAll { edge in ids.contains(edge.from.split(separator: ".").first.map(String.init) ?? "") || ids.contains(edge.to.split(separator: ".").first.map(String.init) ?? "") }
                     vm.selection = nil
                     vm.selected.removeAll()
+                    state.removeDashNode(id: ids.first ?? "")
+                    for i in ids { state.removeDashNode(id: i); state.removeServerNode(id: i) }
                 } else if let sel = vm.selection {
                     vm.nodes.removeAll { $0.id == sel }
                     vm.edges.removeAll { $0.from.hasPrefix(sel+".") || $0.to.hasPrefix(sel+".") }
                     vm.selection = nil
+                    state.removeDashNode(id: sel)
+                    state.removeServerNode(id: sel)
                 }
             }
         }
@@ -644,6 +653,8 @@ struct EditorCanvas: View {
                 vm.translation = CGPoint(x: pan.width, y: pan.height)
             }
     }
+
+    // Panels overlay is temporarily disabled in this pass
 
     // Overlays (zones/notes/health) removed in monitor mode
 }

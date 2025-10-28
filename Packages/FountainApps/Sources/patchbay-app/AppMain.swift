@@ -153,13 +153,13 @@ final class AppState: ObservableObject {
     // Templates (left panel library)
     private let templatesStore = InstrumentTemplatesStore()
     @Published var templates: [InstrumentTemplate] = []
-    enum LeftMode { case templates, openAPIs }
+    enum LeftMode: String, CaseIterable { case templates = "templates", openAPIs = "openAPIs", dashboard = "dashboard" }
     @Published var leftMode: LeftMode = .templates
     private let leftModeKey = "pb.leftMode.v1"
     func loadLeftMode() {
-        if let raw = UserDefaults.standard.string(forKey: leftModeKey), raw == "openAPIs" { leftMode = .openAPIs } else { leftMode = .templates }
+        if let raw = UserDefaults.standard.string(forKey: leftModeKey), let m = LeftMode(rawValue: raw) { leftMode = m } else { leftMode = .templates }
     }
-    func saveLeftMode() { UserDefaults.standard.set(leftMode == .openAPIs ? "openAPIs" : "templates", forKey: leftModeKey) }
+    func saveLeftMode() { UserDefaults.standard.set(leftMode.rawValue, forKey: leftModeKey) }
     // Latest Teatro Guide artifact surfaced for preview/apply flows
     @Published var latestArtifactETag: String? = nil
     @Published var latestArtifactPath: URL? = nil
@@ -951,14 +951,7 @@ struct ContentView: View {
                             Button("Clear") { state.clearCanvas(vm: vm) }
                         }
                     }
-                    Menu("Left Pane") {
-                        Button(action: { state.leftMode = .openAPIs; state.saveLeftMode(); if vm.nodes.isEmpty { state.switchToOpenAPICuration(into: vm) } }) {
-                            if state.leftMode == .openAPIs { Image(systemName: "checkmark"); Text("OpenAPI Services") } else { Text("OpenAPI Services") }
-                        }
-                        Button(action: { state.leftMode = .templates; state.saveLeftMode() }) {
-                            if state.leftMode == .templates { Image(systemName: "checkmark"); Text("Templates Library") } else { Text("Templates Library") }
-                        }
-                    }
+                    // Left Pane menu removed: mode switching is self-contained within the left pane
                     Button {
                         // Add a generic node near origin, snapped to grid
                         let g = max(4, vm.grid)
@@ -1288,8 +1281,7 @@ struct TemplateLibraryView: View {
     @State private var search: String = ""
     @State private var editMode: Bool = false
     @State private var hiddenExpanded: Bool = true
-    private enum LeftSection: String, CaseIterable { case library = "Library", dashboard = "Dashboard Nodes", servers = "Servers", hidden = "Hidden Templates" }
-    @State private var leftSections: [LeftSection] = LeftSection.allCases
+    // Mode selection is self-contained in the pane
 
     private func icon(for kind: String) -> Image {
         switch kind {
@@ -1301,112 +1293,48 @@ struct TemplateLibraryView: View {
     }
 
     var body: some View {
-        if state.leftMode == .openAPIs {
-            OpenAPIServicesLibrary()
-        } else {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                TextField("Search", text: $search)
+            HStack(spacing: 8) {
+                Picker("", selection: Binding(get: { state.leftMode }, set: { state.leftMode = $0; state.saveLeftMode() })) {
+                    Text("Templates").tag(AppState.LeftMode.templates)
+                    Text("Servers").tag(AppState.LeftMode.openAPIs)
+                    Text("Dashboard").tag(AppState.LeftMode.dashboard)
+                }.pickerStyle(.segmented)
                 Spacer()
-                Button("Reset Defaults") { state.resetTemplates() }
-                Button(editMode ? "Done" : "Edit") { withAnimation { editMode.toggle() } }
             }
-            List {
-                ForEach(leftSections, id: \.self) { sec in
-                    Section(header: sectionHeader(sec)) {
-                        switch sec {
-                        case .library:
-                            let visible = state.templates.filter { !$0.hidden && (search.isEmpty || $0.title.localizedCaseInsensitiveContains(search)) }
-                            if visible.isEmpty {
-                                VStack(alignment: .center) {
-                                    Text("No templates. Reset to Defaults?").foregroundColor(.secondary)
-                                    Button("Reset Defaults") { state.resetTemplates() }
-                                }
-                                .frame(maxWidth: .infinity)
-                            } else {
-                                ForEach(visible, id: \.id) { t in
-                                    TemplateRow(template: t, editMode: editMode)
-                                        .environmentObject(state)
-                                        .environmentObject(vm)
-                                }
-                                .onMove { idx, off in state.moveTemplates(fromOffsets: idx, toOffset: off) }
-                            }
-                        case .dashboard:
-                            DashNodeRow(title: "Datasource (Prometheus)", dashKind: .datasource, defaultProps: ["baseURL":"http://127.0.0.1:9090"]).environmentObject(state).environmentObject(vm)
-                            DashNodeRow(title: "Query (PromQL)", dashKind: .query, defaultProps: ["promQL":"","rangeSeconds":"300","stepSeconds":"15","refreshSeconds":"10"]).environmentObject(state).environmentObject(vm)
-                            DashNodeRow(title: "Transform (scale/offset)", dashKind: .transform, defaultProps: [:]).environmentObject(state).environmentObject(vm)
-                            DashNodeRow(title: "Panel (Line)", dashKind: .panelLine, defaultProps: ["title":"Line"]).environmentObject(state).environmentObject(vm)
-                        case .servers:
-                            OpenAPIServicesLibrary().environmentObject(state).environmentObject(vm)
-                        case .hidden:
-                            if hiddenExpanded {
-                                let hidden = state.templates.filter { $0.hidden }
-                                if !hidden.isEmpty {
-                                    Button("Restore All") { state.restoreAllTemplates() }
-                                }
-                                ForEach(hidden, id: \.id) { t in
-                                    HStack {
-                                        icon(for: t.kind.rawValue).frame(width: 20)
-                                        Text(t.title).foregroundColor(.secondary)
-                                        Spacer()
-                                        Button { state.toggleHiddenTemplate(id: t.id) } label: { Image(systemName: "eye") }
-                                            .buttonStyle(.plain)
-                                            .help("Restore")
-                                    }
-                                }
-                            }
+            switch state.leftMode {
+            case .templates:
+                HStack { TextField("Search", text: $search); Spacer(); Button("Reset Defaults") { state.resetTemplates() }; Button(editMode ? "Done" : "Edit") { withAnimation { editMode.toggle() } } }
+                List {
+                    Section(header: Text("Library").font(.headline)) {
+                        let visible = state.templates.filter { !$0.hidden && (search.isEmpty || $0.title.localizedCaseInsensitiveContains(search)) }
+                        if visible.isEmpty {
+                            VStack(alignment: .center) { Text("No templates. Reset to Defaults?").foregroundColor(.secondary); Button("Reset Defaults") { state.resetTemplates() } }.frame(maxWidth: .infinity)
+                        } else {
+                            ForEach(visible, id: \.id) { t in
+                                TemplateRow(template: t, editMode: editMode).environmentObject(state).environmentObject(vm)
+                            }.onMove { idx, off in state.moveTemplates(fromOffsets: idx, toOffset: off) }
                         }
+                    }
+                    Section(header: HStack { Button(action: { withAnimation { hiddenExpanded.toggle() } }) { Image(systemName: hiddenExpanded ? "chevron.down" : "chevron.right") }.buttonStyle(.plain); Text("Hidden Templates").font(.headline); Spacer() }) {
+                        if hiddenExpanded { let hidden = state.templates.filter { $0.hidden }; if !hidden.isEmpty { Button("Restore All") { state.restoreAllTemplates() } }; ForEach(hidden, id: \.id) { t in HStack { icon(for: t.kind.rawValue).frame(width: 20); Text(t.title).foregroundColor(.secondary); Spacer(); Button { state.toggleHiddenTemplate(id: t.id) } label: { Image(systemName: "eye") }.buttonStyle(.plain).help("Restore") } } }
+                    }
+                }
+            case .openAPIs:
+                OpenAPIServicesLibrary().environmentObject(state).environmentObject(vm)
+            case .dashboard:
+                List {
+                    Section(header: Text("Dashboard Nodes").font(.headline)) {
+                        DashNodeRow(title: "Datasource (Prometheus)", dashKind: .datasource, defaultProps: ["baseURL":"http://127.0.0.1:9090"]).environmentObject(state).environmentObject(vm)
+                        DashNodeRow(title: "Query (PromQL)", dashKind: .query, defaultProps: ["promQL":"","rangeSeconds":"300","stepSeconds":"15","refreshSeconds":"10"]).environmentObject(state).environmentObject(vm)
+                        DashNodeRow(title: "Transform (scale/offset)", dashKind: .transform, defaultProps: [:]).environmentObject(state).environmentObject(vm)
+                        DashNodeRow(title: "Panel (Line)", dashKind: .panelLine, defaultProps: ["title":"Line"]).environmentObject(state).environmentObject(vm)
                     }
                 }
             }
         }
         .padding([.top, .horizontal], 8)
-        .onAppear { loadLeftOrder() }
-        .onChange(of: leftSections) { _, _ in saveLeftOrder() }
-        }
-    }
-
-    private func sectionHeader(_ sec: LeftSection) -> some View {
-        HStack {
-            if sec == .hidden {
-                Button(action: { withAnimation { hiddenExpanded.toggle() } }) {
-                    Image(systemName: hiddenExpanded ? "chevron.down" : "chevron.right")
-                }
-                .buttonStyle(.plain)
-            }
-            Text(sec.rawValue)
-                .font(.headline)
-                .onDrag { NSItemProvider(object: NSString(string: sec.rawValue)) }
-                .onDrop(of: [UTType.text], isTargeted: .constant(false)) { providers in
-                    guard let provider = providers.first else { return false }
-                    provider.loadDataRepresentation(forTypeIdentifier: UTType.text.identifier) { data, _ in
-                        guard let data = data, let name = String(data: data, encoding: .utf8), let from = LeftSection(rawValue: name) else { return }
-                        DispatchQueue.main.async {
-                            if let fromIndex = leftSections.firstIndex(of: from), let toIndex = leftSections.firstIndex(of: sec), fromIndex != toIndex {
-                                var arr = leftSections
-                                let item = arr.remove(at: fromIndex)
-                                arr.insert(item, at: toIndex)
-                                leftSections = arr
-                                saveLeftOrder()
-                            }
-                        }
-                    }
-                    return true
-                }
-            Spacer()
-        }
-    }
-
-    private func loadLeftOrder() {
-        let key = "pb.leftSections.v1"
-        if let raw = UserDefaults.standard.array(forKey: key) as? [String] {
-            let mapped = raw.compactMap(LeftSection.init(rawValue:))
-            if !mapped.isEmpty { leftSections = mapped }
-        }
-    }
-    private func saveLeftOrder() {
-        let key = "pb.leftSections.v1"
-        UserDefaults.standard.set(leftSections.map { $0.rawValue }, forKey: key)
+        .onAppear { state.loadLeftMode() }
     }
 }
 

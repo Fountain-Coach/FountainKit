@@ -408,7 +408,8 @@ struct EditorCanvas: View {
     @State private var flowSelection: Set<NodeIndex> = []
     @State private var flowNodeIds: [String] = []
     private func syncFlowSelectionFromVM() {
-        let indexById = Dictionary(uniqueKeysWithValues: flowNodeIds.enumerated().map { ($1, $0) })
+        var indexById: [String:Int] = [:]
+        for (idx, id) in flowNodeIds.enumerated() { if indexById[id] == nil { indexById[id] = idx } }
         var sel: Set<NodeIndex> = []
         for id in vm.selected { if let idx = indexById[id] { sel.insert(idx) } }
         if let id = vm.selection, let idx = indexById[id] { sel.insert(idx) }

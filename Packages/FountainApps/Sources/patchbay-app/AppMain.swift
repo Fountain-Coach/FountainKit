@@ -990,10 +990,10 @@ struct AddInstrumentSheet: View {
     }
 }
 struct InspectorPane: View {
-    enum Tab: String, CaseIterable { case instruments = "Instruments", links = "Links", rules = "Rules", vendor = "Vendor", corpus = "Corpus", chat = "Chat" }
+    enum Tab: String, CaseIterable { case instruments = "Instruments", vendor = "Vendor", corpus = "Corpus", chat = "Chat" }
     @EnvironmentObject var state: AppState
     @EnvironmentObject var vm: EditorVM
-    @State private var tab: Tab = .links
+    @State private var tab: Tab = .instruments
     @State private var selectedInstrumentIndex: Int = 0
     @State private var storeId: String = "scene-1"
     @State private var previewLink: Components.Schemas.CreateLink? = nil
@@ -1002,16 +1002,12 @@ struct InspectorPane: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Picker("", selection: $tab) {
-                ForEach(Tab.allCases, id: \.self) { t in Text(t.rawValue).tag(t) }
+                ForEach(Tab.allCases, id: \.self) { t in Text(t.rawValue).tag(t as Tab?) }
             }
             .pickerStyle(.segmented)
             switch tab {
             case .instruments:
                 instrumentsView
-            case .links:
-                linksView
-            case .rules:
-                rulesView
             case .vendor:
                 vendorView
             case .corpus:
@@ -1065,6 +1061,27 @@ struct InspectorPane: View {
                             .font(.system(.body, design: .monospaced))
                     }
                 } }
+                HStack {
+                    Button("Discover CI (Mock)") {
+                        // Place a function block near center and connect a CI link from the selected instrument's 'out' port
+                        let id = "funcBlock_\(Int(Date().timeIntervalSince1970))"
+                        let g = max(4, vm.grid)
+                        let x = (inst.x + inst.w) + g * 10
+                        let y = inst.y
+                        var ports: [PBPort] = []
+                        ports.append(.init(id: "ciIn", side: .left, dir: .input, type: "ci"))
+                        ports.append(.init(id: "ciOut", side: .right, dir: .output, type: "ci"))
+                        ports.append(.init(id: "peIn", side: .left, dir: .input, type: "pe"))
+                        ports.append(.init(id: "peOut", side: .right, dir: .output, type: "pe"))
+                        let node = PBNode(id: id, title: "Function Block", x: x, y: y, w: 240, h: 140, ports: canonicalSortPorts(ports))
+                        vm.nodes.append(node)
+                        // Wire inst.out -> funcBlock.ciIn
+                        _ = vm.ensureEdge(from: (inst.id, "out"), to: (id, "ciIn"))
+                        vm.selection = id
+                        vm.selected = [id]
+                    }
+                    Spacer()
+                }
                 Divider().padding(.vertical, 4)
                 HStack {
                     Text("Corpus Overview").font(.headline)
@@ -1423,10 +1440,8 @@ struct AssistantPane: View {
         }
         .onAppear {
             if state.chat.isEmpty, let s = seedQuestion {
-                chatInput = s
-                if autoSendOnAppear {
-                    Task { await state.ask(question: chatInput, vm: vm) }
-                }
+                chatInput = s + "\n\n" + state.corpusOverviewLine()
+                if autoSendOnAppear { Task { await state.ask(question: chatInput, vm: vm) } }
             }
         }
     }

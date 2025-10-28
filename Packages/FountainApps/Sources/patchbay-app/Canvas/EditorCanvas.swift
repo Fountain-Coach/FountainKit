@@ -594,40 +594,47 @@ struct EditorCanvas: View {
             .onWireAdded { wire in
                 let srcId = vm.nodes[wire.output.nodeIndex].id
                 let dstId = vm.nodes[wire.input.nodeIndex].id
-                let outPorts = vm.nodes[wire.output.nodeIndex].ports.filter { $0.dir == .output }
-                let inPorts = vm.nodes[wire.input.nodeIndex].ports.filter { $0.dir == .input }
+                let outPorts = canonicalSortPorts(vm.nodes[wire.output.nodeIndex].ports.filter { $0.dir == .output })
+                let inPorts = canonicalSortPorts(vm.nodes[wire.input.nodeIndex].ports.filter { $0.dir == .input })
                 guard wire.output.portIndex < outPorts.count, wire.input.portIndex < inPorts.count else { return }
                 let fromRef = srcId + "." + outPorts[wire.output.portIndex].id
                 let toRef = dstId + "." + inPorts[wire.input.portIndex].id
                 vm.ensureEdge(from: (srcId, outPorts[wire.output.portIndex].id), to: (dstId, inPorts[wire.input.portIndex].id))
                 vm.transientGlowEdge(fromRef: fromRef, toRef: toRef)
-                // Mirror to service (CreateLink property)
+                // Mirror to service (CreateLink property) only when both ends are service instruments
                 Task { @MainActor in
                     if let c = state.api as? PatchBayClient {
-                        let prop = Components.Schemas.PropertyLink(from: fromRef, to: toRef, direction: .a_to_b)
-                        let create = Components.Schemas.CreateLink(kind: .property, property: prop, ump: nil)
-                        _ = try? await c.createLink(create)
-                        await state.refreshLinks()
+                        let isServiceSrc = state.instruments.contains { $0.id == srcId }
+                        let isServiceDst = state.instruments.contains { $0.id == dstId }
+                        if isServiceSrc && isServiceDst {
+                            let prop = Components.Schemas.PropertyLink(from: fromRef, to: toRef, direction: .a_to_b)
+                            let create = Components.Schemas.CreateLink(kind: .property, property: prop, ump: nil)
+                            _ = try? await c.createLink(create)
+                            await state.refreshLinks()
+                        }
                     }
                 }
             }
             .onWireRemoved { wire in
                 let srcId = vm.nodes[wire.output.nodeIndex].id
                 let dstId = vm.nodes[wire.input.nodeIndex].id
-                let outPorts = vm.nodes[wire.output.nodeIndex].ports.filter { $0.dir == .output }
-                let inPorts = vm.nodes[wire.input.nodeIndex].ports.filter { $0.dir == .input }
+                let outPorts = canonicalSortPorts(vm.nodes[wire.output.nodeIndex].ports.filter { $0.dir == .output })
+                let inPorts = canonicalSortPorts(vm.nodes[wire.input.nodeIndex].ports.filter { $0.dir == .input })
                 guard wire.output.portIndex < outPorts.count, wire.input.portIndex < inPorts.count else { return }
                 let fromRef = srcId + "." + outPorts[wire.output.portIndex].id
                 let toRef = dstId + "." + inPorts[wire.input.portIndex].id
                 vm.edges.removeAll { $0.from == fromRef && $0.to == toRef }
-                // Try to delete the corresponding link in the service (best-effort by match)
+                // Try to delete the corresponding link in the service (best-effort by match) when both ends are service instruments
                 Task { @MainActor in
                     if let c = state.api as? PatchBayClient {
-                        // Refresh and find a matching Link to delete
-                        if let list = try? await c.listLinks() {
-                            if let match = list.first(where: { $0.kind == .property && $0.property?.from == fromRef && $0.property?.to == toRef }) {
-                                try? await c.deleteLink(id: match.id)
-                                await state.refreshLinks()
+                        let isServiceSrc = state.instruments.contains { $0.id == srcId }
+                        let isServiceDst = state.instruments.contains { $0.id == dstId }
+                        if isServiceSrc && isServiceDst {
+                            if let list = try? await c.listLinks() {
+                                if let match = list.first(where: { $0.kind == .property && $0.property?.from == fromRef && $0.property?.to == toRef }) {
+                                    try? await c.deleteLink(id: match.id)
+                                    await state.refreshLinks()
+                                }
                             }
                         }
                     }

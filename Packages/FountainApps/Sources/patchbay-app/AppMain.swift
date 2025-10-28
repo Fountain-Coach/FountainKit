@@ -1000,6 +1000,7 @@ struct InspectorPane: View {
     @State private var previewLink: Components.Schemas.CreateLink? = nil
     @State private var showPreview: Bool = false
     @State private var showApplyAllConfirm: Bool = false
+    @State private var diffSummary: String = ""
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
@@ -1057,6 +1058,78 @@ struct InspectorPane: View {
         } else if !state.instruments.isEmpty {
             selectedInstrumentIndex = 0
         }
+    }
+    private func computeDisconnected(vm: EditorVM) -> [String] {
+        var deg: [String: Int] = Dictionary(uniqueKeysWithValues: vm.nodes.map { ($0.id, 0) })
+        for e in vm.edges {
+            let f = String(e.from.split(separator: ".").first ?? "")
+            let t = String(e.to.split(separator: ".").first ?? "")
+            if deg[f] != nil { deg[f]! += 1 }
+            if deg[t] != nil { deg[t]! += 1 }
+        }
+        return deg.filter { $0.value == 0 }.map { $0.key }
+    }
+    private func selectDisconnected(vm: EditorVM) {
+        let ids = computeDisconnected(vm: vm)
+        vm.selected = Set(ids)
+        vm.selection = ids.first
+    }
+    private func computeCoverage() -> String {
+        let total = state.instruments.count
+        let peReady = state.instruments.filter { !$0.propertySchema.properties.isEmpty }.count
+        return "CI/PE: \(peReady)/\(total) instruments expose properties; subscriptions shown per service links."
+    }
+    private func mappingLines() -> [String] {
+        state.links.compactMap { l in
+            switch l.kind {
+            case .property:
+                if let p = l.property, let f = p.from, let t = p.to { return "prop: \(f) -> \(t)" }
+                return nil
+            case .ump:
+                if let u = l.ump {
+                    var parts: [String] = []
+                    parts.append("ump: endpoint=\(u.source.endpointId) g=\(u.source.group) ch=\(u.source.channel)")
+                    if let cc = u.source.cc { parts.append("cc=\(cc)") }
+                    if let note = u.source.note { parts.append("note=\(note)") }
+                    var mapStr = ""
+                    if let m = u.map { mapStr = " scale=\(m.scale ?? 1.0) offset=\(m.offset ?? 0.0)" }
+                    let to = u.to ?? "?"
+                    return parts.joined(separator: " ") + " -> \(to)" + mapStr
+                }
+                return nil
+            default: return nil
+            }
+        }
+    }
+    private func computeHealth(vm: EditorVM) -> String {
+        let total = vm.nodes.count
+        let bad = vm.nodes.filter { canonicalSortPorts($0.ports) != $0.ports }.count
+        let dangling = computeDisconnected(vm: vm).count
+        return "portsOK=\(total-bad)/\(total), disconnected=\(dangling)"
+    }
+    private func saveCurrent(storeId: String, vm: EditorVM) async {
+        if let c = state.api as? PatchBayClient {
+            let doc = vm.toGraphDoc(with: state.instruments)
+            _ = try? await c.putStoredGraph(id: storeId, doc: doc)
+            await state.refreshStore()
+        }
+    }
+    private func loadStored(id: String, vm: EditorVM) async {
+        if let c = state.api as? PatchBayClient, let sg = try? await c.getStoredGraph(id: id) {
+            vm.applyGraphDoc(sg.doc)
+        }
+    }
+    private func computeDiff(storeId: String, vm: EditorVM) async -> String {
+        guard let c = state.api as? PatchBayClient, let sg = try? await c.getStoredGraph(id: storeId) else { return "No stored graph \(storeId)" }
+        let currIds = Set(state.instruments.map { $0.id })
+        let storeIds = Set(sg.doc.instruments.map { $0.id })
+        let addedI = currIds.subtracting(storeIds)
+        let removedI = storeIds.subtracting(currIds)
+        let currEdges = Set(state.links.map { ($0.kind.rawValue, $0.property?.from ?? "", $0.property?.to ?? "", $0.ump?.to ?? "") }.map { "\($0)|\($1)|\($2)|\($3)" })
+        let storeEdges = Set(sg.doc.links.map { l in (l.kind.rawValue, l.property?.from ?? "", l.property?.to ?? "", l.ump?.to ?? "") }.map { "\($0)|\($1)|\($2)|\($3)" })
+        let addedL = currEdges.subtracting(storeEdges)
+        let removedL = storeEdges.subtracting(currEdges)
+        return "+I \(addedI.count) −I \(removedI.count); +L \(addedL.count) −L \(removedL.count)"
     }
     private func loadTabsOrder() {
         let key = "pb.tabsOrder.v1"
@@ -1280,69 +1353,59 @@ struct InspectorPane: View {
         }
     }
     @ViewBuilder var corpusView: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("Corpus Snapshot").font(.headline)
-                Spacer()
-                Button("Refresh Snapshot") { Task { await state.makeSnapshot() } }
-                Button("Copy Summary") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(state.snapshotSummary.isEmpty ? state.corpusOverviewLine() : state.snapshotSummary, forType: .string) }
+        VStack(alignment: .leading, spacing: 8) {
+            // Summary
+            HStack { Text("Summary").font(.headline); Spacer()
+                Button("Refresh") { Task { await state.refresh(); await state.refreshLinks(); await state.makeSnapshot() } }
+                Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(state.corpusOverviewLine(), forType: .string) }
+                Button("Send to Chat") { Task { await state.ask(question: "Describe current corpus.\n\n" + state.corpusOverviewLine(), vm: vm) } }
             }
-            let line = state.snapshotSummary.isEmpty ? state.corpusOverviewLine() : state.snapshotSummary
-            Text(line).font(.system(.body, design: .monospaced))
-            if state.snapshotSummary.isEmpty { Text("Snapshot unavailable; showing live overview.").font(.caption).foregroundStyle(.secondary) }
+            Text(state.corpusOverviewLine()).font(.system(.body, design: .monospaced))
             Divider().padding(.vertical, 4)
+
+            // Disconnected
+            HStack { Text("Disconnected").font(.headline); Spacer(); Button("Select") { selectDisconnected(vm: vm) } }
+            let disconnected = computeDisconnected(vm: vm)
+            if disconnected.isEmpty { Text("All nodes connected").foregroundColor(.secondary) }
+            else { Text(disconnected.joined(separator: ", ")).font(.system(.caption, design: .monospaced)) }
+            Divider().padding(.vertical, 4)
+
+            // Diff vs stored
+            HStack { Text("Diff vs Store").font(.headline); Spacer()
+                TextField("Graph ID", text: $storeId).frame(width: 160)
+                Button("Compute") { Task { diffSummary = await computeDiff(storeId: storeId, vm: vm) } }
+                Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(diffSummary, forType: .string) }
+            }
+            if !diffSummary.isEmpty { Text(diffSummary).font(.system(.caption, design: .monospaced)) }
+            Divider().padding(.vertical, 4)
+
+            // CI/PE Coverage (best-effort from app state)
+            HStack { Text("CI/PE Coverage").font(.headline); Spacer() }
+            let coverage = computeCoverage()
+            Text(coverage).font(.system(.caption, design: .monospaced))
+            Divider().padding(.vertical, 4)
+
+            // Mappings (service links)
+            HStack { Text("Mappings").font(.headline); Spacer(); Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(mappingLines().joined(separator: "\n"), forType: .string) } }
+            ScrollView { VStack(alignment: .leading, spacing: 2) { ForEach(mappingLines(), id: \.self) { Text($0).font(.system(.caption, design: .monospaced)) } } }.frame(maxHeight: 120)
+            Divider().padding(.vertical, 4)
+
+            // Health
+            HStack { Text("Health").font(.headline); Spacer() }
+            let health = computeHealth(vm: vm)
+            Text(health).font(.system(.caption, design: .monospaced))
+            Divider().padding(.vertical, 4)
+
+            // Store
             Text("Store (Save/Load)").font(.headline)
             HStack {
                 TextField("Graph ID", text: $storeId).frame(width: 160)
-                Button("Save Current") {
-                    Task {
-                        if let c = state.api as? PatchBayClient {
-                            let doc = vm.toGraphDoc(with: state.instruments)
-                            try? await c.putStoredGraph(id: storeId, doc: doc)
-                            await state.refreshStore()
-                        }
-                    }
-                }
+                Button("Save Current") { Task { await saveCurrent(storeId: storeId, vm: vm) } }
                 Spacer()
                 Button("Refresh List") { Task { await state.refreshStore() } }
             }
             if state.stored.isEmpty { Text("No stored graphs").foregroundColor(.secondary) }
-            ScrollView {
-                ForEach(state.stored, id: \.id) { item in
-                    HStack {
-                        Text(item.id).font(.system(.body, design: .monospaced))
-                        Spacer()
-                        Button("Load") {
-                            Task {
-                                if let c = state.api as? PatchBayClient, let sg = try? await c.getStoredGraph(id: item.id) {
-                                    vm.applyGraphDoc(sg.doc)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            Divider().padding(.vertical, 4)
-            Text("Agent Preset").font(.headline)
-            HStack(spacing: 8) {
-                Button("Export Agent Preset…") {
-                    // Build agent preset from current GraphDoc and save via NSSavePanel
-                    let doc = vm.toGraphDoc(with: state.instruments)
-                    let base = (state.api as? PatchBayClient)?.baseURL ?? URL(string: "http://127.0.0.1:7090")!
-                    let preset = AgentPreset.build(name: "PatchBay Scene (\(storeId))", baseURL: base, graph: doc, notes: "Generated by PatchBay Studio")
-                    let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]
-                    guard let data = try? enc.encode(preset) else { return }
-                    let panel = NSSavePanel(); if #available(macOS 12.0, *) { panel.allowedContentTypes = [UTType.json] } ; panel.nameFieldStringValue = "agent-preset.json"
-                    panel.begin { resp in
-                        if resp == .OK, let url = panel.url {
-                            do { try data.write(to: url); state.addLog(action: "export-agent-preset", detail: url.lastPathComponent, diff: "") } catch { }
-                        }
-                    }
-                }
-                Text("Exports a lightweight agent config for PatchBay actions.")
-                    .foregroundColor(.secondary)
-            }
-            // Export of a fixed A4 page removed in infinite artboard mode.
+            ScrollView { ForEach(state.stored, id: \.id) { item in HStack { Text(item.id).font(.system(.body, design: .monospaced)); Spacer(); Button("Load") { Task { await loadStored(id: item.id, vm: vm) } } } } }
         }
     }
 }

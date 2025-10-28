@@ -28,6 +28,11 @@ Nodes (kind → purpose)
 - `mapper` — A signal transformer (UMP→PE, PE→UMP, PE→PE) with params: `scale`, `offset`, `curve`.
 - `monitor` — A sink for UMP/PE streams with timeline/log UI.
 
+Audio pipeline primitives (for intent→UMP)
+- `audioInput` — Microphone/stream source; emits audio for analysis. Ports: left `in` (optional), right `out` (audio).
+- `analyzer` — DSP/ML feature extractor (pitch/voicing/onset). Ports: left `in` (audio), right `out` (intent).
+- `noteProcessor` — Real‑time note/gain/DC/legato smoothing; converts intent to UMP. Ports: left `in` (intent), right `umpOut`.
+
 Ports (deterministic order)
 - Inputs (left): `in`, `umpIn`, `ciIn`, `peIn` (if present). Order top→bottom.
 - Outputs (right): `out`, `umpOut`, `ciOut`, `peOut` (if present). Order top→bottom.
@@ -45,6 +50,7 @@ Edges (typed)
 - UMP group lanes (optional overlay): light vertical bands G0–G15, shown when UMP edges are present or on toggle.
 - Selection: marquee and per‑node; delete via Backspace/Forward Delete or drag to the trash target.
 - Trash target: always on bottom‑right; hover highlight and puff animation on delete.
+ - Zones overlay (optional): soft groupings for Host / Device A / Device B to clarify topology and CI/PE attachment points.
 
 ## Inspector (Right Pane)
 
@@ -55,6 +61,9 @@ Tabs (segmented)
 - Vendor — Vendor identity CRUD.
 - Corpus — Snapshot summary + store save/load. Include compact evidence line: `Instruments: N [tri K, quad Q, chat C, coremidi E] · Links: L [property P, ump U]` with Copy and Refresh.
 - Chat — Assistant seeded with “What’s in the corpus?”; uses existing Planner/Gateway wiring.
+
+Stellwerk (control plane)
+- Throughout the spec, the term “Stellwerk” is preferred for the control plane (discovery, routing, corpus snapshots) instead of “Control Tower”, aligning with theatre terminology.
 
 ## Editing Flows (reference)
 
@@ -91,6 +100,8 @@ Persistence
 - Delete works via keys, context menu, and trash drag.
 - Corpus evidence present and copyable in Instruments/Corpus tabs; Chat tab available.
 - No OpenAPI/service changes required.
+ - CI etiquette honored for MIDI‑CI/PE: transactions use TIDs, large messages fragment/reassemble, and PE subscribe/notify status is surfaced in the inspector.
+ - Audio pipeline available: `audioInput → analyzer → noteProcessor → ump` fan‑out supported to multiple transport endpoints.
 
 ---
 

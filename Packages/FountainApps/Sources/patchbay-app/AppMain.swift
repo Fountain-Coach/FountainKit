@@ -990,7 +990,7 @@ struct AddInstrumentSheet: View {
     }
 }
 struct InspectorPane: View {
-    enum Tab: String, CaseIterable { case instruments = "Instruments", vendor = "Vendor", corpus = "Corpus", chat = "Chat" }
+    enum Tab: String, CaseIterable { case instruments = "Instruments", corpus = "Corpus", chat = "Chat" }
     @EnvironmentObject var state: AppState
     @EnvironmentObject var vm: EditorVM
     @State private var tab: Tab = .instruments
@@ -1008,8 +1008,6 @@ struct InspectorPane: View {
             switch tab {
             case .instruments:
                 instrumentsView
-            case .vendor:
-                vendorView
             case .corpus:
                 corpusView
             case .chat:

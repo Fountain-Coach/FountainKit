@@ -23,10 +23,7 @@ struct PatchBayStudioApp: App {
                     Button("Zoom Out") { /* handled in toolbar */ }
                         .keyboardShortcut("-", modifiers: [.command])
                 }
-                CommandMenu("Edit") {
-                    Button("Delete") { NotificationCenter.default.post(name: .pbDelete, object: nil) }
-                        .keyboardShortcut(.delete, modifiers: [])
-                }
+                // Edit menu: deletion disabled (dustbin-only)
                 CommandMenu("Debug") {
                     Button("Dump Focus State") {
                         FocusManager.dumpFocus(label: "dump")
@@ -913,8 +910,6 @@ struct ContentView: View {
                 case 124: vm.nudgeSelected(dx: 1 * stepMult, dy: 0)
                 case 125: vm.nudgeSelected(dx: 0, dy: 1 * stepMult)
                 case 126: vm.nudgeSelected(dx: 0, dy: -1 * stepMult)
-                case 51, 117:
-                    NotificationCenter.default.post(name: .pbDelete, object: nil)
                 default: break
                 }
             }) {

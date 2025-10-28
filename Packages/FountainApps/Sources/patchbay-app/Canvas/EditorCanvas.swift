@@ -475,11 +475,7 @@ struct EditorCanvas: View {
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .center)
             .contentShape(Rectangle())
-            .contextMenu {
-                if !(vm.selected.isEmpty && vm.selection == nil) {
-                    Button("Delete") { NotificationCenter.default.post(name: .pbDelete, object: nil) }
-                }
-            }
+            .contextMenu { EmptyView() }
             .onChange(of: geo.size) { _, newSize in vm.lastViewSize = newSize }
             .onAppear { vm.lastViewSize = geo.size }
             .gesture(DragGesture(minimumDistance: 4)
@@ -527,23 +523,7 @@ struct EditorCanvas: View {
                 // exec.rebuild(vm: vm, registry: state.dashboard)
             }
             // dashboard exec loop disabled
-            .onReceive(NotificationCenter.default.publisher(for: .pbDelete)) { _ in
-                if !vm.selected.isEmpty {
-                    let ids = vm.selected
-                    vm.nodes.removeAll { ids.contains($0.id) }
-                    vm.edges.removeAll { edge in ids.contains(edge.from.split(separator: ".").first.map(String.init) ?? "") || ids.contains(edge.to.split(separator: ".").first.map(String.init) ?? "") }
-                    vm.selection = nil
-                    vm.selected.removeAll()
-                    state.removeDashNode(id: ids.first ?? "")
-                    for i in ids { state.removeDashNode(id: i); state.removeServerNode(id: i) }
-                } else if let sel = vm.selection {
-                    vm.nodes.removeAll { $0.id == sel }
-                    vm.edges.removeAll { $0.from.hasPrefix(sel+".") || $0.to.hasPrefix(sel+".") }
-                    vm.selection = nil
-                    state.removeDashNode(id: sel)
-                    state.removeServerNode(id: sel)
-                }
-            }
+            // Deletion via keyboard/menu disabled (dustbin-only)
         }
     }
 
@@ -585,11 +565,19 @@ struct EditorCanvas: View {
                     let rectView = CGRect(x: originView.x, y: originView.y, width: CGFloat(vm.nodes[i].w) * vm.zoom, height: CGFloat(vm.nodes[i].h) * vm.zoom)
                     let intersects = rectView.intersects(trashRectView)
                     if trashHover != intersects { trashHover = intersects }
-                    // If center entered trash box, delete immediately
+                    // If center entered trash box, delete immediately (single or multi-selection)
                     if intersects {
                         let id = vm.nodes[i].id
-                        vm.nodes.removeAll { $0.id == id }
-                        vm.edges.removeAll { $0.from.hasPrefix(id+".") || $0.to.hasPrefix(id+".") }
+                        let idsToDelete: Set<String> = {
+                            if !vm.selected.isEmpty, vm.selected.contains(id) { return vm.selected }
+                            return [id]
+                        }()
+                        vm.nodes.removeAll { idsToDelete.contains($0.id) }
+                        vm.edges.removeAll { edge in
+                            let fromNode = edge.from.split(separator: ".").first.map(String.init) ?? ""
+                            let toNode = edge.to.split(separator: ".").first.map(String.init) ?? ""
+                            return idsToDelete.contains(fromNode) || idsToDelete.contains(toNode)
+                        }
                         vm.selection = nil
                         vm.selected.removeAll()
                         trashHover = false
@@ -597,6 +585,8 @@ struct EditorCanvas: View {
                         let puff = PuffItem(center: center)
                         puffItems.append(puff)
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { puffItems.removeAll { $0.id == puff.id } }
+                        // Clean registries
+                        for did in idsToDelete { state.removeDashNode(id: did); state.removeServerNode(id: did) }
                     }
                 }
             }

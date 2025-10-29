@@ -6,8 +6,8 @@ import CoreGraphics
 import SwiftUI
 
 @MainActor
-enum ReplayMovieExporter {
-    static func exportMovie(from logURL: URL, to outURL: URL, width: Int = 1440, height: Int = 900, fps: Int32 = 10) async throws {
+public enum ReplayMovieExporter {
+    public static func exportMovie(from logURL: URL, to outURL: URL, width: Int = 1440, height: Int = 900, fps: Int32 = 10) async throws {
         let size = CGSize(width: width, height: height)
         // Prepare scene
         let vm = EditorVM()

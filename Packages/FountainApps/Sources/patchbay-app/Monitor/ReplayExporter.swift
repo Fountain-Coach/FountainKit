@@ -3,7 +3,7 @@ import SwiftUI
 import AppKit
 
 @MainActor
-enum ReplayExporter {
+public enum ReplayExporter {
     struct EventRec: Codable {
         var topic: String
         var ts: String?
@@ -19,7 +19,7 @@ enum ReplayExporter {
         var generatedAt: String
     }
 
-    static func exportFrames(from logURL: URL, width: Int = 1440, height: Int = 900) async {
+    public static func exportFrames(from logURL: URL, width: Int = 1440, height: Int = 900) async {
         let fm = FileManager.default
         let cwd = URL(fileURLWithPath: fm.currentDirectoryPath)
         let outRoot = cwd.appendingPathComponent(".fountain/artifacts/replay", isDirectory: true)

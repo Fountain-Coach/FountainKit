@@ -12,6 +12,7 @@ let package = Package(
     products: ROBOT_ONLY ? [
         // Robot-only: expose just what PatchBay tests need
         .executable(name: "patchbay-app", targets: ["patchbay-app"]),
+        .executable(name: "replay-export", targets: ["replay-export"]),
         .library(name: "MetalViewKit", targets: ["MetalViewKit"])
     ] : [
         .executable(name: "gateway-server", targets: ["gateway-server"]),
@@ -67,7 +68,8 @@ let package = Package(
         .executable(name: "qc-mock-app", targets: ["qc-mock-app"]),
         .executable(name: "qcmockcore-tests", targets: ["qcmockcore-tests"]),
         .executable(name: "patchbay-service-server", targets: ["patchbay-service-server"]),
-        .executable(name: "patchbay-app", targets: ["patchbay-app"])
+        .executable(name: "patchbay-app", targets: ["patchbay-app"]),
+        .executable(name: "replay-export", targets: ["replay-export"])
     ],
     dependencies: [
         .package(path: "../FountainCore"),
@@ -148,6 +150,12 @@ let package = Package(
                 .process("Baselines"),
                 .process("Fixtures")
             ]
+        )
+        ,
+        .executableTarget(
+            name: "replay-export",
+            dependencies: ["MetalViewKit"],
+            path: "Sources/replay-export"
         )
     ] : [
         .target(
@@ -779,6 +787,11 @@ let package = Package(
             ],
             path: "Sources/metalview-demo-app",
             exclude: ["AGENTS.md"]
+        ),
+        .executableTarget(
+            name: "replay-export",
+            dependencies: ["patchbay-app"],
+            path: "Sources/replay-export"
         )
     ]
 )

@@ -979,6 +979,12 @@ struct ContentView: View {
                             Button("16 px (major ×5)") { vm.grid = 16; vm.majorEvery = 5 }
                             Button("24 px (major ×5)") { vm.grid = 24; vm.majorEvery = 5 }
                         }
+                        Divider()
+                        Toggle("Show Baseline Index", isOn: $vm.showBaselineIndex)
+                        Toggle("Always show (all stages)", isOn: $vm.alwaysShowBaselineIndex)
+                            .disabled(!vm.showBaselineIndex)
+                        Toggle("Use 1‑based indices", isOn: $vm.baselineIndexOneBased)
+                            .disabled(!vm.showBaselineIndex)
                     }
                     // Preview button removed: everything previews to The Stage
                     Menu("Monitor") {

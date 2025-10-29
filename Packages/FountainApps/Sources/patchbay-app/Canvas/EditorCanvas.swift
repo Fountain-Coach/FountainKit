@@ -68,6 +68,10 @@ final class EditorVM: ObservableObject {
     // Grid spacing in points (minor). Major lines are drawn every `majorEvery` minors.
     @Published var majorEvery: Int = 5
     @Published var showPanelsOverlay: Bool = false
+    // HUD: baseline index labels for Stage inputs
+    @Published var showBaselineIndex: Bool = false
+    @Published var alwaysShowBaselineIndex: Bool = false
+    @Published var baselineIndexOneBased: Bool = false
 
     func nodeIndex(by id: String) -> Int? { nodes.firstIndex{ $0.id == id } }
     func node(by id: String) -> PBNode? { nodes.first{ $0.id == id } }
@@ -507,10 +511,11 @@ struct EditorCanvas: View {
                 ZStack(alignment: .topLeading) {
                     let minor = CGFloat(vm.grid)
                     let major = CGFloat(vm.grid * max(1, vm.majorEvery))
-                    AnyView(GridBackground(size: docSize, minorStepPoints: minor, majorStepPoints: major, scale: vm.zoom, translation: vm.translation))
-                    AnyView(flowEditorOverlay(docSize: docSize)
-                        .frame(width: docSize.width, height: docSize.height)
-                        .overlay(NodeHandleOverlay(docSize: docSize).environmentObject(vm).environmentObject(state)))
+                AnyView(GridBackground(size: docSize, minorStepPoints: minor, majorStepPoints: major, scale: vm.zoom, translation: vm.translation))
+                AnyView(flowEditorOverlay(docSize: docSize)
+                    .frame(width: docSize.width, height: docSize.height)
+                    .overlay(NodeHandleOverlay(docSize: docSize).environmentObject(vm).environmentObject(state))
+                    .overlay(BaselineIndexOverlay(docSize: docSize).environmentObject(vm).environmentObject(state)))
                 }
                 .frame(width: docSize.width, height: docSize.height, alignment: .topLeading)
                 .offset(x: padX, y: padY)
@@ -692,6 +697,51 @@ fileprivate struct NodeHandleOverlay: View {
         let parts = s.split(separator: ",").compactMap{ Double($0.trimmingCharacters(in: .whitespaces)) }
         if parts.count == 4 { return EdgeInsets(top: parts[0], leading: parts[1], bottom: parts[2], trailing: parts[3]) }
         return EdgeInsets(top: 18, leading: 18, bottom: 18, trailing: 18)
+    }
+}
+
+// HUD overlay: draws small numeric ticks near Stage input ports
+fileprivate struct BaselineIndexOverlay: View {
+    @EnvironmentObject var vm: EditorVM
+    @EnvironmentObject var state: AppState
+    var docSize: CGSize
+    var body: some View {
+        let transform = CanvasTransform(scale: vm.zoom, translation: vm.translation)
+        return ZStack(alignment: .topLeading) {
+            if vm.showBaselineIndex {
+                ForEach(vm.nodes, id: \.id) { n in
+                    if let dash = state.dashboard[n.id], dash.kind == .stageA4 {
+                        // Only show when selected, unless always-on
+                        if vm.alwaysShowBaselineIndex || vm.selection == n.id {
+                            let origin = transform.docToView(CGPoint(x: CGFloat(n.x), y: CGFloat(n.y)))
+                            let rectView = CGRect(x: origin.x, y: origin.y, width: CGFloat(n.w)*vm.zoom, height: CGFloat(n.h)*vm.zoom)
+                            let inPorts = canonicalSortPorts(n.ports.filter { $0.dir == .input && $0.id.hasPrefix("in") })
+                            let count = max(0, inPorts.count)
+                            if count > 0 {
+                                ForEach(Array(inPorts.enumerated()), id: \.element.id) { idx, _ in
+                                    let k = vm.baselineIndexOneBased ? (idx + 1) : idx
+                                    // Evenly distribute indices along the node height (match port placement)
+                                    let frac = CGFloat(idx + 1) / CGFloat(count + 1)
+                                    let y = rectView.minY + rectView.height * frac
+                                    // Place label just inside the left edge
+                                    let x = rectView.minX + 6
+                                    Text("\(k)")
+                                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                                        .foregroundStyle(.secondary)
+                                        .padding(.horizontal, 2)
+                                        .padding(.vertical, 0)
+                                        .background(Color(nsColor: .textBackgroundColor).opacity(0.6))
+                                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                                        .position(x: x, y: y)
+                                        .allowsHitTesting(false)
+                                        .accessibilityLabel(Text("Stage \(dash.props["title"] ?? (n.title ?? n.id)), input \(k) of \(count)"))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

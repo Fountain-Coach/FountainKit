@@ -1,13 +1,29 @@
 # AGENT — Studio (FountainLauncherUI) — DEPRECATED (learnings)
 
-FountainLauncherUI is a frozen snapshot of the original Control workspace. It covered the three‑pane UI for services, a curated OpenAPI editor, a persona editor, and merged logs/diagnostics. The active product path is the composer‑first app (`composer-studio`); this code remains only to preserve lessons and to unblock builds when needed. Do not add features here; fix only what breaks compilation or tests.
+What: FountainLauncherUI is the frozen snapshot of the original control workspace UI. It wrapped launcher scripts, exposed a curated OpenAPI editor, persona editor, and merged logs/diagnostics in a three‑pane layout. The active product now is `composer-studio`.
 
-The composer‑first story remains authoritative: screenplay text (.fountain) becomes a parsed model, then mapped cue plans, then applied notation, and finally a journal (with UMP). Sessions move deterministically through the states “stored (ETag) → parsed → cued → applied → journaled”, and each step exposes visible results (warnings, counts, previews) in a timeline you can explain.
+Why it remains: to preserve lessons and keep builds green when needed. Do not add features; only fix issues that break compilation or tests.
 
-What we keep from this codebase are ideas, not UI: the curated OpenAPI editing loop (Save/Revert, Lint/Regenerate/Reload), the local dev lifecycle scripts, and the curated‑list validator. When you need the operator or curator tools, keep them separate from the composer flow — don’t re‑grow this legacy surface.
+How (if you must run it): build and run with SwiftPM. It’s macOS‑only and expects Keychain‑backed secrets (no `.env`). The app reads `LAUNCHER_SIGNATURE` from Keychain with a default and may require `OPENAI_API_KEY` in Keychain (service `FountainAI`, account `OPENAI_API_KEY`).
+- Build: `swift build --package-path Packages/FountainApps -c debug --target FountainLauncherUI`
+- Run: `swift run --package-path Packages/FountainApps FountainLauncherUI`
+- Tests: `swift test --package-path Packages/FountainApps -c debug --filter FountainLauncherUITests`
 
-Testing should focus on the underlying behaviors rather than view chrome. Unit tests cover curated spec mapping, route diffs, persona parsing, memory compute, and pane state; integration tests make sure generator plugins run and a reload hits the gateway; E2E smoke brings the stack up with `Scripts/dev-up --check`, probes health, asserts `/admin/routes` contains the minimal set, and tears down with `Scripts/dev-down`.
+Where code lives
+- App entry and views: `Packages/FountainApps/Sources/FountainLauncherUI/LauncherUIApp.swift`
+- Resource resolution: `Packages/FountainApps/Sources/FountainLauncherUI/LauncherResources.swift`
+- Tests: `Packages/FountainApps/Tests/FountainLauncherUITests`
 
-The curated OpenAPI list for the repo is declared in `Configuration/curated-openapi-specs.json`. Validate with `Scripts/validate-curated-specs.sh` (it checks that paths exist and generator configs are present) and optionally install `Scripts/install-git-hooks.sh` to run it pre‑commit. CI runs the validator in lint jobs and expects no generated sources in VCS; warn on added scans.
+Composer‑first remains authoritative: screenplay text (.fountain) → parsed model → cue plans → applied notation → journal (+ UMP). Sessions move deterministically “stored (ETag) → parsed → cued → applied → journaled”, and each step surfaces explainable results (warnings, counts, previews) in a visible timeline.
 
-If you must touch this area, keep the scope tight: the curated OpenAPI panel (list specs, Save/Revert, lint, regenerate via swift build, reload routes), a routes viewer (`/admin/routes` diff pre/post reload), the persona editor (`Configuration/persona.yaml` with an “effective persona” preview), logs/services (follow‑tail and filters), and profile selection (default Full with the correct health endpoint). Add tests alongside each.
+Keep ideas, not UI
+Retain the curated OpenAPI editing loop (Save/Revert, Lint/Regenerate/Reload), the local dev lifecycle (`Scripts/dev/**`), and the curated‑list validator — but keep operator/curator tools separate from the composer flow. Do not rebuild this legacy surface.
+
+Testing focus
+Favor behavior over chrome. Unit: curated spec mapping, routes diff, persona parsing, memory compute, pane state. Integration: generator plugins run and gateway reload succeeds. E2E: `Scripts/dev-up --check` → probe health → assert `/admin/routes` contains the minimal set → `Scripts/dev-down`.
+
+Curated OpenAPI list
+Declared in `Configuration/curated-openapi-specs.json`. Validate with `Scripts/openapi/validate-curated-specs.sh` (checks paths and generator configs). Optionally install `Scripts/install-git-hooks.sh` to run it pre‑commit. CI lint jobs run the validator and expect no generated sources in VCS.
+
+Scope if you must touch this code
+Limit to: curated OpenAPI panel (list specs, Save/Revert, lint, regenerate via `swift build`, reload routes), routes viewer (`/admin/routes` diff pre/post), persona editor (`Configuration/persona.yaml` with “effective persona” preview), logs/services (follow‑tail, filters), and profile selection (default Full with correct health endpoint). Add tests alongside each change.

@@ -17,6 +17,10 @@ struct ZoomContainer<Content: View>: NSViewRepresentable {
         private var panTimer: Timer?
         private let stepInterval: TimeInterval = 1.0/120.0
         private let alpha: CGFloat = 0.28 // smoothing factor per tick
+        // Adaptive calibration so doc deltas match raw deltas / zoom.
+        var panGainX: CGFloat = 1.0
+        var panGainY: CGFloat = 1.0
+        let calibrateAlpha: CGFloat = 0.12
         func startPanAnimator() {
             if panTimer == nil {
                 panTimer = Timer.scheduledTimer(timeInterval: stepInterval, target: self, selector: #selector(tickPanAnimatorMain), userInfo: nil, repeats: true)
@@ -78,12 +82,25 @@ struct ZoomContainer<Content: View>: NSViewRepresentable {
             guard let coord, let win = host.window, e.window == win else { return e }
             if NSApp.modalWindow != nil || win.attachedSheet != nil { return e }
             let s = max(0.0001, coord.parent.zoom)
-            // Make horizontal follow finger: positive deltaX moves content with finger.
-            let invX: CGFloat = e.isDirectionInvertedFromDevice ? 1.0 : -1.0
-            // Vertical: ensure swipe up moves content up (translation decreases in doc-space).
-            let invY: CGFloat = e.isDirectionInvertedFromDevice ? -1.0 : 1.0
-            let dxDoc = invX * (e.scrollingDeltaX / s)
-            let dyDoc = invY * (e.scrollingDeltaY / s)
+            // Use adaptive gain to align doc deltas with raw deltas / zoom
+            let rawX = e.scrollingDeltaX
+            let rawY = e.scrollingDeltaY
+            var dxDoc = (coord.panGainX * rawX) / s
+            var dyDoc = (coord.panGainY * rawY) / s
+            // Calibrate sign + magnitude progressively
+            func tune(gain: inout CGFloat, raw: CGFloat, doc: CGFloat) {
+                guard raw != 0 else { return }
+                if doc * raw < 0 { gain = -gain } // fix sign immediately
+                let desired = abs(raw) / s
+                let actual = max(0.0001, abs(doc))
+                let r = desired / actual
+                gain = gain * (1 - coord.calibrateAlpha) + gain * r * coord.calibrateAlpha
+            }
+            tune(gain: &coord.panGainX, raw: rawX, doc: dxDoc)
+            tune(gain: &coord.panGainY, raw: rawY, doc: dyDoc)
+            // Recompute with tuned gains for the applied step
+            dxDoc = (coord.panGainX * rawX) / s
+            dyDoc = (coord.panGainY * rawY) / s
             coord.panTarget = CGPoint(x: coord.parent.translation.x + dxDoc,
                                       y: coord.parent.translation.y + dyDoc)
             coord.startPanAnimator()

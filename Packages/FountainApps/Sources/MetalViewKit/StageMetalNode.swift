@@ -46,6 +46,22 @@ public final class StageMetalNode: MetalCanvasNode {
         }
         return ports
     }
+    public func portDocCenters() -> [MetalNodePortCenter] {
+        // Compute doc-space centers by scaling canonical page-local centers
+        let pg = StageMetalNode.pageSize(page)
+        let sx = frameDoc.width / max(1, pg.width)
+        let sy = frameDoc.height / max(1, pg.height)
+        let count = StageMetalNode.baselineCount(page: page, margins: margins, baseline: baseline)
+        guard count > 0 else { return [] }
+        var out: [MetalNodePortCenter] = []
+        for (i, p) in portLayout().enumerated() {
+            let dx = p.centerLocal.x * sx
+            let dy = p.centerLocal.y * sy
+            let doc = CGPoint(x: frameDoc.minX + dx, y: frameDoc.minY + dy)
+            out.append(.init(id: "in\(i)", dir: .input, side: .left, doc: doc))
+        }
+        return out
+    }
     public func encode(into view: MTKView, device: MTLDevice, encoder: MTLRenderCommandEncoder, transform: MetalCanvasTransform) {
         // Compute scale from canonical page size to current frame
         let pg = StageMetalNode.pageSize(page)

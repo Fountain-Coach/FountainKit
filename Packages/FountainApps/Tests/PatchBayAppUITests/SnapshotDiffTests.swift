@@ -127,7 +127,7 @@ final class SnapshotDiffTests: XCTestCase {
         XCTAssertLessThan(diff, 5.0)
     }
 
-    private func rmseDiffAndHeatmap(a: NSBitmapImageRep, b: NSBitmapImageRep) -> (Double, NSImage?) {
+    static func rmseDiffAndHeatmap(a: NSBitmapImageRep, b: NSBitmapImageRep) -> (Double, NSImage?) {
         let w = min(a.pixelsWide, b.pixelsWide)
         let h = min(a.pixelsHigh, b.pixelsHigh)
         var sum: Double = 0

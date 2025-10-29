@@ -21,6 +21,26 @@ public struct MetalNodePort: Sendable, Hashable {
     }
 }
 
+public struct MetalNodePortCenter: Sendable, Hashable {
+    public var id: String
+    public var dir: MetalNodePortDir
+    public var side: MetalNodePortSide
+    public var doc: CGPoint
+    public init(id: String, dir: MetalNodePortDir, side: MetalNodePortSide, doc: CGPoint) {
+        self.id = id; self.dir = dir; self.side = side; self.doc = doc
+    }
+}
+
+public struct MetalCanvasEdge: Sendable, Hashable {
+    public var fromNode: String
+    public var fromPort: String
+    public var toNode: String
+    public var toPort: String
+    public init(fromNode: String, fromPort: String, toNode: String, toPort: String) {
+        self.fromNode = fromNode; self.fromPort = fromPort; self.toNode = toNode; self.toPort = toPort
+    }
+}
+
 public enum MetalNodeHit: Sendable, Equatable {
     case none
     case body
@@ -37,6 +57,8 @@ public protocol MetalCanvasNode: AnyObject {
     func hitTest(doc: CGPoint) -> MetalNodeHit
     /// Encode Metal commands to render the node body in document space using a shared encoder.
     func encode(into view: MTKView, device: MTLDevice, encoder: MTLRenderCommandEncoder, transform: MetalCanvasTransform)
+    /// Port centers in document space. Default maps local offsets from `frameDoc.origin`.
+    func portDocCenters() -> [MetalNodePortCenter]
 }
 
 public extension MetalCanvasNode {
@@ -45,6 +67,13 @@ public extension MetalCanvasNode {
     }
     func encode(into view: MTKView, device: MTLDevice, encoder: MTLRenderCommandEncoder, transform: MetalCanvasTransform) {
         // Default no-op; concrete nodes draw their body.
+    }
+    func portDocCenters() -> [MetalNodePortCenter] {
+        let ports = portLayout()
+        return ports.map { p in
+            let doc = CGPoint(x: frameDoc.minX + p.centerLocal.x, y: frameDoc.minY + p.centerLocal.y)
+            return MetalNodePortCenter(id: p.id, dir: p.dir, side: p.side, doc: doc)
+        }
     }
 }
 

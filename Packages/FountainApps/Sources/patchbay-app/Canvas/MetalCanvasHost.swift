@@ -5,7 +5,7 @@ struct MetalCanvasHost: View {
     @EnvironmentObject var vm: EditorVM
     @EnvironmentObject var state: AppState
     var body: some View {
-        MetalCanvasView(zoom: vm.zoom, translation: vm.translation) {
+        MetalCanvasView(zoom: vm.zoom, translation: vm.translation, nodes: {
             // Map Stage nodes for now; other kinds can be added later
             var nodes: [MetalCanvasNode] = []
             for n in vm.nodes {
@@ -19,6 +19,17 @@ struct MetalCanvasHost: View {
                 }
             }
             return nodes
-        }
+        }, edges: {
+            // Map VM edges to MetalCanvasEdge by splitting refs like "A.out"
+            var out: [MetalCanvasEdge] = []
+            for e in vm.edges {
+                let fp = e.from.split(separator: ".", maxSplits: 1).map(String.init)
+                let tp = e.to.split(separator: ".", maxSplits: 1).map(String.init)
+                if fp.count == 2, tp.count == 2 {
+                    out.append(MetalCanvasEdge(fromNode: fp[0], fromPort: fp[1], toNode: tp[0], toPort: tp[1]))
+                }
+            }
+            return out
+        })
     }
 }

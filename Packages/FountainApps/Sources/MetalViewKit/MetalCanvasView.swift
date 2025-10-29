@@ -6,13 +6,16 @@ import MetalKit
 
 public struct MetalCanvasView: NSViewRepresentable {
     public typealias NodesProvider = () -> [MetalCanvasNode]
+    public typealias EdgesProvider = () -> [MetalCanvasEdge]
     private let nodesProvider: NodesProvider
+    private let edgesProvider: EdgesProvider
     private let zoom: CGFloat
     private let translation: CGPoint
-    public init(zoom: CGFloat, translation: CGPoint, nodes: @escaping NodesProvider) {
+    public init(zoom: CGFloat, translation: CGPoint, nodes: @escaping NodesProvider, edges: @escaping EdgesProvider = { [] }) {
         self.zoom = zoom
         self.translation = translation
         self.nodesProvider = nodes
+        self.edgesProvider = edges
     }
     public func makeNSView(context: Context) -> MTKView {
         let v = MTKView()
@@ -23,12 +26,12 @@ public struct MetalCanvasView: NSViewRepresentable {
         if let renderer = MetalCanvasRenderer(mtkView: v) {
             context.coordinator.renderer = renderer
             v.delegate = renderer
-            renderer.update(zoom: zoom, translation: translation, nodes: nodesProvider())
+            renderer.update(zoom: zoom, translation: translation, nodes: nodesProvider(), edges: edgesProvider())
         }
         return v
     }
     public func updateNSView(_ nsView: MTKView, context: Context) {
-        context.coordinator.renderer?.update(zoom: zoom, translation: translation, nodes: nodesProvider())
+        context.coordinator.renderer?.update(zoom: zoom, translation: translation, nodes: nodesProvider(), edges: edgesProvider())
     }
     public func makeCoordinator() -> Coordinator { Coordinator() }
 public final class Coordinator { fileprivate var renderer: MetalCanvasRenderer? }
@@ -40,6 +43,7 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
     private let commandQueue: MTLCommandQueue
     private var pipeline: MTLRenderPipelineState!
     private var nodes: [MetalCanvasNode] = []
+    private var edges: [MetalCanvasEdge] = []
     private var zoom: CGFloat = 1.0
     private var translation: CGPoint = .zero
 
@@ -51,10 +55,11 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
         super.init()
         do { try buildPipeline(pixelFormat: mtkView.colorPixelFormat) } catch { return nil }
     }
-    func update(zoom: CGFloat, translation: CGPoint, nodes: [MetalCanvasNode]) {
+    func update(zoom: CGFloat, translation: CGPoint, nodes: [MetalCanvasNode], edges: [MetalCanvasEdge]) {
         self.zoom = zoom
         self.translation = translation
         self.nodes = nodes
+        self.edges = edges
     }
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
     func draw(in view: MTKView) {
@@ -69,8 +74,50 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
             translation: SIMD2<Float>(Float(translation.x) * Float(max(0.0001, zoom)), Float(translation.y) * Float(max(0.0001, zoom))),
             drawableSize: SIMD2<Float>(Float(view.drawableSize.width), Float(view.drawableSize.height))
         )
+        // Draw nodes
+        for node in nodes { node.encode(into: view, device: device, encoder: enc, transform: xf) }
+        // Gather port centers (doc -> NDC)
+        var portMap: [String:[String:SIMD2<Float>]] = [:]
         for node in nodes {
-            node.encode(into: view, device: device, encoder: enc, transform: xf)
+            let centers = node.portDocCenters()
+            var entry: [String:SIMD2<Float>] = [:]
+            for c in centers { entry[c.id] = xf.docToNDC(x: c.doc.x, y: c.doc.y) }
+            portMap[node.id] = entry
+        }
+        // Draw port dots as small quads (~3 px radius)
+        let W = max(1.0, Float(view.drawableSize.width))
+        let H = max(1.0, Float(view.drawableSize.height))
+        let rpx: Float = 3.0
+        let dx = 2 * rpx / W
+        let dy = 2 * rpx / H
+        var portVerts: [SIMD2<Float>] = []
+        for (nid, ports) in portMap {
+            for (_, center) in ports {
+                let tl = SIMD2<Float>(center.x - dx, center.y + dy)
+                let tr = SIMD2<Float>(center.x + dx, center.y + dy)
+                let bl = SIMD2<Float>(center.x - dx, center.y - dy)
+                let br = SIMD2<Float>(center.x + dx, center.y - dy)
+                portVerts.append(contentsOf: [tl, bl, tr, tr, bl, br])
+            }
+        }
+        if !portVerts.isEmpty {
+            enc.setVertexBytes(portVerts, length: portVerts.count * MemoryLayout<SIMD2<Float>>.stride, index: 0)
+            var colorPorts = SIMD4<Float>(0.18,0.36,0.88,1)
+            enc.setFragmentBytes(&colorPorts, length: MemoryLayout<SIMD4<Float>>.size, index: 0)
+            enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: portVerts.count)
+        }
+        // Draw wires as straight lines between centers
+        var wireVerts: [SIMD2<Float>] = []
+        for e in edges {
+            if let a = portMap[e.fromNode]?[e.fromPort], let b = portMap[e.toNode]?[e.toPort] {
+                wireVerts.append(contentsOf: [a, b])
+            }
+        }
+        if !wireVerts.isEmpty {
+            enc.setVertexBytes(wireVerts, length: wireVerts.count * MemoryLayout<SIMD2<Float>>.stride, index: 0)
+            var colorWire = SIMD4<Float>(0.25,0.28,0.32,1)
+            enc.setFragmentBytes(&colorWire, length: MemoryLayout<SIMD4<Float>>.size, index: 0)
+            enc.drawPrimitives(type: .line, vertexStart: 0, vertexCount: wireVerts.count)
         }
         enc.endEncoding()
         cb.present(drawable)

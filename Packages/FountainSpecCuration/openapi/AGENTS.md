@@ -1,23 +1,30 @@
-# OpenAPI directory conventions
+# AGENT — Spec Curation (OpenAPI directory rules)
 
-This folder is the source of truth for our HTTP contracts. Keep specs versioned, linted, and discoverable so they feed cleanly into generation and the control plane.
+This directory is the single source of truth for HTTP contracts. Specs here are versioned, linted, and consumed by generators; server and client targets point at these files (directly or via symlink) and never commit generated Swift.
 
 Versioning and names
-Place each service spec in `openapi/v{major}/service-name.yml`. Gateway plugin specs use the `*-gateway.yml` suffix. Don’t delete or rewrite existing links: new versions append to the index so history remains intact.
+Place each service spec under `openapi/v{major}/service-name.yml`. Keep older versions; add new ones instead of rewriting history. For gateway‑related docs, use clear service names that match their owning package.
 
 Index in README
-After any change, update `openapi/README.md`. We maintain two tables there: Gateway plugins (owner and status) and Persistence/FountainStore specs. Use a simple status mark (e.g., ✅/❌) and keep entries additive.
+After any change, update `Packages/FountainSpecCuration/openapi/README.md`. Maintain two tables: Gateway (server and plugin surfaces) and Persistence/FountainStore specs. Use a simple status mark (e.g., ✅/❌) and keep entries additive.
 
-Validation
-Lint locally with `openapi/lint-matrix.sh <spec>` (or `--list`) and in CI via `Scripts/openapi/openapi-lint.sh`. Redocly failures block merges. Specs end with the required copyright line: `© 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.`
-
-Repository linkage
-Each new Gateway spec should map to a Swift package under `libs/GatewayPlugins/` and a `+GatewayPlugin.swift` registration in `services/GatewayServer/GatewayApp`. Keep names aligned so readers can jump between spec and code.
+Lint and validate
+- Local lint: `Packages/FountainSpecCuration/openapi/lint-matrix.sh <spec>` (or `--list`).
+- CI lint: `Scripts/openapi/openapi-lint.sh`.
+- Curated list validator: `Scripts/openapi/validate-curated-specs.sh` keeps `Configuration/curated-openapi-specs.json` in sync.
 
 Curator as single source
-After editing, invoke the FountainAI OpenAPI Curator via `POST /curate` with every `file://openapi/...` document and a `corpusId` for the bundle. The curated output is the authoritative copy and can be submitted to the Tools Factory when `submitToToolsFactory` is `true`.
+Use the FountainAI OpenAPI Curator to normalize and bundle specs. Run the service from `Packages/FountainTooling/Sources/openapi-curator-service` (HTTP `POST /curate`) or the CLI from `Packages/FountainTooling/Sources/openapi-curator-cli`. Curated output is authoritative and may be submitted to ToolsFactory when appropriate.
+
+Swift OpenAPI Generator workflow
+- Consuming targets provide an `openapi.yaml` in their source directory (or a symlink into this folder) and an `openapi-generator-config.yaml` declaring `generate: [types, server]` or `generate: [types, client]` (use `filter.paths` to scope operations).
+- Shared models live in `FountainCore` (or another shared kit); configure generators to omit duplicate schema emission.
+- Regenerate by running `swift build`; do not hand‑edit generated Swift.
+
+Repository linkage
+Gateway server lives at `Packages/FountainApps/Sources/gateway-server`; gateway plugins and shared gateway utilities live in `Packages/FountainGatewayKit`. Keep spec names aligned with targets so editors can jump from spec to code. Other services follow the same pattern under `Packages/FountainServiceKit-*/Sources/*Service` and consuming executables under `Packages/FountainApps/Sources/*-server`.
 
 Active plans
-See `openapi/arcspec_studio_plan.md` for ArcSpec and Studio implementation work. We use that doc to track changes that cross spec, generator, and UI.
+See `Packages/FountainSpecCuration/openapi/arcspec_studio_plan.md` and `Packages/FountainSpecCuration/openapi/gateway_generator_plan.md` for cross‑cutting work across specs, generators, and UI.
 
-Following these guidelines keeps specs versioned, linted, and wired cleanly into Gateway and FountainStore.
+Following these rules keeps specs versioned, linted, and wired cleanly into the generators, Gateway, and FountainStore.

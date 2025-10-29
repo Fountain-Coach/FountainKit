@@ -10,7 +10,8 @@ Unify the mental model: a PatchBay node should behave like a Stage. The Stage is
 
 ## Scope (initial)
 
-- Node = Stage for renderer nodes (`renderer.stage.*`), with capacity expressed as input ports mapped to baselines.
+- Node = Stage (rendererless): a node is the container that renders its own content; no separate “renderer” concept.
+- Stage family with capacity expressed as input ports mapped to baselines.
 - Inline, in‑node feedback (title, compact status) without external overlays.
 - Stable, persisted identity (name), live‑updating Flow label, and first‑free numbering on create.
 
@@ -20,7 +21,38 @@ Out‑of‑scope (this round): multi‑page stages, non‑rectangular stages, ad
 
 - Stage Baseline: horizontal rhythm used to typeset content; spacing defined by `baseline` and trimmed by `margins`.
 - Baseline Port: one Flow input per baseline, ordered top→bottom: `in0`, `in1`, …
-- Stage Node: `DashKind.stageA4` (later: family `renderer.stage.*`).
+- Stage Node: `DashKind.stageA4` (later: family `stage.*`).
+
+## Amendment — Rendererless Nodes (Decision)
+
+- Remove the “Renderer” concept from PatchBay. Rendering happens inside a node; a node is the boundary for composition and feedback.
+- Consequences:
+  - Left pane: drop the Renderers section; the Stage appears under “Dashboard Nodes” (or a “Containers” subsection).
+  - Types: deprecate `renderer.stage.*` naming; migrate to `stage.*` (keep runtime aliases for compatibility).
+  - Code: StageView remains an internal view used by the Stage node body; there is no separate preview window or overlay pipeline.
+  - Docs/tests: update terminology: “Stage node”, not “Stage renderer”.
+
+Migration checklist
+
+1) Types
+   - Rename `DashKind.stageA4` → `DashKind.stageA4` (keep enum but treat as container). Identify any lingering “renderer” mentions and remove.
+   - Keep a mapping layer to accept legacy `renderer.stage.a4` titles if they appear in old stores.
+
+2) UI
+   - Left pane: remove Renderers group; expose “The Stage (A4)” under Dashboard Nodes/Containers.
+   - Menus/toolbars: no “Preview/Renderer” verbiage.
+
+3) Runtime
+   - Node body owns rendering (title/status + Stage page content). No detached overlays for identity/status.
+   - Panel visuals (charts/tables) remain node‑local views when needed, but avoid global overlay layers.
+
+4) Tests
+   - Update any snapshot/UITest strings that mention “renderer”.
+   - Stage creation + rename + numbering + port count still green.
+
+5) Docs
+   - Update AGENTS and plans to remove “renderer” concept; standardize on “Stage node”.
+
 
 ## Functional Requirements
 
@@ -125,4 +157,3 @@ Out‑of‑scope (this round): multi‑page stages, non‑rectangular stages, ad
 - Change baseline/margins → port count updates; existing wires kept or clamped.
 - Inline rename updates label, left list, and persists.
 - No detached overlays for titles/status.
-

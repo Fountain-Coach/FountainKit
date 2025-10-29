@@ -192,7 +192,6 @@ final class EditorVM: ObservableObject {
     }
 
     func reorderStages(orderedStageIds: [String], isStage: (PBNode)->Bool) {
-        let stageSet = Set(orderedStageIds)
         var others: [PBNode] = []
         var stagesDict: [String: PBNode] = [:]
         for n in nodes { if isStage(n) { stagesDict[n.id] = n } else { others.append(n) } }
@@ -969,11 +968,17 @@ fileprivate struct QuickActionsMenu: View {
     @ViewBuilder
     private func flowEditorOverlay(docSize: CGSize) -> some View {
         let transform = CanvasTransform(scale: vm.zoom, translation: vm.translation)
-        NodeEditor(patch: $flowPatch, selection: $flowSelection)
-            .nodeColor(.clear)
+        // Split Flow patch into stage/rest with index maps so we can render dual editors
+        let classify: (Int) -> Bool = { idx in
+            guard idx >= 0, idx < vm.nodes.count, let k = state.dashboard[vm.nodes[idx].id]?.kind else { return false }
+            return k == .stageA4
+        }
+        let (stagePatch, restPatch, stageIndexMap, restIndexMap) = FountainFlowPatchOps.splitWithMaps(patch: flowPatch, isStage: classify)
+        // Render non-stage nodes with default style
+        NodeEditor(patch: .constant(restPatch), selection: $flowSelection)
             .onNodeMoved { index, loc in
-                guard index >= 0, index < flowNodeIds.count else { return }
-                let nodeId = flowNodeIds[index]
+                guard let orig = restIndexMap[index], orig >= 0, orig < flowNodeIds.count else { return }
+                let nodeId = flowNodeIds[orig]
                 guard let i = vm.nodeIndex(by: nodeId) else { return }
                 let g = CGFloat(vm.grid)
                 vm.nodes[i].x = Int((round(loc.x / g) * g))
@@ -997,10 +1002,11 @@ fileprivate struct QuickActionsMenu: View {
                 }
             }
             .onWireAdded { wire in
-                let srcId = vm.nodes[wire.output.nodeIndex].id
-                let dstId = vm.nodes[wire.input.nodeIndex].id
-                let outPorts = canonicalSortPorts(vm.nodes[wire.output.nodeIndex].ports.filter { $0.dir == .output })
-                let inPorts = canonicalSortPorts(vm.nodes[wire.input.nodeIndex].ports.filter { $0.dir == .input })
+                guard let oi = restIndexMap[wire.output.nodeIndex], let oj = restIndexMap[wire.input.nodeIndex] else { return }
+                let srcId = vm.nodes[oi].id
+                let dstId = vm.nodes[oj].id
+                let outPorts = canonicalSortPorts(vm.nodes[oi].ports.filter { $0.dir == .output })
+                let inPorts = canonicalSortPorts(vm.nodes[oj].ports.filter { $0.dir == .input })
                 guard wire.output.portIndex < outPorts.count, wire.input.portIndex < inPorts.count else { return }
                 let fromRef = srcId + "." + outPorts[wire.output.portIndex].id
                 let toRef = dstId + "." + inPorts[wire.input.portIndex].id
@@ -1021,15 +1027,92 @@ fileprivate struct QuickActionsMenu: View {
                 }
             }
             .onWireRemoved { wire in
-                let srcId = vm.nodes[wire.output.nodeIndex].id
-                let dstId = vm.nodes[wire.input.nodeIndex].id
-                let outPorts = canonicalSortPorts(vm.nodes[wire.output.nodeIndex].ports.filter { $0.dir == .output })
-                let inPorts = canonicalSortPorts(vm.nodes[wire.input.nodeIndex].ports.filter { $0.dir == .input })
+                guard let oi = restIndexMap[wire.output.nodeIndex], let oj = restIndexMap[wire.input.nodeIndex] else { return }
+                let srcId = vm.nodes[oi].id
+                let dstId = vm.nodes[oj].id
+                let outPorts = canonicalSortPorts(vm.nodes[oi].ports.filter { $0.dir == .output })
+                let inPorts = canonicalSortPorts(vm.nodes[oj].ports.filter { $0.dir == .input })
                 guard wire.output.portIndex < outPorts.count, wire.input.portIndex < inPorts.count else { return }
                 let fromRef = srcId + "." + outPorts[wire.output.portIndex].id
                 let toRef = dstId + "." + inPorts[wire.input.portIndex].id
                 vm.edges.removeAll { $0.from == fromRef && $0.to == toRef }
                 // Try to delete the corresponding link in the service (best-effort by match) when both ends are service instruments
+                Task { @MainActor in
+                    if let c = state.api as? PatchBayClient {
+                        let isServiceSrc = state.instruments.contains { $0.id == srcId }
+                        let isServiceDst = state.instruments.contains { $0.id == dstId }
+                        if isServiceSrc && isServiceDst {
+                            if let list = try? await c.listLinks() {
+                                if let match = list.first(where: { $0.kind == .property && $0.property?.from == fromRef && $0.property?.to == toRef }) {
+                                    try? await c.deleteLink(id: match.id)
+                                    await state.refreshLinks()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        // Render stage nodes port-interactive but with transparent body
+        NodeEditor(patch: .constant(stagePatch), selection: $flowSelection)
+            .nodeColor(.clear)
+            .onNodeMoved { index, loc in
+                guard let orig = stageIndexMap[index], orig >= 0, orig < flowNodeIds.count else { return }
+                let nodeId = flowNodeIds[orig]
+                guard let i = vm.nodeIndex(by: nodeId) else { return }
+                let g = CGFloat(vm.grid)
+                vm.nodes[i].x = Int((round(loc.x / g) * g))
+                vm.nodes[i].y = Int((round(loc.y / g) * g))
+                // Trash hit testing
+                let originView = transform.docToView(CGPoint(x: CGFloat(vm.nodes[i].x), y: CGFloat(vm.nodes[i].y)))
+                let rectView = CGRect(x: originView.x, y: originView.y, width: CGFloat(vm.nodes[i].w) * vm.zoom, height: CGFloat(vm.nodes[i].h) * vm.zoom)
+                let intersects = rectView.intersects(trashRectView)
+                if trashHover != intersects { trashHover = intersects }
+                if intersects {
+                    let id = vm.nodes[i].id
+                    let idsToDelete: Set<String> = (!vm.selected.isEmpty && vm.selected.contains(id)) ? vm.selected : [id]
+                    vm.deleteNodes(ids: idsToDelete)
+                    trashHover = false
+                    let center = CGPoint(x: rectView.midX, y: rectView.midY)
+                    let puff = PuffItem(center: center)
+                    puffItems.append(puff)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { puffItems.removeAll { $0.id == puff.id } }
+                    for did in idsToDelete { state.removeDashNode(id: did); state.removeServerNode(id: did); state.closeRendererPreview(id: did) }
+                }
+            }
+            .onWireAdded { wire in
+                guard let oi = stageIndexMap[wire.output.nodeIndex], let oj = stageIndexMap[wire.input.nodeIndex] else { return }
+                let srcId = vm.nodes[oi].id
+                let dstId = vm.nodes[oj].id
+                let outPorts = canonicalSortPorts(vm.nodes[oi].ports.filter { $0.dir == .output })
+                let inPorts = canonicalSortPorts(vm.nodes[oj].ports.filter { $0.dir == .input })
+                guard wire.output.portIndex < outPorts.count, wire.input.portIndex < inPorts.count else { return }
+                let fromRef = srcId + "." + outPorts[wire.output.portIndex].id
+                let toRef = dstId + "." + inPorts[wire.input.portIndex].id
+                vm.ensureEdge(from: (srcId, outPorts[wire.output.portIndex].id), to: (dstId, inPorts[wire.input.portIndex].id))
+                vm.transientGlowEdge(fromRef: fromRef, toRef: toRef)
+                Task { @MainActor in
+                    if let c = state.api as? PatchBayClient {
+                        let isServiceSrc = state.instruments.contains { $0.id == srcId }
+                        let isServiceDst = state.instruments.contains { $0.id == dstId }
+                        if isServiceSrc && isServiceDst {
+                            let prop = Components.Schemas.PropertyLink(from: fromRef, to: toRef, direction: .a_to_b)
+                            let create = Components.Schemas.CreateLink(kind: .property, property: prop, ump: nil)
+                            _ = try? await c.createLink(create)
+                            await state.refreshLinks()
+                        }
+                    }
+                }
+            }
+            .onWireRemoved { wire in
+                guard let oi = stageIndexMap[wire.output.nodeIndex], let oj = stageIndexMap[wire.input.nodeIndex] else { return }
+                let srcId = vm.nodes[oi].id
+                let dstId = vm.nodes[oj].id
+                let outPorts = canonicalSortPorts(vm.nodes[oi].ports.filter { $0.dir == .output })
+                let inPorts = canonicalSortPorts(vm.nodes[oj].ports.filter { $0.dir == .input })
+                guard wire.output.portIndex < outPorts.count, wire.input.portIndex < inPorts.count else { return }
+                let fromRef = srcId + "." + outPorts[wire.output.portIndex].id
+                let toRef = dstId + "." + inPorts[wire.input.portIndex].id
+                vm.edges.removeAll { $0.from == fromRef && $0.to == toRef }
                 Task { @MainActor in
                     if let c = state.api as? PatchBayClient {
                         let isServiceSrc = state.instruments.contains { $0.id == srcId }

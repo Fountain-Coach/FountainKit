@@ -983,8 +983,23 @@ struct ContentView: View {
                         Toggle("Use 1‑based indices", isOn: $vm.baselineIndexOneBased)
                             .disabled(!vm.showBaselineIndex)
                     }
-                    // Monitor menu trimmed: Prometheus removed; keep Clear for convenience
-                    Menu("Monitor") {
+                    // Knowledge/Monitor menu: clear canvas, harvest logs, open knowledge folder
+                    Menu("Knowledge") {
+                        Button("Harvest Logs to Knowledge") {
+                            if let url = try? StoryLogHarvester.harvestAll() { NSWorkspace.shared.open(url) }
+                        }
+                        Button("Open Knowledge Folder") { StoryLogHarvester.openKnowledgeFolder() }
+                        Button("Export Replay Frames from Log…") {
+                            let panel = NSOpenPanel()
+                            panel.allowedFileTypes = ["ndjson"]
+                            panel.allowsMultipleSelection = false
+                            panel.canChooseDirectories = false
+                            panel.title = "Choose a .ndjson story log"
+                            if panel.runModal() == .OK, let url = panel.url {
+                                Task { await ReplayExporter.exportFrames(from: url) }
+                            }
+                        }
+                        Divider()
                         Button("Clear Canvas") { state.clearCanvas(vm: vm) }
                     }
                     // Left Pane menu removed: mode switching is self-contained within the left pane

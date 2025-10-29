@@ -15,10 +15,21 @@ struct MetalCanvasHost: View {
                     if let dash = state.dashboard[n.id], dash.kind == .stageA4 {
                         let rect = CGRect(x: CGFloat(n.x), y: CGFloat(n.y), width: CGFloat(n.w), height: CGFloat(n.h))
                         let page = dash.props["page"] ?? "A4"
-                        let parts = (dash.props["margins"] ?? "18,18,18,18").split(separator: ",").compactMap{ Double($0.trimmingCharacters(in: .whitespaces)) }
-                        let m = (parts.count == 4) ? MVKMargins(top: parts[0], leading: parts[1], bottom: parts[2], trailing: parts[3]) : MVKMargins(top: 18, leading: 18, bottom: 18, trailing: 18)
+                        // Prefer individual margin keys if present; otherwise parse aggregated string
+                        let mTop = Double(dash.props["margins.top"] ?? "")
+                        let mLeft = Double(dash.props["margins.left"] ?? "")
+                        let mBottom = Double(dash.props["margins.bottom"] ?? "")
+                        let mRight = Double(dash.props["margins.right"] ?? "")
+                        let margins: MVKMargins = {
+                            if let t = mTop, let l = mLeft, let b = mBottom, let r = mRight {
+                                return MVKMargins(top: t, leading: l, bottom: b, trailing: r)
+                            }
+                            let parts = (dash.props["margins"] ?? "18,18,18,18").split(separator: ",").compactMap{ Double($0.trimmingCharacters(in: .whitespaces)) }
+                            if parts.count == 4 { return MVKMargins(top: parts[0], leading: parts[1], bottom: parts[2], trailing: parts[3]) }
+                            return MVKMargins(top: 18, leading: 18, bottom: 18, trailing: 18)
+                        }()
                         let bl = CGFloat(Double(dash.props["baseline"] ?? "12") ?? 12)
-                        nodes.append(StageMetalNode(id: n.id, frameDoc: rect, title: dash.props["title"] ?? (n.title ?? n.id), page: page, margins: m, baseline: bl))
+                        nodes.append(StageMetalNode(id: n.id, frameDoc: rect, title: dash.props["title"] ?? (n.title ?? n.id), page: page, margins: margins, baseline: bl))
                     }
                 }
                 return nodes
@@ -182,6 +193,14 @@ fileprivate struct NodeInteractionOverlay: View {
         for id in ids { if let n = vm.node(by: id) { initialPositions[id] = (n.x, n.y) } }
         pressStart = start
         lastPoint = start
+        // Emit drag.start with anchor point in doc-space
+        let doc = viewToDoc(start)
+        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+            "type": "drag.start",
+            "ids": Array(ids),
+            "anchor.doc.x": Double(doc.x),
+            "anchor.doc.y": Double(doc.y)
+        ])
     }
     private func applyDrag(to current: CGPoint) {
         guard let start = pressStart else { return }

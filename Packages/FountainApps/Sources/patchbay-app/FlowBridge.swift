@@ -25,7 +25,8 @@ struct FlowBridge {
                 return Flow.Port(name: name, type: portType(from: p.type))
             }
             let outputs = outPB.map { Flow.Port(name: $0.id, type: portType(from: $0.type)) }
-            return Flow.Node(name: titleFor(n),
+            let nodeName = isStage(n) ? "" : titleFor(n)
+            return Flow.Node(name: nodeName,
                              position: CGPoint(x: n.x, y: n.y),
                              inputs: inputs,
                              outputs: outputs)

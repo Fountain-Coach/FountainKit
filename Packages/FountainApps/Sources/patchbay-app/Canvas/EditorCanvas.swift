@@ -651,7 +651,7 @@ fileprivate struct NodeHandleOverlay: View {
                                   margins: parseInsetsLocal(mstr),
                                   baseline: bl)
                             .frame(width: rectView.width, height: rectView.height, alignment: .topLeading)
-                            .position(x: rectView.midX, y: rectView.midY)
+                            .position(x: rectView.minX, y: rectView.minY)
                             .allowsHitTesting(false)
                     }
                     
@@ -660,7 +660,7 @@ fileprivate struct NodeHandleOverlay: View {
                     if dash.kind == .stageA4 {
                         Color.clear
                             .frame(width: rectView.width, height: rectView.height, alignment: .topLeading)
-                            .position(x: rectView.midX, y: rectView.midY)
+                            .position(x: rectView.minX, y: rectView.minY)
                             .contentShape(Rectangle())
                             .onTapGesture(count: 2) { beginRename(n) }
                             .contextMenu { Button("Rename Stage…") { beginRename(n) } }

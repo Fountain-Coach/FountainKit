@@ -16,6 +16,7 @@ public struct MetalCanvasView: NSViewRepresentable {
     public typealias SelectedProvider = () -> Set<String>
     public typealias SelectHandler = (Set<String>) -> Void
     public typealias MoveByHandler = (_ ids: Set<String>, _ deltaDoc: CGSize) -> Void
+    public typealias TransformChanged = (_ translation: CGPoint, _ zoom: CGFloat) -> Void
     private let nodesProvider: NodesProvider
     private let edgesProvider: EdgesProvider
     private let zoom: CGFloat
@@ -26,6 +27,7 @@ public struct MetalCanvasView: NSViewRepresentable {
     private let selectedProvider: SelectedProvider
     private let onSelect: SelectHandler
     private let onMoveBy: MoveByHandler
+    private let onTransformChanged: TransformChanged
     public init(zoom: CGFloat,
                 translation: CGPoint,
                 gridMinor: CGFloat = 24,
@@ -35,6 +37,7 @@ public struct MetalCanvasView: NSViewRepresentable {
                 selected: @escaping SelectedProvider = { [] },
                 onSelect: @escaping SelectHandler = { _ in },
                 onMoveBy: @escaping MoveByHandler = { _,_  in },
+                onTransformChanged: @escaping TransformChanged = { _,_ in },
                 instrument: MetalInstrumentDescriptor? = nil) {
         self.zoom = zoom
         self.translation = translation
@@ -45,6 +48,7 @@ public struct MetalCanvasView: NSViewRepresentable {
         self.selectedProvider = selected
         self.onSelect = onSelect
         self.onMoveBy = onMoveBy
+        self.onTransformChanged = onTransformChanged
         self.instrument = instrument
     }
     public func makeNSView(context: Context) -> MTKView {
@@ -89,6 +93,7 @@ public struct MetalCanvasView: NSViewRepresentable {
         context.coordinator.selectedProvider = selectedProvider
         context.coordinator.onSelect = onSelect
         context.coordinator.onMoveBy = onMoveBy
+        context.coordinator.onTransformChanged = onTransformChanged
         if let mv = v as? MetalCanvasNSView { mv.coordinator = context.coordinator }
         return v
     }
@@ -106,6 +111,7 @@ public final class Coordinator: NSObject {
     fileprivate var selectedProvider: SelectedProvider = { [] }
     fileprivate var onSelect: SelectHandler = { _ in }
     fileprivate var onMoveBy: MoveByHandler = { _,_ in }
+    fileprivate var onTransformChanged: TransformChanged = { _,_ in }
     fileprivate var gridMinor: CGFloat = 24
     // Drag state
     fileprivate var pressView: CGPoint? = nil
@@ -124,14 +130,13 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
     private var edges: [MetalCanvasEdge] = []
     private var gridMinor: CGFloat = 24
     private var majorEvery: Int = 5
-    private var zoom: CGFloat = 1.0
-    private var translation: CGPoint = .zero
+    private var canvas = Canvas2D()
     // PE overrides
     private var overrideGridMinor: CGFloat? = nil
     private var overrideMajorEvery: Int? = nil
     // Snapshot accessors
-    var currentZoom: CGFloat { zoom }
-    var currentTranslation: CGPoint { translation }
+    var currentZoom: CGFloat { canvas.zoom }
+    var currentTranslation: CGPoint { canvas.translation }
     var currentGridMinor: CGFloat { overrideGridMinor ?? gridMinor }
     var currentMajorEvery: Int { overrideMajorEvery ?? majorEvery }
     // Snapshots for external hit-testing (read-only)
@@ -149,8 +154,8 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
         do { try buildPipeline(pixelFormat: mtkView.colorPixelFormat) } catch { return nil }
     }
     func update(zoom: CGFloat, translation: CGPoint, gridMinor: CGFloat, majorEvery: Int, nodes: [MetalCanvasNode], edges: [MetalCanvasEdge]) {
-        self.zoom = zoom
-        self.translation = translation
+        self.canvas.zoom = zoom
+        self.canvas.translation = translation
         self.gridMinor = gridMinor
         self.majorEvery = max(1, majorEvery)
         self.nodes = nodes
@@ -159,14 +164,16 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
     @MainActor
     func applyUniform(_ name: String, value: Float) {
         switch name {
-        case "zoom": self.zoom = CGFloat(max(0.25, min(3.0, value)))
-        case "translation.x": self.translation.x = CGFloat(value)
-        case "translation.y": self.translation.y = CGFloat(value)
+        case "zoom": self.canvas.zoom = CGFloat(max(self.canvas.minZoom, min(self.canvas.maxZoom, CGFloat(value))))
+        case "translation.x": self.canvas.translation.x = CGFloat(value)
+        case "translation.y": self.canvas.translation.y = CGFloat(value)
         case "grid.minor": self.overrideGridMinor = CGFloat(max(1.0, value))
         case "grid.majorEvery": self.overrideMajorEvery = max(1, Int(value.rounded()))
         default: break
         }
     }
+    @MainActor func panBy(docDX: CGFloat, docDY: CGFloat) { canvas.translation.x += docDX; canvas.translation.y += docDY }
+    @MainActor func zoomAround(anchorView: CGPoint, magnification: CGFloat) { canvas.zoomAround(viewAnchor: anchorView, magnification: magnification) }
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
     func draw(in view: MTKView) {
         guard let drawable = view.currentDrawable,
@@ -178,8 +185,8 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
         // Use view bounds in points for transform so overlays (SwiftUI points)
         // and Metal rendering share the same coordinate basis.
         let xf = MetalCanvasTransform(
-            zoom: Float(zoom),
-            translation: SIMD2<Float>(Float(translation.x), Float(translation.y)),
+            zoom: Float(canvas.zoom),
+            translation: SIMD2<Float>(Float(canvas.translation.x), Float(canvas.translation.y)),
             drawableSize: SIMD2<Float>(Float(view.bounds.width), Float(view.bounds.height))
         )
         // Grid background
@@ -264,11 +271,11 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
         cb.commit()
     }
     private func drawGrid(in view: MTKView, encoder: MTLRenderCommandEncoder, xf: MetalCanvasTransform) {
-        let z = max(0.0001, CGFloat(zoom))
-        let minDocX = 0 / z - translation.x
-        let maxDocX = CGFloat(view.drawableSize.width) / z - translation.x
-        let minDocY = 0 / z - translation.y
-        let maxDocY = CGFloat(view.drawableSize.height) / z - translation.y
+        let z = max(0.0001, CGFloat(canvas.zoom))
+        let minDocX = 0 / z - canvas.translation.x
+        let maxDocX = CGFloat(view.drawableSize.width) / z - canvas.translation.x
+        let minDocY = 0 / z - canvas.translation.y
+        let maxDocY = CGFloat(view.drawableSize.height) / z - canvas.translation.y
         let step = max(1.0, overrideGridMinor ?? gridMinor)
         // Vertical lines
         var vMinor: [SIMD2<Float>] = []
@@ -441,6 +448,39 @@ final class MetalCanvasNSView: MTKView {
                 "type":"marquee.end", "selected": Array(sel)
             ])
         }
+    }
+    // Trackpad pan (scroll)
+    override func scrollWheel(with event: NSEvent) {
+        guard let c = coordinator, let r = c.renderer else { return }
+        let s = max(0.0001, r.currentZoom)
+        let dxDoc = event.scrollingDeltaX / s
+        let dyDoc = event.scrollingDeltaY / s
+        r.panBy(docDX: dxDoc, docDY: dyDoc)
+        c.onTransformChanged(r.currentTranslation, r.currentZoom)
+        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+            "type":"ui.pan",
+            "x": Double(r.currentTranslation.x),
+            "y": Double(r.currentTranslation.y),
+            "dx.doc": Double(dxDoc),
+            "dy.doc": Double(dyDoc),
+            "dx.raw": Double(event.scrollingDeltaX),
+            "dy.raw": Double(event.scrollingDeltaY),
+            "precise": event.hasPreciseScrollingDeltas
+        ])
+    }
+    // Trackpad pinch to zoom (anchor-stable)
+    override func magnify(with event: NSEvent) {
+        guard let c = coordinator, let r = c.renderer else { return }
+        let anchor = convert(event.locationInWindow, from: nil)
+        r.zoomAround(anchorView: anchor, magnification: CGFloat(event.magnification))
+        c.onTransformChanged(r.currentTranslation, r.currentZoom)
+        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+            "type":"ui.zoom",
+            "zoom": Double(r.currentZoom),
+            "anchor.view.x": Double(anchor.x),
+            "anchor.view.y": Double(anchor.y),
+            "magnification": Double(event.magnification)
+        ])
     }
 }
 

@@ -945,17 +945,14 @@ struct ContentView: View {
                 }
             }) {
                 HStack(spacing: 0) {
-                    // Canvas with infinite pan/zoom via trackpad (Metal-backed)
-                    ZoomContainer(zoom: $vm.zoom, translation: $vm.translation) {
-                        MetalCanvasHost()
-                            .environmentObject(vm)
-                            .environmentObject(state)
-                            .background(Color(NSColor.textBackgroundColor))
-                    }
-                    .onDrop(of: [UTType.json, UTType.text], isTargeted: .constant(false)) { providers, location in
-                        handleDrop(providers: providers, location: location)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    MetalCanvasHost()
+                        .environmentObject(vm)
+                        .environmentObject(state)
+                        .background(Color(NSColor.textBackgroundColor))
+                        .onDrop(of: [UTType.json, UTType.text], isTargeted: .constant(false)) { providers, location in
+                            handleDrop(providers: providers, location: location)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .navigationTitle("PatchBay Canvas")

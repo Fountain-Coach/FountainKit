@@ -68,6 +68,7 @@ struct MetalCanvasHost: View {
                                     }
                                 }
                             },
+                            onTransformChanged: { t, z in vm.translation = t; vm.zoom = z },
                             instrument: MetalInstrumentDescriptor(manufacturer: "Fountain", product: "PatchBayCanvas", instanceId: "main", displayName: "PatchBay Canvas"))
             // Right-edge hover hit area for MIDI monitor
             MidiMonitorHitArea()

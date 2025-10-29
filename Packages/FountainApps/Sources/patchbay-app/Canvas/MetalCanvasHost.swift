@@ -153,6 +153,28 @@ fileprivate struct StageInstrumentsBinder: NSViewRepresentable {
                     default: break
                     }
                     state.updateDashProps(id: stageId, props: p)
+                    // Reflow Stage ports to match new baseline count; resize to canonical page size
+                    if let i = vm.nodeIndex(by: stageId) {
+                        func baselineCount(_ props: [String:String]) -> Int {
+                            let page = props["page"]?.lowercased() ?? "a4"
+                            let height: Double = (page == "letter") ? 792.0 : 842.0
+                            let baseline = Double(props["baseline"] ?? "12") ?? 12.0
+                            let mparts = (props["margins"] ?? "18,18,18,18").split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+                            let top = mparts.count == 4 ? mparts[0] : (Double(props["margins.top"] ?? "18") ?? 18)
+                            let bottom = mparts.count == 4 ? mparts[2] : (Double(props["margins.bottom"] ?? "18") ?? 18)
+                            let usable = max(0.0, height - top - bottom)
+                            return max(1, Int(floor(usable / max(1.0, baseline))))
+                        }
+                        func pageSize(_ props: [String:String]) -> (Int,Int) {
+                            let page = props["page"]?.lowercased() ?? "a4"
+                            return page == "letter" ? (612, 792) : (595, 842)
+                        }
+                        let newCount = baselineCount(p)
+                        var ports: [PBPort] = []
+                        for k in 0..<newCount { ports.append(.init(id: "in\(k)", side: .left, dir: .input, type: "view")) }
+                        vm.nodes[i].ports = canonicalSortPorts(ports)
+                        let sz = pageSize(p); vm.nodes[i].w = sz.0; vm.nodes[i].h = sz.1
+                    }
                 }
                 let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "Stage", instanceId: "stage-\(sid)", displayName: "Stage #\(sid)")
                 let inst = MetalInstrument(sink: sink, descriptor: desc)

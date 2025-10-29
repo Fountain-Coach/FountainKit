@@ -12,6 +12,25 @@ struct ZoomContainer<Content: View>: NSViewRepresentable {
         var parent: ZoomContainer
         weak var host: NSHostingView<AnyView>?
         init(_ parent: ZoomContainer) { self.parent = parent }
+        // Smooth pan animator
+        var panTarget: CGPoint = .zero
+        private var panTimer: Timer?
+        private let stepInterval: TimeInterval = 1.0/120.0
+        private let alpha: CGFloat = 0.28 // smoothing factor per tick
+        func startPanAnimator() {
+            if panTimer == nil {
+                panTimer = Timer.scheduledTimer(timeInterval: stepInterval, target: self, selector: #selector(tickPanAnimatorMain), userInfo: nil, repeats: true)
+            }
+        }
+        @objc private func tickPanAnimatorMain() { tickPanAnimator() }
+        private func tickPanAnimator() {
+            let cur = parent.translation
+            let tgt = panTarget
+            let dx = tgt.x - cur.x
+            let dy = tgt.y - cur.y
+            if abs(dx) < 0.01 && abs(dy) < 0.01 { parent.translation = tgt; return }
+            parent.translation = CGPoint(x: cur.x + dx * alpha, y: cur.y + dy * alpha)
+        }
 
         @objc func handleMagnify(_ gr: NSMagnificationGestureRecognizer) {
             guard let host = host else { return }
@@ -65,12 +84,13 @@ struct ZoomContainer<Content: View>: NSViewRepresentable {
             let invY: CGFloat = e.isDirectionInvertedFromDevice ? -1.0 : 1.0
             let dxDoc = invX * (e.scrollingDeltaX / s)
             let dyDoc = invY * (e.scrollingDeltaY / s)
-            coord.parent.translation.x += dxDoc
-            coord.parent.translation.y += dyDoc
+            coord.panTarget = CGPoint(x: coord.parent.translation.x + dxDoc,
+                                      y: coord.parent.translation.y + dyDoc)
+            coord.startPanAnimator()
             NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
                 "type": "ui.pan",
-                "x": Double(coord.parent.translation.x),
-                "y": Double(coord.parent.translation.y),
+                "x": Double(coord.panTarget.x),
+                "y": Double(coord.panTarget.y),
                 "dx.doc": Double(dxDoc),
                 "dy.doc": Double(dyDoc),
                 "dx.raw": Double(e.scrollingDeltaX),

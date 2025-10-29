@@ -31,6 +31,14 @@ struct MetalCanvasHost: View {
                         let bl = CGFloat(Double(dash.props["baseline"] ?? "12") ?? 12)
                         nodes.append(StageMetalNode(id: n.id, frameDoc: rect, title: dash.props["title"] ?? (n.title ?? n.id), page: page, margins: margins, baseline: bl))
                     }
+                    else if let dash = state.dashboard[n.id], dash.kind == .replayPlayer {
+                        let rect = CGRect(x: CGFloat(n.x), y: CGFloat(n.y), width: CGFloat(n.w), height: CGFloat(n.h))
+                        let title = dash.props["title"] ?? (n.title ?? n.id)
+                        let fps = Float(dash.props["fps"] ?? "10") ?? 10
+                        let playing = (dash.props["playing"] ?? "0") == "1"
+                        let frame = Int(dash.props["frame"] ?? "0") ?? 0
+                        nodes.append(ReplayMetalNode(id: n.id, frameDoc: rect, title: title, fps: fps, playing: playing, frameIndex: frame))
+                    }
                 }
                 return nodes
             }, edges: {
@@ -49,6 +57,8 @@ struct MetalCanvasHost: View {
             MidiMonitorHitArea()
             // Per-Stage MIDI 2.0 instruments: expose PE for page/margins/baseline
             StageInstrumentsBinder()
+            // Per-Replay MIDI 2.0 instruments: expose PE for play/fps/frame
+            ReplayInstrumentsBinder()
             // Selection outlines for single/group
             SelectionOverlay().allowsHitTesting(false)
             // Interaction overlay: hit-test, selection, group-select, drag-move
@@ -404,5 +414,101 @@ fileprivate struct SelectionOverlay: View {
                 }
             }
         }
+    }
+}
+
+import MetalKit
+final class ReplayMetalNode: MetalCanvasNode {
+    let id: String
+    var frameDoc: CGRect
+    var title: String
+    var fps: Float
+    var playing: Bool
+    var frameIndex: Int
+    init(id: String, frameDoc: CGRect, title: String, fps: Float, playing: Bool, frameIndex: Int) {
+        self.id = id; self.frameDoc = frameDoc; self.title = title; self.fps = fps; self.playing = playing; self.frameIndex = frameIndex
+    }
+    func portLayout() -> [MetalNodePort] { return [] }
+    func encode(into view: MTKView, device: MTLDevice, encoder: MTLRenderCommandEncoder, transform: MetalCanvasTransform) {
+        let tl = transform.docToNDC(x: frameDoc.minX, y: frameDoc.minY)
+        let tr = transform.docToNDC(x: frameDoc.maxX, y: frameDoc.minY)
+        let bl = transform.docToNDC(x: frameDoc.minX, y: frameDoc.maxY)
+        let br = transform.docToNDC(x: frameDoc.maxX, y: frameDoc.maxY)
+        var bgVerts = [tl, bl, tr, tr, bl, br]
+        encoder.setVertexBytes(bgVerts, length: bgVerts.count * MemoryLayout<SIMD2<Float>>.stride, index: 0)
+        var bg = SIMD4<Float>(0.98, 0.98, 0.985, 1)
+        encoder.setFragmentBytes(&bg, length: MemoryLayout<SIMD4<Float>>.size, index: 0)
+        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
+        var border = [tl, tr, tr, br, br, bl, bl, tl]
+        encoder.setVertexBytes(border, length: border.count * MemoryLayout<SIMD2<Float>>.stride, index: 0)
+        var c = SIMD4<Float>(0.72, 0.74, 0.78, 1)
+        encoder.setFragmentBytes(&c, length: MemoryLayout<SIMD4<Float>>.size, index: 0)
+        encoder.drawPrimitives(type: .line, vertexStart: 0, vertexCount: border.count)
+        // Play indicator
+        let inset: CGFloat = 8
+        let a = transform.docToNDC(x: frameDoc.minX + inset, y: frameDoc.minY + inset)
+        let b = transform.docToNDC(x: frameDoc.minX + inset, y: frameDoc.minY + inset + 14)
+        let d = transform.docToNDC(x: frameDoc.minX + inset + 12, y: frameDoc.minY + inset + 7)
+        var tri = [a, b, d]
+        encoder.setVertexBytes(tri, length: tri.count * MemoryLayout<SIMD2<Float>>.stride, index: 0)
+        var triColor = playing ? SIMD4<Float>(0.20,0.65,0.35,1) : SIMD4<Float>(0.75,0.75,0.78,1)
+        encoder.setFragmentBytes(&triColor, length: MemoryLayout<SIMD4<Float>>.size, index: 0)
+        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+    }
+}
+
+fileprivate struct ReplayInstrumentsBinder: NSViewRepresentable {
+    @EnvironmentObject var state: AppState
+    @EnvironmentObject var vm: EditorVM
+    final class Sink: MetalSceneRenderer {
+        let nodeId: String
+        weak var state: AppState?
+        init(nodeId: String, state: AppState?) { self.nodeId = nodeId; self.state = state }
+        func setUniform(_ name: String, float: Float) {
+            // Avoid capturing task-isolated self inside a MainActor task; capture values first.
+            let nodeId = self.nodeId
+            weak var weakState = self.state
+            Task { @MainActor in
+                guard let state = weakState, let dash = state.dashboard[nodeId], dash.kind == .replayPlayer else { return }
+                var p = dash.props
+                switch name {
+                case "replay.play": p["playing"] = (float > 0.5) ? "1" : "0"
+                case "replay.fps": p["fps"] = String(format: "%.3f", Double(float))
+                case "replay.frame": p["frame"] = String(Int(float.rounded()))
+                default: break
+                }
+                state.updateDashProps(id: nodeId, props: p)
+            }
+        }
+        func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
+        func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
+        func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+    }
+    final class Coordinator { var instruments: [String: MetalInstrument] = [:] }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeNSView(context: Context) -> NSView { NSView(frame: .zero) }
+    func updateNSView(_ nsView: NSView, context: Context) {
+        let ids = vm.nodes.compactMap { n in state.dashboard[n.id]?.kind == .replayPlayer ? n.id : nil }
+        for (sid, inst) in context.coordinator.instruments where !ids.contains(sid) { inst.disable(); context.coordinator.instruments.removeValue(forKey: sid) }
+        for sid in ids where context.coordinator.instruments[sid] == nil {
+            let sink = Sink(nodeId: sid, state: state)
+            let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "ReplayPlayer", instanceId: "rp-\(sid)", displayName: "Replay #\(sid)")
+            let inst = MetalInstrument(sink: sink, descriptor: desc)
+            inst.stateProvider = { [weak state] in
+                guard let dash = state?.dashboard[sid], dash.kind == .replayPlayer else { return [:] }
+                return [
+                    "replay.play": ((dash.props["playing"] ?? "0") == "1") ? 1.0 : 0.0,
+                    "replay.fps": Double(dash.props["fps"] ?? "10") ?? 10.0,
+                    "replay.frame": Double(dash.props["frame"] ?? "0") ?? 0.0,
+                    "replay.length": 0.0
+                ]
+            }
+            inst.enable()
+            context.coordinator.instruments[sid] = inst
+        }
+    }
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        for (_, i) in coordinator.instruments { i.disable() }
+        coordinator.instruments.removeAll()
     }
 }

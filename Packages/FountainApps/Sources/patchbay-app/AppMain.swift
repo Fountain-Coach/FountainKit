@@ -1252,6 +1252,7 @@ struct ContentView: View {
             case .panelStat: return "ps"
             case .panelTable: return "pt"
             case .stageA4: return "stage"
+            case .replayPlayer: return "replay"
             case .adapterFountain: return "fxf"
             case .adapterScoreKit: return "fxs"
             }
@@ -1297,12 +1298,13 @@ struct ContentView: View {
             case .panelStat: return "prom.panel.stat"
             case .panelTable: return "prom.panel.table"
             case .stageA4: return "stage.a4"
+            case .replayPlayer: return "replay.player"
             case .adapterFountain: return "adapter.fountain→teatro"
             case .adapterScoreKit: return "adapter.scorekit→teatro"
             }
         }(), x: x, y: y,
            w: (kind == .stageA4 ? stageSize.0 : 260),
-           h: (kind == .stageA4 ? stageSize.1 : (kind == .panelLine ? 200 : (kind == .panelStat ? 140 : (kind == .panelTable ? 200 : 140)))),
+           h: (kind == .stageA4 ? stageSize.1 : (kind == .panelLine ? 200 : (kind == .panelStat ? 140 : (kind == .panelTable ? 200 : (kind == .replayPlayer ? 180 : 140))))),
            ports: canonicalSortPorts(ports))
         vm.nodes.append(node)
         var propsToSave = props
@@ -1348,6 +1350,8 @@ struct ContentView: View {
             if let top = lastId(where: { _, k in k == .topN }) { _ = vm.ensureEdge(from: (top,"out"), to: (newId,"in")) }
         case .stageA4:
             if let up = lastId(where: { _, k in k == .panelLine || k == .panelStat || k == .panelTable || k == .adapterFountain || k == .adapterScoreKit }) { _ = vm.ensureEdge(from: (up,"out"), to: (newId,"in0")) }
+        case .replayPlayer:
+            break
         case .adapterFountain, .adapterScoreKit:
             if let stage = lastId(where: { _, k in k == .stageA4 }) { _ = vm.ensureEdge(from: (newId,"out"), to: (stage,"in0")) }
         case .datasource:
@@ -1401,6 +1405,10 @@ struct DashEditSheet: View {
     @State private var refreshSeconds: String = "10"
     @State private var title: String = ""
     @State private var sourcePath: String = ""
+    // Replay player properties
+    @State private var replayFPS: String = "10"
+    @State private var replayPlaying: Bool = false
+    @State private var replayFrame: String = "0"
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack { Text("Edit \(dash.kind.rawValue)").font(.title3).bold(); Spacer(); Button("Close") { dismiss() } }
@@ -1428,6 +1436,13 @@ struct DashEditSheet: View {
                 TextField("Title", text: $title)
                 HStack { TextField("Page (A4/Letter)", text: Binding(get: { dash.props["page"] ?? "A4" }, set: { _ in })); TextField("Baseline (pt)", text: Binding(get: { dash.props["baseline"] ?? "12" }, set: { _ in })) }
                 TextField("Margins (t,l,b,r)", text: Binding(get: { dash.props["margins"] ?? "18,18,18,18" }, set: { _ in }))
+            case .replayPlayer:
+                TextField("Title", text: $title)
+                HStack {
+                    TextField("FPS", text: $replayFPS).frame(width: 80)
+                    Toggle("Playing", isOn: $replayPlaying)
+                }
+                TextField("Frame Index", text: $replayFrame).frame(width: 140)
             case .adapterFountain, .adapterScoreKit:
                 TextField("Source (file path)", text: $sourcePath)
             }
@@ -1445,6 +1460,10 @@ struct DashEditSheet: View {
         stepSeconds = p["stepSeconds"] ?? stepSeconds
         refreshSeconds = p["refreshSeconds"] ?? refreshSeconds
         title = p["title"] ?? dash.kind.rawValue
+        // Replay
+        replayFPS = p["fps"] ?? replayFPS
+        replayPlaying = (p["playing"] ?? "0") == "1"
+        replayFrame = p["frame"] ?? replayFrame
         sourcePath = p["source"] ?? sourcePath
     }
     private func save() {
@@ -1464,6 +1483,12 @@ struct DashEditSheet: View {
             vm.setNodeTitle(id: id, title: title)
             // Recompute baseline-derived ports and migrate edges
             reflowStagePorts(id: id, props: p)
+        case .replayPlayer:
+            p["title"] = title
+            vm.setNodeTitle(id: id, title: title)
+            p["fps"] = replayFPS
+            p["playing"] = replayPlaying ? "1" : "0"
+            p["frame"] = replayFrame
         case .adapterFountain, .adapterScoreKit:
             p["source"] = sourcePath
         default: break
@@ -1540,6 +1565,9 @@ struct TemplateLibraryView: View {
         List {
             Section(header: Text("Stage").font(.headline)) {
                 DashNodeRow(title: "Add Stage (A4)", dashKind: .stageA4, defaultProps: ["title":"The Stage", "page":"A4", "margins":"18,18,18,18", "baseline":"12"]).environmentObject(state).environmentObject(vm)
+            }
+            Section(header: Text("Instruments").font(.headline)) {
+                DashNodeRow(title: "Replay Player", dashKind: .replayPlayer, defaultProps: ["title":"Replay", "fps":"10", "playing":"0", "frame":"0"]).environmentObject(state).environmentObject(vm)
             }
             // Existing stages on canvas
             let stages: [PBNode] = vm.nodes.filter { n in state.dashboard[n.id]?.kind == .stageA4 }
@@ -1806,6 +1834,7 @@ struct DashNodeRow: View {
             case .panelStat: return "ps"
             case .panelTable: return "pt"
             case .stageA4: return "stage"
+            case .replayPlayer: return "replay"
             case .adapterFountain: return "fxf"
             case .adapterScoreKit: return "fxs"
             }
@@ -1846,7 +1875,7 @@ struct DashNodeRow: View {
         }()
         let node = PBNode(id: id, title: titleFrom(kind), x: x, y: y,
                           w: (kind == .stageA4 ? stageSize.0 : 260),
-                          h: (kind == .stageA4 ? stageSize.1 : (kind == .panelLine ? 200 : (kind == .panelStat ? 140 : (kind == .panelTable ? 200 : 140)))),
+                          h: (kind == .stageA4 ? stageSize.1 : (kind == .panelLine ? 200 : (kind == .panelStat ? 140 : (kind == .panelTable ? 200 : (kind == .replayPlayer ? 180 : 140))))),
                           ports: canonicalSortPorts(ports))
         vm.nodes.append(node)
         var propsToSave2 = props
@@ -1886,6 +1915,8 @@ struct DashNodeRow: View {
             if let top = lastId(where: { _, k in k == .topN }) { _ = vm.ensureEdge(from: (top,"out"), to: (id,"in")) }
         case .stageA4:
             if let up = lastId(where: { _, k in k == .panelLine || k == .panelStat || k == .panelTable || k == .adapterFountain || k == .adapterScoreKit }) { _ = vm.ensureEdge(from: (up,"out"), to: (id,"in")) }
+        case .replayPlayer:
+            break
         case .adapterFountain, .adapterScoreKit:
             if let stage = lastId(where: { _, k in k == .stageA4 }) { _ = vm.ensureEdge(from: (id,"out"), to: (stage,"in")) }
         case .datasource:
@@ -1893,8 +1924,8 @@ struct DashNodeRow: View {
         }
         return id
     }
-    private func titleFrom(_ k: DashKind) -> String { switch k { case .datasource: return "prom.datasource"; case .query: return "prom.query"; case .transform: return "prom.transform"; case .aggregator: return "prom.aggregator"; case .topN: return "prom.topN"; case .threshold: return "prom.threshold"; case .panelLine: return "prom.panel.line"; case .panelStat: return "prom.panel.stat"; case .panelTable: return "prom.panel.table"; case .stageA4: return "renderer.stage.a4"; case .adapterFountain: return "adapter.fountain→teatro"; case .adapterScoreKit: return "adapter.scorekit→teatro" } }
-    private func iconName(for k: DashKind) -> String { switch k { case .datasource: return "bolt.horizontal"; case .query: return "text.magnifyingglass"; case .transform: return "arrow.triangle.2.circlepath"; case .aggregator: return "sum"; case .topN: return "list.number"; case .threshold: return "line.diagonal.arrow"; case .panelLine: return "chart.line.uptrend.xyaxis"; case .panelStat: return "gauge"; case .panelTable: return "tablecells"; case .stageA4: return "doc.richtext"; case .adapterFountain: return "text.document"; case .adapterScoreKit: return "music.quarternote.3" } }
+    private func titleFrom(_ k: DashKind) -> String { switch k { case .datasource: return "prom.datasource"; case .query: return "prom.query"; case .transform: return "prom.transform"; case .aggregator: return "prom.aggregator"; case .topN: return "prom.topN"; case .threshold: return "prom.threshold"; case .panelLine: return "prom.panel.line"; case .panelStat: return "prom.panel.stat"; case .panelTable: return "prom.panel.table"; case .stageA4: return "renderer.stage.a4"; case .replayPlayer: return "replay.player"; case .adapterFountain: return "adapter.fountain→teatro"; case .adapterScoreKit: return "adapter.scorekit→teatro" } }
+    private func iconName(for k: DashKind) -> String { switch k { case .datasource: return "bolt.horizontal"; case .query: return "text.magnifyingglass"; case .transform: return "arrow.triangle.2.circlepath"; case .aggregator: return "sum"; case .topN: return "list.number"; case .threshold: return "line.diagonal.arrow"; case .panelLine: return "chart.line.uptrend.xyaxis"; case .panelStat: return "gauge"; case .panelTable: return "tablecells"; case .stageA4: return "doc.richtext"; case .replayPlayer: return "play.rectangle"; case .adapterFountain: return "text.document"; case .adapterScoreKit: return "music.quarternote.3" } }
 }
 
 enum FlowNodeKind: String, Codable { case audioInput, analyzer, noteProcessor, transportEndpoint }

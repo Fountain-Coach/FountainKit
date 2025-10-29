@@ -6,6 +6,7 @@ struct MetalCanvasHost: View {
     @EnvironmentObject var state: AppState
     var body: some View {
         ZStack(alignment: .topLeading) {
+            UMPRecorderBinder()
             MetalCanvasView(zoom: vm.zoom, translation: vm.translation, gridMinor: CGFloat(vm.grid), majorEvery: vm.majorEvery, nodes: {
                 // Map Stage nodes for now; other kinds can be added later
                 var nodes: [MetalCanvasNode] = []

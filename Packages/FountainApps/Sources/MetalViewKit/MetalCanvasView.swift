@@ -7,6 +7,7 @@ import CoreMIDI
 
 public extension Notification.Name {
     static let MetalCanvasMIDIActivity = Notification.Name("MetalCanvasMIDIActivity")
+    static let MetalCanvasUMPOut = Notification.Name("MetalCanvasUMPOut")
 }
 
 public struct MetalCanvasView: NSViewRepresentable {
@@ -44,6 +45,12 @@ public struct MetalCanvasView: NSViewRepresentable {
                 let inst = MetalInstrument(sink: sink, descriptor: desc)
                 inst.enable()
                 context.coordinator.instrument = inst
+                // Bridge app activity events into UMP vendor JSON
+                NotificationCenter.default.addObserver(forName: .MetalCanvasMIDIActivity, object: nil, queue: .main) { noti in
+                    var dict: [String: Any] = [:]
+                    noti.userInfo?.forEach { k, v in dict[String(describing: k)] = v }
+                    inst.sendVendorJSONEvent(topic: dict["type"] as? String ?? "event", dict: dict)
+                }
             }
         }
         return v

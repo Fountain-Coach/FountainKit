@@ -236,8 +236,8 @@ public final class MetalInstrument: @unchecked Sendable {
     }
 
     // Send SysEx7 UMP stream with correct packet headers (Single/Start/Continue/End), 6 bytes per packet
-    private func sendSysEx7UMP(bytes: [UInt8], group: UInt8 = 0) {
-        guard client != 0, src != 0 else { return }
+    private func buildSysEx7Words(bytes: [UInt8], group: UInt8 = 0) -> [UInt32] {
+        guard client != 0, src != 0 else { return [] }
         let chunks: [[UInt8]] = stride(from: 0, to: bytes.count, by: 6).map { Array(bytes[$0..<min($0+6, bytes.count)]) }
         var words: [UInt32] = []
         for (idx, chunk) in chunks.enumerated() {
@@ -255,6 +255,11 @@ public final class MetalInstrument: @unchecked Sendable {
             let w2 = UInt32(bigEndian: (UInt32(b[4]) << 24) | (UInt32(b[5]) << 16) | (UInt32(b[6]) << 8) | UInt32(b[7]))
             words.append(w1); words.append(w2)
         }
+        return words
+    }
+
+    private func sendSysEx7UMP(bytes: [UInt8], group: UInt8 = 0) {
+        let words = buildSysEx7Words(bytes: bytes, group: group)
         // Emit via virtual source
         let byteCount = MemoryLayout<MIDIEventList>.size + MemoryLayout<UInt32>.size * (max(1, words.count) - 1)
         let raw = UnsafeMutableRawPointer.allocate(byteCount: byteCount, alignment: MemoryLayout<MIDIEventList>.alignment)
@@ -265,6 +270,20 @@ public final class MetalInstrument: @unchecked Sendable {
             cur = MIDIEventListAdd(listPtr, byteCount, cur, 0, buf.count, buf.baseAddress!)
         }
         _ = MIDIReceivedEventList(src, listPtr)
+    }
+
+    public func sendVendorJSONEvent(topic: String, dict: [String: Any], group: UInt8 = 0) {
+        // Vendor 0x7D + UTF8 JSON payload: [F0 7D 'J' 'S' 'O' 'N' 00 <json bytes> F7] (enveloped via SysEx7 UMP)
+        var payload: [UInt8] = [0xF0, 0x7D, 0x4A, 0x53, 0x4F, 0x4E, 0x00]
+        let body: [String: Any] = ["topic": topic, "data": dict, "ts": ISO8601DateFormatter().string(from: Date())]
+        let data = (try? JSONSerialization.data(withJSONObject: body)) ?? Data()
+        payload.append(contentsOf: data)
+        payload.append(0xF7)
+        let words = buildSysEx7Words(bytes: payload, group: group)
+        // Send
+        sendSysEx7UMP(bytes: payload, group: group)
+        // Publish for recorders
+        NotificationCenter.default.post(name: .MetalCanvasUMPOut, object: nil, userInfo: ["topic": topic, "data": body, "words": words])
     }
 }
 

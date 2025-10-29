@@ -1,8 +1,12 @@
 import SwiftUI
+import MetalViewKit
 
 struct Midi2MonitorOverlay: View {
     @Binding var isHot: Bool
     @State private var targetOpacity: Double = 1.0
+    @State private var minOpacity: Double = 0.08
+    @State private var fadeSeconds: Double = 4.0
+    @State private var maxLines: Int = 12
     @State private var lastEvent: Date? = nil
     @State private var count: Int = 0
     @State private var events: [Event] = []
@@ -14,10 +18,8 @@ struct Midi2MonitorOverlay: View {
         let color: Color
     }
 
-    private func push(_ e: Event) {
-        events.append(e)
-        if events.count > 12 { events.removeFirst(events.count - 12) }
-    }
+    private func push(_ e: Event) { events.append(e); trim() }
+    private func trim() { if events.count > maxLines { events.removeFirst(events.count - maxLines) } }
 
     private func formatEvent(_ info: [AnyHashable: Any]?) -> Event {
         let type = (info?["type"] as? String) ?? "?"
@@ -58,8 +60,8 @@ struct Midi2MonitorOverlay: View {
     }
 
     private func startFade() {
-        withAnimation(.linear(duration: 4.0).repeatForever(autoreverses: false)) {
-            targetOpacity = 0.08
+        withAnimation(.linear(duration: fadeSeconds).repeatForever(autoreverses: false)) {
+            targetOpacity = minOpacity
         }
     }
     private func stopFade() {
@@ -99,5 +101,36 @@ struct Midi2MonitorOverlay: View {
             lastEvent = Date(); count += 1
             if let info = noti.userInfo { push(formatEvent(info)) }
         }
+        .overlay(InstrumentBinder(onSet: { name, value in
+            switch name {
+            case "monitor.fadeSeconds": self.fadeSeconds = Double(value); self.startFade()
+            case "monitor.opacity.min": self.minOpacity = Double(value); self.startFade()
+            case "monitor.maxLines": self.maxLines = max(1, Int(value)); self.trim()
+            default: break
+            }
+        }))
     }
+}
+
+// Binds a MetalInstrument (MIDI 2.0) to this overlay and maps PE setUniform to overlay properties.
+fileprivate struct InstrumentBinder: NSViewRepresentable {
+    let onSet: (String, Float) -> Void
+    final class Sink: MetalSceneRenderer { var onSet: ((String, Float)->Void)?; func setUniform(_ name: String, float: Float) { onSet?(name, float) }
+        func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
+        func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
+        func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+    }
+    final class Coordinator { var instrument: MetalInstrument? = nil }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeNSView(context: Context) -> NSView {
+        let v = NSView(frame: .zero)
+        let sink = Sink(); sink.onSet = onSet
+        let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "MidiMonitor", instanceId: "overlay", displayName: "MIDI Monitor Overlay")
+        let inst = MetalInstrument(sink: sink, descriptor: desc)
+        inst.enable()
+        context.coordinator.instrument = inst
+        return v
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) { coordinator.instrument?.disable(); coordinator.instrument = nil }
 }

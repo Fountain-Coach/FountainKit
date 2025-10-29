@@ -25,7 +25,7 @@ public struct MetalInstrumentDescriptor: Sendable, Equatable {
     }
 }
 
-final class MetalInstrument: @unchecked Sendable {
+public final class MetalInstrument: @unchecked Sendable {
     private weak var sink: MetalSceneRenderer?
     private let desc: MetalInstrumentDescriptor
 
@@ -33,12 +33,12 @@ final class MetalInstrument: @unchecked Sendable {
     private var src: MIDIEndpointRef = 0
     private var dest: MIDIEndpointRef = 0
 
-    init(sink: MetalSceneRenderer, descriptor: MetalInstrumentDescriptor) {
+    public init(sink: MetalSceneRenderer, descriptor: MetalInstrumentDescriptor) {
         self.sink = sink
         self.desc = descriptor
     }
 
-    func enable() {
+    public func enable() {
         guard client == 0 else { return }
         let nameCF = (desc.displayName as CFString)
         let clientName = "\(desc.product)#\(desc.instanceId)" as CFString
@@ -54,7 +54,7 @@ final class MetalInstrument: @unchecked Sendable {
         publishStateCI()
     }
 
-    func disable() {
+    public func disable() {
         if src != 0 { MIDIEndpointDispose(src); src = 0 }
         if dest != 0 { MIDIEndpointDispose(dest); dest = 0 }
         if client != 0 { MIDIClientDispose(client); client = 0 }

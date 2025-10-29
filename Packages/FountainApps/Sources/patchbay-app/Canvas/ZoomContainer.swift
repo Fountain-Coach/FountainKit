@@ -58,17 +58,16 @@ struct ZoomContainer<Content: View>: NSViewRepresentable {
         NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak coord = context.coordinator] e in
             guard let coord, let win = host.window, e.window == win else { return e }
             if NSApp.modalWindow != nil || win.attachedSheet != nil { return e }
-            Task { @MainActor in
-                let s = max(0.0001, coord.parent.zoom)
-                // Pan follows trackpad: swipe up -> content moves up
-                // Adjust for device inversion flag so behavior is consistent with system preference
-                let inv: CGFloat = e.isDirectionInvertedFromDevice ? 1.0 : -1.0
-                coord.parent.translation.x += inv * (e.scrollingDeltaX / s)
-                coord.parent.translation.y += inv * (e.scrollingDeltaY / s)
-                NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
-                    "type": "ui.pan", "x": Double(coord.parent.translation.x), "y": Double(coord.parent.translation.y)
-                ])
-            }
+            let s = max(0.0001, coord.parent.zoom)
+            // Make horizontal follow finger.
+            let invX: CGFloat = e.isDirectionInvertedFromDevice ? 1.0 : -1.0
+            // Vertical: ensure swipe up moves content up (doc translation decreases).
+            let invY: CGFloat = e.isDirectionInvertedFromDevice ? -1.0 : 1.0
+            coord.parent.translation.x += invX * (e.scrollingDeltaX / s)
+            coord.parent.translation.y += invY * (e.scrollingDeltaY / s)
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                "type": "ui.pan", "x": Double(coord.parent.translation.x), "y": Double(coord.parent.translation.y)
+            ])
             return e
         }
         // Install content after view is set up

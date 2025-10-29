@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import Flow
+import FountainFlow
 import Foundation
 
 enum PBPortSide: String, CaseIterable { case left, right, top, bottom }
@@ -512,10 +513,10 @@ struct EditorCanvas: View {
                     let minor = CGFloat(vm.grid)
                     let major = CGFloat(vm.grid * max(1, vm.majorEvery))
                 AnyView(GridBackground(size: docSize, minorStepPoints: minor, majorStepPoints: major, scale: vm.zoom, translation: vm.translation))
-                AnyView(flowEditorOverlay(docSize: docSize)
-                    .frame(width: docSize.width, height: docSize.height)
-                    .overlay(NodeHandleOverlay(docSize: docSize).environmentObject(vm).environmentObject(state))
-                    .overlay(BaselineIndexOverlay(docSize: docSize).environmentObject(vm).environmentObject(state)))
+                    AnyView(flowEditorOverlay(docSize: docSize)
+                        .frame(width: docSize.width, height: docSize.height)
+                        .overlay(NodeHandleOverlay(docSize: docSize).environmentObject(vm).environmentObject(state))
+                        .overlay(stageOverlay(docSize: docSize)))
                 }
                 .frame(width: docSize.width, height: docSize.height, alignment: .topLeading)
                 .offset(x: padX, y: padY)
@@ -709,50 +710,6 @@ fileprivate struct NodeHandleOverlay: View {
     }
 }
 
-// HUD overlay: draws small numeric ticks near Stage input ports
-fileprivate struct BaselineIndexOverlay: View {
-    @EnvironmentObject var vm: EditorVM
-    @EnvironmentObject var state: AppState
-    var docSize: CGSize
-    var body: some View {
-        let transform = CanvasTransform(scale: vm.zoom, translation: vm.translation)
-        return ZStack(alignment: .topLeading) {
-            if vm.showBaselineIndex {
-                ForEach(vm.nodes, id: \.id) { n in
-                    if let dash = state.dashboard[n.id], dash.kind == .stageA4 {
-                        // Only show when selected, unless always-on
-                        if vm.alwaysShowBaselineIndex || vm.selection == n.id {
-                            let origin = transform.docToView(CGPoint(x: CGFloat(n.x), y: CGFloat(n.y)))
-                            let rectView = CGRect(x: origin.x, y: origin.y, width: CGFloat(n.w)*vm.zoom, height: CGFloat(n.h)*vm.zoom)
-                            let inPorts = canonicalSortPorts(n.ports.filter { $0.dir == .input && $0.id.hasPrefix("in") })
-                            let count = max(0, inPorts.count)
-                            if count > 0 {
-                                ForEach(Array(inPorts.enumerated()), id: \.element.id) { idx, _ in
-                                    let k = vm.baselineIndexOneBased ? (idx + 1) : idx
-                                    // Evenly distribute indices along the node height (match port placement)
-                                    let frac = CGFloat(idx + 1) / CGFloat(count + 1)
-                                    let y = rectView.minY + rectView.height * frac
-                                    // Place label just inside the left edge
-                                    let x = rectView.minX + 6
-                                    Text("\(k)")
-                                        .font(.system(size: 9, weight: .regular, design: .monospaced))
-                                        .foregroundStyle(.secondary)
-                                        .padding(.horizontal, 2)
-                                        .padding(.vertical, 0)
-                                        .background(Color(nsColor: .textBackgroundColor).opacity(0.6))
-                                        .clipShape(RoundedRectangle(cornerRadius: 3))
-                                        .position(x: x, y: y)
-                                        .allowsHitTesting(false)
-                                        .accessibilityLabel(Text("Stage \(dash.props["title"] ?? (n.title ?? n.id)), input \(k) of \(count)"))
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 fileprivate struct ExecutorHook: View {
     @EnvironmentObject var vm: EditorVM
@@ -1092,6 +1049,26 @@ fileprivate struct QuickActionsMenu: View {
                 vm.zoom = CGFloat(z)
                 vm.translation = CGPoint(x: pan.width, y: pan.height)
             }
+    }
+
+    // FountainFlow: stage overlay composed from dashboard registry + vm node rects
+    private func stageOverlay(docSize: CGSize) -> some View {
+        let stages: [StageNodeModel] = vm.nodes.compactMap { n in
+            guard let dash = state.dashboard[n.id], dash.kind == .stageA4 else { return nil }
+            let rectDoc = CGRect(x: CGFloat(n.x), y: CGFloat(n.y), width: CGFloat(n.w), height: CGFloat(n.h))
+            let page = dash.props["page"] ?? "A4"
+            let mstr = dash.props["margins"] ?? "18,18,18,18"
+            let parts = mstr.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+            let margins = (parts.count == 4) ? EdgeInsets(top: parts[0], leading: parts[1], bottom: parts[2], trailing: parts[3]) : EdgeInsets(top: 18, leading: 18, bottom: 18, trailing: 18)
+            let baseline = CGFloat(Double(dash.props["baseline"] ?? "12") ?? 12)
+            return StageNodeModel(id: n.id, rectDoc: rectDoc, title: dash.props["title"] ?? (n.title ?? n.id), page: page, margins: margins, baseline: baseline, selected: (vm.selection == n.id))
+        }
+        return StageOverlayHost(stages: stages,
+                                zoom: vm.zoom,
+                                translation: vm.translation,
+                                showBaselineIndex: vm.showBaselineIndex,
+                                alwaysShow: vm.alwaysShowBaselineIndex,
+                                oneBased: vm.baselineIndexOneBased)
     }
 
     // Overlays (zones/notes/health) removed in monitor mode

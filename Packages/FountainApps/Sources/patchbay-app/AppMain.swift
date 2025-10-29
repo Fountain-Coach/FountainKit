@@ -1061,6 +1061,13 @@ struct ContentView: View {
         return max(1, Int(floor(usable / max(1.0, baseline))))
     }
 
+    // Canonical Stage page size in points
+    private func stagePageSize(_ props: [String:String]) -> (Int, Int) {
+        let page = props["page"]?.lowercased() ?? "a4"
+        if page == "letter" { return (612, 792) } // 8.5x11in at 72dpi
+        return (595, 842) // A4 at 72dpi
+    }
+
     private func buildPrometheusExample() {
         // Clear canvas; compose datasource -> 3 queries -> 3 panels
         state.clearCanvas(vm: vm)
@@ -1278,14 +1285,8 @@ struct ContentView: View {
             ports.append(.init(id: "in", side: .left, dir: .input, type: "data"))
             ports.append(.init(id: "out", side: .right, dir: .output, type: "data"))
         }
-        // Stage sizing depends on current zoom so it appears usable immediately
-        let stageSize: (Int, Int) = {
-            let z = max(0.0001, vm.zoom)
-            let baseW = 480, baseH = 680
-            let w = Int(CGFloat(baseW) / z)
-            let h = Int(CGFloat(baseH) / z)
-            return (w, h)
-        }()
+        // Stage sizing uses canonical page size so node equals page
+        let stageSize: (Int, Int) = stagePageSize(props)
         let node = PBNode(id: id, title: {
             switch kind {
             case .datasource: return "prom.datasource"
@@ -1491,6 +1492,15 @@ struct DashEditSheet: View {
         var ports: [PBPort] = []
         for k in 0..<newCount { ports.append(.init(id: "in\(k)", side: .left, dir: .input, type: "view")) }
         vm.nodes[i].ports = canonicalSortPorts(ports)
+        // Resize node to canonical page size so page and node are one
+        func stagePageSizeLocal(_ props: [String:String]) -> (Int, Int) {
+            let page = props["page"]?.lowercased() ?? "a4"
+            if page == "letter" { return (612, 792) }
+            return (595, 842)
+        }
+        let sz = stagePageSizeLocal(props)
+        vm.nodes[i].w = sz.0
+        vm.nodes[i].h = sz.1
         // Migrate edges
         for eidx in 0..<vm.edges.count {
             var e = vm.edges[eidx]

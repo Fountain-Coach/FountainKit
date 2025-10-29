@@ -13,6 +13,9 @@ public extension Notification.Name {
 public struct MetalCanvasView: NSViewRepresentable {
     public typealias NodesProvider = () -> [MetalCanvasNode]
     public typealias EdgesProvider = () -> [MetalCanvasEdge]
+    public typealias SelectedProvider = () -> Set<String>
+    public typealias SelectHandler = (Set<String>) -> Void
+    public typealias MoveByHandler = (_ ids: Set<String>, _ deltaDoc: CGSize) -> Void
     private let nodesProvider: NodesProvider
     private let edgesProvider: EdgesProvider
     private let zoom: CGFloat
@@ -20,17 +23,32 @@ public struct MetalCanvasView: NSViewRepresentable {
     private let gridMinor: CGFloat
     private let majorEvery: Int
     private let instrument: MetalInstrumentDescriptor?
-    public init(zoom: CGFloat, translation: CGPoint, gridMinor: CGFloat = 24, majorEvery: Int = 5, nodes: @escaping NodesProvider, edges: @escaping EdgesProvider = { [] }, instrument: MetalInstrumentDescriptor? = nil) {
+    private let selectedProvider: SelectedProvider
+    private let onSelect: SelectHandler
+    private let onMoveBy: MoveByHandler
+    public init(zoom: CGFloat,
+                translation: CGPoint,
+                gridMinor: CGFloat = 24,
+                majorEvery: Int = 5,
+                nodes: @escaping NodesProvider,
+                edges: @escaping EdgesProvider = { [] },
+                selected: @escaping SelectedProvider = { [] },
+                onSelect: @escaping SelectHandler = { _ in },
+                onMoveBy: @escaping MoveByHandler = { _,_  in },
+                instrument: MetalInstrumentDescriptor? = nil) {
         self.zoom = zoom
         self.translation = translation
         self.gridMinor = gridMinor
         self.majorEvery = max(1, majorEvery)
         self.nodesProvider = nodes
         self.edgesProvider = edges
+        self.selectedProvider = selected
+        self.onSelect = onSelect
+        self.onMoveBy = onMoveBy
         self.instrument = instrument
     }
     public func makeNSView(context: Context) -> MTKView {
-        let v = MTKView()
+        let v = MetalCanvasNSView()
         v.device = MTLCreateSystemDefaultDevice()
         v.colorPixelFormat = .bgra8Unorm
         v.clearColor = MTLClearColorMake(0.965, 0.965, 0.975, 1.0)
@@ -40,6 +58,7 @@ public struct MetalCanvasView: NSViewRepresentable {
             context.coordinator.renderer = renderer
             v.delegate = renderer
             renderer.update(zoom: zoom, translation: translation, gridMinor: gridMinor, majorEvery: majorEvery, nodes: nodesProvider(), edges: edgesProvider())
+            renderer.selectionProvider = selectedProvider
             if let desc = instrument {
                 let sink = CanvasInstrumentSink(renderer: renderer)
                 let inst = MetalInstrument(sink: sink, descriptor: desc)
@@ -64,13 +83,36 @@ public struct MetalCanvasView: NSViewRepresentable {
                 }
             }
         }
+        // Wire interaction callbacks and shared state for hit-testing
+        context.coordinator.gridMinor = gridMinor
+        context.coordinator.nodesProvider = nodesProvider
+        context.coordinator.selectedProvider = selectedProvider
+        context.coordinator.onSelect = onSelect
+        context.coordinator.onMoveBy = onMoveBy
+        if let mv = v as? MetalCanvasNSView { mv.coordinator = context.coordinator }
         return v
     }
     public func updateNSView(_ nsView: MTKView, context: Context) {
         context.coordinator.renderer?.update(zoom: zoom, translation: translation, gridMinor: gridMinor, majorEvery: majorEvery, nodes: nodesProvider(), edges: edgesProvider())
+        context.coordinator.renderer?.selectionProvider = selectedProvider
+        context.coordinator.nodesProvider = nodesProvider
+        context.coordinator.selectedProvider = selectedProvider
     }
     public func makeCoordinator() -> Coordinator { Coordinator() }
-public final class Coordinator { fileprivate var renderer: MetalCanvasRenderer?; fileprivate var instrument: MetalInstrument? }
+public final class Coordinator: NSObject {
+    fileprivate var renderer: MetalCanvasRenderer?
+    fileprivate var instrument: MetalInstrument?
+    fileprivate var nodesProvider: NodesProvider = { [] }
+    fileprivate var selectedProvider: SelectedProvider = { [] }
+    fileprivate var onSelect: SelectHandler = { _ in }
+    fileprivate var onMoveBy: MoveByHandler = { _,_ in }
+    fileprivate var gridMinor: CGFloat = 24
+    // Drag state
+    fileprivate var pressView: CGPoint? = nil
+    fileprivate var lastDoc: CGPoint? = nil
+    fileprivate var draggingIds: Set<String> = []
+    fileprivate var marqueeStart: CGPoint? = nil
+}
 }
 @MainActor
 final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
@@ -92,6 +134,11 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
     var currentTranslation: CGPoint { translation }
     var currentGridMinor: CGFloat { overrideGridMinor ?? gridMinor }
     var currentMajorEvery: Int { overrideMajorEvery ?? majorEvery }
+    // Snapshots for external hit-testing (read-only)
+    var nodesSnapshot: [MetalCanvasNode] { nodes }
+    // UI selection and marquee (drawn in Metal)
+    var selectionProvider: (() -> Set<String>)?
+    var marqueeDocRect: CGRect? = nil
 
     init?(mtkView: MTKView) {
         guard let device = mtkView.device ?? MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue() else { return nil }
@@ -139,6 +186,23 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
         drawGrid(in: view, encoder: enc, xf: xf)
         // Draw nodes
         for node in nodes { node.encode(into: view, device: device, encoder: enc, transform: xf) }
+        // Draw selection outlines in Metal
+        if let sel = selectionProvider?(), !sel.isEmpty {
+            var borderVerts: [SIMD2<Float>] = []
+            for n in nodes where sel.contains(n.id) {
+                let tl = xf.docToNDC(x: n.frameDoc.minX, y: n.frameDoc.minY)
+                let tr = xf.docToNDC(x: n.frameDoc.maxX, y: n.frameDoc.minY)
+                let bl = xf.docToNDC(x: n.frameDoc.minX, y: n.frameDoc.maxY)
+                let br = xf.docToNDC(x: n.frameDoc.maxX, y: n.frameDoc.maxY)
+                borderVerts.append(contentsOf: [tl,tr, tr,br, br,bl, bl,tl])
+            }
+            if !borderVerts.isEmpty {
+                enc.setVertexBytes(borderVerts, length: borderVerts.count * MemoryLayout<SIMD2<Float>>.stride, index: 0)
+                var accent = SIMD4<Float>(0.20, 0.45, 0.95, 1)
+                enc.setFragmentBytes(&accent, length: MemoryLayout<SIMD4<Float>>.size, index: 0)
+                enc.drawPrimitives(type: .line, vertexStart: 0, vertexCount: borderVerts.count)
+            }
+        }
         // Gather port centers (doc -> NDC)
         var portMap: [String:[String:SIMD2<Float>]] = [:]
         for node in nodes {
@@ -154,7 +218,7 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
         let dx = 2 * rpx / W
         let dy = 2 * rpx / H
         var portVerts: [SIMD2<Float>] = []
-        for (nid, ports) in portMap {
+        for (_, ports) in portMap {
             for (_, center) in ports {
                 let tl = SIMD2<Float>(center.x - dx, center.y + dy)
                 let tr = SIMD2<Float>(center.x + dx, center.y + dy)
@@ -181,6 +245,19 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
             var colorWire = SIMD4<Float>(0.25,0.28,0.32,1)
             enc.setFragmentBytes(&colorWire, length: MemoryLayout<SIMD4<Float>>.size, index: 0)
             enc.drawPrimitives(type: .line, vertexStart: 0, vertexCount: wireVerts.count)
+        }
+        // Draw marquee rectangle if present
+        if let m = marqueeDocRect {
+            var mv: [SIMD2<Float>] = []
+            let tl = xf.docToNDC(x: m.minX, y: m.minY)
+            let tr = xf.docToNDC(x: m.maxX, y: m.minY)
+            let bl = xf.docToNDC(x: m.minX, y: m.maxY)
+            let br = xf.docToNDC(x: m.maxX, y: m.maxY)
+            mv.append(contentsOf: [tl,tr, tr,br, br,bl, bl,tl])
+            enc.setVertexBytes(mv, length: mv.count * MemoryLayout<SIMD2<Float>>.stride, index: 0)
+            var c = SIMD4<Float>(0.20,0.45,0.95,1)
+            enc.setFragmentBytes(&c, length: MemoryLayout<SIMD4<Float>>.size, index: 0)
+            enc.drawPrimitives(type: .line, vertexStart: 0, vertexCount: mv.count)
         }
         enc.endEncoding()
         cb.present(drawable)
@@ -262,6 +339,109 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
         VSOut o; o.pos = float4(pos[vid], 0, 1); return o; }
     fragment float4 node_ps(const VSOut in [[stage_in]], constant float4 &color [[ buffer(0) ]]) { return color; }
     """
+}
+
+// MARK: - Interaction (Mouse) — MTKView subclass
+final class MetalCanvasNSView: MTKView {
+    weak var coordinator: MetalCanvasView.Coordinator?
+    private func viewToDoc(_ p: CGPoint) -> CGPoint {
+        guard let r = coordinator?.renderer else { return .zero }
+        let s = max(0.0001, r.currentZoom)
+        return CGPoint(x: (p.x / s) - r.currentTranslation.x,
+                       y: (p.y / s) - r.currentTranslation.y)
+    }
+    private func topmostHit(at doc: CGPoint) -> String? {
+        guard let r = coordinator?.renderer else { return nil }
+        for n in r.nodesSnapshot.reversed() { if n.frameDoc.contains(doc) { return n.id } }
+        return nil
+    }
+    override func mouseDown(with event: NSEvent) {
+        guard let c = coordinator else { return }
+        let p = convert(event.locationInWindow, from: nil)
+        c.pressView = p
+        let doc = viewToDoc(p)
+        if let id = topmostHit(at: doc) {
+            var sel = c.selectedProvider()
+            let mods = event.modifierFlags
+            if mods.contains(.command) { if sel.contains(id) { sel.remove(id) } else { sel.insert(id) } }
+            else if mods.contains(.shift) { sel.insert(id) }
+            else { sel = [id] }
+            c.onSelect(sel)
+            c.draggingIds = sel
+            c.lastDoc = doc
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                "type":"drag.start", "ids": Array(sel), "anchor.doc.x": Double(doc.x), "anchor.doc.y": Double(doc.y)
+            ])
+        } else {
+            // Start marquee
+            c.marqueeStart = p
+            if let r = c.renderer { r.marqueeDocRect = CGRect(origin: doc, size: .zero) }
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                "type":"marquee.start", "view.x": Double(p.x), "view.y": Double(p.y), "doc.x": Double(doc.x), "doc.y": Double(doc.y)
+            ])
+        }
+    }
+    override func mouseDragged(with event: NSEvent) {
+        guard let c = coordinator else { return }
+        let p = convert(event.locationInWindow, from: nil)
+        if !c.draggingIds.isEmpty {
+            if let last = c.lastDoc {
+                let cur = viewToDoc(p)
+                let dx = cur.x - last.x
+                let dy = cur.y - last.y
+                // Snap by grid
+                let g = max(1.0, c.gridMinor)
+                let sdx = CGFloat(g) * (dx / g).rounded()
+                let sdy = CGFloat(g) * (dy / g).rounded()
+                c.onMoveBy(c.draggingIds, CGSize(width: sdx, height: sdy))
+                c.lastDoc = CGPoint(x: last.x + sdx, y: last.y + sdy)
+                NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                    "type":"drag.move", "ids": Array(c.draggingIds), "dx.doc": Double(dx), "dy.doc": Double(dy),
+                    "dx.snap": Double(sdx), "dy.snap": Double(sdy), "grid": Int(c.gridMinor)
+                ])
+            }
+        } else if let start = c.marqueeStart, let r = c.renderer {
+            // Update marquee rect in doc-space
+            let a = viewToDoc(start)
+            let b = viewToDoc(p)
+            let x0 = min(a.x, b.x), y0 = min(a.y, b.y)
+            r.marqueeDocRect = CGRect(x: x0, y: y0, width: abs(a.x - b.x), height: abs(a.y - b.y))
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                "type":"marquee.update", "min.doc.x": Double(r.marqueeDocRect!.minX), "min.doc.y": Double(r.marqueeDocRect!.minY),
+                "max.doc.x": Double(r.marqueeDocRect!.maxX), "max.doc.y": Double(r.marqueeDocRect!.maxY)
+            ])
+        }
+    }
+    override func mouseUp(with event: NSEvent) {
+        guard let c = coordinator else { return }
+        let p = convert(event.locationInWindow, from: nil)
+        defer { c.pressView = nil; c.draggingIds.removeAll(); c.lastDoc = nil; c.marqueeStart = nil; c.renderer?.marqueeDocRect = nil }
+        if !c.draggingIds.isEmpty {
+            let doc = viewToDoc(p)
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                "type":"drag.end", "ids": Array(c.draggingIds), "doc.x": Double(doc.x), "doc.y": Double(doc.y)
+            ])
+            return
+        }
+        if let r = c.renderer, let m = r.marqueeDocRect {
+            // Apply marquee selection
+            var sel: Set<String> = []
+            for n in r.nodesSnapshot { if n.frameDoc.intersects(m) { sel.insert(n.id) } }
+            let mods = event.modifierFlags
+            var base = c.selectedProvider()
+            if mods.contains(.command) {
+                for id in sel { if base.contains(id) { base.remove(id) } else { base.insert(id) } }
+                c.onSelect(base)
+            } else if mods.contains(.shift) {
+                c.onSelect(base.union(sel))
+            } else {
+                c.onSelect(sel)
+            }
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                "type":"marquee.end", "selected": Array(sel)
+            ])
+        }
+    }
 }
 
 // Instrument sink adapter for canvas

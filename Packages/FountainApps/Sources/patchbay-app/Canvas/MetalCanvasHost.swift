@@ -8,7 +8,11 @@ struct MetalCanvasHost: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             UMPRecorderBinder()
-            MetalCanvasView(zoom: vm.zoom, translation: vm.translation, gridMinor: CGFloat(vm.grid), majorEvery: vm.majorEvery, nodes: {
+            MetalCanvasView(zoom: vm.zoom,
+                            translation: vm.translation,
+                            gridMinor: CGFloat(vm.grid),
+                            majorEvery: vm.majorEvery,
+                            nodes: {
                 // Map Stage nodes for now; other kinds can be added later
                 var nodes: [MetalCanvasNode] = []
                 for n in vm.nodes {
@@ -52,17 +56,26 @@ struct MetalCanvasHost: View {
                     }
                 }
                 return out
-            }, instrument: MetalInstrumentDescriptor(manufacturer: "Fountain", product: "PatchBayCanvas", instanceId: "main", displayName: "PatchBay Canvas"))
+            },
+                            selected: { vm.selected },
+                            onSelect: { sel in vm.selected = sel; vm.selection = sel.first },
+                            onMoveBy: { ids, delta in
+                                guard delta != .zero else { return }
+                                for i in 0..<vm.nodes.count {
+                                    if ids.contains(vm.nodes[i].id) {
+                                        vm.nodes[i].x += Int(delta.width)
+                                        vm.nodes[i].y += Int(delta.height)
+                                    }
+                                }
+                            },
+                            instrument: MetalInstrumentDescriptor(manufacturer: "Fountain", product: "PatchBayCanvas", instanceId: "main", displayName: "PatchBay Canvas"))
             // Right-edge hover hit area for MIDI monitor
             MidiMonitorHitArea()
             // Per-Stage MIDI 2.0 instruments: expose PE for page/margins/baseline
             StageInstrumentsBinder()
             // Per-Replay MIDI 2.0 instruments: expose PE for play/fps/frame
             ReplayInstrumentsBinder()
-            // Selection outlines for single/group
-            SelectionOverlay().allowsHitTesting(false)
-            // Interaction overlay: hit-test, selection, group-select, drag-move
-            NodeInteractionOverlay()
+            // Selection + interaction now handled inside MetalCanvasView (MTKView subclass)
             // HUD: zoom and origin
             Text(String(format: "Zoom %.2fx  Origin (%.0f, %.0f)", Double(vm.zoom), Double(vm.translation.x), Double(vm.translation.y)))
                 .font(.system(size: 11, weight: .medium, design: .monospaced))

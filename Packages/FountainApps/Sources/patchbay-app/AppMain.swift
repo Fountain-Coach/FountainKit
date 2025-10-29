@@ -991,7 +991,11 @@ struct ContentView: View {
                         Button("Open Knowledge Folder") { StoryLogHarvester.openKnowledgeFolder() }
                         Button("Export Replay Frames from Log…") {
                             let panel = NSOpenPanel()
-                            panel.allowedFileTypes = ["ndjson"]
+                            if #available(macOS 12.0, *) {
+                                panel.allowedContentTypes = [UTType(filenameExtension: "ndjson")!]
+                            } else {
+                                panel.allowedFileTypes = ["ndjson"]
+                            }
                             panel.allowsMultipleSelection = false
                             panel.canChooseDirectories = false
                             panel.title = "Choose a .ndjson story log"
@@ -999,19 +1003,28 @@ struct ContentView: View {
                                 Task { await ReplayExporter.exportFrames(from: url) }
                             }
                         }
-                        Button("Export Replay Movie from Log…") {
+                        Button("Export Replay Movie from Log (auto)…") {
                             let open = NSOpenPanel()
-                            open.allowedFileTypes = ["ndjson"]
+                            if #available(macOS 12.0, *) {
+                                open.allowedContentTypes = [UTType(filenameExtension: "ndjson")!]
+                            } else {
+                                open.allowedFileTypes = ["ndjson"]
+                            }
                             open.allowsMultipleSelection = false
                             open.canChooseDirectories = false
                             open.title = "Choose a .ndjson story log"
                             if open.runModal() == .OK, let logURL = open.url {
-                                let save = NSSavePanel()
-                                save.allowedFileTypes = ["mov"]
-                                save.nameFieldStringValue = logURL.deletingPathExtension().lastPathComponent + ".mov"
-                                save.title = "Choose where to save the replay movie"
-                                if save.runModal() == .OK, let out = save.url {
-                                    Task { try? await ReplayMovieExporter.exportMovie(from: logURL, to: out, width: 1440, height: 900, fps: 10) }
+                                let fm = FileManager.default
+                                let cwd = URL(fileURLWithPath: fm.currentDirectoryPath)
+                                let outRoot = cwd.appendingPathComponent(".fountain/artifacts/replay", isDirectory: true)
+                                try? fm.createDirectory(at: outRoot, withIntermediateDirectories: true)
+                                let base = logURL.deletingPathExtension().lastPathComponent
+                                let outDir = outRoot.appendingPathComponent(base, isDirectory: true)
+                                try? fm.createDirectory(at: outDir, withIntermediateDirectories: true)
+                                let outURL = outDir.appendingPathComponent("\(base).mov")
+                                Task {
+                                    try? await ReplayMovieExporter.exportMovie(from: logURL, to: outURL, width: 1440, height: 900, fps: 10)
+                                    NSWorkspace.shared.open(outDir)
                                 }
                             }
                         }

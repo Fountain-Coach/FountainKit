@@ -2,6 +2,9 @@ import Foundation
 import AppKit
 import SwiftUI
 import MetalViewKit
+import AVFoundation
+import CoreVideo
+import CoreGraphics
 @main
 struct ReplayExportMain {
     static func main() async {
@@ -59,9 +62,75 @@ private func exportFramesStandalone(from logURL: URL, width: Int, height: Int) a
 
 @MainActor
 private func exportMovieStandalone(from logURL: URL, to outURL: URL, width: Int, height: Int) async {
-    // Minimal: export frames then leave movie assembly as future work
-    await exportFramesStandalone(from: logURL, width: width, height: height)
-    print("Frames exported to .fountain/artifacts/replay; movie export not yet implemented in standalone tool")
+    let size = CGSize(width: width, height: height)
+    // Prepare scene host
+    let view = MetalCanvasView(zoom: 1.0, translation: .zero, nodes: { ReplayScene.shared.nodes }, selected: { [] }, onSelect: { _ in }, onMoveBy: { _,_ in }, onTransformChanged: { _,_ in })
+    let host = NSHostingView(rootView: view)
+    host.frame = NSRect(x: 0, y: 0, width: width, height: height)
+    host.layoutSubtreeIfNeeded()
+
+    // Prepare writer
+    if FileManager.default.fileExists(atPath: outURL.path) { try? FileManager.default.removeItem(at: outURL) }
+    guard let writer = try? AVAssetWriter(outputURL: outURL, fileType: .mov) else { fputs("[replay] cannot create writer\n", stderr); return }
+    let videoSettings: [String: Any] = [
+        AVVideoCodecKey: AVVideoCodecType.h264,
+        AVVideoWidthKey: width,
+        AVVideoHeightKey: height,
+        AVVideoCompressionPropertiesKey: [
+            AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
+            AVVideoAverageBitRateKey: width * height * 5
+        ]
+    ]
+    let input = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
+    input.expectsMediaDataInRealTime = false
+    let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
+        kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA),
+        kCVPixelBufferWidthKey as String: width,
+        kCVPixelBufferHeightKey as String: height,
+        kCVPixelBufferCGBitmapContextCompatibilityKey as String: true,
+        kCVPixelBufferBytesPerRowAlignmentKey as String: width * 4
+    ])
+    guard writer.canAdd(input) else { fputs("[replay] cannot add input\n", stderr); return }
+    writer.add(input)
+    guard writer.startWriting() else { fputs("[replay] cannot start writer: \(writer.error?.localizedDescription ?? "unknown")\n", stderr); return }
+    writer.startSession(atSourceTime: .zero)
+
+    // Read log
+    guard let text = try? String(contentsOf: logURL) else { return }
+    let colorSpace = CGColorSpaceCreateDeviceRGB()
+    let bitmapInfo = CGBitmapInfo.byteOrder32Little.rawValue | CGImageAlphaInfo.premultipliedFirst.rawValue
+    var frame: Int64 = 0
+    let fps: Int32 = 10
+    let timescale = fps
+    for line in text.split(separator: "\n") {
+        guard let obj = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else { continue }
+        let topic = (obj["topic"] as? String) ?? "event"
+        let payload = (obj["data"] as? [String: Any]) ?? [:]
+        ReplayScene.shared.apply(topic: topic, payload: payload)
+        // Give MTKView a moment
+        try? await Task.sleep(nanoseconds: 10_000_000)
+        guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { continue }
+        host.cacheDisplay(in: host.bounds, to: rep)
+        guard let cgImage = rep.cgImage else { continue }
+        var pb: CVPixelBuffer? = nil
+        let status = CVPixelBufferCreate(kCFAllocatorDefault, Int(size.width), Int(size.height), kCVPixelFormatType_32BGRA, nil, &pb)
+        guard status == kCVReturnSuccess, let pixelBuffer = pb else { continue }
+        CVPixelBufferLockBaseAddress(pixelBuffer, [])
+        if let ctx = CGContext(data: CVPixelBufferGetBaseAddress(pixelBuffer), width: Int(size.width), height: Int(size.height), bitsPerComponent: 8, bytesPerRow: CVPixelBufferGetBytesPerRow(pixelBuffer), space: colorSpace, bitmapInfo: bitmapInfo) {
+            ctx.interpolationQuality = .high
+            ctx.draw(cgImage, in: CGRect(origin: .zero, size: size))
+        }
+        CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
+        let pts = CMTime(value: frame, timescale: timescale)
+        while !input.isReadyForMoreMediaData { try? await Task.sleep(nanoseconds: 2_000_000) }
+        adaptor.append(pixelBuffer, withPresentationTime: pts)
+        frame += 1
+    }
+    input.markAsFinished()
+    await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+        writer.finishWriting { cont.resume() }
+    }
+    print("Wrote movie: \(outURL.path)")
 }
 
 // Minimal scene that interprets a subset of events, rendering Stage pages

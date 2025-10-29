@@ -590,7 +590,10 @@ struct EditorCanvas: View {
             .onAppear {
                 // Initial open: reset to a sensible default for infinite artboard
                 if !didInitialFit { vm.translation = .zero; vm.zoom = 1.0; didInitialFit = true }
-                flowPatch = FlowBridge.toFlowPatch(vm: vm)
+                flowPatch = FlowBridge.toFlowPatch(vm: vm, titleFor: { $0.title ?? $0.id }, isStage: { n in
+                    if let k = state.dashboard[n.id]?.kind { return k == .stageA4 }
+                    return false
+                })
                 flowNodeIds = vm.nodes.map { $0.id }
                 syncFlowSelectionFromVM()
                 // dashboard exec rebuild disabled (composition-only)
@@ -600,7 +603,10 @@ struct EditorCanvas: View {
                 let ids = vm.nodes.map { $0.id }
                 let names = vm.nodes.map { $0.title ?? $0.id }
                 if ids != flowNodeIds || names != flowNodeNames {
-                    flowPatch = FlowBridge.toFlowPatch(vm: vm, titleFor: dynamicTitle)
+                    flowPatch = FlowBridge.toFlowPatch(vm: vm, titleFor: dynamicTitle, isStage: { n in
+                        if let k = state.dashboard[n.id]?.kind { return k == .stageA4 }
+                        return false
+                    })
                     flowNodeIds = ids
                     flowNodeNames = names
                     syncFlowSelectionFromVM()
@@ -608,7 +614,10 @@ struct EditorCanvas: View {
                 // exec.rebuild(vm: vm, registry: state.dashboard)
             }
             .onChange(of: vm.edges) { _, _ in
-                flowPatch = FlowBridge.toFlowPatch(vm: vm, titleFor: dynamicTitle)
+                flowPatch = FlowBridge.toFlowPatch(vm: vm, titleFor: dynamicTitle, isStage: { n in
+                    if let k = state.dashboard[n.id]?.kind { return k == .stageA4 }
+                    return false
+                })
                 flowNodeIds = vm.nodes.map { $0.id }
                 syncFlowSelectionFromVM()
                 // exec.rebuild(vm: vm, registry: state.dashboard)
@@ -923,7 +932,19 @@ fileprivate struct QuickActionsMenu: View {
                 case .panelTable:
                     Button("Connect ← TopN") { connectFromLastTopN(into: sel) }
                 case .stageA4:
-                    Button("Connect ← Renderer") { connectIntoStage(into: sel) }
+                    Button("Connect ← View") { connectIntoStage(into: sel) }
+                    Menu("Connect to baseline…") {
+                        let count = (vm.node(by: sel)?.ports.filter{ $0.dir == .input && $0.id.hasPrefix("in") }.count) ?? 0
+                        let maxK = min(count, 64)
+                        if maxK > 0 {
+                            ForEach(0..<maxK, id: \.self) { k in
+                                let label = vm.baselineIndexOneBased ? (k+1) : k
+                                Button("\(label)") { connectIntoStage(into: sel, baselineZeroBased: k) }
+                            }
+                        } else {
+                            Text("No baselines available").foregroundStyle(.secondary)
+                        }
+                    }
                 case .datasource, .adapterFountain, .adapterScoreKit:
                     EmptyView()
                 }
@@ -957,7 +978,10 @@ fileprivate struct QuickActionsMenu: View {
         if let top = lastId(where: { _, k in k == .topN }) { _ = vm.ensureEdge(from: (top,"out"), to: (id,"in")) }
     }
     private func connectIntoStage(into id: String) {
-        if let up = lastId(where: { _, k in k == .panelLine || k == .panelStat || k == .panelTable }) { _ = vm.ensureEdge(from: (up,"out"), to: (id,"in0")) }
+        if let up = lastId(where: { _, k in k == .panelLine || k == .panelStat || k == .panelTable || k == .adapterFountain || k == .adapterScoreKit }) { _ = vm.ensureEdge(from: (up,"out"), to: (id,"in0")) }
+    }
+    private func connectIntoStage(into id: String, baselineZeroBased k: Int) {
+        if let up = lastId(where: { _, k in k == .panelLine || k == .panelStat || k == .panelTable || k == .adapterFountain || k == .adapterScoreKit }) { _ = vm.ensureEdge(from: (up,"out"), to: (id,"in\(max(0,k))")) }
     }
 }
 

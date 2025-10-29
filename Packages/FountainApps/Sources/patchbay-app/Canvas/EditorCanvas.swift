@@ -1013,6 +1013,7 @@ fileprivate struct QuickActionsMenu: View {
     private func flowEditorOverlay(docSize: CGSize) -> some View {
         let transform = CanvasTransform(scale: vm.zoom, translation: vm.translation)
         NodeEditor(patch: $flowPatch, selection: $flowSelection)
+            .nodeColor(.clear)
             .onNodeMoved { index, loc in
                 guard index >= 0, index < flowNodeIds.count else { return }
                 let nodeId = flowNodeIds[index]

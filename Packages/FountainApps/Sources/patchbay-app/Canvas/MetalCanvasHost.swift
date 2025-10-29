@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import MetalViewKit
 
 struct MetalCanvasHost: View {
@@ -37,6 +38,8 @@ struct MetalCanvasHost: View {
             MidiMonitorHitArea()
             // Per-Stage MIDI 2.0 instruments: expose PE for page/margins/baseline
             StageInstrumentsBinder()
+            // Selection outlines for single/group
+            SelectionOverlay().allowsHitTesting(false)
             // Interaction overlay: hit-test, selection, group-select, drag-move
             NodeInteractionOverlay()
             // HUD: zoom and origin
@@ -186,11 +189,14 @@ fileprivate struct NodeInteractionOverlay: View {
         let s = max(0.0001, vm.zoom)
         let dxDoc = dxView / s
         let dyDoc = dyView / s
-        // Move selected nodes by rounded doc delta (snap to integer; grid snapping handled by subsequent operations if desired)
+        // Snap delta to grid
+        let g = max(1, vm.grid)
+        let snapDX = CGFloat(g) * (dxDoc / CGFloat(g)).rounded()
+        let snapDY = CGFloat(g) * (dyDoc / CGFloat(g)).rounded()
         for (id, pos) in initialPositions {
             if let i = vm.nodeIndex(by: id) {
-                vm.nodes[i].x = pos.x + Int(round(dxDoc))
-                vm.nodes[i].y = pos.y + Int(round(dyDoc))
+                vm.nodes[i].x = pos.x + Int(snapDX)
+                vm.nodes[i].y = pos.y + Int(snapDY)
             }
         }
         lastPoint = current
@@ -215,10 +221,21 @@ fileprivate struct NodeInteractionOverlay: View {
                     if pressStart == nil {
                         // Mouse down
                         pressStart = p
+                        let flags = NSApp.currentEvent?.modifierFlags ?? []
+                        let isCmd = flags.contains(.command)
+                        let isShift = flags.contains(.shift)
                         if let hit = hitTestNode(at: p) {
-                            // Start dragging selected group; if hit isn’t selected, select it
-                            if !vm.selected.contains(hit.id) { vm.selected = [hit.id]; vm.selection = hit.id }
-                            beginDrag(for: vm.selected.isEmpty ? [hit.id] : vm.selected, at: p)
+                            var newSel = vm.selected
+                            if isCmd {
+                                if newSel.contains(hit.id) { newSel.remove(hit.id) } else { newSel.insert(hit.id) }
+                            } else if isShift {
+                                newSel.insert(hit.id)
+                            } else {
+                                newSel = [hit.id]
+                            }
+                            vm.selected = newSel
+                            vm.selection = newSel.first
+                            if !newSel.isEmpty { beginDrag(for: newSel, at: p) }
                         } else {
                             // Begin marquee selection
                             marqueeRect = CGRect(origin: p, size: .zero)
@@ -246,9 +263,20 @@ fileprivate struct NodeInteractionOverlay: View {
                     }
                     // End of marquee or click
                     if let rect = marqueeRect {
+                        let flags = NSApp.currentEvent?.modifierFlags ?? []
+                        let isCmd = flags.contains(.command)
+                        let isShift = flags.contains(.shift)
                         var sel: Set<String> = []
                         for n in vm.nodes { if nodeViewRect(n).intersects(rect) { sel.insert(n.id) } }
-                        vm.selected = sel
+                        if isCmd {
+                            var toggled = vm.selected
+                            for id in sel { if toggled.contains(id) { toggled.remove(id) } else { toggled.insert(id) } }
+                            vm.selected = toggled
+                        } else if isShift {
+                            vm.selected = vm.selected.union(sel)
+                        } else {
+                            vm.selected = sel
+                        }
                         vm.selection = sel.first
                     } else {
                         // Click without drag: set selection to topmost hit or clear
@@ -256,6 +284,49 @@ fileprivate struct NodeInteractionOverlay: View {
                     }
                 }
             )
+        }
+    }
+}
+// Draw selection outlines for selected nodes and a dashed group bounding box.
+fileprivate struct SelectionOverlay: View {
+    @EnvironmentObject var vm: EditorVM
+    private func transform(_ size: CGSize) -> CanvasTransform { CanvasTransform(scale: vm.zoom, translation: vm.translation) }
+    private func nodeViewRect(_ n: PBNode, xf: CanvasTransform) -> CGRect {
+        let origin = xf.docToView(CGPoint(x: CGFloat(n.x), y: CGFloat(n.y)))
+        return CGRect(x: origin.x, y: origin.y, width: CGFloat(n.w) * vm.zoom, height: CGFloat(n.h) * vm.zoom)
+    }
+    var body: some View {
+        GeometryReader { geo in
+            let xf = transform(geo.size)
+            // Compute selected rects in view space
+            let rects: [CGRect] = vm.nodes.filter { vm.selected.contains($0.id) }.map { nodeViewRect($0, xf: xf) }
+            // Compute union rect if group selection
+            let groupRect: CGRect? = {
+                guard rects.count > 1 else { return nil }
+                var minX = CGFloat.greatestFiniteMagnitude
+                var minY = CGFloat.greatestFiniteMagnitude
+                var maxX = CGFloat.leastNormalMagnitude
+                var maxY = CGFloat.leastNormalMagnitude
+                for r in rects { minX = min(minX, r.minX); minY = min(minY, r.minY); maxX = max(maxX, r.maxX); maxY = max(maxY, r.maxY) }
+                return CGRect(x: minX, y: minY, width: max(0, maxX - minX), height: max(0, maxY - minY))
+            }()
+            ZStack(alignment: .topLeading) {
+                // Per-node selection boxes
+                ForEach(Array(rects.enumerated()), id: \.offset) { _, rect in
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(Color.accentColor, lineWidth: 2)
+                        .frame(width: rect.width, height: rect.height)
+                        .position(x: rect.midX, y: rect.midY)
+                        .shadow(color: .accentColor.opacity(0.15), radius: 3, x: 0, y: 0)
+                }
+                if let gr = groupRect {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [6,4]))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: gr.width, height: gr.height)
+                        .position(x: gr.midX, y: gr.midY)
+                }
+            }
         }
     }
 }

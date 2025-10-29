@@ -1,6 +1,7 @@
 import XCTest
 import SwiftUI
 @testable import FountainFlow
+import Flow
 
 final class StageGeometryTests: XCTestCase {
     func testBaselineCountA4() {
@@ -24,5 +25,20 @@ final class StageGeometryTests: XCTestCase {
         XCTAssertEqual(ys.count, 10)
         XCTAssertGreaterThanOrEqual(ys.min() ?? 0, r.minY)
         XCTAssertLessThanOrEqual(ys.max() ?? 0, r.maxY)
+    }
+    func testFlowAlignedFractionsWithinOnePixel() {
+        // Given a Flow layout, verify fractions map to flow input centers to within 1 px when scaled to rect height
+        let count = 20
+        let layout = LayoutConstants()
+        let slot = layout.portSize.height + layout.portSpacing
+        let totalH = CGFloat(count) * slot + layout.nodeTitleHeight + layout.portSpacing
+        let nodeRect = CGRect(x: 0, y: 0, width: layout.nodeWidth, height: totalH)
+        let flowFractions = StageOverlayGeometry.flowFractions(count: count, layout: layout)
+        XCTAssertEqual(flowFractions.count, count)
+        let expectedCenters = (0..<count).map { i in layout.nodeTitleHeight + layout.portSpacing + CGFloat(i) * slot + layout.portSize.height / 2 }
+        for (frac, center) in zip(flowFractions, expectedCenters) {
+            let y = nodeRect.minY + nodeRect.height * frac
+            XCTAssertLessThanOrEqual(abs(y - center), 1.0, "tick not within 1 px of flow input center")
+        }
     }
 }

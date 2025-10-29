@@ -115,6 +115,16 @@ public enum StageOverlayGeometry {
         let f = baselineFractions(count: count)
         return f.map { rect.minY + rect.height * $0 }
     }
+    /// Fractions for Flow-style port centers given LayoutConstants.
+    public static func flowFractions(count: Int, layout: LayoutConstants = LayoutConstants()) -> [CGFloat] {
+        guard count > 0 else { return [] }
+        let slot = layout.portSize.height + layout.portSpacing
+        let totalH = CGFloat(count) * slot + layout.nodeTitleHeight + layout.portSpacing
+        return (0..<count).map { i in
+            let centerY = layout.nodeTitleHeight + layout.portSpacing + CGFloat(i) * slot + layout.portSize.height / 2
+            return centerY / totalH
+        }
+    }
 }
 
 public struct StageOverlayHost: View {
@@ -124,8 +134,9 @@ public struct StageOverlayHost: View {
     public var showBaselineIndex: Bool
     public var alwaysShow: Bool
     public var oneBased: Bool
-    public init(stages: [StageNodeModel], zoom: CGFloat, translation: CGPoint, showBaselineIndex: Bool, alwaysShow: Bool, oneBased: Bool) {
-        self.stages = stages; self.zoom = zoom; self.translation = translation; self.showBaselineIndex = showBaselineIndex; self.alwaysShow = alwaysShow; self.oneBased = oneBased
+    public var alignToFlowPorts: Bool
+    public init(stages: [StageNodeModel], zoom: CGFloat, translation: CGPoint, showBaselineIndex: Bool, alwaysShow: Bool, oneBased: Bool, alignToFlowPorts: Bool = true) {
+        self.stages = stages; self.zoom = zoom; self.translation = translation; self.showBaselineIndex = showBaselineIndex; self.alwaysShow = alwaysShow; self.oneBased = oneBased; self.alignToFlowPorts = alignToFlowPorts
     }
     private func docToView(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x * zoom + translation.x * zoom, y: p.y * zoom + translation.y * zoom) }
     public var body: some View {
@@ -139,9 +150,11 @@ public struct StageOverlayHost: View {
                     .allowsHitTesting(false)
                 if showBaselineIndex && (alwaysShow || s.selected) {
                     let count = StageGeometry.baselineCount(page: s.page, margins: s.margins, baseline: s.baseline)
-                    ForEach(0..<count, id: \.self) { idx in
+                    let fractions: [CGFloat] = alignToFlowPorts ? StageOverlayGeometry.flowFractions(count: count) : StageOverlayGeometry.baselineFractions(count: count)
+                    ForEach(Array(fractions.enumerated()), id: \.offset) { pair in
+                        let idx = pair.offset
                         let k = oneBased ? (idx + 1) : idx
-                        let frac = CGFloat(idx + 1) / CGFloat(count + 1)
+                        let frac = pair.element
                         let y = rectView.minY + rectView.height * frac
                         let x = rectView.minX + 6
                         Text("\(k)")

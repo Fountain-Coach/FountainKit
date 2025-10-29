@@ -2,6 +2,7 @@ import XCTest
 @testable import patchbay_app
 import SwiftUI
 
+@MainActor
 final class RobotScriptedSequencesTests: XCTestCase {
     // Scripted pan/zoom sequence using the MIDI Robot. On assertion failure, exports a replay movie from the latest log.
     func testRobotScriptedPanZoomScenario() async throws {
@@ -92,4 +93,3 @@ final class RobotScriptedSequencesTests: XCTestCase {
         return nil
     }
 }
-

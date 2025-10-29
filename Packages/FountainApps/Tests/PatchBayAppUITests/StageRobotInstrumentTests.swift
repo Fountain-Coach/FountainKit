@@ -2,6 +2,7 @@ import XCTest
 @testable import patchbay_app
 import SwiftUI
 
+@MainActor
 final class StageRobotInstrumentTests: XCTestCase {
     func testStagePEBaselineAndPage() throws {
         let vm = EditorVM()
@@ -37,4 +38,3 @@ final class StageRobotInstrumentTests: XCTestCase {
         XCTAssertEqual(dash?.props["page"], "Letter")
     }
 }
-

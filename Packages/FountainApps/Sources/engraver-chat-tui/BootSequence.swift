@@ -33,11 +33,11 @@ actor BootSequence {
         Task.detached {
             var env = environment
             if env["GATEWAY_BEARER"].flatMap({ !$0.isEmpty }) != true,
-               let bearer = SecretStoreHelper.read(service: "FountainAI", account: "GATEWAY_BEARER") {
+               let bearer = await MainActor.run { SecretStoreHelper.read(service: "FountainAI", account: "GATEWAY_BEARER") } {
                 env["GATEWAY_BEARER"] = bearer
             }
             if env["OPENAI_API_KEY"].flatMap({ !$0.isEmpty }) != true,
-               let apiKey = SecretStoreHelper.read(service: "FountainAI", account: "OPENAI_API_KEY") {
+               let apiKey = await MainActor.run { SecretStoreHelper.read(service: "FountainAI", account: "OPENAI_API_KEY") } {
                 env["OPENAI_API_KEY"] = apiKey
             }
             await self.runProcess(scriptURL: scriptURL, environment: env)

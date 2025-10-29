@@ -1,6 +1,7 @@
 import Foundation
 import SwiftCursesKit
 import EngraverChatCore
+import FountainDevHarness
 import FountainAIAdapters
 import FountainAIKit
 import ProviderOpenAI
@@ -171,7 +172,9 @@ actor ChatSession {
                 bootstrapBaseURL: configuration.bootstrapBaseURL,
                 bearerToken: configuration.bearerToken,
                 seedingConfiguration: Self.mapSeeding(configuration.seedingConfiguration),
-                environmentController: env
+                environmentController: env,
+                gatewayBaseURL: configuration.gatewayBaseURL,
+                directMode: configuration.bypassGateway
             )
         }
     }
@@ -1343,6 +1346,7 @@ enum EngraverChatTUIMain {
     }
 }
 
+@MainActor
 private func populateFountainSecrets(into environment: inout [String: String]) {
     if (environment["GATEWAY_BEARER"]?.isEmpty ?? true),
        let secret = SecretStoreHelper.read(service: "FountainAI", account: "GATEWAY_BEARER") {

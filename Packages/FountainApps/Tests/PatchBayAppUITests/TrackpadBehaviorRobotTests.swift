@@ -2,6 +2,7 @@ import XCTest
 @testable import patchbay_app
 import SwiftUI
 
+@MainActor
 final class TrackpadBehaviorRobotTests: XCTestCase {
     // Contract: follow‑finger pan — translation increases by viewDelta/zoom on both axes
     func testPanViewDeltaAtZoom1() throws {
@@ -83,4 +84,3 @@ final class TrackpadBehaviorRobotTests: XCTestCase {
         return (host, vm, state)
     }
 }
-

@@ -2,6 +2,7 @@ import XCTest
 @testable import patchbay_app
 import SwiftUI
 
+@MainActor
 final class ReplayPlayerRobotInstrumentTests: XCTestCase {
     func testReplayPEProperties() throws {
         let vm = EditorVM()
@@ -31,4 +32,3 @@ final class ReplayPlayerRobotInstrumentTests: XCTestCase {
         XCTAssertEqual(dash?.props["frame"], "42")
     }
 }
-

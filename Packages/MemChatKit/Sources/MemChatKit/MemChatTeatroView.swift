@@ -27,7 +27,7 @@ public struct MemChatTeatroView: View {
                 connected: isConnected,
                 acks: controller.turns.count,
                 nacks: controller.lastError == nil ? 0 : 1,
-                rtt: lastRoundTripMs,
+                rtt: Double(lastRoundTripMs),
                 window: max(controller.streamingTokens.count, 1),
                 loss: controller.lastError == nil ? 0 : 100
             )

@@ -3,6 +3,7 @@ import XCTest
 import MetalViewKit
 import SwiftUI
 
+@MainActor
 final class Canvas2DInvariantTests: XCTestCase {
     func testAnchorStableZoom() {
         var c = Canvas2D(zoom: 1.0, translation: .zero)
@@ -28,4 +29,3 @@ final class Canvas2DInvariantTests: XCTestCase {
         XCTAssertEqual(c.translation.y, -15, accuracy: 0.001)
     }
 }
-

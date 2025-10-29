@@ -2,6 +2,7 @@ import XCTest
 @testable import patchbay_app
 import SwiftUI
 
+@MainActor
 final class RobotAnchorZoomTests: XCTestCase {
     func testAnchorZoomAroundCenterViaVendorJSON() throws {
         let vm = EditorVM()

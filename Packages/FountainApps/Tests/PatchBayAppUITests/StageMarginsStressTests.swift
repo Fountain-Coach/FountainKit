@@ -2,6 +2,7 @@ import XCTest
 @testable import patchbay_app
 import SwiftUI
 
+@MainActor
 final class StageMarginsStressTests: XCTestCase {
     func testMarginsChangeAffectsRender() throws {
         let vm = EditorVM()
@@ -27,4 +28,3 @@ final class StageMarginsStressTests: XCTestCase {
         XCTAssertGreaterThan(diff.mse, 0.5) // coarse threshold; margins should move page rect noticeably
     }
 }
-

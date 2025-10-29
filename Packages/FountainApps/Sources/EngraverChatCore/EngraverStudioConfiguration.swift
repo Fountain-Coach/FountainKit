@@ -98,6 +98,7 @@ public struct EngraverStudioConfiguration: Sendable {
         }
     }
 
+    @MainActor
     public init(environment: [String: String] = ProcessInfo.processInfo.environment) {
         var env = environment
 

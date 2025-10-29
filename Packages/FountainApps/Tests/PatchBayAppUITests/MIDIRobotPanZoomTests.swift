@@ -2,6 +2,7 @@ import XCTest
 @testable import patchbay_app
 import SwiftUI
 
+@MainActor
 final class MIDIRobotPanZoomTests: XCTestCase {
     func testRendererPanAndZoomProgrammatically() throws {
         let vm = EditorVM()

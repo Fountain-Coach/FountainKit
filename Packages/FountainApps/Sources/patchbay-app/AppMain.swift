@@ -1304,7 +1304,7 @@ struct ContentView: View {
             case .panelLine: return "prom.panel.line"
             case .panelStat: return "prom.panel.stat"
             case .panelTable: return "prom.panel.table"
-            case .stageA4: return "renderer.stage.a4"
+            case .stageA4: return "stage.a4"
             case .adapterFountain: return "adapter.fountain→teatro"
             case .adapterScoreKit: return "adapter.scorekit→teatro"
             }

@@ -533,8 +533,11 @@ final class MetalCanvasNSView: MTKView {
     override func scrollWheel(with event: NSEvent) {
         guard let c = coordinator, let r = c.renderer else { return }
         let s = max(0.0001, r.currentZoom)
-        let dxDoc = event.scrollingDeltaX / s
-        let dyDoc = event.scrollingDeltaY / s
+        let rawX = event.scrollingDeltaX
+        let rawY = event.scrollingDeltaY
+        // Follow-finger policy: horizontal as-is, vertical inverted to match user expectation across natural/legacy prefs.
+        let dxDoc = rawX / s
+        let dyDoc = -rawY / s
         r.panBy(docDX: dxDoc, docDY: dyDoc)
         c.onTransformChanged(r.currentTranslation, r.currentZoom)
         NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
@@ -543,8 +546,8 @@ final class MetalCanvasNSView: MTKView {
             "y": Double(r.currentTranslation.y),
             "dx.doc": Double(dxDoc),
             "dy.doc": Double(dyDoc),
-            "dx.raw": Double(event.scrollingDeltaX),
-            "dy.raw": Double(event.scrollingDeltaY),
+            "dx.raw": Double(rawX),
+            "dy.raw": Double(rawY),
             "precise": event.hasPreciseScrollingDeltas
         ])
     }

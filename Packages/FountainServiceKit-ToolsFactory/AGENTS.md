@@ -1,11 +1,16 @@
 # AGENT — ToolsFactory Service
 
-ToolsFactory catalogs and registers tools. Spec: `Packages/FountainServiceKit-ToolsFactory/Sources/ToolsFactoryService/openapi.yaml`. Tool lists are corpus‑scoped; registration is idempotent; list formats are stable.
+What: ToolsFactory catalogs and registers tools (OpenAPI operations). Spec: `Packages/FountainServiceKit-ToolsFactory/Sources/ToolsFactoryService/openapi.yaml`. Lists are corpus‑scoped; registration is idempotent; list formats are stable.
 
-Registering external OpenAPI specs
+Register external OpenAPI
 - Endpoint: `POST /tools/register?corpusId=<id>[&base=<url>]`
-- Body: OpenAPI document as JSON; YAML is also accepted. When `base` is present (or `servers[0].url` is set in the document), `http_path` is resolved to an absolute URL using that base.
-- Minimal fields used per operation: `operationId` (required), `summary` (optional → name), `description` (optional), HTTP method, and path.
-- Helper: `Scripts/openapi/register-teatro-guide-as-tools.sh` fetches the upstream YAML, normalizes to JSON, and registers it with an optional base override.
+- Body: OpenAPI document as JSON (YAML accepted). If `base` is present (or `servers[0].url` exists), resolve `http_path` to an absolute URL using that base.
+- Minimal per operation: `operationId` (required), `summary` (optional → name), `description` (optional), HTTP method, path.
+- Helper: `Scripts/openapi/register-teatro-guide-as-tools.sh` normalizes upstream YAML to JSON and registers it (optional base override).
 
-Unit tests cover registration normalization and corpus filtering. Integration registers the AudioTalk spec and asserts the list contains expected entries. CI builds and tests this package; Studio autostart registers AudioTalk tools during dev.
+Build/test
+- Build: `swift build --package-path Packages/FountainServiceKit-ToolsFactory -c debug`
+- Tests: `swift test --package-path Packages/FountainServiceKit-ToolsFactory -c debug`
+
+Testing
+Unit covers registration normalization and corpus filtering. Integration registers AudioTalk and asserts expected entries. CI builds/tests this package; Studio autostart registers AudioTalk tools during dev.

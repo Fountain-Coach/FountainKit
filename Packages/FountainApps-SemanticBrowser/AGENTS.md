@@ -1,7 +1,16 @@
 FountainApps-SemanticBrowser — Agent Guide
 
-This package turns the Semantic Browser service library (`FountainServiceKit-SemanticBrowser`) into a runnable executable (`semantic-browser-server`). Keep it lightweight: focus on process wiring, transport setup, env handling, and a small readiness surface. All specs/configs live in the service kit; don’t add OpenAPI generator configs here.
+What: This package turns the Semantic Browser service library (`FountainServiceKit-SemanticBrowser`) into a runnable executable (`semantic-browser-server`). Keep it lightweight: process wiring, transport setup, env handling, and a small readiness surface. Specs/configs live in the service kit; do not add generator configs here.
 
-Use `FountainRuntime.NIOOpenAPIServerTransport` to register generated handlers and `NIOHTTPServer` to serve traffic. Non‑API endpoints like `/metrics` and `/openapi.yaml` can sit behind a simple fallback `HTTPKernel`. Engine selection is controlled by env vars: `SB_CDP_URL` for CDP, `SB_BROWSER_CLI`/`SB_BROWSER_ARGS` for a CLI engine, otherwise fall back to `URLFetchBrowserEngine`. Favor minimal dependencies and document any additions in the README.
+How
+- Register generated handlers via `FountainRuntime.NIOOpenAPIServerTransport`; serve with `NIOHTTPServer`.
+- Provide a fallback `HTTPKernel` for non‑API endpoints like `/metrics` and `/openapi.yaml`.
+- Engine selection envs: `SB_CDP_URL` (CDP), `SB_BROWSER_CLI`/`SB_BROWSER_ARGS` (CLI engine); otherwise use `URLFetchBrowserEngine`.
 
-Build with `swift build --package-path Packages/FountainApps-SemanticBrowser` and run with `swift run --package-path Packages/FountainApps-SemanticBrowser semantic-browser-server`. A helper wrapper exists at `Scripts/semantic-browser [build|run]`. CI builds this package separately from `FountainApps` to keep CNIO/NIO extras out of unrelated test jobs.
+Build/run
+- Build: `swift build --package-path Packages/FountainApps-SemanticBrowser -c debug`
+- Run: `swift run --package-path Packages/FountainApps-SemanticBrowser semantic-browser-server`
+- Helper: `Scripts/semantic-browser [build|run]`
+
+CI
+Build this package separately from `FountainApps` to keep CNIO/NIO extras out of unrelated jobs.

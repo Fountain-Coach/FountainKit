@@ -1,5 +1,15 @@
 # AGENT — FountainTelemetryKit (MIDI/streaming diagnostics)
 
-`Packages/FountainTelemetryKit/**` provides the MIDI 2.0 stack, SSE‑over‑MIDI, and diagnostics. Performance constraints must be explicit and buffers sized deterministically so streaming doesn’t regress as we evolve the stack.
+What: `Packages/FountainTelemetryKit/**` provides the MIDI 2.0 stack, SSE‑over‑MIDI, and diagnostics. Keep performance constraints explicit and buffers sized deterministically to prevent regressions.
 
-Tests cover encoders/decoders and timebase consistency; where hardware isn’t available, simulate long‑running streams to probe resilience. CI builds and tests this package; telemetry tests may be skipped when hardware is absent.
+Where code lives
+- MIDI 2.0: `Packages/FountainTelemetryKit/Sources/MIDI2*`
+- SSE over MIDI: `Packages/FountainTelemetryKit/Sources/SSEOverMIDI`
+- Flex bridge/CLI: `Packages/FountainTelemetryKit/Sources/FlexBridge`, `Tools/flexctl`
+
+Build/test
+- Build: `swift build --package-path Packages/FountainTelemetryKit -c debug`
+- Tests: `swift test --package-path Packages/FountainTelemetryKit -c debug`
+
+Testing
+Cover encoders/decoders and timebase consistency. When hardware isn’t available, simulate long‑running streams to probe resilience. CI builds/tests this package; telemetry tests may be skipped without supported hardware.

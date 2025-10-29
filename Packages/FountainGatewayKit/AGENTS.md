@@ -1,7 +1,19 @@
 # AGENT — FountainGatewayKit (gateway plugins and orchestrator)
 
-`Packages/FountainGatewayKit/**` contains the gateway persona orchestrator and its plugins (authentication, rate‑limits, policy, security/budget, payload inspection, role health) plus the publishing frontend. Plugins are composable and side‑effect‑free, and the chain must enforce time/size budgets. The reload endpoint `/admin/routes/reload` is a stable contract. Gateway remains OpenAPI‑first — see `Packages/FountainApps/Sources/gateway-server/openapi.yaml`.
+What: `Packages/FountainGatewayKit/**` implements the gateway persona orchestrator, plugins (auth, rate‑limits, policy, security/budget, payload inspection, role health), and a minimal publishing frontend. Plugins are composable and side‑effect‑free; the chain enforces time/size budgets. The reload endpoint `/admin/routes/reload` is a stable contract. Gateway is OpenAPI‑first — spec at `Packages/FountainApps/Sources/gateway-server/openapi.yaml`.
 
-Tests cover plugin behaviors and failure paths (auth, limits, budgets, policy checks). Integration bootstraps the gateway with a real plugin chain and verifies that route reload succeeds; end‑to‑end, a regenerate step leads to `/admin/routes` containing the curated minimal set. CI builds and tests this package; scripts start the server for smoke.
+Where code lives
+- Orchestrator and shared utils: `Packages/FountainGatewayKit/Sources/**`
+- Gateway server target: `Packages/FountainApps/Sources/gateway-server` (registers generated handlers and wires plugins)
+- Tests: `Packages/FountainApps/Tests/GatewayServerTests` (integration) and `Packages/FountainGatewayKit/Tests` (unit)
 
-When adding a plugin, include tests and update curated route exposure rules so the control plane stays predictable.
+Build/test
+- Build server: `swift build --package-path Packages/FountainApps -c debug --target gateway-server`
+- Run server: `swift run --package-path Packages/FountainApps gateway-server`
+- Tests: `swift test --package-path Packages/FountainApps -c debug --filter GatewayServerTests`
+
+Testing focus
+Unit tests cover plugin behaviors and failure paths (auth, limits, budgets, policy checks). Integration boots a real plugin chain and verifies reload succeeds; end‑to‑end, regenerate → `/admin/routes` contains the curated minimal set. Scripts start the server for smoke (`Scripts/ci/ci-smoke.sh`).
+
+Adding a plugin
+Include unit/integration tests and update curated route exposure rules so the control plane remains predictable. Keep plugin APIs additive and document budget semantics.

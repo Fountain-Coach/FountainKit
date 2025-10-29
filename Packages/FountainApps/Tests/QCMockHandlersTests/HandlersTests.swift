@@ -81,3 +81,7 @@ final class QCMockHandlersTests: XCTestCase {
         XCTAssertEqual(n3.ports.count, 0)
     }
 }
+
+#endif // !ROBOT_ONLY
+// Robot-only mode: exclude this suite when building robot tests
+#if !ROBOT_ONLY

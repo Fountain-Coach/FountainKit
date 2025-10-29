@@ -1,12 +1,19 @@
 // swift-tools-version: 6.1
 import PackageDescription
+import Foundation
+
+let ROBOT_ONLY = ProcessInfo.processInfo.environment["ROBOT_ONLY"] == "1" || ProcessInfo.processInfo.environment["FK_ROBOT_ONLY"] == "1"
 
 let package = Package(
     name: "FountainApps",
     platforms: [
         .macOS(.v14)
     ],
-    products: [
+    products: ROBOT_ONLY ? [
+        // Robot-only: expose just what PatchBay tests need
+        .executable(name: "patchbay-app", targets: ["patchbay-app"]),
+        .library(name: "MetalViewKit", targets: ["MetalViewKit"])
+    ] : [
         .executable(name: "gateway-server", targets: ["gateway-server"]),
         .executable(name: "gateway-ci-smoke", targets: ["gateway-ci-smoke"]),
         .executable(name: "tools-factory-server", targets: ["tools-factory-server"]),
@@ -101,7 +108,48 @@ let package = Package(
         // MIDI2 Instrument Bridge (sampler) — pin to released tag
         .package(url: "https://github.com/Fountain-Coach/midi2sampler.git", exact: "0.1.1")
     ],
-    targets: [
+    targets: ROBOT_ONLY ? [
+        .target(
+            name: "MetalViewKit",
+            dependencies: [
+                .product(name: "MIDI2CI", package: "midi2")
+            ],
+            path: "Sources/MetalViewKit",
+            exclude: ["AGENTS.md"]
+        ),
+        .executableTarget(
+            name: "patchbay-app",
+            dependencies: [
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
+                .product(name: "Flow", package: "Flow"),
+                "MetalViewKit",
+                .product(name: "FountainAIAdapters", package: "FountainGatewayKit"),
+                .product(name: "LLMGatewayAPI", package: "FountainAPIClients"),
+                .product(name: "ApiClientsCore", package: "FountainAPIClients"),
+                .product(name: "TutorDashboard", package: "FountainAPIClients"),
+                .product(name: "TeatroRenderAPI", package: "TeatroFull")
+            ],
+            path: "Sources/patchbay-app",
+            exclude: ["AGENTS.md"],
+            plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
+        .testTarget(
+            name: "PatchBayAppUITests",
+            dependencies: [
+                "patchbay-app",
+                .product(name: "MIDI2CI", package: "midi2")
+            ],
+            path: "Tests/PatchBayAppUITests",
+            resources: [
+                .process("Baselines"),
+                .process("Fixtures")
+            ]
+        )
+    ] : [
         .target(
             name: "QCMockCore",
             dependencies: [],

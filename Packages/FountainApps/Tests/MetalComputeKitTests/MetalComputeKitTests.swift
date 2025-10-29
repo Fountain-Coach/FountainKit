@@ -1,3 +1,6 @@
+// Robot-only mode: exclude this suite when building robot tests
+#if !ROBOT_ONLY
+
 import XCTest
 @testable import MetalComputeKit
 import Metal
@@ -110,3 +113,5 @@ final class MetalComputeKitTests: XCTestCase {
         }
     }
 }
+
+#endif // !ROBOT_ONLY

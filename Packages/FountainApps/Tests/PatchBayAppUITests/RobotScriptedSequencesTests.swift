@@ -1,6 +1,7 @@
 import XCTest
 @testable import patchbay_app
 import SwiftUI
+import MetalViewKit
 
 @MainActor
 final class RobotScriptedSequencesTests: XCTestCase {
@@ -19,12 +20,17 @@ final class RobotScriptedSequencesTests: XCTestCase {
         changeExp.isInverted = false
         let obs = NotificationCenter.default.addObserver(forName: Notification.Name("MetalCanvasTransformChanged"), object: nil, queue: .main) { note in
             let u = note.userInfo ?? [:]
-            lastZoom = CGFloat((u["zoom"] as? Double) ?? Double(lastZoom))
-            lastTx = CGFloat((u["tx"] as? Double) ?? Double(lastTx))
-            lastTy = CGFloat((u["ty"] as? Double) ?? Double(lastTy))
+            let z = (u["zoom"] as? Double)
+            let tx = (u["tx"] as? Double)
+            let ty = (u["ty"] as? Double)
+            MainActor.assumeIsolated {
+                if let z { lastZoom = CGFloat(z) }
+                if let tx { lastTx = CGFloat(tx) }
+                if let ty { lastTy = CGFloat(ty) }
+            }
         }
         // Warm up run loop
-        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        try? await Task.sleep(nanoseconds: 200_000_000)
 
         guard let robot = MIDIRobot(destName: "PatchBay Canvas") else {
             throw XCTSkip("Robot could not attach to PatchBay Canvas destination")
@@ -32,12 +38,12 @@ final class RobotScriptedSequencesTests: XCTestCase {
 
         // Reset to known state
         robot.setProperties(["translation.x": 0.0, "translation.y": 0.0, "zoom": 1.0])
-        RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+        try? await Task.sleep(nanoseconds: 150_000_000)
         // Step 1: pan by (+120, -80) doc units (apply absolute via PE SET)
         var expectTx = lastTx + 120
         var expectTy = lastTy - 80
         robot.setProperties(["translation.x": Double(expectTx), "translation.y": Double(expectTy)])
-        RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+        try? await Task.sleep(nanoseconds: 150_000_000)
         if abs(lastTx - expectTx) > 1.0 || abs(lastTy - expectTy) > 1.0 {
             await exportLatestReplayArtifact()
         }
@@ -46,7 +52,7 @@ final class RobotScriptedSequencesTests: XCTestCase {
 
         // Step 2: zoom to 1.5 (absolute)
         robot.setProperties(["zoom": 1.5])
-        RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+        try? await Task.sleep(nanoseconds: 150_000_000)
         if abs(lastZoom - 1.5) > 0.02 { await exportLatestReplayArtifact() }
         XCTAssertEqual(lastZoom, 1.5, accuracy: 0.02)
 
@@ -54,7 +60,7 @@ final class RobotScriptedSequencesTests: XCTestCase {
         expectTx = lastTx - 60
         expectTy = lastTy + 40
         robot.setProperties(["translation.x": Double(expectTx), "translation.y": Double(expectTy)])
-        RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+        try? await Task.sleep(nanoseconds: 150_000_000)
         if abs(lastTx - expectTx) > 1.0 || abs(lastTy - expectTy) > 1.0 { await exportLatestReplayArtifact() }
         XCTAssertEqual(lastTx, expectTx, accuracy: 1.0)
         XCTAssertEqual(lastTy, expectTy, accuracy: 1.0)

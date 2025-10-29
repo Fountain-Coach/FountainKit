@@ -93,3 +93,7 @@ final class EnvironmentManagerTests: XCTestCase {
         XCTFail("Timed out waiting for condition")
     }
 }
+
+#endif // !ROBOT_ONLY
+// Robot-only mode: exclude this suite when building robot tests
+#if !ROBOT_ONLY

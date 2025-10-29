@@ -32,3 +32,7 @@ enum ServerTestUtils {
         return (d, r as! HTTPURLResponse)
     }
 }
+
+#endif // !ROBOT_ONLY
+// Robot-only mode: exclude helpers when building robot tests
+#if !ROBOT_ONLY

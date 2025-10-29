@@ -1,7 +1,7 @@
 import Foundation
 import XCTest
 import CoreMIDI
-import MIDI2CI
+import MIDI2
 
 final class MIDIRobot {
     private var client: MIDIClientRef = 0
@@ -11,7 +11,8 @@ final class MIDIRobot {
 
     init?(destName: String = "PatchBay Canvas") {
         guard MIDIClientCreateWithBlock(clientName, &client, { _ in }) == noErr else { return nil }
-        guard MIDIOutputPortCreateWithProtocol(client, clientName, ._2_0, &outPort) == noErr else { return nil }
+        // Create a traditional output port; we still send UMP via MIDIEventList
+        guard MIDIOutputPortCreate(client, clientName, &outPort) == noErr else { return nil }
         // Find destination by name
         let count = MIDIGetNumberOfDestinations()
         for i in 0..<count {
@@ -76,7 +77,7 @@ final class MIDIRobot {
         let raw = UnsafeMutableRawPointer.allocate(byteCount: byteCount, alignment: MemoryLayout<MIDIEventList>.alignment)
         defer { raw.deallocate() }
         let listPtr = raw.bindMemory(to: MIDIEventList.self, capacity: 1)
-        var cur = MIDIEventListInit(listPtr, ._2_0)
+        var cur = MIDIEventListInit(listPtr, MIDIProtocolID._2_0)
         words.withUnsafeBufferPointer { buf in
             cur = MIDIEventListAdd(listPtr, byteCount, cur, 0, buf.count, buf.baseAddress!)
         }

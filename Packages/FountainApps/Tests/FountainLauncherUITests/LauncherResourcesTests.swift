@@ -49,3 +49,7 @@ final class LauncherResourcesTests: XCTestCase {
         return url
     }
 }
+
+#endif // !ROBOT_ONLY
+// Robot-only mode: exclude this suite when building robot tests
+#if !ROBOT_ONLY

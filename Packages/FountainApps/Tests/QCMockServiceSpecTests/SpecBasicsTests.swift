@@ -1,3 +1,6 @@
+// Robot-only mode: exclude this suite when building robot tests
+#if !ROBOT_ONLY
+
 import XCTest
 import Yams
 
@@ -36,3 +39,4 @@ final class SpecBasicsTests: XCTestCase {
     }
 }
 
+#endif // !ROBOT_ONLY

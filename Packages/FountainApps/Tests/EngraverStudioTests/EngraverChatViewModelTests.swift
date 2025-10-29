@@ -290,6 +290,8 @@ final class EngraverChatViewModelTests: XCTestCase {
     }
 }
 
+#endif // !ROBOT_ONLY
+
 private struct MockGatewayChatStreaming: GatewayChatStreaming {
     let chunks: [GatewayChatChunk]
     let finalResponse: GatewayChatResponse
@@ -330,3 +332,5 @@ private struct MockGatewayChatStreaming: GatewayChatStreaming {
         finalResponse
     }
 }
+// Robot-only mode: exclude this suite when building robot tests
+#if !ROBOT_ONLY

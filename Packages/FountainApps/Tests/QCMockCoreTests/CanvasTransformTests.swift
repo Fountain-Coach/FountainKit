@@ -1,3 +1,6 @@
+// Robot-only mode: exclude this suite when building robot tests
+#if !ROBOT_ONLY
+
 import XCTest
 @testable import QCMockCore
 import CoreGraphics
@@ -42,3 +45,4 @@ final class CanvasTransformTests: XCTestCase {
     }
 }
 
+#endif // !ROBOT_ONLY

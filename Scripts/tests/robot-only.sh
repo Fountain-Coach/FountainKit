@@ -8,7 +8,7 @@ pushd "$ROOT_DIR" >/dev/null
 
 FILTER='^PatchBayAppUITests\.'
 echo "[robot-only] running PatchBayAppUITests with filter $FILTER"
-swift test --package-path Packages/FountainApps -c debug --filter "$FILTER" --quiet || true
+ROBOT_ONLY=1 swift test --package-path Packages/FountainApps -c debug --filter "$FILTER" -Xswiftc -DROBOT_ONLY --quiet || true
 
 if [[ ":${*}:" == *:"--open":* ]]; then
   ART="$ROOT_DIR/.fountain/artifacts/replay"
@@ -23,4 +23,3 @@ fi
 
 popd >/dev/null
 echo "[robot-only] done"
-

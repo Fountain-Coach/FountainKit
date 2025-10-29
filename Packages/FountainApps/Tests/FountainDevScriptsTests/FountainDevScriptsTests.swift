@@ -1,3 +1,6 @@
+// Robot-only mode: exclude this suite when building robot tests
+#if !ROBOT_ONLY
+
 import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
@@ -104,3 +107,5 @@ final class FountainDevScriptsTests: XCTestCase {
         if let lastError { throw lastError }
     }
 }
+
+#endif // !ROBOT_ONLY

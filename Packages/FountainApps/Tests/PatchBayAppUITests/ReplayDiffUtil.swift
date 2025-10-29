@@ -29,6 +29,7 @@ enum ReplayDiffUtil {
         let mse = se / Double(bytesPerRow * h)
         return .init(mse: mse, changedPixels: changes)
     }
+    @MainActor
     static func snapshot(_ view: NSView) -> NSImage? {
         guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return nil }
         view.cacheDisplay(in: view.bounds, to: rep)
@@ -41,4 +42,3 @@ enum ReplayDiffUtil {
         try? tiff.write(to: url)
     }
 }
-

@@ -245,3 +245,7 @@ final class GatewayServerTests: XCTestCase {
         XCTAssertEqual(notFound.status, 404)
     }
 }
+
+#endif // !ROBOT_ONLY
+// Robot-only mode: exclude this suite when building robot tests
+#if !ROBOT_ONLY

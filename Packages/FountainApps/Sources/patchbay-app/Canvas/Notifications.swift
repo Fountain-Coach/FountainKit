@@ -5,4 +5,3 @@ extension Notification.Name {
     static let pbZoomActual = Notification.Name("pbZoomActual")
     static let pbDelete = Notification.Name("pbDelete")
 }
-

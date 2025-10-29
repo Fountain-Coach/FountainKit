@@ -17,9 +17,9 @@ warning: 'fountainapps': found 1 file(s) which are unhandled; explicitly declare
 [0/1] Planning build
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'local-agent-manager' complete! (14.53s)
+Build of product 'local-agent-manager' complete! (16.00s)
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
 Build of product 'local-agent-manager' complete! (0.45s)
 failed to become healthy after 30s; attempting fallback mock-localagent
-mock-localagent started pid 51909
+mock-localagent started pid 99024

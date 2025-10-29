@@ -20,6 +20,15 @@
       }
     },
     {
+      "identity" : "flow",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/AudioKit/Flow.git",
+      "state" : {
+        "revision" : "c2195aff3772a405655c08f22eb2aafbd77c27af",
+        "version" : "1.0.4"
+      }
+    },
+    {
       "identity" : "fountain-store",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Fountain-Coach/Fountain-Store.git",
@@ -35,6 +44,15 @@
       "state" : {
         "branch" : "main",
         "revision" : "fec93dae9efbb4f1d56984eb0889983962a1dbab"
+      }
+    },
+    {
+      "identity" : "midi2sampler",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Fountain-Coach/midi2sampler.git",
+      "state" : {
+        "revision" : "64aaed8613a1f8eff0fc8bdb76656688848b0f87",
+        "version" : "0.1.1"
       }
     },
     {

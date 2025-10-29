@@ -733,7 +733,7 @@ fileprivate struct ExecutorHook: View {
         if let top = lastId(where: { _, k in k == .topN }) { _ = vm.ensureEdge(from: (top,"out"), to: (id,"in")) }
     }
     private func connectIntoStage(into id: String) {
-        if let up = lastId(where: { _, k in k == .panelLine || k == .panelStat || k == .panelTable }) { _ = vm.ensureEdge(from: (up,"out"), to: (id,"in")) }
+        if let up = lastId(where: { _, k in k == .panelLine || k == .panelStat || k == .panelTable }) { _ = vm.ensureEdge(from: (up,"out"), to: (id,"in0")) }
     }
 }
 
@@ -907,7 +907,7 @@ fileprivate struct QuickActionsMenu: View {
         if let top = lastId(where: { _, k in k == .topN }) { _ = vm.ensureEdge(from: (top,"out"), to: (id,"in")) }
     }
     private func connectIntoStage(into id: String) {
-        if let up = lastId(where: { _, k in k == .panelLine || k == .panelStat || k == .panelTable }) { _ = vm.ensureEdge(from: (up,"out"), to: (id,"in")) }
+        if let up = lastId(where: { _, k in k == .panelLine || k == .panelStat || k == .panelTable }) { _ = vm.ensureEdge(from: (up,"out"), to: (id,"in0")) }
     }
 }
 

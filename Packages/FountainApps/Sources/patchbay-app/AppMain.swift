@@ -1250,7 +1250,16 @@ struct ContentView: View {
         case .panelStat, .panelTable:
             ports.append(.init(id: "in", side: .left, dir: .input, type: "data"))
         case .stageA4:
-            ports.append(.init(id: "in", side: .left, dir: .input, type: "view"))
+            // Stage capacity maps to baseline count
+            let page = props["page"]?.lowercased() ?? "a4"
+            let height: Double = (page == "letter") ? 792.0 : 842.0
+            let baseline = Double(props["baseline"] ?? "12") ?? 12.0
+            let mparts = (props["margins"] ?? "18,18,18,18").split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+            let top = mparts.count == 4 ? mparts[0] : 18.0
+            let bottom = mparts.count == 4 ? mparts[2] : 18.0
+            let usable = max(0.0, height - top - bottom)
+            let count = max(1, Int(floor(usable / max(1.0, baseline))))
+            for i in 0..<count { ports.append(.init(id: "in\(i)", side: .left, dir: .input, type: "view")) }
         case .adapterFountain, .adapterScoreKit:
             ports.append(.init(id: "out", side: .right, dir: .output, type: "view"))
         default:
@@ -1327,8 +1336,7 @@ struct ContentView: View {
         case .panelTable:
             if let top = lastId(where: { _, k in k == .topN }) { _ = vm.ensureEdge(from: (top,"out"), to: (newId,"in")) }
         case .stageA4:
-            // Try last renderer-capable upstream (panel or adapter once available)
-            if let up = lastId(where: { _, k in k == .panelLine || k == .panelStat || k == .panelTable || k == .adapterFountain || k == .adapterScoreKit }) { _ = vm.ensureEdge(from: (up,"out"), to: (newId,"in")) }
+            if let up = lastId(where: { _, k in k == .panelLine || k == .panelStat || k == .panelTable || k == .adapterFountain || k == .adapterScoreKit }) { _ = vm.ensureEdge(from: (up,"out"), to: (newId,"in0")) }
         case .adapterFountain, .adapterScoreKit:
             if let stage = lastId(where: { _, k in k == .stageA4 }) { _ = vm.ensureEdge(from: (newId,"out"), to: (stage,"in")) }
         case .datasource:
@@ -1819,7 +1827,15 @@ struct DashNodeRow: View {
         case .panelStat, .panelTable:
             ports.append(.init(id: "in", side: .left, dir: .input))
         case .stageA4:
-            ports.append(.init(id: "in", side: .left, dir: .input, type: "view"))
+            let page = props["page"]?.lowercased() ?? "a4"
+            let height: Double = (page == "letter") ? 792.0 : 842.0
+            let baseline = Double(props["baseline"] ?? "12") ?? 12.0
+            let mparts = (props["margins"] ?? "18,18,18,18").split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+            let top = mparts.count == 4 ? mparts[0] : 18.0
+            let bottom = mparts.count == 4 ? mparts[2] : 18.0
+            let usable = max(0.0, height - top - bottom)
+            let count = max(1, Int(floor(usable / max(1.0, baseline))))
+            for i in 0..<count { ports.append(.init(id: "in\(i)", side: .left, dir: .input)) }
         case .adapterFountain, .adapterScoreKit:
             ports.append(.init(id: "out", side: .right, dir: .output, type: "view"))
         default:

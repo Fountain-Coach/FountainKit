@@ -535,9 +535,12 @@ final class MetalCanvasNSView: MTKView {
         let s = max(0.0001, r.currentZoom)
         let rawX = event.scrollingDeltaX
         let rawY = event.scrollingDeltaY
-        // Follow-finger policy: horizontal as-is, vertical inverted to match user expectation across natural/legacy prefs.
-        let dxDoc = rawX / s
-        let dyDoc = -rawY / s
+        // Follow‑finger: convert device deltas to finger deltas using system inversion flag.
+        // When natural scrolling is enabled, isDirectionInvertedFromDevice is true and raw deltas follow the finger.
+        // When disabled, raw deltas are opposite the finger, so multiply by -1.
+        let inv: CGFloat = event.isDirectionInvertedFromDevice ? 1.0 : -1.0
+        let dxDoc = (rawX * inv) / s
+        let dyDoc = (rawY * inv) / s
         r.panBy(docDX: dxDoc, docDY: dyDoc)
         c.onTransformChanged(r.currentTranslation, r.currentZoom)
         NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [

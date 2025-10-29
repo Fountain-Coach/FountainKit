@@ -1189,30 +1189,34 @@ struct ContentView: View {
                 return
             }
             guard let p = try? decoder.decode(TemplatePayload.self, from: data), let kindStr = p.kind, let title = p.title, let w = p.w, let h = p.h else { return }
-            Task { @MainActor in
-                let kind = Components.Schemas.InstrumentKind(rawValue: kindStr) ?? .init(rawValue: kindStr)!
-                let base = baseForKind(kindStr, title: title)
-                let id = nextId(base: base)
-                // Convert drop location (view coords) → doc coords, snap to grid
-                let z = max(0.0001, vm.zoom)
-                let docX = Int((location.x / z) - vm.translation.x)
-                let docY = Int((location.y / z) - vm.translation.y)
-                let g = max(1, vm.grid)
-                let snap: (Int) -> Int = { ((($0 + g/2) / g) * g) }
-                let x = snap(docX)
-                let y = snap(docY)
+            Task {
+                // Snapshot inputs on MainActor
+                let input: (Components.Schemas.InstrumentKind, String, Int, Int, Int, Int) = await MainActor.run {
+                    let kind = Components.Schemas.InstrumentKind(rawValue: kindStr) ?? .init(rawValue: kindStr)!
+                    let base = baseForKind(kindStr, title: title)
+                    let id = nextId(base: base)
+                    let z = max(0.0001, vm.zoom)
+                    let docX = Int((location.x / z) - vm.translation.x)
+                    let docY = Int((location.y / z) - vm.translation.y)
+                    let g = max(1, vm.grid)
+                    let snap: (Int) -> Int = { ((($0 + g/2) / g) * g) }
+                    return (kind, id, snap(docX), snap(docY), w, h)
+                }
+                let (kind, id, x, y, w2, h2) = input
                 if let c = state.api as? PatchBayClient {
                     do {
-                        if let inst = try await c.createInstrument(id: id, kind: kind, title: title, x: x, y: y, w: w, h: h) {
-                            var node = PBNode(id: inst.id, title: inst.title, x: inst.x, y: inst.y, w: inst.w, h: inst.h, ports: [])
-                            node.ports.append(.init(id: "in", side: .left, dir: .input, type: "data"))
-                            node.ports.append(.init(id: "out", side: .right, dir: .output, type: "data"))
-                            if inst.identity.hasUMPInput == true { node.ports.append(.init(id: "umpIn", side: .left, dir: .input, type: "ump")) }
-                            if inst.identity.hasUMPOutput == true { node.ports.append(.init(id: "umpOut", side: .right, dir: .output, type: "ump")) }
-                            vm.nodes.append(node)
-                            vm.selection = inst.id
-                            vm.selected = [inst.id]
-                            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type":"node.add", "id": inst.id, "x": node.x, "y": node.y])
+                        if let inst = try await c.createInstrument(id: id, kind: kind, title: title, x: x, y: y, w: w2, h: h2) {
+                            await MainActor.run {
+                                var node = PBNode(id: inst.id, title: inst.title, x: inst.x, y: inst.y, w: inst.w, h: inst.h, ports: [])
+                                node.ports.append(.init(id: "in", side: .left, dir: .input, type: "data"))
+                                node.ports.append(.init(id: "out", side: .right, dir: .output, type: "data"))
+                                if inst.identity.hasUMPInput == true { node.ports.append(.init(id: "umpIn", side: .left, dir: .input, type: "ump")) }
+                                if inst.identity.hasUMPOutput == true { node.ports.append(.init(id: "umpOut", side: .right, dir: .output, type: "ump")) }
+                                vm.nodes.append(node)
+                                vm.selection = inst.id
+                                vm.selected = [inst.id]
+                                NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type":"node.add", "id": inst.id, "x": node.x, "y": node.y])
+                            }
                         }
                     } catch { }
                 }

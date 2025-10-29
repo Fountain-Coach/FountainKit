@@ -125,7 +125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             PBNode(id: "B", title: "B", x: 360, y: 180, w: 220, h: 140, ports: [.init(id: "in", side: .left, dir: .input)])
         ]
         vm2.edges = [ PBEdge(from: "A.out", to: "B.in") ]
-        let cHost = NSHostingView(rootView: EditorCanvas().environmentObject(vm2))
+        let cHost = NSHostingView(rootView: EditorCanvas().environmentObject(vm2).environmentObject(AppState()))
         cHost.frame = NSRect(x: 0, y: 0, width: 640, height: 480)
         cHost.layoutSubtreeIfNeeded()
         if let rep2 = cHost.bitmapImageRepForCachingDisplay(in: cHost.bounds) { cHost.cacheDisplay(in: cHost.bounds, to: rep2)

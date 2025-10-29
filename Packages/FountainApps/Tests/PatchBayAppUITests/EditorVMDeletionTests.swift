@@ -1,6 +1,7 @@
 import XCTest
 @testable import patchbay_app
 
+@MainActor
 final class EditorVMDeletionTests: XCTestCase {
     func testDeleteSingleNodeRemovesIncidentEdges() {
         let vm = EditorVM()
@@ -36,4 +37,3 @@ final class EditorVMDeletionTests: XCTestCase {
         XCTAssertTrue(vm.selected.isEmpty)
     }
 }
-

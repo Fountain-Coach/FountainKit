@@ -235,6 +235,7 @@ extension EngraverStudioConfiguration {
         return URL(string: "http://127.0.0.1:8002")
     }
 
+    @MainActor
     private static func resolveSeedingConfiguration(from env: [String: String]) -> SeedingConfiguration? {
         let baseDirectory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
         let sources = resolveSeedSources(from: env, relativeTo: baseDirectory)

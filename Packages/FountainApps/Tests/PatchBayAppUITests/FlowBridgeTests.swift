@@ -1,6 +1,7 @@
 import XCTest
 @testable import patchbay_app
 
+@MainActor
 final class FlowBridgeTests: XCTestCase {
     func testToFlowPatchWithDuplicateIdsDoesNotCrash() {
         let vm = EditorVM()
@@ -19,4 +20,3 @@ final class FlowBridgeTests: XCTestCase {
         XCTAssertLessThan(w.input.nodeIndex, patch.nodes.count)
     }
 }
-

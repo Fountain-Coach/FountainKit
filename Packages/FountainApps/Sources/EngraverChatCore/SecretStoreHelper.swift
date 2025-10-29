@@ -1,6 +1,7 @@
 import Foundation
 import SecretStore
 
+@MainActor
 public enum SecretStoreHelper {
     // In-process memoization to avoid repeated Keychain/libsecret lookups, which may
     // trigger OS prompts. We only read once per (service, account) per process.

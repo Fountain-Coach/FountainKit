@@ -52,7 +52,7 @@ final class SnapshotDiffTests: XCTestCase {
         host.cacheDisplay(in: host.bounds, to: actual)
         let baselineData = try Data(contentsOf: baselineURL)
         let baseline = NSBitmapImageRep(data: baselineData)!
-        let (diff, heatmap) = rmseDiffAndHeatmap(a: baseline, b: actual)
+        let (diff, heatmap) = Self.rmseDiffAndHeatmap(a: baseline, b: actual)
         if diff > 2.0, let img = heatmap, let data = img.tiffRepresentation {
             let out = artifactsDir().appendingPathComponent("patchbay-snapshot-heatmap.tiff")
             try? data.write(to: out)
@@ -91,7 +91,7 @@ final class SnapshotDiffTests: XCTestCase {
         host.cacheDisplay(in: host.bounds, to: actual)
         let baselineData = try Data(contentsOf: baselineURL)
         let baseline = NSBitmapImageRep(data: baselineData)!
-        let (diff, heatmap) = rmseDiffAndHeatmap(a: baseline, b: actual)
+        let (diff, heatmap) = Self.rmseDiffAndHeatmap(a: baseline, b: actual)
         if diff > 5.0, let img = heatmap, let data = img.tiffRepresentation {
             let out = artifactsDir().appendingPathComponent("patchbay-initial-open-heatmap.tiff")
             try? data.write(to: out)
@@ -120,7 +120,7 @@ final class SnapshotDiffTests: XCTestCase {
         guard let actual = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { XCTFail("no rep"); return }
         host.cacheDisplay(in: host.bounds, to: actual)
         let baseline = NSBitmapImageRep(data: try Data(contentsOf: baselineURL))!
-        let (diff, heatmap) = rmseDiffAndHeatmap(a: baseline, b: actual)
+        let (diff, heatmap) = Self.rmseDiffAndHeatmap(a: baseline, b: actual)
         if diff > 5.0, let img = heatmap, let data = img.tiffRepresentation {
             try? data.write(to: artifactsDir().appendingPathComponent("patchbay-initial-open-1280x800-portrait-heatmap.tiff"))
         }

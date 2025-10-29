@@ -28,6 +28,7 @@ public struct MetalInstrumentDescriptor: Sendable, Equatable {
 public final class MetalInstrument: @unchecked Sendable {
     private weak var sink: MetalSceneRenderer?
     private let desc: MetalInstrumentDescriptor
+    public var stateProvider: (() -> [String: Any])? = nil
 
     private var client: MIDIClientRef = 0
     private var src: MIDIEndpointRef = 0
@@ -176,7 +177,7 @@ public final class MetalInstrument: @unchecked Sendable {
 
     func publishStateCI(requestId: UInt32? = nil) {
         // Compose property snapshot as JSON
-        let snapshot: [String: Any] = [
+        var snapshot: [String: Any] = [
             "identity": [
                 "manufacturer": desc.manufacturer,
                 "product": desc.product,
@@ -184,6 +185,7 @@ public final class MetalInstrument: @unchecked Sendable {
             ],
             "pe": ["version": 1, "supports": ["get", "set"]]
         ]
+        if let props = stateProvider?() { snapshot["properties"] = props }
         let data = (try? JSONSerialization.data(withJSONObject: snapshot)) ?? Data()
         let pe = MidiCiPropertyExchangeBody(
             command: (requestId != nil ? .getReply : .notify),

@@ -51,6 +51,17 @@ public struct MetalCanvasView: NSViewRepresentable {
                     noti.userInfo?.forEach { k, v in dict[String(describing: k)] = v }
                     inst.sendVendorJSONEvent(topic: dict["type"] as? String ?? "event", dict: dict)
                 }
+                // Provide state snapshot for PE GET
+                inst.stateProvider = { [weak renderer] in
+                    guard let r = renderer else { return [:] }
+                    return [
+                        "zoom": Double(r.currentZoom),
+                        "translation.x": Double(r.currentTranslation.x),
+                        "translation.y": Double(r.currentTranslation.y),
+                        "grid.minor": Double(r.currentGridMinor),
+                        "grid.majorEvery": r.currentMajorEvery
+                    ]
+                }
             }
         }
         return v
@@ -73,6 +84,14 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
     private var majorEvery: Int = 5
     private var zoom: CGFloat = 1.0
     private var translation: CGPoint = .zero
+    // PE overrides
+    private var overrideGridMinor: CGFloat? = nil
+    private var overrideMajorEvery: Int? = nil
+    // Snapshot accessors
+    var currentZoom: CGFloat { zoom }
+    var currentTranslation: CGPoint { translation }
+    var currentGridMinor: CGFloat { overrideGridMinor ?? gridMinor }
+    var currentMajorEvery: Int { overrideMajorEvery ?? majorEvery }
 
     init?(mtkView: MTKView) {
         guard let device = mtkView.device ?? MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue() else { return nil }
@@ -96,6 +115,8 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
         case "zoom": self.zoom = CGFloat(max(0.25, min(3.0, value)))
         case "translation.x": self.translation.x = CGFloat(value)
         case "translation.y": self.translation.y = CGFloat(value)
+        case "grid.minor": self.overrideGridMinor = CGFloat(max(1.0, value))
+        case "grid.majorEvery": self.overrideMajorEvery = max(1, Int(value.rounded()))
         default: break
         }
     }
@@ -169,7 +190,7 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
         let maxDocX = CGFloat(view.drawableSize.width) / z - translation.x
         let minDocY = 0 / z - translation.y
         let maxDocY = CGFloat(view.drawableSize.height) / z - translation.y
-        let step = max(1.0, gridMinor)
+        let step = max(1.0, overrideGridMinor ?? gridMinor)
         // Vertical lines
         var vMinor: [SIMD2<Float>] = []
         var vMajor: [SIMD2<Float>] = []
@@ -180,7 +201,7 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
         while x <= endVX * step {
             let a = xf.docToNDC(x: x, y: minDocY)
             let b = xf.docToNDC(x: x, y: maxDocY)
-            if (idx % max(1, majorEvery)) == 0 { vMajor.append(contentsOf: [a,b]) } else { vMinor.append(contentsOf: [a,b]) }
+            if (idx % max(1, overrideMajorEvery ?? majorEvery)) == 0 { vMajor.append(contentsOf: [a,b]) } else { vMinor.append(contentsOf: [a,b]) }
             idx += 1
             x += step
         }
@@ -194,7 +215,7 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
         while y <= endHY * step {
             let a = xf.docToNDC(x: minDocX, y: y)
             let b = xf.docToNDC(x: maxDocX, y: y)
-            if (idy % max(1, majorEvery)) == 0 { hMajor.append(contentsOf: [a,b]) } else { hMinor.append(contentsOf: [a,b]) }
+            if (idy % max(1, overrideMajorEvery ?? majorEvery)) == 0 { hMajor.append(contentsOf: [a,b]) } else { hMinor.append(contentsOf: [a,b]) }
             idy += 1
             y += step
         }

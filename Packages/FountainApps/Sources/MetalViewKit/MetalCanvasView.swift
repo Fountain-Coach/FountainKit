@@ -431,6 +431,10 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
 // MARK: - Interaction (Mouse) — MTKView subclass
 final class MetalCanvasNSView: MTKView {
     weak var coordinator: MetalCanvasView.Coordinator?
+    // Low-pass smoothing state for trackpad pan
+    private var panVX: CGFloat = 0
+    private var panVY: CGFloat = 0
+    private let panSmoothingAlpha: CGFloat = 0.35
     private func viewToDoc(_ p: CGPoint) -> CGPoint {
         guard let r = coordinator?.renderer else { return .zero }
         let s = max(0.0001, r.currentZoom)
@@ -539,8 +543,13 @@ final class MetalCanvasNSView: MTKView {
         // When natural scrolling is enabled, isDirectionInvertedFromDevice is true and raw deltas follow the finger.
         // When disabled, raw deltas are opposite the finger, so multiply by -1.
         let inv: CGFloat = event.isDirectionInvertedFromDevice ? 1.0 : -1.0
-        let dxDoc = (rawX * inv) / s
-        let dyDoc = (rawY * inv) / s
+        let dxView = rawX * inv
+        let dyView = rawY * inv
+        // Low‑pass smoothing to tame jitter
+        panVX = panVX * (1 - panSmoothingAlpha) + dxView * panSmoothingAlpha
+        panVY = panVY * (1 - panSmoothingAlpha) + dyView * panSmoothingAlpha
+        let dxDoc = panVX / s
+        let dyDoc = panVY / s
         r.panBy(docDX: dxDoc, docDY: dyDoc)
         c.onTransformChanged(r.currentTranslation, r.currentZoom)
         NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [

@@ -180,26 +180,31 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
         NotificationCenter.default.addObserver(forName: Notification.Name("MetalCanvasRendererCommand"), object: nil, queue: .main) { [weak self] noti in
             guard let self else { return }
             let u = noti.userInfo ?? [:]
-            if let op = u["op"] as? String {
+            guard let op = u["op"] as? String else { return }
+            // Extract values outside the Task to avoid task-isolated capture warnings
+            let dx = CGFloat((u["dx"] as? Double) ?? 0)
+            let dy = CGFloat((u["dy"] as? Double) ?? 0)
+            let vx = CGFloat((u["dx"] as? Double) ?? 0)
+            let vy = CGFloat((u["dy"] as? Double) ?? 0)
+            let ax = CGFloat((u["anchor.x"] as? Double) ?? 0)
+            let ay = CGFloat((u["anchor.y"] as? Double) ?? 0)
+            let mag = CGFloat((u["magnification"] as? Double) ?? 0)
+            let z = (u["zoom"] as? Double)
+            let tx = (u["tx"] as? Double)
+            let ty = (u["ty"] as? Double)
+            Task { @MainActor in
                 switch op {
                 case "panBy":
-                    let dx = CGFloat((u["dx"] as? Double) ?? 0)
-                    let dy = CGFloat((u["dy"] as? Double) ?? 0)
                     self.panBy(docDX: dx, docDY: dy)
                 case "panByView":
-                    let vx = CGFloat((u["dx"] as? Double) ?? 0)
-                    let vy = CGFloat((u["dy"] as? Double) ?? 0)
                     let s = max(0.0001, self.currentZoom)
                     self.panBy(docDX: vx / s, docDY: vy / s)
                 case "zoomAround":
-                    let ax = CGFloat((u["anchor.x"] as? Double) ?? 0)
-                    let ay = CGFloat((u["anchor.y"] as? Double) ?? 0)
-                    let mag = CGFloat((u["magnification"] as? Double) ?? 0)
                     self.zoomAround(anchorView: CGPoint(x: ax, y: ay), magnification: mag)
                 case "set":
-                    if let z = u["zoom"] as? Double { self.canvas.zoom = CGFloat(z) }
-                    if let tx = u["tx"] as? Double { self.canvas.translation.x = CGFloat(tx) }
-                    if let ty = u["ty"] as? Double { self.canvas.translation.y = CGFloat(ty) }
+                    if let z = z { self.canvas.zoom = CGFloat(z) }
+                    if let tx = tx { self.canvas.translation.x = CGFloat(tx) }
+                    if let ty = ty { self.canvas.translation.y = CGFloat(ty) }
                     NotificationCenter.default.post(name: Notification.Name("MetalCanvasTransformChanged"), object: nil, userInfo: [
                         "zoom": self.canvas.zoom, "tx": self.canvas.translation.x, "ty": self.canvas.translation.y, "op": "set"
                     ])

@@ -128,10 +128,12 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
               let enc = cb.makeRenderCommandEncoder(descriptor: rpd) else { return }
         // Use a shared pipeline and transform for all nodes
         enc.setRenderPipelineState(pipeline)
+        // Use view bounds in points for transform so overlays (SwiftUI points)
+        // and Metal rendering share the same coordinate basis.
         let xf = MetalCanvasTransform(
             zoom: Float(zoom),
             translation: SIMD2<Float>(Float(translation.x), Float(translation.y)),
-            drawableSize: SIMD2<Float>(Float(view.drawableSize.width), Float(view.drawableSize.height))
+            drawableSize: SIMD2<Float>(Float(view.bounds.width), Float(view.bounds.height))
         )
         // Grid background
         drawGrid(in: view, encoder: enc, xf: xf)
@@ -146,8 +148,8 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
             portMap[node.id] = entry
         }
         // Draw port dots as small quads (~3 px radius)
-        let W = max(1.0, Float(view.drawableSize.width))
-        let H = max(1.0, Float(view.drawableSize.height))
+        let W = max(1.0, Float(view.bounds.width))
+        let H = max(1.0, Float(view.bounds.height))
         let rpx: Float = 3.0
         let dx = 2 * rpx / W
         let dy = 2 * rpx / H

@@ -1049,6 +1049,18 @@ struct ContentView: View {
         return "Stage \(i)"
     }
 
+    // Shared: compute baseline count from props
+    private func stageBaselineCount(from props: [String:String]) -> Int {
+        let page = props["page"]?.lowercased() ?? "a4"
+        let height: Double = (page == "letter") ? 792.0 : 842.0
+        let baseline = Double(props["baseline"] ?? "12") ?? 12.0
+        let mparts = (props["margins"] ?? "18,18,18,18").split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+        let top = mparts.count == 4 ? mparts[0] : 18.0
+        let bottom = mparts.count == 4 ? mparts[2] : 18.0
+        let usable = max(0.0, height - top - bottom)
+        return max(1, Int(floor(usable / max(1.0, baseline))))
+    }
+
     private func buildPrometheusExample() {
         // Clear canvas; compose datasource -> 3 queries -> 3 panels
         state.clearCanvas(vm: vm)
@@ -1338,7 +1350,7 @@ struct ContentView: View {
         case .stageA4:
             if let up = lastId(where: { _, k in k == .panelLine || k == .panelStat || k == .panelTable || k == .adapterFountain || k == .adapterScoreKit }) { _ = vm.ensureEdge(from: (up,"out"), to: (newId,"in0")) }
         case .adapterFountain, .adapterScoreKit:
-            if let stage = lastId(where: { _, k in k == .stageA4 }) { _ = vm.ensureEdge(from: (newId,"out"), to: (stage,"in")) }
+            if let stage = lastId(where: { _, k in k == .stageA4 }) { _ = vm.ensureEdge(from: (newId,"out"), to: (stage,"in0")) }
         case .datasource:
             break
         }
@@ -1415,6 +1427,8 @@ struct DashEditSheet: View {
                 TextField("Threshold", text: Binding(get: { dash.props["threshold"] ?? "0" }, set: { _ in }))
             case .stageA4:
                 TextField("Title", text: $title)
+                HStack { TextField("Page (A4/Letter)", text: Binding(get: { dash.props["page"] ?? "A4" }, set: { _ in })); TextField("Baseline (pt)", text: Binding(get: { dash.props["baseline"] ?? "12" }, set: { _ in })) }
+                TextField("Margins (t,l,b,r)", text: Binding(get: { dash.props["margins"] ?? "18,18,18,18" }, set: { _ in }))
             case .adapterFountain, .adapterScoreKit:
                 TextField("Source (file path)", text: $sourcePath)
             }
@@ -1449,11 +1463,45 @@ struct DashEditSheet: View {
         case .stageA4:
             p["title"] = title
             vm.setNodeTitle(id: id, title: title)
+            // Recompute baseline-derived ports and migrate edges
+            reflowStagePorts(id: id, props: p)
         case .adapterFountain, .adapterScoreKit:
             p["source"] = sourcePath
         default: break
         }
         state.updateDashProps(id: id, props: p)
+    }
+
+    private func reflowStagePorts(id: String, props: [String:String]) {
+        guard let i = vm.nodeIndex(by: id) else { return }
+        func stageBaselineCountLocal(_ props: [String:String]) -> Int {
+            let page = props["page"]?.lowercased() ?? "a4"
+            let height: Double = (page == "letter") ? 792.0 : 842.0
+            let baseline = Double(props["baseline"] ?? "12") ?? 12.0
+            let mparts = (props["margins"] ?? "18,18,18,18").split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+            let top = mparts.count == 4 ? mparts[0] : 18.0
+            let bottom = mparts.count == 4 ? mparts[2] : 18.0
+            let usable = max(0.0, height - top - bottom)
+            return max(1, Int(floor(usable / max(1.0, baseline))))
+        }
+        let newCount = stageBaselineCountLocal(props)
+        let oldIn = vm.nodes[i].ports.filter { $0.dir == .input && $0.id.hasPrefix("in") }
+        if oldIn.count == newCount { return }
+        // Rebuild ports: inputs only (left)
+        var ports: [PBPort] = []
+        for k in 0..<newCount { ports.append(.init(id: "in\(k)", side: .left, dir: .input, type: "view")) }
+        vm.nodes[i].ports = canonicalSortPorts(ports)
+        // Migrate edges
+        for eidx in 0..<vm.edges.count {
+            var e = vm.edges[eidx]
+            if e.to.hasPrefix(id + ".in") {
+                if let idxStr = e.to.split(separator: ".").last?.dropFirst(2), let idx = Int(idxStr) {
+                    let clamped = max(0, min(newCount - 1, idx))
+                    e.to = id + ".in\(clamped)"
+                    vm.edges[eidx] = e
+                }
+            }
+        }
     }
 }
 
@@ -1542,9 +1590,7 @@ struct TemplateLibraryView: View {
                         DashNodeRow(title: "Panel (Line)", dashKind: .panelLine, defaultProps: ["title":"Line"]).environmentObject(state).environmentObject(vm)
                         DashNodeRow(title: "Panel (Stat)", dashKind: .panelStat, defaultProps: ["title":"Stat"]).environmentObject(state).environmentObject(vm)
                         DashNodeRow(title: "Panel (Table)", dashKind: .panelTable, defaultProps: ["title":"Table"]).environmentObject(state).environmentObject(vm)
-                    }
-                    Section(header: Text("Renderers").font(.headline)) {
-                        DashNodeRow(title: "The Stage (A4)", dashKind: .stageA4, defaultProps: ["title":"The Stage", "page":"A4", "margins":"18,18,18,18", "baseline":"12"]).environmentObject(state).environmentObject(vm)
+                        DashNodeRow(title: "Stage (A4)", dashKind: .stageA4, defaultProps: ["title":"The Stage", "page":"A4", "margins":"18,18,18,18", "baseline":"12"]).environmentObject(state).environmentObject(vm)
                     }
                     Section(header: Text("Adapters").font(.headline)) {
                         DashNodeRow(title: "Fountain → Teatro", dashKind: .adapterFountain, defaultProps: ["source":"Design/Teatro/Examples/sample.fountain"]).environmentObject(state).environmentObject(vm)

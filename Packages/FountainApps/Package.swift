@@ -83,6 +83,8 @@ let package = Package(
         .package(path: "../FountainTooling"),
         // External UI graph editor used by PatchBay
         .package(url: "https://github.com/AudioKit/Flow.git", from: "1.0.4"),
+        // New: local incubator for a per-node flexible editor
+        .package(path: "../../External/_gh/FountainFlow"),
         .package(path: "../FountainTelemetryKit"),
         .package(path: "../../Tools/PersistenceSeeder"),
         .package(path: "../../External/TeatroFull"),
@@ -246,6 +248,7 @@ let package = Package(
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
                 .product(name: "Flow", package: "Flow"),
+                .product(name: "FountainFlow", package: "FountainFlow"),
                 .product(name: "FountainAIAdapters", package: "FountainGatewayKit"),
                 .product(name: "LLMGatewayAPI", package: "FountainAPIClients"),
                 .product(name: "ApiClientsCore", package: "FountainAPIClients"),

@@ -83,8 +83,8 @@ let package = Package(
         .package(path: "../FountainTooling"),
         // External UI graph editor used by PatchBay
         .package(url: "https://github.com/AudioKit/Flow.git", from: "1.0.4"),
-        // New: local incubator for a per-node flexible editor
-        .package(path: "../../External/_gh/FountainFlow"),
+        // New: per-node flexible editor (remote home)
+        .package(url: "https://github.com/Fountain-Coach/FountainFlow.git", branch: "main"),
         .package(path: "../FountainTelemetryKit"),
         .package(path: "../../Tools/PersistenceSeeder"),
         .package(path: "../../External/TeatroFull"),

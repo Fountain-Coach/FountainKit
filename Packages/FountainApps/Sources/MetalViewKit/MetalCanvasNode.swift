@@ -84,10 +84,13 @@ public struct MetalCanvasTransform: Sendable {
     public init(zoom: Float, translation: SIMD2<Float>, drawableSize: SIMD2<Float>) {
         self.zoom = zoom; self.translation = translation; self.drawableSize = drawableSize
     }
+    // Translation is expressed in document units (doc-space),
+    // matching SwiftUI overlays and interaction math. We transform by
+    // first translating in doc-space, then scaling to view pixels.
     @inlinable public func docToNDC(x: CGFloat, y: CGFloat) -> SIMD2<Float> {
         let z = max(0.0001, zoom)
-        let vx = Float(x) * z + translation.x
-        let vy = Float(y) * z + translation.y
+        let vx = (Float(x) + translation.x) * z
+        let vy = (Float(y) + translation.y) * z
         let ndcX = (vx / max(1, drawableSize.x)) * 2 - 1
         let ndcY = 1 - (vy / max(1, drawableSize.y)) * 2
         return SIMD2<Float>(ndcX, ndcY)

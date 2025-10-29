@@ -127,6 +127,16 @@ enum ReplayMovieExporter {
             if let arr = payload["selected"] as? [Any] { vm.selected = Set(arr.compactMap { $0 as? String }); vm.selection = vm.selected.first }
         case "selection.change":
             if let arr = payload["after"] as? [Any] { vm.selected = Set(arr.compactMap { $0 as? String }); vm.selection = vm.selected.first }
+        case "ui.pan":
+            if let x = payload["x"] as? Double, let y = payload["y"] as? Double {
+                vm.translation = CGPoint(x: x, y: y)
+            } else {
+                let dx = (payload["dx.doc"] as? Double) ?? 0
+                let dy = (payload["dy.doc"] as? Double) ?? 0
+                vm.translation = CGPoint(x: vm.translation.x + dx, y: vm.translation.y + dy)
+            }
+        case "ui.zoom":
+            if let z = payload["zoom"] as? Double { vm.zoom = CGFloat(z) }
         default:
             break
         }

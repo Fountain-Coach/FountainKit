@@ -59,14 +59,23 @@ struct ZoomContainer<Content: View>: NSViewRepresentable {
             guard let coord, let win = host.window, e.window == win else { return e }
             if NSApp.modalWindow != nil || win.attachedSheet != nil { return e }
             let s = max(0.0001, coord.parent.zoom)
-            // Make horizontal follow finger.
+            // Make horizontal follow finger: positive deltaX moves content with finger.
             let invX: CGFloat = e.isDirectionInvertedFromDevice ? 1.0 : -1.0
-            // Vertical: ensure swipe up moves content up (doc translation decreases).
+            // Vertical: ensure swipe up moves content up (translation decreases in doc-space).
             let invY: CGFloat = e.isDirectionInvertedFromDevice ? -1.0 : 1.0
-            coord.parent.translation.x += invX * (e.scrollingDeltaX / s)
-            coord.parent.translation.y += invY * (e.scrollingDeltaY / s)
+            let dxDoc = invX * (e.scrollingDeltaX / s)
+            let dyDoc = invY * (e.scrollingDeltaY / s)
+            coord.parent.translation.x += dxDoc
+            coord.parent.translation.y += dyDoc
             NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
-                "type": "ui.pan", "x": Double(coord.parent.translation.x), "y": Double(coord.parent.translation.y)
+                "type": "ui.pan",
+                "x": Double(coord.parent.translation.x),
+                "y": Double(coord.parent.translation.y),
+                "dx.doc": Double(dxDoc),
+                "dy.doc": Double(dyDoc),
+                "dx.raw": Double(e.scrollingDeltaX),
+                "dy.raw": Double(e.scrollingDeltaY),
+                "precise": e.hasPreciseScrollingDeltas
             ])
             return e
         }

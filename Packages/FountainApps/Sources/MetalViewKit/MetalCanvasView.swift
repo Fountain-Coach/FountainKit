@@ -241,14 +241,25 @@ final class CanvasInstrumentSink: MetalSceneRenderer {
     func setUniform(_ name: String, float: Float) {
         guard let r = renderer else { return }
         Task { @MainActor in r.applyUniform(name, value: float) }
-        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type": "pe.set", "name": name])
+        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+            "type": "pe.set", "name": name, "value": float
+        ])
     }
     func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {
-        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type": "noteOn"]) }
+        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+            "type": "noteOn", "group": Int(group), "channel": Int(channel), "note": Int(note), "velocity": Int(velocity)
+        ])
+    }
     func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {
-        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type": "cc"]) }
+        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+            "type": "cc", "group": Int(group), "channel": Int(channel), "controller": Int(controller), "value": Int(value)
+        ])
+    }
     func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {
-        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type": "pb"]) }
+        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+            "type": "pb", "group": Int(group), "channel": Int(channel), "value14": Int(value14)
+        ])
+    }
 }
 
 #endif

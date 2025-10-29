@@ -30,7 +30,7 @@ struct ZoomContainer<Content: View>: NSViewRepresentable {
                 let newTy = CGFloat(loc.y) / s2 - docY
                 parent.translation = CGPoint(x: newTx, y: newTy)
                 parent.zoom = newScale
-                NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type": "ui.zoom"])                
+                NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type": "ui.zoom", "zoom": Double(newScale)])
             default: break
             }
         }
@@ -65,7 +65,9 @@ struct ZoomContainer<Content: View>: NSViewRepresentable {
                 let inv: CGFloat = e.isDirectionInvertedFromDevice ? 1.0 : -1.0
                 coord.parent.translation.x += inv * (e.scrollingDeltaX / s)
                 coord.parent.translation.y += inv * (e.scrollingDeltaY / s)
-                NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type": "ui.pan"])                
+                NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                    "type": "ui.pan", "x": Double(coord.parent.translation.x), "y": Double(coord.parent.translation.y)
+                ])
             }
             return e
         }

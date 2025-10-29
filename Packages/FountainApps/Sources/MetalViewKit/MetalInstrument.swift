@@ -157,6 +157,7 @@ final class MetalInstrument: @unchecked Sendable {
         )
         let env = MidiCiEnvelope(scope: .nonRealtime, subId2: 0x71, version: 1, body: .discovery(body))
         sendSysEx7UMP(bytes: env.sysEx7Payload())
+        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type": "ci.discovery.reply"])        
     }
 
     private func applyProperties(_ properties: [String: Any]) {
@@ -202,8 +203,10 @@ final class MetalInstrument: @unchecked Sendable {
             let caps = MidiCiPropertyExchangeBody(command: .capReply, requestId: pe.requestId, encoding: .json, header: ["formats": "json"], data: [])
             let env = MidiCiEnvelope(scope: .nonRealtime, subId2: 0x7C, version: 1, body: .propertyExchange(caps))
             sendSysEx7UMP(bytes: env.sysEx7Payload())
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type": "pe.capInquiry"])                
         case .get:
             publishStateCI(requestId: pe.requestId)
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type": "pe.get"])                
         case .set:
             // Parse JSON and apply
             if pe.encoding == .json, let dict = (try? JSONSerialization.jsonObject(with: Data(pe.data))) as? [String: Any] {
@@ -214,6 +217,7 @@ final class MetalInstrument: @unchecked Sendable {
             let envAck = MidiCiEnvelope(scope: .nonRealtime, subId2: 0x7C, version: 1, body: .propertyExchange(ack))
             sendSysEx7UMP(bytes: envAck.sysEx7Payload())
             publishStateCI()
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type": "pe.set.request"])                
         default:
             // Not implemented: subscribe/notify/terminate
             let nak = MidiCiAckNakBody(ack: false, statusCode: 0x10, message: "Unsupported PE command")

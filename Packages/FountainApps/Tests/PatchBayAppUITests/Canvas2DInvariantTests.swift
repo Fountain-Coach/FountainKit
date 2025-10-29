@@ -8,17 +8,14 @@ final class Canvas2DInvariantTests: XCTestCase {
     func testAnchorStableZoom() {
         var c = Canvas2D(zoom: 1.0, translation: .zero)
         let anchor = CGPoint(x: 320, y: 240)
-        // Choose a doc point and compute its view position at z=1
-        let d = CGPoint(x: 100, y: 80)
-        let v0 = c.docToView(d)
+        // Compute the doc point currently under the anchor
+        let d = c.viewToDoc(anchor)
         // Zoom around the view anchor
         c.zoomAround(viewAnchor: anchor, magnification: 0.25) // +25%
-        // Re-project the same doc point
-        let v1 = c.docToView(d)
-        // The relative offset in view should change by the same factor from the anchor
-        // But the anchor itself stays stationary. Within 1 px tolerance.
-        XCTAssertLessThan(abs(v1.x - v0.x - (anchor.x - anchor.x)), 1.0)
-        XCTAssertLessThan(abs(v1.y - v0.y - (anchor.y - anchor.y)), 1.0)
+        // The same doc point should still map to the anchor within tolerance
+        let v = c.docToView(d)
+        XCTAssertLessThan(abs(v.x - anchor.x), 1.0)
+        XCTAssertLessThan(abs(v.y - anchor.y), 1.0)
     }
 
     func testFollowFingerPan() {

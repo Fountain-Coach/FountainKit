@@ -39,6 +39,7 @@ enum DashKind: String, Codable {
     case panelStat
     case panelTable
     case stageA4
+    case replayPlayer
     // Adapters producing Stage-ready views
     case adapterFountain   // .fountain -> SVG (via Teatro)
     case adapterScoreKit   // ScoreKit JSON -> SVG (via TeatroScoreKitRenderer)

@@ -63,6 +63,8 @@ public struct MetalCanvasView: NSViewRepresentable {
             v.delegate = renderer
             renderer.update(zoom: zoom, translation: translation, gridMinor: gridMinor, majorEvery: majorEvery, nodes: nodesProvider(), edges: edgesProvider())
             renderer.selectionProvider = selectedProvider
+            // Test hook: publish renderer for observers (tests only)
+            NotificationCenter.default.post(name: Notification.Name("MetalCanvasRendererReady"), object: nil, userInfo: ["renderer": renderer])
             if let desc = instrument {
                 let sink = CanvasInstrumentSink(renderer: renderer)
                 let inst = MetalInstrument(sink: sink, descriptor: desc)

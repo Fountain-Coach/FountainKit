@@ -898,7 +898,7 @@ fileprivate struct QuickActionsMenu: View {
                             Text("No baselines available").foregroundStyle(.secondary)
                         }
                     }
-                case .datasource, .adapterFountain, .adapterScoreKit:
+                case .datasource, .adapterFountain, .adapterScoreKit, .replayPlayer:
                     EmptyView()
                 }
                 Divider()

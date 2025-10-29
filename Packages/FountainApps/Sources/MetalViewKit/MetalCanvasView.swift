@@ -186,6 +186,11 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
                     let dx = CGFloat((u["dx"] as? Double) ?? 0)
                     let dy = CGFloat((u["dy"] as? Double) ?? 0)
                     self.panBy(docDX: dx, docDY: dy)
+                case "panByView":
+                    let vx = CGFloat((u["dx"] as? Double) ?? 0)
+                    let vy = CGFloat((u["dy"] as? Double) ?? 0)
+                    let s = max(0.0001, self.currentZoom)
+                    self.panBy(docDX: vx / s, docDY: vy / s)
                 case "zoomAround":
                     let ax = CGFloat((u["anchor.x"] as? Double) ?? 0)
                     let ay = CGFloat((u["anchor.y"] as? Double) ?? 0)

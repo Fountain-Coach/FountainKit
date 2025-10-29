@@ -131,6 +131,15 @@ public final class MetalInstrument: @unchecked Sendable {
             i += 2
             if status == 0x0 || status == 0x3 { break }
         }
+        // Vendor JSON payload: F0 7D 'JSON' 00 <utf8 json> F7
+        if bytes.count >= 8, bytes[0] == 0xF0, bytes[1] == 0x7D,
+           bytes[2] == 0x4A, bytes[3] == 0x53, bytes[4] == 0x4F, bytes[5] == 0x4E, bytes[6] == 0x00 {
+            let body = Data(bytes[7..<(bytes.count-1)]) // strip F7
+            if let obj = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {
+                handleVendorJSON(obj)
+            }
+            return
+        }
         guard !bytes.isEmpty else { return }
         // Parse CI envelope
         guard let env = try? MidiCiEnvelope(sysEx7Payload: bytes) else { return }
@@ -139,6 +148,27 @@ public final class MetalInstrument: @unchecked Sendable {
             sendDiscoveryReply()
         case 0x7C: // Property Exchange
             handlePropertyExchange(env)
+        default:
+            break
+        }
+    }
+
+    private func handleVendorJSON(_ obj: [String: Any]) {
+        guard let topic = obj["topic"] as? String else { return }
+        let data = (obj["data"] as? [String: Any]) ?? [:]
+        switch topic {
+        case "ui.zoomAround":
+            let ax = CGFloat((data["anchor.view.x"] as? Double) ?? 0)
+            let ay = CGFloat((data["anchor.view.y"] as? Double) ?? 0)
+            let mag = CGFloat((data["magnification"] as? Double) ?? 0)
+            NotificationCenter.default.post(name: Notification.Name("MetalCanvasRendererCommand"), object: nil, userInfo: ["op": "zoomAround", "anchor.x": ax, "anchor.y": ay, "magnification": mag])
+        case "ui.panBy":
+            if let dx = data["dx.doc"] as? Double, let dy = data["dy.doc"] as? Double {
+                NotificationCenter.default.post(name: Notification.Name("MetalCanvasRendererCommand"), object: nil, userInfo: ["op": "panBy", "dx": dx, "dy": dy])
+            } else if let vx = data["dx.view"] as? Double, let vy = data["dy.view"] as? Double {
+                // Convert roughly via notification consumer; keeping both forms for flexibility
+                NotificationCenter.default.post(name: Notification.Name("MetalCanvasRendererCommand"), object: nil, userInfo: ["op": "panByView", "dx": vx, "dy": vy])
+            }
         default:
             break
         }

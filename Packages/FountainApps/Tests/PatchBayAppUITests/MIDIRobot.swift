@@ -26,6 +26,16 @@ final class MIDIRobot {
         if dest == 0 { return nil }
     }
 
+    // Send vendor JSON command as SysEx7 UMP with developer ID 0x7D
+    func sendVendorJSON(topic: String, data: [String: Any]) {
+        var payload: [UInt8] = [0xF0, 0x7D, 0x4A, 0x53, 0x4F, 0x4E, 0x00] // F0 7D 'JSON' 00
+        let obj: [String: Any] = ["topic": topic, "data": data]
+        let bytes = (try? JSONSerialization.data(withJSONObject: obj)) ?? Data()
+        payload.append(contentsOf: bytes)
+        payload.append(0xF7)
+        sendSysEx7(bytes: payload)
+    }
+
     deinit {
         if outPort != 0 { MIDIPortDispose(outPort) }
         if client != 0 { MIDIClientDispose(client) }
@@ -73,4 +83,3 @@ final class MIDIRobot {
         MIDISendEventList(outPort, dest, listPtr)
     }
 }
-

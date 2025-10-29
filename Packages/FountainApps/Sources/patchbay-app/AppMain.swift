@@ -1195,6 +1195,7 @@ struct ContentView: View {
                     let g = max(1, vm.grid)
                     let snap: (Int) -> Int = { ((($0 + g/2) / g) * g) }
                     addFlowNode(kind: kind, title: flowKind, x: snap(docX), y: snap(docY))
+                    NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type":"node.add", "kind": flowKind, "x": snap(docX), "y": snap(docY)])
                 }
                 return
             }
@@ -1222,6 +1223,7 @@ struct ContentView: View {
                             vm.nodes.append(node)
                             vm.selection = inst.id
                             vm.selected = [inst.id]
+                            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type":"node.add", "id": inst.id, "x": node.x, "y": node.y])
                         }
                     } catch { }
                 }

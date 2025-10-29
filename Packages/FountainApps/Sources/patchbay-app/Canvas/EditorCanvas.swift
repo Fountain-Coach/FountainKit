@@ -54,9 +54,9 @@ func canonicalSortPorts(_ ports: [PBPort]) -> [PBPort] {
 
 @MainActor
 final class EditorVM: ObservableObject {
-    @Published var nodes: [PBNode] = []
-    @Published var edges: [PBEdge] = []
-    @Published var selection: String? = nil
+    @Published var nodes: [PBNode] = [] { didSet { Self.postNodeDiffEvents(oldValue: oldValue, newValue: nodes) } }
+    @Published var edges: [PBEdge] = [] { didSet { Self.postEdgeDiffEvents(oldValue: oldValue, newValue: edges) } }
+    @Published var selection: String? = nil { didSet { NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type":"selection", "id": selection ?? ""]) } }
     @Published var selected: Set<String> = []
     @Published var zoom: CGFloat = 1.0
     @Published var grid: Int = 24
@@ -157,6 +157,45 @@ final class EditorVM: ObservableObject {
         var candidate: String
         repeat { candidate = "\(prefix)_\(idx)"; idx += 1 } while nodes.contains{ $0.id == candidate }
         return candidate
+    }
+
+    // MARK: - MIDI 2.0 activity helpers (UI-level events)
+    nonisolated private static func postNodeDiffEvents(oldValue: [PBNode], newValue: [PBNode]) {
+        let oldById = Dictionary(uniqueKeysWithValues: oldValue.map { ($0.id, $0) })
+        let newById = Dictionary(uniqueKeysWithValues: newValue.map { ($0.id, $0) })
+        // Added
+        for (id, n) in newById where oldById[id] == nil {
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type":"node.add", "id": id, "x": n.x, "y": n.y, "w": n.w, "h": n.h])
+        }
+        // Removed
+        for (id, _) in oldById where newById[id] == nil {
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type":"node.remove", "id": id])
+        }
+        // Moved/Resized/Renamed
+        for (id, n) in newById {
+            if let o = oldById[id] {
+                if o.x != n.x || o.y != n.y {
+                    NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type":"node.move", "id": id, "x": n.x, "y": n.y])
+                }
+                if o.w != n.w || o.h != n.h {
+                    NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type":"node.resize", "id": id, "w": n.w, "h": n.h])
+                }
+                if (o.title ?? "") != (n.title ?? "") {
+                    NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type":"node.rename", "id": id, "title": n.title ?? ""])
+                }
+            }
+        }
+    }
+    nonisolated private static func postEdgeDiffEvents(oldValue: [PBEdge], newValue: [PBEdge]) {
+        let oldSet = Set(oldValue.map { "\($0.from)->\($0.to)" })
+        let newSet = Set(newValue.map { "\($0.from)->\($0.to)" })
+        for key in newSet.subtracting(oldSet) {
+            let parts = key.split(separator: "-")
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type":"wire.add", "ref": key])
+        }
+        for key in oldSet.subtracting(newSet) {
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type":"wire.remove", "ref": key])
+        }
     }
 
     func nudgeSelected(dx: Int, dy: Int, step: Int? = nil) {

@@ -1,6 +1,6 @@
-# PatchBay — Node = Stage (Feature Plan, To Be Discussed)
+# PatchBay — Node = Stage (Feature Plan)
 
-Status: proposal (to be discussed)
+Status: in progress
 Audience: PatchBay app team, Flow/Canvas maintainers, Teatro/Score teams
 Owner: PatchBay Studio
 
@@ -35,7 +35,7 @@ Out‑of‑scope (this round): multi‑page stages, non‑rectangular stages, ad
 Migration checklist
 
 1) Types
-   - Rename `DashKind.stageA4` → `DashKind.stageA4` (keep enum but treat as container). Identify any lingering “renderer” mentions and remove.
+   - Keep `DashKind.stageA4` as the container kind; identify and remove lingering “renderer” mentions in UI strings and helpers. Map old labels (e.g., `renderer.stage.a4`) to `stage.a4` for backward compatibility.
    - Keep a mapping layer to accept legacy `renderer.stage.a4` titles if they appear in old stores.
 
 2) UI
@@ -54,28 +54,32 @@ Migration checklist
    - Update AGENTS and plans to remove “renderer” concept; standardize on “Stage node”.
 
 
-## Functional Requirements
+## Functional Requirements (and current status)
 
-- FR‑1 Capacity mapping
+- FR‑1 Capacity mapping — implemented
   - Compute baseline count = floor((pageHeight − top − bottom) / baseline).
   - Expose one left input port per baseline (`in0..inN-1`).
   - Recompute ports when `baseline`, `margins`, or `page` changes; preserve existing wires by best‑effort mapping (see Migrate below).
+  - Anchors: baseline math and creation on add live in `Packages/FountainApps/Sources/patchbay-app/AppMain.swift:1880`; live recompute + edge migration on save is in `Packages/FountainApps/Sources/patchbay-app/AppMain.swift:1476`.
 
-- FR‑2 Inline edit & identity
+- FR‑2 Inline edit & identity — implemented
   - Inline rename on the node handle (double‑click) with Enter/Escape.
   - Persist name in dashboard registry; mirror to PBNode; refresh Flow label live.
   - First‑free numbering on create: derive from live canvas only.
+  - Anchors: inline rename overlay in `Packages/FountainApps/Sources/patchbay-app/Canvas/EditorCanvas.swift:648`; stage numbering logic in `Packages/FountainApps/Sources/patchbay-app/AppMain.swift:1035`.
 
-- FR‑3 Node‑body feedback
+- FR‑3 Node‑body feedback — implemented
   - Title always visible (monospace secondary line optional for compact status).
   - No detached overlays for identity/status. Rich page content may still render inside the node body.
+  - Anchors: `StageView` inside node body at `Packages/FountainApps/Sources/patchbay-app/Canvas/EditorCanvas.swift:800`.
 
-- FR‑4 Port HUD (baseline index aid)
+- FR‑4 Port HUD (baseline index aid) — pending
   - Small numeric tick near each input dot (0‑based or 1‑based configurable) shown on hover or when stage is selected.
   - Accessibility: provide spoken description, e.g., “Stage ‘Main’, input 12 of 64”.
 
-- FR‑5 Auto‑wire helpers
-  - “Connect ← Renderer” targets `in0` by default; allow “Connect to… baseline k” quick pick when k > 0.
+- FR‑5 Auto‑wire helpers — partial
+  - “Connect ← Renderer” currently targets `in0` by default; add “Connect to… baseline k” quick pick when k > 0 and rename the action to avoid “Renderer” terminology.
+  - Anchors: quick actions menu at `Packages/FountainApps/Sources/patchbay-app/Canvas/EditorCanvas.swift:876`.
 
 ## UX Details
 
@@ -118,14 +122,14 @@ Migration checklist
   - Create stage at zoom Z → size scales as expected; port count stable.
   - Port HUD shows correct indices; toggles off/on.
 
-- Snapshot (optional)
-  - Node handle with HUD visible at standard zooms.
+- Snapshot — mandatory
+  - Add baselines for Stage node with HUD visible at standard sizes (1440×900, 1280×800). Rebaseline only via `Scripts/ci/ui-rebaseline.sh` after numeric invariants pass (fit/center, spacing).
 
 ## Milestones
 
-1) Port count = baselines (A4/Letter, static) — ship
-2) Live recompute + migration on props edit — ship
-3) Port index HUD + accessibility — ship
+1) Port count = baselines (A4/Letter, static) — shipped
+2) Live recompute + migration on props edit — shipped
+3) Port index HUD + accessibility — next
 4) Auto‑wire “Connect to baseline k” picker — discuss
 5) Multi‑page stages (Page n) — discuss (later)
 
@@ -157,3 +161,10 @@ Migration checklist
 - Change baseline/margins → port count updates; existing wires kept or clamped.
 - Inline rename updates label, left list, and persists.
 - No detached overlays for titles/status.
+
+## Next Work Items (tracked)
+
+- Port index HUD: draw numeric ticks near input ports for selected stages; add Canvas toggle “Show Baseline Index”. Verify visibility thresholds at high counts.
+- Quick pick baseline: update quick actions to “Connect ← View” and add “Connect to baseline k…” with a small picker. Default remains `in0`.
+- Terminology clean‑up: remove “renderer” mentions in menus and `titleFrom` mapping; migrate `renderer.stage.a4` → `stage.a4` with a mapping layer for old stores. Anchors: `Packages/FountainApps/Sources/patchbay-app/AppMain.swift:2008`.
+- Tests: add snapshot goldens for Stage with HUD; add numeric invariants for centering/spacing; extend unit tests for baseline math across A4/Letter and edge cases.

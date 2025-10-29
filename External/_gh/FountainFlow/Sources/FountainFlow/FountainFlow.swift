@@ -104,6 +104,19 @@ public struct StageRenderer: View {
     }
 }
 
+public enum StageOverlayGeometry {
+    /// Fractions (0..1) for tick centers along inner height. Matches current HUD placement rule.
+    public static func baselineFractions(count: Int) -> [CGFloat] {
+        guard count > 0 else { return [] }
+        return (0..<count).map { i in CGFloat(i + 1) / CGFloat(count + 1) }
+    }
+    /// Absolute Y positions for tick centers inside a given doc rect using the fractions above.
+    public static func docTickYs(rect: CGRect, count: Int) -> [CGFloat] {
+        let f = baselineFractions(count: count)
+        return f.map { rect.minY + rect.height * $0 }
+    }
+}
+
 public struct StageOverlayHost: View {
     public var stages: [StageNodeModel]
     public var zoom: CGFloat
@@ -146,4 +159,3 @@ public struct StageOverlayHost: View {
         }
     }
 }
-

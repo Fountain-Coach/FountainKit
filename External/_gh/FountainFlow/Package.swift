@@ -16,7 +16,11 @@ let package = Package(
             name: "FountainFlow",
             dependencies: [ .product(name: "Flow", package: "Flow") ],
             path: "Sources/FountainFlow"
+        ),
+        .testTarget(
+            name: "FountainFlowTests",
+            dependencies: ["FountainFlow"],
+            path: "Tests/FountainFlowTests"
         )
     ]
 )
-

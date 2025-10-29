@@ -133,9 +133,12 @@ Recommended validation commands (agent runs these proactively):
 
 We validate GUI surfaces by treating them as MIDI 2.0 instruments. Tests drive the app via CoreMIDI (MIDI‑CI Property Exchange) and via direct transform hooks, then assert numeric and visual invariants.
 
+Intensionality
+- Be eager to robot‑test every trait that can be expressed over MIDI 2.0. Strive for 100% coverage of instrument properties and operations. When a new surface or property is added, add a robot test in the same PR.
+
 What
-- Robot driver (tests): sends MIDI‑CI PE SET (SysEx7 UMP) to “PatchBay Canvas” (and later per‑node instruments) to set `zoom`, `translation.x`, `translation.y`.
-- Invariants: follow‑finger pan (docDelta = viewDelta/zoom; correct sign), anchor‑stable zoom (≤1 px drift at typical sizes).
+- Robot driver (tests): sends MIDI‑CI PE SET (SysEx7 UMP) to “PatchBay Canvas” and per‑node instruments (Stage, Replay) to set `zoom`, `translation.x`, `translation.y` and instrument‑specific properties.
+- Invariants: follow‑finger pan (docDelta = viewDelta/zoom; correct sign), anchor‑stable zoom (≤1 px drift at typical sizes). Export replay movies on mismatch.
 - Evidence: UMPRecorder writes `.ndjson` under `.fountain/corpus/ump`; KnowledgeAuto maintains `knowledge‑latest.json`; Replay exporters produce frames/movies under `.fountain/artifacts/replay/<log>/`.
 
 How
@@ -145,6 +148,7 @@ How
 Where
 - Code: `Packages/FountainApps/Sources/MetalViewKit/` (Canvas2D, MetalCanvasView); robot/tests under `Packages/FountainApps/Tests/PatchBayAppUITests/`.
 - Auto‑harvest: `Packages/FountainApps/Sources/patchbay-app/Monitor/KnowledgeAuto.swift`.
+ - Local runner: `Scripts/ci/robot-run.sh`.
 
 Maintenance
 - Keep PE property names stable; when extending, update tests + docs. Keep robot scripts deterministic and idempotent.

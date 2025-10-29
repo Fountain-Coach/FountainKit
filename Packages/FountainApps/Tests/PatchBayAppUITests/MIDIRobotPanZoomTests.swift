@@ -38,11 +38,13 @@ final class MIDIRobotPanZoomTests: XCTestCase {
         wait(for: [readyExp], timeout: 2.0)
         XCTAssertTrue(gotReady)
 
-        // Simulate transform changes by directly posting debug ops (renderer API not public)
-        // Pan
-        NotificationCenter.default.post(name: Notification.Name("MetalCanvasTransformChanged"), object: nil, userInfo: ["op":"panBy","dx": 50.0, "dy": -30.0, "zoom": 1.0, "tx": 50.0, "ty": -30.0])
-        // Zoom
-        NotificationCenter.default.post(name: Notification.Name("MetalCanvasTransformChanged"), object: nil, userInfo: ["op":"zoomAround","zoom": 1.2, "tx": 50.0, "ty": -30.0])
+        // Drive via CoreMIDI Property Exchange SET
+        if let robot = MIDIRobot(destName: "PatchBay Canvas") {
+            robot.setProperties(["translation.x": 50.0, "translation.y": -30.0])
+            robot.setProperties(["zoom": 1.2])
+        } else {
+            throw XCTSkip("Robot could not attach to PatchBay Canvas destination")
+        }
 
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
         wait(for: [changeExp], timeout: 2.0)
@@ -51,4 +53,3 @@ final class MIDIRobotPanZoomTests: XCTestCase {
         _ = readyObs; _ = changeObs
     }
 }
-

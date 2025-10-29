@@ -87,6 +87,28 @@ public struct MetalCanvasView: NSViewRepresentable {
                         "grid.majorEvery": r.currentMajorEvery
                     ]
                 }
+            } else {
+                // Default: midified by default — create per-view instrument automatically
+                let sink = CanvasInstrumentSink(renderer: renderer)
+                let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "Canvas", displayName: "Canvas")
+                let inst = MetalInstrument(sink: sink, descriptor: desc)
+                inst.enable()
+                context.coordinator.instrument = inst
+                NotificationCenter.default.addObserver(forName: .MetalCanvasMIDIActivity, object: nil, queue: .main) { noti in
+                    var dict: [String: Any] = [:]
+                    noti.userInfo?.forEach { k, v in dict[String(describing: k)] = v }
+                    inst.sendVendorJSONEvent(topic: dict["type"] as? String ?? "event", dict: dict)
+                }
+                inst.stateProvider = { [weak renderer] in
+                    guard let r = renderer else { return [:] }
+                    return [
+                        "zoom": Double(r.currentZoom),
+                        "translation.x": Double(r.currentTranslation.x),
+                        "translation.y": Double(r.currentTranslation.y),
+                        "grid.minor": Double(r.currentGridMinor),
+                        "grid.majorEvery": r.currentMajorEvery
+                    ]
+                }
             }
         }
         // Wire interaction callbacks and shared state for hit-testing

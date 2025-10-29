@@ -51,14 +51,17 @@ Canvas Nodes (draft)
 - Stage nodes will implement `node = page` by drawing the page body and placing input ports at baseline midpoints; panel/query/transform nodes keep tile bodies.
 - No overlays: HUD (ticks/selection) remains transient; node bodies are rendered by the node itself.
 
-MIDI Robot Testing (canonical)
+MIDI Robot Testing (canonical) — Default Policy
 Narrative first: we test every interactive surface by treating it as a MIDI 2.0 instrument and by validating invariants against the canonical 2D transform. No UI automation is needed — tests send UMP and observe deterministic transform updates.
 
 Why
 - Driving via MIDI makes tests transport‑agnostic and production‑faithful. The canvas, nodes, and inspectors remain consistent regardless of the UI toolkit.
 
+Default
+- Every MetalViewKit view is “midified” by default. If an app does not pass an explicit descriptor, the view creates its own instrument (`manufacturer: Fountain, product: Canvas, displayName: Canvas`).
+
 What
-- Robot: a CoreMIDI sender emitting MIDI‑CI PE SET as SysEx7 UMP (JSON). Properties include `zoom`, `translation.x` and `translation.y`.
+- Robot: a CoreMIDI sender emitting MIDI‑CI PE SET as SysEx7 UMP (JSON). Properties include `zoom`, `translation.x` and `translation.y` (expand per instrument).
 - Invariants: follow‑finger pan (`docDelta = viewDelta/zoom`, correct sign) and anchor‑stable zoom (doc point under anchor remains within ≤1 px in view).
 - Evidence: UMPRecorder writes `.ndjson` under `.fountain/corpus/ump`. Knowledge harvester writes `knowledge‑latest.json` for quick indexing. Replay exporters reconstruct visuals event‑by‑event for movies/frames.
 
@@ -73,7 +76,7 @@ Where
 - Knowledge harvester: `patchbay-app/Monitor/KnowledgeAuto.swift` (auto‑harvest on launch).
 
 Maintenance
-- Keep property names stable (PE schema in lockstep with renderer). Extend via additive properties. Update tests and docs together when invariants evolve.
+- Keep property names stable (PE schema in lockstep with renderer). Extend via additive properties. Update tests and docs together when invariants evolve. Apps should assume instruments exist and are robot‑testable by default.
 
 Testing
 Build and run: use the robot tests to set exact transforms; rely on replay tests for end‑to‑end validation. Keep “Monitor” enabled to mirror outgoing events.

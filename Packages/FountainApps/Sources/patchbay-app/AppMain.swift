@@ -56,6 +56,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 await writeBaselinesAndExit()
             }
         }
+        // Auto-harvest knowledge from UMP logs for quick analysis
+        KnowledgeAuto.start()
     }
 
     @MainActor

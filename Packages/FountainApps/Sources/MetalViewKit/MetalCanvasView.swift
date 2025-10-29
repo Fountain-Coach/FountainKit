@@ -154,6 +154,33 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
         self.commandQueue = queue
         super.init()
         do { try buildPipeline(pixelFormat: mtkView.colorPixelFormat) } catch { return nil }
+        // Test hook: accept external transform commands
+        NotificationCenter.default.addObserver(forName: Notification.Name("MetalCanvasRendererCommand"), object: nil, queue: .main) { [weak self] noti in
+            guard let self else { return }
+            let u = noti.userInfo ?? [:]
+            if let op = u["op"] as? String {
+                switch op {
+                case "panBy":
+                    let dx = CGFloat((u["dx"] as? Double) ?? 0)
+                    let dy = CGFloat((u["dy"] as? Double) ?? 0)
+                    self.panBy(docDX: dx, docDY: dy)
+                case "zoomAround":
+                    let ax = CGFloat((u["anchor.x"] as? Double) ?? 0)
+                    let ay = CGFloat((u["anchor.y"] as? Double) ?? 0)
+                    let mag = CGFloat((u["magnification"] as? Double) ?? 0)
+                    self.zoomAround(anchorView: CGPoint(x: ax, y: ay), magnification: mag)
+                case "set":
+                    if let z = u["zoom"] as? Double { self.canvas.zoom = CGFloat(z) }
+                    if let tx = u["tx"] as? Double { self.canvas.translation.x = CGFloat(tx) }
+                    if let ty = u["ty"] as? Double { self.canvas.translation.y = CGFloat(ty) }
+                    NotificationCenter.default.post(name: Notification.Name("MetalCanvasTransformChanged"), object: nil, userInfo: [
+                        "zoom": self.canvas.zoom, "tx": self.canvas.translation.x, "ty": self.canvas.translation.y, "op": "set"
+                    ])
+                default:
+                    break
+                }
+            }
+        }
     }
     func update(zoom: CGFloat, translation: CGPoint, gridMinor: CGFloat, majorEvery: Int, nodes: [MetalCanvasNode], edges: [MetalCanvasEdge]) {
         self.canvas.zoom = zoom
@@ -174,8 +201,27 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
         default: break
         }
     }
-    @MainActor func panBy(docDX: CGFloat, docDY: CGFloat) { canvas.translation.x += docDX; canvas.translation.y += docDY }
-    @MainActor func zoomAround(anchorView: CGPoint, magnification: CGFloat) { canvas.zoomAround(viewAnchor: anchorView, magnification: magnification) }
+    @MainActor func panBy(docDX: CGFloat, docDY: CGFloat) {
+        canvas.translation.x += docDX; canvas.translation.y += docDY
+        NotificationCenter.default.post(name: Notification.Name("MetalCanvasTransformChanged"), object: nil, userInfo: [
+            "zoom": canvas.zoom, "tx": canvas.translation.x, "ty": canvas.translation.y, "op": "panBy", "dx": docDX, "dy": docDY
+        ])
+        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+            "type":"ui.pan.debug","x": Double(canvas.translation.x),"y": Double(canvas.translation.y),"dx.doc": Double(docDX),"dy.doc": Double(docDY)
+        ])
+    }
+    @MainActor func zoomAround(anchorView: CGPoint, magnification: CGFloat) {
+        let before = canvas
+        canvas.zoomAround(viewAnchor: anchorView, magnification: magnification)
+        NotificationCenter.default.post(name: Notification.Name("MetalCanvasTransformChanged"), object: nil, userInfo: [
+            "zoom": canvas.zoom, "tx": canvas.translation.x, "ty": canvas.translation.y, "op": "zoomAround",
+            "anchor.x": anchorView.x, "anchor.y": anchorView.y, "magnification": magnification,
+            "prev.zoom": before.zoom, "prev.tx": before.translation.x, "prev.ty": before.translation.y
+        ])
+        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+            "type":"ui.zoom.debug","zoom": Double(canvas.zoom),"anchor.view.x": Double(anchorView.x),"anchor.view.y": Double(anchorView.y),"magnification": Double(magnification)
+        ])
+    }
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
     func draw(in view: MTKView) {
         guard let drawable = view.currentDrawable,

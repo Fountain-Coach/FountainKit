@@ -62,9 +62,15 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
               let rpd = view.currentRenderPassDescriptor,
               let cb = commandQueue.makeCommandBuffer(),
               let enc = cb.makeRenderCommandEncoder(descriptor: rpd) else { return }
-        // Clear handled by MTKView
+        // Use a shared pipeline and transform for all nodes
+        enc.setRenderPipelineState(pipeline)
+        let xf = MetalCanvasTransform(
+            zoom: Float(zoom),
+            translation: SIMD2<Float>(Float(translation.x) * Float(max(0.0001, zoom)), Float(translation.y) * Float(max(0.0001, zoom))),
+            drawableSize: SIMD2<Float>(Float(view.drawableSize.width), Float(view.drawableSize.height))
+        )
         for node in nodes {
-            drawNodeRect(node: node, in: view, encoder: enc)
+            node.encode(into: view, device: device, encoder: enc, transform: xf)
         }
         enc.endEncoding()
         cb.present(drawable)
@@ -83,35 +89,7 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
         desc.colorAttachments[0].pixelFormat = pixelFormat
         pipeline = try device.makeRenderPipelineState(descriptor: desc)
     }
-    private func drawNodeRect(node: MetalCanvasNode, in view: MTKView, encoder: MTLRenderCommandEncoder) {
-        guard let vb = makeRectBuffer(for: node, in: view) else { return }
-        encoder.setRenderPipelineState(pipeline)
-        encoder.setVertexBuffer(vb, offset: 0, index: 0)
-        var color = SIMD4<Float>(1,1,1,1)
-        encoder.setFragmentBytes(&color, length: MemoryLayout<SIMD4<Float>>.size, index: 0)
-        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
-    }
-    private func makeRectBuffer(for node: MetalCanvasNode, in view: MTKView) -> MTLBuffer? {
-        let r = node.frameDoc
-        let z = max(0.0001, Float(zoom))
-        let tx = Float(translation.x) * z
-        let ty = Float(translation.y) * z
-        let W = max(1.0, Float(view.drawableSize.width))
-        let H = max(1.0, Float(view.drawableSize.height))
-        func toNDC(_ x: CGFloat, _ y: CGFloat) -> SIMD2<Float> {
-            let vx = Float(x) * z + tx
-            let vy = Float(y) * z + ty
-            let ndcX = (vx / W) * 2 - 1
-            let ndcY = 1 - (vy / H) * 2
-            return SIMD2<Float>(ndcX, ndcY)
-        }
-        let tl = toNDC(r.minX, r.minY)
-        let tr = toNDC(r.maxX, r.minY)
-        let bl = toNDC(r.minX, r.maxY)
-        let br = toNDC(r.maxX, r.maxY)
-        let verts: [SIMD2<Float>] = [tl, bl, tr, tr, bl, br]
-        return device.makeBuffer(bytes: verts, length: verts.count * MemoryLayout<SIMD2<Float>>.stride, options: .storageModeShared)
-    }
+    // Node-specific drawing happens in node.encode
     private static let shaderSource = """
     #include <metal_stdlib>
     using namespace metal;

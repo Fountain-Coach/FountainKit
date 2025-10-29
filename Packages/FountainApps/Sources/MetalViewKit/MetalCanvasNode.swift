@@ -35,18 +35,34 @@ public protocol MetalCanvasNode: AnyObject {
     func portLayout() -> [MetalNodePort]
     /// Hit-test a point in document space.
     func hitTest(doc: CGPoint) -> MetalNodeHit
-    /// Encode Metal commands to render the node body in document space.
-    func encode(into view: MTKView, device: MTLDevice, commandBuffer: MTLCommandBuffer, pass: MTLRenderPassDescriptor)
+    /// Encode Metal commands to render the node body in document space using a shared encoder.
+    func encode(into view: MTKView, device: MTLDevice, encoder: MTLRenderCommandEncoder, transform: MetalCanvasTransform)
 }
 
 public extension MetalCanvasNode {
     func hitTest(doc: CGPoint) -> MetalNodeHit {
         return frameDoc.contains(doc) ? .body : .none
     }
-    func encode(into view: MTKView, device: MTLDevice, commandBuffer: MTLCommandBuffer, pass: MTLRenderPassDescriptor) {
+    func encode(into view: MTKView, device: MTLDevice, encoder: MTLRenderCommandEncoder, transform: MetalCanvasTransform) {
         // Default no-op; concrete nodes draw their body.
     }
 }
 
-#endif
+public struct MetalCanvasTransform: Sendable {
+    public var zoom: Float
+    public var translation: SIMD2<Float>
+    public var drawableSize: SIMD2<Float>
+    public init(zoom: Float, translation: SIMD2<Float>, drawableSize: SIMD2<Float>) {
+        self.zoom = zoom; self.translation = translation; self.drawableSize = drawableSize
+    }
+    @inlinable public func docToNDC(x: CGFloat, y: CGFloat) -> SIMD2<Float> {
+        let z = max(0.0001, zoom)
+        let vx = Float(x) * z + translation.x
+        let vy = Float(y) * z + translation.y
+        let ndcX = (vx / max(1, drawableSize.x)) * 2 - 1
+        let ndcY = 1 - (vy / max(1, drawableSize.y)) * 2
+        return SIMD2<Float>(ndcX, ndcY)
+    }
+}
 
+#endif

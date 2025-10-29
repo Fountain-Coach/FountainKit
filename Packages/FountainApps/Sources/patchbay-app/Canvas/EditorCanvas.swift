@@ -69,7 +69,7 @@ final class EditorVM: ObservableObject {
     @Published var majorEvery: Int = 5
     @Published var showPanelsOverlay: Bool = false
     // HUD: baseline index labels for Stage inputs
-    @Published var showBaselineIndex: Bool = false
+    @Published var showBaselineIndex: Bool = true
     @Published var alwaysShowBaselineIndex: Bool = false
     @Published var baselineIndexOneBased: Bool = false
 

@@ -171,6 +171,7 @@ fileprivate struct NodeInteractionOverlay: View {
         let origin = t.docToView(CGPoint(x: CGFloat(n.x), y: CGFloat(n.y)))
         return CGRect(x: origin.x, y: origin.y, width: CGFloat(n.w) * vm.zoom, height: CGFloat(n.h) * vm.zoom)
     }
+    private func viewToDoc(_ p: CGPoint) -> CGPoint { transform().viewToDoc(p) }
     private func hitTestNode(at p: CGPoint) -> PBNode? {
         for n in vm.nodes.reversed() { if nodeViewRect(n).contains(p) { return n } }
         return nil
@@ -201,6 +202,11 @@ fileprivate struct NodeInteractionOverlay: View {
         }
         lastPoint = current
     }
+    private func postActivity(type: String, _ extra: [String: Any] = [:]) {
+        var payload: [String: Any] = ["type": type]
+        extra.forEach { payload[$0.key] = $0.value }
+        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: payload)
+    }
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
@@ -224,6 +230,12 @@ fileprivate struct NodeInteractionOverlay: View {
                         let flags = NSApp.currentEvent?.modifierFlags ?? []
                         let isCmd = flags.contains(.command)
                         let isShift = flags.contains(.shift)
+                        let docP = viewToDoc(p)
+                        postActivity(type: "ui.pointer.down", [
+                            "view.x": Double(p.x), "view.y": Double(p.y),
+                            "doc.x": Double(docP.x), "doc.y": Double(docP.y),
+                            "mods": (isCmd && isShift ? "cmd+shift" : (isCmd ? "cmd" : (isShift ? "shift" : "")))
+                        ])
                         if let hit = hitTestNode(at: p) {
                             var newSel = vm.selected
                             if isCmd {
@@ -233,22 +245,48 @@ fileprivate struct NodeInteractionOverlay: View {
                             } else {
                                 newSel = [hit.id]
                             }
+                            let before = Array(vm.selected)
                             vm.selected = newSel
                             vm.selection = newSel.first
+                            postActivity(type: "selection.change", ["before": before, "after": Array(newSel)])
                             if !newSel.isEmpty { beginDrag(for: newSel, at: p) }
                         } else {
                             // Begin marquee selection
                             marqueeRect = CGRect(origin: p, size: .zero)
+                            postActivity(type: "marquee.start", [
+                                "view.x": Double(p.x), "view.y": Double(p.y),
+                                "doc.x": Double(docP.x), "doc.y": Double(docP.y)
+                            ])
                         }
                     } else {
                         // Update either drag or marquee
                         if !draggingIds.isEmpty {
                             applyDrag(to: p)
+                            if let start = pressStart {
+                                let s = max(0.0001, vm.zoom)
+                                let dxDoc = (p.x - start.x) / s
+                                let dyDoc = (p.y - start.y) / s
+                                let g = max(1, vm.grid)
+                                let snapDX = CGFloat(g) * (dxDoc / CGFloat(g)).rounded()
+                                let snapDY = CGFloat(g) * (dyDoc / CGFloat(g)).rounded()
+                                postActivity(type: "drag.move", [
+                                    "ids": Array(draggingIds),
+                                    "dx.doc": Double(dxDoc), "dy.doc": Double(dyDoc),
+                                    "dx.snap": Double(snapDX), "dy.snap": Double(snapDY),
+                                    "grid": vm.grid
+                                ])
+                            }
                         } else if var rect = marqueeRect, let start = pressStart {
                             let x0 = min(start.x, p.x), y0 = min(start.y, p.y)
                             rect.origin = CGPoint(x: x0, y: y0)
                             rect.size = CGSize(width: abs(p.x - start.x), height: abs(p.y - start.y))
                             marqueeRect = rect
+                            let a = viewToDoc(CGPoint(x: rect.minX, y: rect.minY))
+                            let b = viewToDoc(CGPoint(x: rect.maxX, y: rect.maxY))
+                            postActivity(type: "marquee.update", [
+                                "min.doc.x": Double(a.x), "min.doc.y": Double(a.y),
+                                "max.doc.x": Double(b.x), "max.doc.y": Double(b.y)
+                            ])
                         }
                     }
                 }
@@ -258,7 +296,16 @@ fileprivate struct NodeInteractionOverlay: View {
                         pressStart = nil; marqueeRect = nil; draggingIds.removeAll(); initialPositions.removeAll(); lastPoint = nil
                     }
                     if !draggingIds.isEmpty {
-                        // Drag finished — selection stays
+                        // Drag finished — selection stays; emit end event
+                        if let start = pressStart {
+                            let s = max(0.0001, vm.zoom)
+                            let dxDoc = (p.x - start.x) / s
+                            let dyDoc = (p.y - start.y) / s
+                            postActivity(type: "drag.end", [
+                                "ids": Array(initialPositions.keys),
+                                "dx.doc": Double(dxDoc), "dy.doc": Double(dyDoc)
+                            ])
+                        }
                         return
                     }
                     // End of marquee or click
@@ -278,10 +325,20 @@ fileprivate struct NodeInteractionOverlay: View {
                             vm.selected = sel
                         }
                         vm.selection = sel.first
+                        let a = viewToDoc(CGPoint(x: rect.minX, y: rect.minY))
+                        let b = viewToDoc(CGPoint(x: rect.maxX, y: rect.maxY))
+                        postActivity(type: "marquee.end", [
+                            "min.doc.x": Double(a.x), "min.doc.y": Double(a.y),
+                            "max.doc.x": Double(b.x), "max.doc.y": Double(b.y),
+                            "selected": Array(vm.selected)
+                        ])
                     } else {
                         // Click without drag: set selection to topmost hit or clear
                         if let hit = hitTestNode(at: p) { vm.selected = [hit.id]; vm.selection = hit.id } else { vm.selected.removeAll(); vm.selection = nil }
+                        postActivity(type: "selection.set", ["selected": Array(vm.selected)])
                     }
+                    let docP = viewToDoc(p)
+                    postActivity(type: "ui.pointer.up", ["view.x": Double(p.x), "view.y": Double(p.y), "doc.x": Double(docP.x), "doc.y": Double(docP.y)])
                 }
             )
         }

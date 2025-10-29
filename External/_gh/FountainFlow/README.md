@@ -1,6 +1,6 @@
 # FountainFlow — Node Editor for FountainKit
 
-FountainFlow is a Swift package that provides a per‑node‑flexible node/wire editor designed for FountainKit’s needs (Stage nodes, baseline‑aligned ports, custom bodies), while honoring our ancestor editors (Quartz Composer, Vuo) and building on lessons from AudioKit’s Flow.
+FountainFlow is a Swift package that provides a per‑node‑flexible node/wire editor designed for FountainKit’s needs (Stage nodes, baseline‑aligned ports, custom bodies), while honoring our ancestor editors (Quartz Composer, Vuo, Plogue Bidule) and building on lessons from AudioKit’s Flow.
 
 Why
 - We need Stage nodes to be “node = page” with ports at baseline midpoints, HUD ticks, and custom body rendering. Flow’s global layout/style model can’t deliver this per node.
@@ -19,5 +19,4 @@ Roadmap
 - v2: Snapshot harness + numeric invariants (fit/center, spacing).
 
 License and attribution
-- Honors AudioKit Flow and our ancestors (Quartz Composer, Vuo). We’ll upstream good ideas where possible and clearly mark diverging design.
-
+- Honors AudioKit Flow and our ancestors (Quartz Composer, Vuo, Plogue Bidule). We’ll upstream good ideas where possible and clearly mark diverging design.

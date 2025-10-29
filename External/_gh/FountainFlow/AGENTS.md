@@ -1,6 +1,6 @@
 # AGENT — FountainFlow (per‑node flexible node editor)
 
-FountainFlow is our evolution path from AudioKit’s Flow toward a per‑node‑flexible editor that can render Stage nodes as pages (node = page) with baseline‑aligned ports and custom bodies, while keeping Flow’s solid wiring and gestures.
+FountainFlow is our evolution path from AudioKit’s Flow toward a per‑node‑flexible editor that can render Stage nodes as pages (node = page) with baseline‑aligned ports and custom bodies, while keeping Flow’s solid wiring and gestures. We explicitly honor our ancestors: Quartz Composer, Vuo, and Plogue Bidule.
 
 What
 - A SwiftPM library exporting `FountainFlow`.
@@ -23,4 +23,3 @@ Where it’s used
 Conventions
 - Snapshot/UI invariants required; golden images under `Tests/**/Baselines`.
 - Numeric invariants: fit/center, baseline spacing, left edge alignment to ports.
-

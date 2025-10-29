@@ -999,6 +999,22 @@ struct ContentView: View {
                                 Task { await ReplayExporter.exportFrames(from: url) }
                             }
                         }
+                        Button("Export Replay Movie from Log…") {
+                            let open = NSOpenPanel()
+                            open.allowedFileTypes = ["ndjson"]
+                            open.allowsMultipleSelection = false
+                            open.canChooseDirectories = false
+                            open.title = "Choose a .ndjson story log"
+                            if open.runModal() == .OK, let logURL = open.url {
+                                let save = NSSavePanel()
+                                save.allowedFileTypes = ["mov"]
+                                save.nameFieldStringValue = logURL.deletingPathExtension().lastPathComponent + ".mov"
+                                save.title = "Choose where to save the replay movie"
+                                if save.runModal() == .OK, let out = save.url {
+                                    Task { try? await ReplayMovieExporter.exportMovie(from: logURL, to: out, width: 1440, height: 900, fps: 10) }
+                                }
+                            }
+                        }
                         Divider()
                         Button("Clear Canvas") { state.clearCanvas(vm: vm) }
                     }

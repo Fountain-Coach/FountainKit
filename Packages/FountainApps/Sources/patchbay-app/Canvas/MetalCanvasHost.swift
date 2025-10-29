@@ -37,6 +37,8 @@ struct MetalCanvasHost: View {
             MidiMonitorHitArea()
             // Per-Stage MIDI 2.0 instruments: expose PE for page/margins/baseline
             StageInstrumentsBinder()
+            // Interaction overlay: hit-test, selection, group-select, drag-move
+            NodeInteractionOverlay()
             // HUD: zoom and origin
             Text(String(format: "Zoom %.2fx  Origin (%.0f, %.0f)", Double(vm.zoom), Double(vm.translation.x), Double(vm.translation.y)))
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
@@ -149,5 +151,111 @@ fileprivate struct StageInstrumentsBinder: NSViewRepresentable {
     static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
         for (_, inst) in coordinator.instruments { inst.disable() }
         coordinator.instruments.removeAll()
+    }
+}
+// Overlay to support selection, marquee selection, and drag-moving nodes on the Metal canvas.
+fileprivate struct NodeInteractionOverlay: View {
+    @EnvironmentObject var vm: EditorVM
+    @EnvironmentObject var state: AppState
+    @State private var pressStart: CGPoint? = nil
+    @State private var marqueeRect: CGRect? = nil
+    @State private var draggingIds: Set<String> = []
+    @State private var initialPositions: [String:(x:Int,y:Int)] = [:]
+    @State private var lastPoint: CGPoint? = nil
+    private func transform() -> CanvasTransform { CanvasTransform(scale: vm.zoom, translation: vm.translation) }
+    private func nodeViewRect(_ n: PBNode) -> CGRect {
+        let t = transform()
+        let origin = t.docToView(CGPoint(x: CGFloat(n.x), y: CGFloat(n.y)))
+        return CGRect(x: origin.x, y: origin.y, width: CGFloat(n.w) * vm.zoom, height: CGFloat(n.h) * vm.zoom)
+    }
+    private func hitTestNode(at p: CGPoint) -> PBNode? {
+        for n in vm.nodes.reversed() { if nodeViewRect(n).contains(p) { return n } }
+        return nil
+    }
+    private func beginDrag(for ids: Set<String>, at start: CGPoint) {
+        draggingIds = ids
+        initialPositions = [:]
+        for id in ids { if let n = vm.node(by: id) { initialPositions[id] = (n.x, n.y) } }
+        pressStart = start
+        lastPoint = start
+    }
+    private func applyDrag(to current: CGPoint) {
+        guard let start = pressStart else { return }
+        let dxView = current.x - start.x
+        let dyView = current.y - start.y
+        let s = max(0.0001, vm.zoom)
+        let dxDoc = dxView / s
+        let dyDoc = dyView / s
+        // Move selected nodes by rounded doc delta (snap to integer; grid snapping handled by subsequent operations if desired)
+        for (id, pos) in initialPositions {
+            if let i = vm.nodeIndex(by: id) {
+                vm.nodes[i].x = pos.x + Int(round(dxDoc))
+                vm.nodes[i].y = pos.y + Int(round(dyDoc))
+            }
+        }
+        lastPoint = current
+    }
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .topLeading) {
+                // Marquee rectangle visualization
+                if let rect = marqueeRect {
+                    Rectangle()
+                        .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 1, dash: [4,3]))
+                        .background(Rectangle().fill(Color.accentColor.opacity(0.08)))
+                        .frame(width: rect.width, height: rect.height)
+                        .position(x: rect.midX, y: rect.midY)
+                }
+                Color.clear
+            }
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { v in
+                    let p = v.location
+                    if pressStart == nil {
+                        // Mouse down
+                        pressStart = p
+                        if let hit = hitTestNode(at: p) {
+                            // Start dragging selected group; if hit isn’t selected, select it
+                            if !vm.selected.contains(hit.id) { vm.selected = [hit.id]; vm.selection = hit.id }
+                            beginDrag(for: vm.selected.isEmpty ? [hit.id] : vm.selected, at: p)
+                        } else {
+                            // Begin marquee selection
+                            marqueeRect = CGRect(origin: p, size: .zero)
+                        }
+                    } else {
+                        // Update either drag or marquee
+                        if !draggingIds.isEmpty {
+                            applyDrag(to: p)
+                        } else if var rect = marqueeRect, let start = pressStart {
+                            let x0 = min(start.x, p.x), y0 = min(start.y, p.y)
+                            rect.origin = CGPoint(x: x0, y: y0)
+                            rect.size = CGSize(width: abs(p.x - start.x), height: abs(p.y - start.y))
+                            marqueeRect = rect
+                        }
+                    }
+                }
+                .onEnded { v in
+                    let p = v.location
+                    defer {
+                        pressStart = nil; marqueeRect = nil; draggingIds.removeAll(); initialPositions.removeAll(); lastPoint = nil
+                    }
+                    if !draggingIds.isEmpty {
+                        // Drag finished — selection stays
+                        return
+                    }
+                    // End of marquee or click
+                    if let rect = marqueeRect {
+                        var sel: Set<String> = []
+                        for n in vm.nodes { if nodeViewRect(n).intersects(rect) { sel.insert(n.id) } }
+                        vm.selected = sel
+                        vm.selection = sel.first
+                    } else {
+                        // Click without drag: set selection to topmost hit or clear
+                        if let hit = hitTestNode(at: p) { vm.selected = [hit.id]; vm.selection = hit.id } else { vm.selected.removeAll(); vm.selection = nil }
+                    }
+                }
+            )
+        }
     }
 }

@@ -2,6 +2,8 @@
 
 PatchBay Studio is a visual, deterministic patcher for MIDI 2.0 instruments. The app is a thin SwiftUI client that speaks to a typed PatchBay service over OpenAPI. Instruments (discovered via CI and described by PE) appear as nodes on a canvas; connections are explicit, typed links (property↔property and UMP→property). The goal is to make ideas concrete, inspectable, and repeatable — without mystery glue.
 
+MIDI 2.0 everywhere: the canvas and nodes can run in “instrument mode” and publish CoreMIDI virtual endpoints (protocol 2.0) with a small Property Exchange schema (canvas: `zoom`, `translation.x/y`; stage: `page`, `margins.*`, `baseline`). Rendering remains transport‑agnostic; instrument mode is additive and optional.
+
 Getting started is simple: start the service, then the app. By default, our dev scripts launch the service as part of the core control plane. If you prefer to run it by hand, you can do that too. The service exposes a small set of endpoints for instruments, graph suggestions, link CRUD, store, and corpus snapshots; the app surfaces these as focused tools in the right‑hand inspector.
 
 ### Quick start

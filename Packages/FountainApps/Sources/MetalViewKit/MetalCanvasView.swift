@@ -5,6 +5,10 @@ import Metal
 import MetalKit
 import CoreMIDI
 
+public extension Notification.Name {
+    static let MetalCanvasMIDIActivity = Notification.Name("MetalCanvasMIDIActivity")
+}
+
 public struct MetalCanvasView: NSViewRepresentable {
     public typealias NodesProvider = () -> [MetalCanvasNode]
     public typealias EdgesProvider = () -> [MetalCanvasEdge]
@@ -237,10 +241,14 @@ final class CanvasInstrumentSink: MetalSceneRenderer {
     func setUniform(_ name: String, float: Float) {
         guard let r = renderer else { return }
         Task { @MainActor in r.applyUniform(name, value: float) }
+        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type": "pe.set", "name": name])
     }
-    func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
-    func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
-    func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+    func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {
+        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type": "noteOn"]) }
+    func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {
+        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type": "cc"]) }
+    func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {
+        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type": "pb"]) }
 }
 
 #endif

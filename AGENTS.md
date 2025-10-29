@@ -148,6 +148,16 @@ Thank you for helping FountainKit stay modular and healthy!
 
 ---
 
+## MIDI 2.0 Everywhere (Concept)
+Every interactive surface is a MIDI 2.0 instrument. The canvas, nodes, inspectors, and monitors may advertise a MIDI‑CI identity and optional Property Exchange so external tools can introspect and set state deterministically.
+
+- Identity: stable names (`<product>#<instanceId>`) and CoreMIDI virtual endpoints (protocol 2.0).
+- State mapping: small PE schemas per surface (e.g., canvas: `zoom`, `translation.x/y`; stage: `page`, `margins.*`, `baseline`). GET is deterministic; SET applies and notifies.
+- Topology: begin with one group/function block per canvas; promote per‑node blocks as needed.
+- Transport‑agnostic: rendering and composition remain independent of MIDI; instrument mode is additive and optional.
+
+---
+
 ### Agents
 - Legacy Studio (deprecated) — learnings only: `Packages/FountainApps/Sources/FountainLauncherUI/AGENTS.md`.
 - Composer Studio (fresh app) — new work: `Packages/FountainApps/Sources/composer-studio/AGENTS.md`.

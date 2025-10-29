@@ -6,6 +6,8 @@ In instrument mode, a view owns a unique instrument identity (manufacturer, prod
 
 MetalViewKit exposes a small facilitator for apps to toggle per‑view endpoints or route UMP manually. The `MetalSceneRenderer` remains transport‑agnostic; UMP decode sits in a helper alongside each renderer. Planned types include `MetalInstrumentDescriptor` (identity and endpoint names) and a `MetalInstrument` runtime (enable/disable, `receiveUMP(_:)`, PE handlers, and `publishState()` when properties change). Views get an init knob like `instrument: MetalInstrumentDescriptor? = nil`.
 
+Everything is an Instrument: in MetalViewKit land, every entity (canvas, node, inspector) can operate in “instrument mode” and expose a MIDI‑CI identity + optional Property Exchange (PE). Keep rendering transport‑agnostic; instrument mode is additive and optional. Use stable endpoint names like `<product>#<instanceId>`.
+
 Property schema example:
 ```
 {

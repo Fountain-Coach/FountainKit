@@ -40,6 +40,9 @@ enum DashKind: String, Codable {
     case panelTable
     case stageA4
     case replayPlayer
+    // MIDI‑CI PE schemas (robot‑testable by design):
+    // - stageA4: stage.baseline (float), stage.page (0=A4,1=Letter), stage.margins.top/left/bottom/right (floats)
+    // - replayPlayer: replay.play (0/1), replay.fps (float), replay.frame (int)
     // Adapters producing Stage-ready views
     case adapterFountain   // .fountain -> SVG (via Teatro)
     case adapterScoreKit   // ScoreKit JSON -> SVG (via TeatroScoreKitRenderer)

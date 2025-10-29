@@ -1,7 +1,6 @@
 import SwiftUI
 import AppKit
 import Flow
-import FountainFlow
 import Foundation
 
 enum PBPortSide: String, CaseIterable { case left, right, top, bottom }
@@ -514,8 +513,7 @@ struct EditorCanvas: View {
                 AnyView(GridBackground(size: docSize, minorStepPoints: minor, majorStepPoints: major, scale: vm.zoom, translation: vm.translation))
                     AnyView(flowEditorOverlay(docSize: docSize)
                         .frame(width: docSize.width, height: docSize.height)
-                        .overlay(NodeHandleOverlay(docSize: docSize).environmentObject(vm).environmentObject(state))
-                        .overlay(stageOverlay(docSize: docSize)))
+                        .overlay(NodeHandleOverlay(docSize: docSize).environmentObject(vm).environmentObject(state)))
                 }
                 .frame(width: docSize.width, height: docSize.height, alignment: .topLeading)
                 .offset(x: padX, y: padY)
@@ -968,13 +966,10 @@ fileprivate struct QuickActionsMenu: View {
     @ViewBuilder
     private func flowEditorOverlay(docSize: CGSize) -> some View {
         let transform = CanvasTransform(scale: vm.zoom, translation: vm.translation)
-        // Split Flow patch into stage/rest with index maps so we can render dual editors
-        let classify: (Int) -> Bool = { idx in
-            guard idx >= 0, idx < vm.nodes.count, let k = state.dashboard[vm.nodes[idx].id]?.kind else { return false }
-            return k == .stageA4
-        }
-        let (stagePatch, restPatch, stageIndexMap, restIndexMap) = FountainFlowPatchOps.splitWithMaps(patch: flowPatch, isStage: classify)
-        // Render non-stage nodes with default style
+        // Overlay concept removed: render the full Flow patch in a single editor.
+        let restPatch = flowPatch
+        // Identity map between Flow node indices and VM node indices
+        let restIndexMap: [NodeIndex: Int] = Dictionary(uniqueKeysWithValues: (0..<flowPatch.nodes.count).map { ($0, $0) })
         NodeEditor(patch: .constant(restPatch), selection: $flowSelection)
             .onNodeMoved { index, loc in
                 guard let orig = restIndexMap[index], orig >= 0, orig < flowNodeIds.count else { return }
@@ -1052,107 +1047,13 @@ fileprivate struct QuickActionsMenu: View {
                     }
                 }
             }
-        // Render stage nodes port-interactive but with transparent body
-        NodeEditor(patch: .constant(stagePatch), selection: $flowSelection)
-            .nodeColor(.clear)
-            .onNodeMoved { index, loc in
-                guard let orig = stageIndexMap[index], orig >= 0, orig < flowNodeIds.count else { return }
-                let nodeId = flowNodeIds[orig]
-                guard let i = vm.nodeIndex(by: nodeId) else { return }
-                let g = CGFloat(vm.grid)
-                vm.nodes[i].x = Int((round(loc.x / g) * g))
-                vm.nodes[i].y = Int((round(loc.y / g) * g))
-                // Trash hit testing
-                let originView = transform.docToView(CGPoint(x: CGFloat(vm.nodes[i].x), y: CGFloat(vm.nodes[i].y)))
-                let rectView = CGRect(x: originView.x, y: originView.y, width: CGFloat(vm.nodes[i].w) * vm.zoom, height: CGFloat(vm.nodes[i].h) * vm.zoom)
-                let intersects = rectView.intersects(trashRectView)
-                if trashHover != intersects { trashHover = intersects }
-                if intersects {
-                    let id = vm.nodes[i].id
-                    let idsToDelete: Set<String> = (!vm.selected.isEmpty && vm.selected.contains(id)) ? vm.selected : [id]
-                    vm.deleteNodes(ids: idsToDelete)
-                    trashHover = false
-                    let center = CGPoint(x: rectView.midX, y: rectView.midY)
-                    let puff = PuffItem(center: center)
-                    puffItems.append(puff)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { puffItems.removeAll { $0.id == puff.id } }
-                    for did in idsToDelete { state.removeDashNode(id: did); state.removeServerNode(id: did); state.closeRendererPreview(id: did) }
-                }
-            }
-            .onWireAdded { wire in
-                guard let oi = stageIndexMap[wire.output.nodeIndex], let oj = stageIndexMap[wire.input.nodeIndex] else { return }
-                let srcId = vm.nodes[oi].id
-                let dstId = vm.nodes[oj].id
-                let outPorts = canonicalSortPorts(vm.nodes[oi].ports.filter { $0.dir == .output })
-                let inPorts = canonicalSortPorts(vm.nodes[oj].ports.filter { $0.dir == .input })
-                guard wire.output.portIndex < outPorts.count, wire.input.portIndex < inPorts.count else { return }
-                let fromRef = srcId + "." + outPorts[wire.output.portIndex].id
-                let toRef = dstId + "." + inPorts[wire.input.portIndex].id
-                vm.ensureEdge(from: (srcId, outPorts[wire.output.portIndex].id), to: (dstId, inPorts[wire.input.portIndex].id))
-                vm.transientGlowEdge(fromRef: fromRef, toRef: toRef)
-                Task { @MainActor in
-                    if let c = state.api as? PatchBayClient {
-                        let isServiceSrc = state.instruments.contains { $0.id == srcId }
-                        let isServiceDst = state.instruments.contains { $0.id == dstId }
-                        if isServiceSrc && isServiceDst {
-                            let prop = Components.Schemas.PropertyLink(from: fromRef, to: toRef, direction: .a_to_b)
-                            let create = Components.Schemas.CreateLink(kind: .property, property: prop, ump: nil)
-                            _ = try? await c.createLink(create)
-                            await state.refreshLinks()
-                        }
-                    }
-                }
-            }
-            .onWireRemoved { wire in
-                guard let oi = stageIndexMap[wire.output.nodeIndex], let oj = stageIndexMap[wire.input.nodeIndex] else { return }
-                let srcId = vm.nodes[oi].id
-                let dstId = vm.nodes[oj].id
-                let outPorts = canonicalSortPorts(vm.nodes[oi].ports.filter { $0.dir == .output })
-                let inPorts = canonicalSortPorts(vm.nodes[oj].ports.filter { $0.dir == .input })
-                guard wire.output.portIndex < outPorts.count, wire.input.portIndex < inPorts.count else { return }
-                let fromRef = srcId + "." + outPorts[wire.output.portIndex].id
-                let toRef = dstId + "." + inPorts[wire.input.portIndex].id
-                vm.edges.removeAll { $0.from == fromRef && $0.to == toRef }
-                Task { @MainActor in
-                    if let c = state.api as? PatchBayClient {
-                        let isServiceSrc = state.instruments.contains { $0.id == srcId }
-                        let isServiceDst = state.instruments.contains { $0.id == dstId }
-                        if isServiceSrc && isServiceDst {
-                            if let list = try? await c.listLinks() {
-                                if let match = list.first(where: { $0.kind == .property && $0.property?.from == fromRef && $0.property?.to == toRef }) {
-                                    try? await c.deleteLink(id: match.id)
-                                    await state.refreshLinks()
-                                }
-                            }
-                        }
-                    }
-                }
-            }
             .onTransformChanged { pan, z in
                 vm.zoom = CGFloat(z)
                 vm.translation = CGPoint(x: pan.width, y: pan.height)
             }
     }
 
-    // FountainFlow: stage overlay composed from dashboard registry + vm node rects
-    private func stageOverlay(docSize: CGSize) -> some View {
-        let stages: [StageNodeModel] = vm.nodes.compactMap { n in
-            guard let dash = state.dashboard[n.id], dash.kind == .stageA4 else { return nil }
-            let rectDoc = CGRect(x: CGFloat(n.x), y: CGFloat(n.y), width: CGFloat(n.w), height: CGFloat(n.h))
-            let page = dash.props["page"] ?? "A4"
-            let mstr = dash.props["margins"] ?? "18,18,18,18"
-            let parts = mstr.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
-            let margins = (parts.count == 4) ? EdgeInsets(top: parts[0], leading: parts[1], bottom: parts[2], trailing: parts[3]) : EdgeInsets(top: 18, leading: 18, bottom: 18, trailing: 18)
-            let baseline = CGFloat(Double(dash.props["baseline"] ?? "12") ?? 12)
-            return StageNodeModel(id: n.id, rectDoc: rectDoc, title: dash.props["title"] ?? (n.title ?? n.id), page: page, margins: margins, baseline: baseline, selected: (vm.selection == n.id))
-        }
-        return StageOverlayHost(stages: stages,
-                                zoom: vm.zoom,
-                                translation: vm.translation,
-                                showBaselineIndex: vm.showBaselineIndex,
-                                alwaysShow: vm.alwaysShowBaselineIndex,
-                                oneBased: vm.baselineIndexOneBased)
-    }
+    // Stage overlay removed; Stage pages will be rendered by MetalViewKit.
 
     // Overlays (zones/notes/health) removed in monitor mode
 }

@@ -44,6 +44,11 @@ Add backing vars in Swift, update `setUniform`, and resize the uniform buffer; m
 Mapping integration
 The renderer stays transport‑agnostic; the demo parses JSON mapping and calls `setUniform`. In instrument mode, the same properties are discoverable and settable via PE — no hard‑coded CCs.
 
+Canvas Nodes (draft)
+- Nodes conform to a MetalCanvasNode protocol (doc-space `frameDoc`, port geometry provider, Metal encode method). The canvas owns pan/zoom and passes an `MTKView`/`MTLCommandBuffer` to each node to render its body in the same pass as its ports/wires.
+- Stage nodes will implement `node = page` by drawing the page body and placing input ports at baseline midpoints; panel/query/transform nodes keep tile bodies.
+- No overlays: HUD (ticks/selection) remains transient; node bodies are rendered by the node itself.
+
 Testing
 Build the demo and verify: Triangle responds to tint/zoom via UI or MIDI CC; Quad responds to rotationSpeed/tint/zoom via mappings. Keep “Monitor” enabled to mirror outgoing events.
 

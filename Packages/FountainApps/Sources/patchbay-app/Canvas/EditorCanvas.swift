@@ -524,7 +524,7 @@ struct EditorCanvas: View {
     @State private var trashRectView: CGRect = .zero
     @State private var trashHover: Bool = false
     @State private var puffItems: [PuffItem] = []
-    @StateObject private var exec = DashboardExecutor()
+    // Dashboard executor removed
 
     var body: some View {
         GeometryReader { geo in
@@ -659,7 +659,7 @@ struct EditorCanvas: View {
                 syncFlowSelectionFromVM()
                 // exec.rebuild(vm: vm, registry: state.dashboard)
             }
-            .background(ExecutorHook())
+            // Dashboard executor hook removed
             // Deletion via keyboard/menu disabled (dustbin-only)
         }
 }
@@ -747,47 +747,7 @@ fileprivate struct NodeHandleOverlay: View {
 }
 
 
-fileprivate struct ExecutorHook: View {
-    @EnvironmentObject var vm: EditorVM
-    @EnvironmentObject var state: AppState
-    @StateObject private var exec = DashboardExecutor()
-    var body: some View {
-        Color.clear
-            .onChange(of: state.dashboard.count) { _, _ in exec.rebuild(vm: vm, registry: state.dashboard) }
-            .task {
-                exec.rebuild(vm: vm, registry: state.dashboard)
-                while true {
-                    await exec.tick()
-                    await MainActor.run { state.dashOutputs = exec.outputs }
-                    try? await Task.sleep(nanoseconds: 800_000_000)
-                }
-            }
-    }
-
-    private func lastId(where pred: (String, DashKind) -> Bool) -> String? {
-        let ids = vm.nodes.map { $0.id }
-        for id in ids.reversed() { if let k = state.dashboard[id]?.kind, pred(id, k) { return id } }
-        return nil
-    }
-    private func connectFromLastDatasource(into id: String) {
-        if let ds = lastId(where: { _, k in k == .datasource }) { _ = vm.ensureEdge(from: (ds,"out"), to: (id,"in")) }
-    }
-    private func connectFromLastSeriesNode(into id: String) {
-        if let up = lastId(where: { _, k in k == .transform || k == .query || k == .aggregator || k == .topN || k == .threshold }) { _ = vm.ensureEdge(from: (up,"out"), to: (id,"in")) }
-    }
-    private func connectOverlayFromLastThreshold(into id: String) {
-        if let thr = lastId(where: { _, k in k == .threshold }) { _ = vm.ensureEdge(from: (thr,"out"), to: (id,"overlayIn")) }
-    }
-    private func connectFromLastAggregator(into id: String) {
-        if let agg = lastId(where: { _, k in k == .aggregator }) { _ = vm.ensureEdge(from: (agg,"out"), to: (id,"in")) }
-    }
-    private func connectFromLastTopN(into id: String) {
-        if let top = lastId(where: { _, k in k == .topN }) { _ = vm.ensureEdge(from: (top,"out"), to: (id,"in")) }
-    }
-    private func connectIntoStage(into id: String) {
-        if let up = lastId(where: { _, k in k == .panelLine || k == .panelStat || k == .panelTable }) { _ = vm.ensureEdge(from: (up,"out"), to: (id,"in0")) }
-    }
-}
+// Dashboard executor removed
 
 fileprivate struct PanelsOverlayHost: View {
     @EnvironmentObject var vm: EditorVM

@@ -415,10 +415,7 @@ final class AppState: ObservableObject {
         if let data = try? JSONEncoder().encode(serversMeta) { UserDefaults.standard.set(data, forKey: serversKey) }
     }
 
-    // MARK: - Monitor: Prometheus
-    func buildPrometheusOverviewCanvas(vm: EditorVM) async {
-        PrometheusCanvas.buildPrometheusOverviewCanvas(vm: vm)
-    }
+    // MARK: - Monitor (Prometheus removed)
     func clearCanvas(vm: EditorVM) {
         vm.nodes.removeAll(); vm.edges.removeAll(); vm.selection = nil; vm.selected.removeAll()
     }
@@ -986,13 +983,9 @@ struct ContentView: View {
                         Toggle("Use 1‑based indices", isOn: $vm.baselineIndexOneBased)
                             .disabled(!vm.showBaselineIndex)
                     }
-                    // Preview button removed: everything previews to The Stage
+                    // Monitor menu trimmed: Prometheus removed; keep Clear for convenience
                     Menu("Monitor") {
-                        Menu("Prometheus Dashboard") {
-                            Button("Build Example (Extended)") { buildPrometheusExample() }
-                            Divider()
-                            Button("Clear") { state.clearCanvas(vm: vm) }
-                        }
+                        Button("Clear Canvas") { state.clearCanvas(vm: vm) }
                     }
                     // Left Pane menu removed: mode switching is self-contained within the left pane
                     Button {
@@ -1074,54 +1067,7 @@ struct ContentView: View {
         return (595, 842) // A4 at 72dpi
     }
 
-    private func buildPrometheusExample() {
-        // Clear canvas; compose datasource -> 3 queries -> 3 panels
-        state.clearCanvas(vm: vm)
-        let g = max(4, vm.grid)
-        func place(_ id: String, _ title: String, _ x: Int, _ y: Int, _ w: Int = 260, _ h: Int = 160) {
-            let node = PBNode(id: id, title: title, x: x, y: y, w: w, h: h, ports: canonicalSortPorts([
-                .init(id: "in", side: .left, dir: .input, type: "data"),
-                .init(id: "out", side: .right, dir: .output, type: "data")
-            ]))
-            vm.nodes.append(node)
-        }
-        // Nodes
-        place("ds_1", "prom.datasource", g*6, g*4)
-        state.registerDashNode(id: "ds_1", kind: .datasource, props: ["baseURL": "http://127.0.0.1:9090"])    
-        place("q_rps", "prom.query", g*18, g*4)
-        state.registerDashNode(id: "q_rps", kind: .query, props: ["promQL":"sum(rate(http_requests_total[5m]))","rangeSeconds":"300","stepSeconds":"15","refreshSeconds":"10"]) 
-        place("q_p99", "prom.query", g*18, g*12)
-        state.registerDashNode(id: "q_p99", kind: .query, props: ["promQL":"histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))","rangeSeconds":"300","stepSeconds":"15","refreshSeconds":"10"]) 
-        place("q_err", "prom.query", g*18, g*20)
-        state.registerDashNode(id: "q_err", kind: .query, props: ["promQL":"(sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m]))) * 100","rangeSeconds":"300","stepSeconds":"15","refreshSeconds":"10"]) 
-        place("p_rps", "prom.panel.line", g*30, g*4)
-        state.registerDashNode(id: "p_rps", kind: .panelLine, props: ["title":"RPS"]) 
-        place("p_p99", "prom.panel.line", g*30, g*12)
-        state.registerDashNode(id: "p_p99", kind: .panelLine, props: ["title":"P99 Latency"]) 
-        place("p_err", "prom.panel.line", g*30, g*20)
-        state.registerDashNode(id: "p_err", kind: .panelLine, props: ["title":"Error %"]) 
-        // Extended nodes: aggregator/stat, topN/table
-        place("agg_rps", "prom.aggregator", g*24, g*4)
-        state.registerDashNode(id: "agg_rps", kind: .aggregator, props: ["op":"avg"]) 
-        place("stat_rps", "prom.panel.stat", g*36, g*4)
-        state.registerDashNode(id: "stat_rps", kind: .panelStat, props: ["title":"RPS avg"]) 
-
-        place("top_err", "prom.topN", g*24, g*20)
-        state.registerDashNode(id: "top_err", kind: .topN, props: ["n":"5"]) 
-        place("tbl_err", "prom.panel.table", g*36, g*20)
-        state.registerDashNode(id: "tbl_err", kind: .panelTable, props: ["title":"Top Error %"]) 
-        // Wires
-        _ = vm.ensureEdge(from: ("ds_1","out"), to: ("q_rps","in"))
-        _ = vm.ensureEdge(from: ("ds_1","out"), to: ("q_p99","in"))
-        _ = vm.ensureEdge(from: ("ds_1","out"), to: ("q_err","in"))
-        _ = vm.ensureEdge(from: ("q_rps","out"), to: ("p_rps","in"))
-        _ = vm.ensureEdge(from: ("q_p99","out"), to: ("p_p99","in"))
-        _ = vm.ensureEdge(from: ("q_err","out"), to: ("p_err","in"))
-        _ = vm.ensureEdge(from: ("q_rps","out"), to: ("agg_rps","in"))
-        _ = vm.ensureEdge(from: ("agg_rps","out"), to: ("stat_rps","in"))
-        _ = vm.ensureEdge(from: ("q_err","out"), to: ("top_err","in"))
-        _ = vm.ensureEdge(from: ("top_err","out"), to: ("tbl_err","in"))
-    }
+    private func buildPrometheusExample() { /* removed */ }
 
     private func seedWelcomeScene() { /* removed in chat‑only startup */ }
 
@@ -1546,79 +1492,20 @@ struct AddInstrumentToolbar: View {
 struct TemplateLibraryView: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var vm: EditorVM
-    @State private var search: String = ""
-    @State private var editMode: Bool = false
-    @State private var hiddenExpanded: Bool = true
-    // Mode selection is self-contained in the pane
-
-    private func icon(for kind: String) -> Image {
-        switch kind {
-        case "mvk.triangle": return Image(systemName: "triangle.fill")
-        case "mvk.quad": return Image(systemName: "square.inset.filled")
-        case "audiotalk.chat": return Image(systemName: "text.bubble")
-        default: return Image(systemName: "circle.grid.3x3")
-        }
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Picker("", selection: Binding(get: { state.leftMode }, set: { state.leftMode = $0; state.saveLeftMode() })) {
-                    Text("Templates").tag(AppState.LeftMode.templates)
-                    Text("Servers").tag(AppState.LeftMode.openAPIs)
-                    Text("Dashboard").tag(AppState.LeftMode.dashboard)
-                }.pickerStyle(.segmented)
-                Spacer()
+        List {
+            Section(header: Text("Stage").font(.headline)) {
+                DashNodeRow(title: "Add Stage (A4)", dashKind: .stageA4, defaultProps: ["title":"The Stage", "page":"A4", "margins":"18,18,18,18", "baseline":"12"]).environmentObject(state).environmentObject(vm)
             }
-            switch state.leftMode {
-            case .templates:
-                HStack { TextField("Search", text: $search); Spacer(); Button("Reset Defaults") { state.resetTemplates() }; Button(editMode ? "Done" : "Edit") { withAnimation { editMode.toggle() } } }
-                List {
-                    Section(header: Text("Library").font(.headline)) {
-                        let visible = state.templates.filter { !$0.hidden && (search.isEmpty || $0.title.localizedCaseInsensitiveContains(search)) }
-                        if visible.isEmpty {
-                            VStack(alignment: .center) { Text("No templates. Reset to Defaults?").foregroundColor(.secondary); Button("Reset Defaults") { state.resetTemplates() } }.frame(maxWidth: .infinity)
-                        } else {
-                            ForEach(visible, id: \.id) { t in
-                                TemplateRow(template: t, editMode: editMode).environmentObject(state).environmentObject(vm)
-                            }.onMove { idx, off in state.moveTemplates(fromOffsets: idx, toOffset: off) }
-                        }
-                    }
-                    Section(header: HStack { Button(action: { withAnimation { hiddenExpanded.toggle() } }) { Image(systemName: hiddenExpanded ? "chevron.down" : "chevron.right") }.buttonStyle(.plain); Text("Hidden Templates").font(.headline); Spacer() }) {
-                        if hiddenExpanded { let hidden = state.templates.filter { $0.hidden }; if !hidden.isEmpty { Button("Restore All") { state.restoreAllTemplates() } }; ForEach(hidden, id: \.id) { t in HStack { icon(for: t.kind.rawValue).frame(width: 20); Text(t.title).foregroundColor(.secondary); Spacer(); Button { state.toggleHiddenTemplate(id: t.id) } label: { Image(systemName: "eye") }.buttonStyle(.plain).help("Restore") } } }
-                    }
-                }
-            case .openAPIs:
-                OpenAPIServicesLibrary().environmentObject(state).environmentObject(vm)
-            case .dashboard:
-                List {
-                    // Stages present on canvas — rename, reorder (z-order), center
-                    let stages: [PBNode] = vm.nodes.filter { n in state.dashboard[n.id]?.kind == .stageA4 }
-                    if !stages.isEmpty {
-                        Section(header: Text("Stages").font(.headline)) {
-                            StagesList(stages: stages).environmentObject(state).environmentObject(vm)
-                        }
-                    }
-                    Section(header: Text("Dashboard Nodes").font(.headline)) {
-                        DashNodeRow(title: "Datasource (Prometheus)", dashKind: .datasource, defaultProps: ["baseURL":"http://127.0.0.1:9090"]).environmentObject(state).environmentObject(vm)
-                        DashNodeRow(title: "Query (PromQL)", dashKind: .query, defaultProps: ["promQL":"","rangeSeconds":"300","stepSeconds":"15","refreshSeconds":"10"]).environmentObject(state).environmentObject(vm)
-                        DashNodeRow(title: "Transform (scale/offset)", dashKind: .transform, defaultProps: [:]).environmentObject(state).environmentObject(vm)
-                        DashNodeRow(title: "Aggregator", dashKind: .aggregator, defaultProps: ["op":"avg"]).environmentObject(state).environmentObject(vm)
-                        DashNodeRow(title: "TopN", dashKind: .topN, defaultProps: ["n":"5"]).environmentObject(state).environmentObject(vm)
-                        DashNodeRow(title: "Panel (Line)", dashKind: .panelLine, defaultProps: ["title":"Line"]).environmentObject(state).environmentObject(vm)
-                        DashNodeRow(title: "Panel (Stat)", dashKind: .panelStat, defaultProps: ["title":"Stat"]).environmentObject(state).environmentObject(vm)
-                        DashNodeRow(title: "Panel (Table)", dashKind: .panelTable, defaultProps: ["title":"Table"]).environmentObject(state).environmentObject(vm)
-                        DashNodeRow(title: "Stage (A4)", dashKind: .stageA4, defaultProps: ["title":"The Stage", "page":"A4", "margins":"18,18,18,18", "baseline":"12"]).environmentObject(state).environmentObject(vm)
-                    }
-                    Section(header: Text("Adapters").font(.headline)) {
-                        DashNodeRow(title: "Fountain → Teatro", dashKind: .adapterFountain, defaultProps: ["source":"Design/Teatro/Examples/sample.fountain"]).environmentObject(state).environmentObject(vm)
-                        DashNodeRow(title: "ScoreKit → Teatro (SVG)", dashKind: .adapterScoreKit, defaultProps: ["source":"Design/Teatro/Examples/sample.svg"]).environmentObject(state).environmentObject(vm)
-                    }
+            // Existing stages on canvas
+            let stages: [PBNode] = vm.nodes.filter { n in state.dashboard[n.id]?.kind == .stageA4 }
+            if !stages.isEmpty {
+                Section(header: Text("Stages on Canvas").font(.headline)) {
+                    StagesList(stages: stages).environmentObject(state).environmentObject(vm)
                 }
             }
         }
         .padding([.top, .horizontal], 8)
-        .onAppear { state.loadLeftMode() }
     }
 }
 

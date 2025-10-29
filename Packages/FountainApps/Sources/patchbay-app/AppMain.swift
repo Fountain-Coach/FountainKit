@@ -4,6 +4,7 @@ import FountainAIAdapters
 import LLMGatewayAPI
 import ApiClientsCore
 import TutorDashboard
+import AppKit
 
 @main
 struct PatchBayStudioApp: App {
@@ -23,6 +24,7 @@ struct PatchBayStudioApp: App {
                     Button("Zoom Out") { /* handled in toolbar */ }
                         .keyboardShortcut("-", modifiers: [.command])
                 }
+                // Canvas menu contains zoom items above; no overlay toggle (removed)
                 // Edit menu: deletion disabled (dustbin-only)
                 CommandMenu("Debug") {
                     Button("Dump Focus State") {
@@ -150,6 +152,38 @@ final class AppState: ObservableObject {
     @Published var chat: [ChatMessage] = []
     @Published var allowedFunctions: [String] = []
     @Published var plannedSteps: [PlannerFunctionCall] = []
+    // Dashboard executor outputs for overlay rendering
+    @Published var dashOutputs: [String:Payload] = [:]
+    private var previewWindows: [String: NSWindow] = [:]
+
+    // Open or focus a live preview window for a renderer node (panel.*)
+    func openRendererPreview(id: String, vm: EditorVM) {
+        if let win = previewWindows[id] {
+            win.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        guard let dash = dashboard[id] else { return }
+        let view = RendererPreviewView(id: id, dash: dash, vm: vm).environmentObject(self)
+        let host = NSHostingView(rootView: view)
+        let win = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 560, height: 360),
+                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                           backing: .buffered, defer: false)
+        win.contentView = host
+        win.title = (dash.props["title"]) ?? (dashboard[id]?.kind.rawValue ?? id)
+        win.isReleasedWhenClosed = false
+        win.center()
+        win.makeKeyAndOrderFront(nil)
+        previewWindows[id] = win
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: win, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.previewWindows.removeValue(forKey: id) }
+        }
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func closeRendererPreview(id: String) {
+        if let win = previewWindows[id] { win.close(); previewWindows.removeValue(forKey: id) }
+    }
     // Templates (left panel library)
     private let templatesStore = InstrumentTemplatesStore()
     @Published var templates: [InstrumentTemplate] = []
@@ -914,15 +948,17 @@ struct ContentView: View {
                 }
             }) {
                 HStack(spacing: 0) {
-                    // Canvas with drop target (direct hosting; ZoomContainer removed for stability)
-                    EditorCanvas()
-                        .environmentObject(vm)
-                        .environmentObject(state)
-                        .background(Color(NSColor.textBackgroundColor))
-                        .onDrop(of: [UTType.json], isTargeted: .constant(false)) { providers, location in
-                            handleDrop(providers: providers, location: location)
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // Canvas with infinite pan/zoom via trackpad
+                    ZoomContainer(zoom: $vm.zoom, translation: $vm.translation) {
+                        EditorCanvas()
+                            .environmentObject(vm)
+                            .environmentObject(state)
+                            .background(Color(NSColor.textBackgroundColor))
+                    }
+                    .onDrop(of: [UTType.json, UTType.text], isTargeted: .constant(false)) { providers, location in
+                        handleDrop(providers: providers, location: location)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .navigationTitle("PatchBay Canvas")
@@ -944,9 +980,10 @@ struct ContentView: View {
                             Button("24 px (major ×5)") { vm.grid = 24; vm.majorEvery = 5 }
                         }
                     }
+                    // Preview button removed: everything previews to The Stage
                     Menu("Monitor") {
                         Menu("Prometheus Dashboard") {
-                            Button("Build Example") { buildPrometheusExample() }
+                            Button("Build Example (Extended)") { buildPrometheusExample() }
                             Divider()
                             Button("Clear") { state.clearCanvas(vm: vm) }
                         }
@@ -995,6 +1032,23 @@ struct ContentView: View {
         .environmentObject(vm)
     }
 
+    // Compute the next Stage name from the canvas only (ignores stale persisted entries).
+    private func nextStageTitle() -> String {
+        func parseStageIndex(_ title: String?) -> Int? {
+            guard let s = title else { return nil }
+            let t = s.trimmingCharacters(in: .whitespaces)
+            guard t.lowercased().hasPrefix("stage ") else { return nil }
+            return Int(t.dropFirst("stage ".count))
+        }
+        var used: Set<Int> = []
+        for n in vm.nodes where state.dashboard[n.id]?.kind == .stageA4 {
+            if let i = parseStageIndex(state.dashboard[n.id]?.props["title"]) ?? parseStageIndex(n.title) { used.insert(i) }
+        }
+        var i = 1
+        while used.contains(i) { i += 1 }
+        return "Stage \(i)"
+    }
+
     private func buildPrometheusExample() {
         // Clear canvas; compose datasource -> 3 queries -> 3 panels
         state.clearCanvas(vm: vm)
@@ -1021,6 +1075,16 @@ struct ContentView: View {
         state.registerDashNode(id: "p_p99", kind: .panelLine, props: ["title":"P99 Latency"]) 
         place("p_err", "prom.panel.line", g*30, g*20)
         state.registerDashNode(id: "p_err", kind: .panelLine, props: ["title":"Error %"]) 
+        // Extended nodes: aggregator/stat, topN/table
+        place("agg_rps", "prom.aggregator", g*24, g*4)
+        state.registerDashNode(id: "agg_rps", kind: .aggregator, props: ["op":"avg"]) 
+        place("stat_rps", "prom.panel.stat", g*36, g*4)
+        state.registerDashNode(id: "stat_rps", kind: .panelStat, props: ["title":"RPS avg"]) 
+
+        place("top_err", "prom.topN", g*24, g*20)
+        state.registerDashNode(id: "top_err", kind: .topN, props: ["n":"5"]) 
+        place("tbl_err", "prom.panel.table", g*36, g*20)
+        state.registerDashNode(id: "tbl_err", kind: .panelTable, props: ["title":"Top Error %"]) 
         // Wires
         _ = vm.ensureEdge(from: ("ds_1","out"), to: ("q_rps","in"))
         _ = vm.ensureEdge(from: ("ds_1","out"), to: ("q_p99","in"))
@@ -1028,11 +1092,38 @@ struct ContentView: View {
         _ = vm.ensureEdge(from: ("q_rps","out"), to: ("p_rps","in"))
         _ = vm.ensureEdge(from: ("q_p99","out"), to: ("p_p99","in"))
         _ = vm.ensureEdge(from: ("q_err","out"), to: ("p_err","in"))
+        _ = vm.ensureEdge(from: ("q_rps","out"), to: ("agg_rps","in"))
+        _ = vm.ensureEdge(from: ("agg_rps","out"), to: ("stat_rps","in"))
+        _ = vm.ensureEdge(from: ("q_err","out"), to: ("top_err","in"))
+        _ = vm.ensureEdge(from: ("top_err","out"), to: ("tbl_err","in"))
     }
 
     private func seedWelcomeScene() { /* removed in chat‑only startup */ }
 
     private func handleDrop(providers: [NSItemProvider], location: CGPoint) -> Bool {
+        // 1) Stage move payload (text): "moveStage:<id>"
+        if let tp = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.text.identifier) }) {
+            _ = tp.loadDataRepresentation(forTypeIdentifier: UTType.text.identifier) { data, _ in
+                guard let data = data, let s = String(data: data, encoding: .utf8) else { return }
+                if s.hasPrefix("moveStage:") {
+                    let id = String(s.dropFirst("moveStage:".count))
+                    Task { @MainActor in
+                        let z = max(0.0001, vm.zoom)
+                        let docX = Int((location.x / z) - vm.translation.x)
+                        let docY = Int((location.y / z) - vm.translation.y)
+                        let g = max(1, vm.grid)
+                        let snap: (Int) -> Int = { ((($0 + g/2) / g) * g) }
+                        if let i = vm.nodeIndex(by: id) {
+                            vm.nodes[i].x = snap(docX)
+                            vm.nodes[i].y = snap(docY)
+                            vm.selection = id; vm.selected = [id]
+                        }
+                    }
+                    return
+                }
+            }
+        }
+        // 2) Node creation payloads (json)
         guard let prov = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.json.identifier) }) else { return false }
         _ = prov.loadDataRepresentation(forTypeIdentifier: UTType.json.identifier) { data, _ in
             guard let data = data else { return }
@@ -1137,28 +1228,112 @@ struct ContentView: View {
             case .datasource: return "ds"
             case .query: return "q"
             case .transform: return "xf"
+            case .aggregator: return "agg"
+            case .topN: return "top"
+            case .threshold: return "thr"
             case .panelLine: return "p"
             case .panelStat: return "ps"
+            case .panelTable: return "pt"
+            case .stageA4: return "stage"
+            case .adapterFountain: return "fxf"
+            case .adapterScoreKit: return "fxs"
             }
         }()
         let id = nextId(base: base)
         var ports: [PBPort] = []
-        // All have in/out; panels need only input, datasource needs only output
+        // Ports by kind
         switch kind {
         case .datasource:
             ports.append(.init(id: "out", side: .right, dir: .output, type: "data"))
-        case .panelLine, .panelStat:
+        case .panelLine:
             ports.append(.init(id: "in", side: .left, dir: .input, type: "data"))
+        case .panelStat, .panelTable:
+            ports.append(.init(id: "in", side: .left, dir: .input, type: "data"))
+        case .stageA4:
+            ports.append(.init(id: "in", side: .left, dir: .input, type: "view"))
+        case .adapterFountain, .adapterScoreKit:
+            ports.append(.init(id: "out", side: .right, dir: .output, type: "view"))
         default:
             ports.append(.init(id: "in", side: .left, dir: .input, type: "data"))
             ports.append(.init(id: "out", side: .right, dir: .output, type: "data"))
         }
+        // Stage sizing depends on current zoom so it appears usable immediately
+        let stageSize: (Int, Int) = {
+            let z = max(0.0001, vm.zoom)
+            let baseW = 480, baseH = 680
+            let w = Int(CGFloat(baseW) / z)
+            let h = Int(CGFloat(baseH) / z)
+            return (w, h)
+        }()
         let node = PBNode(id: id, title: {
-            switch kind { case .datasource: return "prom.datasource"; case .query: return "prom.query"; case .transform: return "prom.transform"; case .panelLine: return "prom.panel.line"; case .panelStat: return "prom.panel.stat" }
-        }(), x: x, y: y, w: 260, h: (kind == .panelLine || kind == .panelStat) ? 180 : 140, ports: canonicalSortPorts(ports))
+            switch kind {
+            case .datasource: return "prom.datasource"
+            case .query: return "prom.query"
+            case .transform: return "prom.transform"
+            case .aggregator: return "prom.aggregator"
+            case .topN: return "prom.topN"
+            case .threshold: return "prom.threshold"
+            case .panelLine: return "prom.panel.line"
+            case .panelStat: return "prom.panel.stat"
+            case .panelTable: return "prom.panel.table"
+            case .stageA4: return "renderer.stage.a4"
+            case .adapterFountain: return "adapter.fountain→teatro"
+            case .adapterScoreKit: return "adapter.scorekit→teatro"
+            }
+        }(), x: x, y: y,
+           w: (kind == .stageA4 ? stageSize.0 : 260),
+           h: (kind == .stageA4 ? stageSize.1 : (kind == .panelLine ? 200 : (kind == .panelStat ? 140 : (kind == .panelTable ? 200 : 140)))),
+           ports: canonicalSortPorts(ports))
         vm.nodes.append(node)
-        state.registerDashNode(id: id, kind: kind, props: props)
+        var propsToSave = props
+        if kind == .stageA4 {
+            // Use the same numbering logic here
+            func parseStageIndex(_ title: String?) -> Int? {
+                guard let s = title else { return nil }
+                let t = s.trimmingCharacters(in: .whitespaces)
+                guard t.lowercased().hasPrefix("stage ") else { return nil }
+                return Int(t.dropFirst("stage ".count))
+            }
+            var maxIdx = 0
+            for (_, node) in state.dashboard where node.kind == .stageA4 { if let n = parseStageIndex(node.props["title"]) { maxIdx = max(maxIdx, n) } }
+            for n in vm.nodes where state.dashboard[n.id]?.kind == .stageA4 { if let i = parseStageIndex(n.title) { maxIdx = max(maxIdx, i) } }
+            let defaultTitle = "Stage \(maxIdx + 1)"
+            let current = propsToSave["title"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if current == nil || current == "" || current == "The Stage" { propsToSave["title"] = defaultTitle }
+            vm.setNodeTitle(id: id, title: propsToSave["title"] ?? defaultTitle)
+        }
+        state.registerDashNode(id: id, kind: kind, props: propsToSave)
         vm.selection = id; vm.selected = [id]
+        autoWire(newId: id, kind: kind)
+    }
+
+    private func autoWire(newId: String, kind: DashKind) {
+        func lastId(where pred: (String, DashKind) -> Bool) -> String? {
+            let ids = vm.nodes.map { $0.id }
+            for id in ids.reversed() {
+                if let k = state.dashboard[id]?.kind, pred(id, k) { return id }
+            }
+            return nil
+        }
+        switch kind {
+        case .query:
+            if let ds = lastId(where: { _, k in k == .datasource }) { _ = vm.ensureEdge(from: (ds,"out"), to: (newId,"in")) }
+        case .transform, .aggregator, .topN, .threshold:
+            if let upstream = vm.selection ?? lastId(where: { _, k in k == .query || k == .transform }) { _ = vm.ensureEdge(from: (upstream,"out"), to: (newId,"in")) }
+        case .panelLine:
+            if let up = vm.selection ?? lastId(where: { _, k in k == .aggregator || k == .transform || k == .query }) { _ = vm.ensureEdge(from: (up,"out"), to: (newId,"in")) }
+        case .panelStat:
+            if let agg = lastId(where: { _, k in k == .aggregator }) { _ = vm.ensureEdge(from: (agg,"out"), to: (newId,"in")) }
+        case .panelTable:
+            if let top = lastId(where: { _, k in k == .topN }) { _ = vm.ensureEdge(from: (top,"out"), to: (newId,"in")) }
+        case .stageA4:
+            // Try last renderer-capable upstream (panel or adapter once available)
+            if let up = lastId(where: { _, k in k == .panelLine || k == .panelStat || k == .panelTable || k == .adapterFountain || k == .adapterScoreKit }) { _ = vm.ensureEdge(from: (up,"out"), to: (newId,"in")) }
+        case .adapterFountain, .adapterScoreKit:
+            if let stage = lastId(where: { _, k in k == .stageA4 }) { _ = vm.ensureEdge(from: (newId,"out"), to: (stage,"in")) }
+        case .datasource:
+            break
+        }
     }
 
     private func addFlowNode(kind: FlowNodeKind, title: String, x: Int, y: Int) {
@@ -1206,6 +1381,7 @@ struct DashEditSheet: View {
     @State private var stepSeconds: String = "15"
     @State private var refreshSeconds: String = "10"
     @State private var title: String = ""
+    @State private var sourcePath: String = ""
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack { Text("Edit \(dash.kind.rawValue)").font(.title3).bold(); Spacer(); Button("Close") { dismiss() } }
@@ -1221,6 +1397,18 @@ struct DashEditSheet: View {
                 Text("Transform properties pending").foregroundStyle(.secondary)
             case .panelStat:
                 Text("Stat panel properties pending").foregroundStyle(.secondary)
+            case .panelTable:
+                TextField("Title", text: $title)
+            case .aggregator:
+                TextField("Op (last/avg/min/max)", text: Binding(get: { dash.props["op"] ?? "avg" }, set: { _ in }))
+            case .topN:
+                TextField("N", text: Binding(get: { dash.props["n"] ?? "5" }, set: { _ in }))
+            case .threshold:
+                TextField("Threshold", text: Binding(get: { dash.props["threshold"] ?? "0" }, set: { _ in }))
+            case .stageA4:
+                TextField("Title", text: $title)
+            case .adapterFountain, .adapterScoreKit:
+                TextField("Source (file path)", text: $sourcePath)
             }
             HStack { Spacer(); Button("Save") { save(); dismiss() } }
         }
@@ -1236,6 +1424,7 @@ struct DashEditSheet: View {
         stepSeconds = p["stepSeconds"] ?? stepSeconds
         refreshSeconds = p["refreshSeconds"] ?? refreshSeconds
         title = p["title"] ?? dash.kind.rawValue
+        sourcePath = p["source"] ?? sourcePath
     }
     private func save() {
         var p = dash.props
@@ -1249,6 +1438,11 @@ struct DashEditSheet: View {
             p["refreshSeconds"] = refreshSeconds
         case .panelLine:
             p["title"] = title
+        case .stageA4:
+            p["title"] = title
+            vm.setNodeTitle(id: id, title: title)
+        case .adapterFountain, .adapterScoreKit:
+            p["source"] = sourcePath
         default: break
         }
         state.updateDashProps(id: id, props: p)
@@ -1324,17 +1518,97 @@ struct TemplateLibraryView: View {
                 OpenAPIServicesLibrary().environmentObject(state).environmentObject(vm)
             case .dashboard:
                 List {
+                    // Stages present on canvas — rename, reorder (z-order), center
+                    let stages: [PBNode] = vm.nodes.filter { n in state.dashboard[n.id]?.kind == .stageA4 }
+                    if !stages.isEmpty {
+                        Section(header: Text("Stages").font(.headline)) {
+                            StagesList(stages: stages).environmentObject(state).environmentObject(vm)
+                        }
+                    }
                     Section(header: Text("Dashboard Nodes").font(.headline)) {
                         DashNodeRow(title: "Datasource (Prometheus)", dashKind: .datasource, defaultProps: ["baseURL":"http://127.0.0.1:9090"]).environmentObject(state).environmentObject(vm)
                         DashNodeRow(title: "Query (PromQL)", dashKind: .query, defaultProps: ["promQL":"","rangeSeconds":"300","stepSeconds":"15","refreshSeconds":"10"]).environmentObject(state).environmentObject(vm)
                         DashNodeRow(title: "Transform (scale/offset)", dashKind: .transform, defaultProps: [:]).environmentObject(state).environmentObject(vm)
+                        DashNodeRow(title: "Aggregator", dashKind: .aggregator, defaultProps: ["op":"avg"]).environmentObject(state).environmentObject(vm)
+                        DashNodeRow(title: "TopN", dashKind: .topN, defaultProps: ["n":"5"]).environmentObject(state).environmentObject(vm)
                         DashNodeRow(title: "Panel (Line)", dashKind: .panelLine, defaultProps: ["title":"Line"]).environmentObject(state).environmentObject(vm)
+                        DashNodeRow(title: "Panel (Stat)", dashKind: .panelStat, defaultProps: ["title":"Stat"]).environmentObject(state).environmentObject(vm)
+                        DashNodeRow(title: "Panel (Table)", dashKind: .panelTable, defaultProps: ["title":"Table"]).environmentObject(state).environmentObject(vm)
+                    }
+                    Section(header: Text("Renderers").font(.headline)) {
+                        DashNodeRow(title: "The Stage (A4)", dashKind: .stageA4, defaultProps: ["title":"The Stage", "page":"A4", "margins":"18,18,18,18", "baseline":"12"]).environmentObject(state).environmentObject(vm)
+                    }
+                    Section(header: Text("Adapters").font(.headline)) {
+                        DashNodeRow(title: "Fountain → Teatro", dashKind: .adapterFountain, defaultProps: ["source":"Design/Teatro/Examples/sample.fountain"]).environmentObject(state).environmentObject(vm)
+                        DashNodeRow(title: "ScoreKit → Teatro (SVG)", dashKind: .adapterScoreKit, defaultProps: ["source":"Design/Teatro/Examples/sample.svg"]).environmentObject(state).environmentObject(vm)
                     }
                 }
             }
         }
         .padding([.top, .horizontal], 8)
         .onAppear { state.loadLeftMode() }
+    }
+}
+
+// MARK: - Stages List (left pane)
+struct StagesList: View {
+    @EnvironmentObject var state: AppState
+    @EnvironmentObject var vm: EditorVM
+    var stages: [PBNode]
+    @State private var editingId: String? = nil
+    @State private var draft: String = ""
+    var body: some View {
+        ForEach(stages, id: \.id) { n in
+            HStack(spacing: 6) {
+                Image(systemName: "doc.richtext").foregroundStyle(.secondary)
+                if editingId == n.id {
+                    TextField("Stage name", text: Binding(
+                        get: { draft },
+                        set: { draft = $0 }
+                    ), onCommit: { commitRename(id: n.id) })
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: .infinity)
+                } else {
+                    Text(stageTitle(for: n)).lineLimit(1)
+                        .onTapGesture { vm.selection = n.id; vm.selected = [n.id] }
+                        .onTapGesture(count: 2) { beginRename(id: n.id, current: stageTitle(for: n)) }
+                }
+                Spacer()
+                Button { vm.centerOnNode(id: n.id) } label: { Image(systemName: "scope") }.buttonStyle(.plain).help("Center on canvas")
+                Menu("⋯") {
+                    Button("Bring to Front") { vm.bringToFront(ids: [n.id]) }
+                    Button("Send to Back") { vm.sendToBack(ids: [n.id]) }
+                    Button("Edit Properties…") { state.pendingEditNodeId = n.id }
+                }
+            }
+            .contentShape(Rectangle())
+            .onDrag {
+                // Allow repositioning by dragging a Stage row onto canvas
+                NSItemProvider(object: NSString(string: "moveStage:\(n.id)"))
+            }
+        }
+        .onMove(perform: move)
+    }
+    private func stageTitle(for n: PBNode) -> String {
+        if let t = state.dashboard[n.id]?.props["title"], !t.isEmpty { return t }
+        return n.title ?? n.id
+    }
+    private func beginRename(id: String, current: String) {
+        editingId = id
+        draft = current
+    }
+    private func commitRename(id: String) {
+        guard let dash = state.dashboard[id] else { editingId = nil; return }
+        var p = dash.props
+        p["title"] = draft
+        state.updateDashProps(id: id, props: p)
+        vm.setNodeTitle(id: id, title: draft)
+        editingId = nil
+    }
+    private func move(from: IndexSet, to: Int) {
+        var ordered = stages.map { $0.id }
+        ordered.move(fromOffsets: from, toOffset: to)
+        vm.reorderStages(orderedStageIds: ordered, isStage: { node in state.dashboard[node.id]?.kind == .stageA4 })
     }
 }
 
@@ -1517,19 +1791,99 @@ struct DashNodeRow: View {
     }
     @discardableResult
     private func create(kind: DashKind, props: [String:String], x: Int, y: Int) -> String {
-        let base: String = { switch kind { case .datasource: return "ds"; case .query: return "q"; case .transform: return "xf"; case .panelLine: return "p"; case .panelStat: return "ps" } }()
+        let base: String = {
+            switch kind {
+            case .datasource: return "ds"
+            case .query: return "q"
+            case .transform: return "xf"
+            case .aggregator: return "agg"
+            case .topN: return "top"
+            case .threshold: return "thr"
+            case .panelLine: return "p"
+            case .panelStat: return "ps"
+            case .panelTable: return "pt"
+            case .stageA4: return "stage"
+            case .adapterFountain: return "fxf"
+            case .adapterScoreKit: return "fxs"
+            }
+        }()
         func nextId(base: String) -> String { var n = 1; let ids = Set(vm.nodes.map { $0.id }); var c = "\(base)_\(n)"; while ids.contains(c) { n += 1; c = "\(base)_\(n)" }; return c }
         let id = nextId(base: base)
         var ports: [PBPort] = []
-        switch kind { case .datasource: ports.append(.init(id: "out", side: .right, dir: .output)); case .panelLine, .panelStat: ports.append(.init(id: "in", side: .left, dir: .input)); default: ports.append(.init(id: "in", side: .left, dir: .input)); ports.append(.init(id: "out", side: .right, dir: .output)) }
-        let node = PBNode(id: id, title: titleFrom(kind), x: x, y: y, w: 260, h: (kind == .panelLine || kind == .panelStat) ? 180 : 140, ports: canonicalSortPorts(ports))
+        switch kind {
+        case .datasource:
+            ports.append(.init(id: "out", side: .right, dir: .output))
+        case .panelLine:
+            ports.append(.init(id: "in", side: .left, dir: .input))
+            ports.append(.init(id: "overlayIn", side: .left, dir: .input))
+        case .panelStat, .panelTable:
+            ports.append(.init(id: "in", side: .left, dir: .input))
+        case .stageA4:
+            ports.append(.init(id: "in", side: .left, dir: .input, type: "view"))
+        case .adapterFountain, .adapterScoreKit:
+            ports.append(.init(id: "out", side: .right, dir: .output, type: "view"))
+        default:
+            ports.append(.init(id: "in", side: .left, dir: .input))
+            ports.append(.init(id: "out", side: .right, dir: .output))
+        }
+        let stageSize: (Int, Int) = {
+            let z = max(0.0001, vm.zoom)
+            let baseW = 480, baseH = 680
+            let w = Int(CGFloat(baseW) / z)
+            let h = Int(CGFloat(baseH) / z)
+            return (w, h)
+        }()
+        let node = PBNode(id: id, title: titleFrom(kind), x: x, y: y,
+                          w: (kind == .stageA4 ? stageSize.0 : 260),
+                          h: (kind == .stageA4 ? stageSize.1 : (kind == .panelLine ? 200 : (kind == .panelStat ? 140 : (kind == .panelTable ? 200 : 140)))),
+                          ports: canonicalSortPorts(ports))
         vm.nodes.append(node)
-        state.registerDashNode(id: id, kind: kind, props: props)
+        var propsToSave2 = props
+        if kind == .stageA4 {
+            func parseStageIndex(_ title: String?) -> Int? {
+                guard let s = title else { return nil }
+                let t = s.trimmingCharacters(in: .whitespaces)
+                guard t.lowercased().hasPrefix("stage ") else { return nil }
+                return Int(t.dropFirst("stage ".count))
+            }
+            var maxIdx = 0
+            for (_, node) in state.dashboard where node.kind == .stageA4 { if let n = parseStageIndex(node.props["title"]) { maxIdx = max(maxIdx, n) } }
+            for n in vm.nodes where state.dashboard[n.id]?.kind == .stageA4 { if let i = parseStageIndex(n.title) { maxIdx = max(maxIdx, i) } }
+            let defaultTitle = "Stage \(maxIdx + 1)"
+            let current = propsToSave2["title"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if current == nil || current == "" || current == "The Stage" { propsToSave2["title"] = defaultTitle }
+            vm.setNodeTitle(id: id, title: propsToSave2["title"] ?? defaultTitle)
+        }
+        state.registerDashNode(id: id, kind: kind, props: propsToSave2)
         vm.selection = id; vm.selected = [id]
+        // Auto-wire common patterns for double-click creations
+        func lastId(where pred: (String, DashKind) -> Bool) -> String? {
+            let ids = vm.nodes.map { $0.id }
+            for nid in ids.reversed() { if let k = state.dashboard[nid]?.kind, pred(nid, k) { return nid } }
+            return nil
+        }
+        switch kind {
+        case .query:
+            if let ds = lastId(where: { _, k in k == .datasource }) { _ = vm.ensureEdge(from: (ds,"out"), to: (id,"in")) }
+        case .transform, .aggregator, .topN, .threshold:
+            if let upstream = vm.selection ?? lastId(where: { _, k in k == .query || k == .transform }) { _ = vm.ensureEdge(from: (upstream,"out"), to: (id,"in")) }
+        case .panelLine:
+            if let up = vm.selection ?? lastId(where: { _, k in k == .aggregator || k == .transform || k == .query }) { _ = vm.ensureEdge(from: (up,"out"), to: (id,"in")) }
+        case .panelStat:
+            if let agg = lastId(where: { _, k in k == .aggregator }) { _ = vm.ensureEdge(from: (agg,"out"), to: (id,"in")) }
+        case .panelTable:
+            if let top = lastId(where: { _, k in k == .topN }) { _ = vm.ensureEdge(from: (top,"out"), to: (id,"in")) }
+        case .stageA4:
+            if let up = lastId(where: { _, k in k == .panelLine || k == .panelStat || k == .panelTable || k == .adapterFountain || k == .adapterScoreKit }) { _ = vm.ensureEdge(from: (up,"out"), to: (id,"in")) }
+        case .adapterFountain, .adapterScoreKit:
+            if let stage = lastId(where: { _, k in k == .stageA4 }) { _ = vm.ensureEdge(from: (id,"out"), to: (stage,"in")) }
+        case .datasource:
+            break
+        }
         return id
     }
-    private func titleFrom(_ k: DashKind) -> String { switch k { case .datasource: return "prom.datasource"; case .query: return "prom.query"; case .transform: return "prom.transform"; case .panelLine: return "prom.panel.line"; case .panelStat: return "prom.panel.stat" } }
-    private func iconName(for k: DashKind) -> String { switch k { case .datasource: return "bolt.horizontal"; case .query: return "text.magnifyingglass"; case .transform: return "arrow.triangle.2.circlepath"; case .panelLine: return "chart.line.uptrend.xyaxis"; case .panelStat: return "gauge" } }
+    private func titleFrom(_ k: DashKind) -> String { switch k { case .datasource: return "prom.datasource"; case .query: return "prom.query"; case .transform: return "prom.transform"; case .aggregator: return "prom.aggregator"; case .topN: return "prom.topN"; case .threshold: return "prom.threshold"; case .panelLine: return "prom.panel.line"; case .panelStat: return "prom.panel.stat"; case .panelTable: return "prom.panel.table"; case .stageA4: return "renderer.stage.a4"; case .adapterFountain: return "adapter.fountain→teatro"; case .adapterScoreKit: return "adapter.scorekit→teatro" } }
+    private func iconName(for k: DashKind) -> String { switch k { case .datasource: return "bolt.horizontal"; case .query: return "text.magnifyingglass"; case .transform: return "arrow.triangle.2.circlepath"; case .aggregator: return "sum"; case .topN: return "list.number"; case .threshold: return "line.diagonal.arrow"; case .panelLine: return "chart.line.uptrend.xyaxis"; case .panelStat: return "gauge"; case .panelTable: return "tablecells"; case .stageA4: return "doc.richtext"; case .adapterFountain: return "text.document"; case .adapterScoreKit: return "music.quarternote.3" } }
 }
 
 enum FlowNodeKind: String, Codable { case audioInput, analyzer, noteProcessor, transportEndpoint }
@@ -2398,5 +2752,51 @@ private func linkSummary(_ l: Components.Schemas.Link) -> String {
             return "ump: ep=\(s.endpointId) g=\(s.group) ch=\(s.channel) \(msg) → \(to)"
         }
         return "ump: (incomplete)"
+    }
+}
+
+// MARK: - Renderer Preview Window
+struct RendererPreviewView: View {
+    @EnvironmentObject var state: AppState
+    let id: String
+    let dash: DashNode
+    @ObservedObject var vm: EditorVM
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(dash.props["title"] ?? (dash.kind.rawValue)).font(.headline)
+            content()
+                .background(Color(NSColor.windowBackgroundColor))
+                .cornerRadius(8)
+        }
+        .padding(12)
+    }
+    @ViewBuilder
+    private func content() -> some View {
+        switch dash.kind {
+        case .panelLine:
+            if let up = upstream(for: id, port: "in"), case .timeSeries(let s) = state.dashOutputs[up] ?? .none {
+                LineOverlayPanelView(title: dash.props["title"] ?? dash.kind.rawValue, series: s, annotations: [])
+            } else { noData }
+        case .panelStat:
+            if let up = upstream(for: id, port: "in"), let p = state.dashOutputs[up] {
+                switch p {
+                case .scalar(let v): StatPanelView(title: dash.props["title"] ?? dash.kind.rawValue, value: v)
+                case .timeSeries(let s): StatPanelView(title: dash.props["title"] ?? dash.kind.rawValue, value: s.first?.points.last?.1 ?? 0)
+                default: noData
+                }
+            } else { noData }
+        case .panelTable:
+            if let up = upstream(for: id, port: "in"), case .table(let rows) = state.dashOutputs[up] ?? .none {
+                TablePanelView(title: dash.props["title"] ?? dash.kind.rawValue, rows: rows)
+            } else { noData }
+        default:
+            VStack(alignment: .leading) { Text("Not a renderer node").foregroundStyle(.secondary) }
+        }
+    }
+    private var noData: some View {
+        VStack(alignment: .leading) { Text("No data").font(.caption).foregroundStyle(.secondary) }
+    }
+    private func upstream(for nodeId: String, port: String) -> String? {
+        vm.edges.first(where: { $0.to == nodeId+"."+port })?.from.split(separator: ".").first.map(String.init)
     }
 }

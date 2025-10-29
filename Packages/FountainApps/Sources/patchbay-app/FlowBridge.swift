@@ -8,11 +8,13 @@ struct FlowBridge {
         switch pb { case "ump": return .midi; case "data": return .control; default: return .control }
     }
 
-    static func toFlowPatch(vm: EditorVM) -> Patch {
+    static func toFlowPatch(vm: EditorVM) -> Patch { toFlowPatch(vm: vm, titleFor: { $0.title ?? $0.id }) }
+
+    static func toFlowPatch(vm: EditorVM, titleFor: (PBNode) -> String) -> Patch {
         let nodes: [Flow.Node] = vm.nodes.enumerated().map { idx, n in
             let inputs = canonicalSortPorts(n.ports.filter { $0.dir == .input }).map { Flow.Port(name: $0.id, type: portType(from: $0.type)) }
             let outputs = canonicalSortPorts(n.ports.filter { $0.dir == .output }).map { Flow.Port(name: $0.id, type: portType(from: $0.type)) }
-            return Flow.Node(name: n.title ?? n.id,
+            return Flow.Node(name: titleFor(n),
                              position: CGPoint(x: n.x, y: n.y),
                              inputs: inputs,
                              outputs: outputs)

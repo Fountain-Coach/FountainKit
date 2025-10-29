@@ -72,6 +72,31 @@ final class DashboardExecutor: ObservableObject {
                 outputs[id] = .text("Query failed: \(error.localizedDescription)")
             }
         }
+        // Adapters: push view payloads (stateless; recompute every tick)
+        for (id, node) in registry where node.kind == .adapterFountain {
+            if let path = node.props["source"], !path.isEmpty {
+                do {
+                    let svg = try AdapterFountainToTeatro.render(path: path)
+                    outputs[id] = .view(svg)
+                } catch {
+                    outputs[id] = .text("Fountain adapter failed: \(error.localizedDescription)")
+                }
+            } else {
+                outputs[id] = .text("Missing source path")
+            }
+        }
+        for (id, node) in registry where node.kind == .adapterScoreKit {
+            if let path = node.props["source"], !path.isEmpty {
+                // For now, treat .svg as a direct view; otherwise, emit an informational text.
+                if let data = try? Data(contentsOf: URL(fileURLWithPath: path)), let s = String(data: data, encoding: .utf8), s.contains("<svg") {
+                    outputs[id] = .view(s)
+                } else {
+                    outputs[id] = .text("ScoreKit adapter: supply an SVG for now")
+                }
+            } else {
+                outputs[id] = .text("Missing source path")
+            }
+        }
         // Transforms: pass-through with optional scale/offset
         for (id, node) in registry where node.kind == .transform {
             let ups = deps[id] ?? []
@@ -85,11 +110,69 @@ final class DashboardExecutor: ObservableObject {
                     return TimeSeries(points: pts)
                 }
                 outputs[id] = .timeSeries(mapped)
+            case .scalar(let v): outputs[id] = .scalar(v * scale + offset)
+            case .table(let rows): outputs[id] = .table(rows.map { TableRow(label: $0.label, value: $0.value * scale + offset) })
+            case .annotations(let anns): outputs[id] = .annotations(anns)
             case .text(let t): outputs[id] = .text(t)
+            case .view(let s): outputs[id] = .view(s)
             case .none: outputs[id] = .none
+            }
+        }
+        // Aggregator: timeSeries -> scalar (avg/last/min/max)
+        for (id, node) in registry where node.kind == .aggregator {
+            let ups = deps[id] ?? []
+            guard let src = ups.first, let payload = outputs[src] else { outputs[id] = .none; continue }
+            let op = (node.props["op"] ?? "last").lowercased()
+            switch payload {
+            case .timeSeries(let arr):
+                let lastVals = arr.compactMap { $0.points.last?.1 }
+                if lastVals.isEmpty { outputs[id] = .scalar(0) }
+                else {
+                    let val: Double
+                    switch op {
+                    case "avg": val = lastVals.reduce(0,+) / Double(lastVals.count)
+                    case "min": val = lastVals.min() ?? 0
+                    case "max": val = lastVals.max() ?? 0
+                    default: val = lastVals.last ?? 0
+                    }
+                    outputs[id] = .scalar(val)
+                }
+            default:
+                outputs[id] = .text("Aggregator expects timeSeries")
+            }
+        }
+        // TopN: timeSeries -> table sorted by last value
+        for (id, node) in registry where node.kind == .topN {
+            let ups = deps[id] ?? []
+            guard let src = ups.first, let payload = outputs[src] else { outputs[id] = .none; continue }
+            let n = Int(node.props["n"] ?? "5") ?? 5
+            switch payload {
+            case .timeSeries(let arr):
+                let rows = arr.enumerated().compactMap { (i, ts) -> TableRow? in
+                    guard let last = ts.points.last?.1 else { return nil }
+                    return TableRow(label: "series_\(i+1)", value: last)
+                }
+                outputs[id] = .table(Array(rows.sorted { $0.value > $1.value }.prefix(max(0, n))))
+            default:
+                outputs[id] = .text("TopN expects timeSeries")
+            }
+        }
+        // Threshold: timeSeries -> annotations when last value exceeds threshold
+        for (id, node) in registry where node.kind == .threshold {
+            let ups = deps[id] ?? []
+            guard let src = ups.first, let payload = outputs[src] else { outputs[id] = .none; continue }
+            let thr = Double(node.props["threshold"] ?? "0") ?? 0
+            switch payload {
+            case .timeSeries(let arr):
+                var anns: [Annotation] = []
+                for (i, ts) in arr.enumerated() {
+                    if let (t, y) = ts.points.last, y > thr { anns.append(Annotation(time: t, text: "series_\(i+1) > \(thr)")) }
+                }
+                outputs[id] = .annotations(anns)
+            default:
+                outputs[id] = .text("Threshold expects timeSeries")
             }
         }
         // Panels consume upstream; they don’t emit.
     }
 }
-

@@ -28,7 +28,7 @@ final class PatchBayClient: PatchBayAPI {
         cfg.waitsForConnectivity = false
         cfg.requestCachePolicy = .reloadIgnoringLocalCacheData
         let session = URLSession(configuration: cfg)
-        self.transport = URLSessionTransport(session: session)
+        self.transport = URLSessionTransport(configuration: .init(session: session))
         self.client = Client(serverURL: baseURL, transport: transport)
         self.baseURL = baseURL
     }
@@ -148,7 +148,7 @@ final class PatchBayClient: PatchBayAPI {
 
 // Minimal network debug logger that writes to .fountain/logs/patchbay-app.log when PATCHBAY_DEBUG=1
 enum NetDebug {
-    private static var enabled: Bool = {
+    private static let enabled: Bool = {
         ProcessInfo.processInfo.environment["PATCHBAY_DEBUG"] == "1"
     }()
     static func log(_ message: String) {

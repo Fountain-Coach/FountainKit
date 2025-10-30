@@ -63,6 +63,32 @@ final class MIDIRobot {
         sendSysEx7(bytes: payload)
     }
 
+    func marqueeBegin(docX: Double, docY: Double, selectionMode: Int = 0) {
+        sendVendorJSON(topic: "marquee.begin", data: [
+            "origin.doc.x": docX,
+            "origin.doc.y": docY,
+            "selectionMode": selectionMode
+        ])
+    }
+
+    func marqueeUpdate(docX: Double, docY: Double) {
+        sendVendorJSON(topic: "marquee.update", data: [
+            "current.doc.x": docX,
+            "current.doc.y": docY
+        ])
+    }
+
+    func marqueeEnd(docX: Double, docY: Double) {
+        sendVendorJSON(topic: "marquee.end", data: [
+            "current.doc.x": docX,
+            "current.doc.y": docY
+        ])
+    }
+
+    func marqueeCancel() {
+        sendVendorJSON(topic: "marquee.cancel", data: [:])
+    }
+
     deinit {
         #if canImport(CoreMIDI)
         if case .coreMIDI(let client, let port, _) = mode {

@@ -131,6 +131,7 @@ public struct MetalCanvasView: NSViewRepresentable {
         context.coordinator.selectedProvider = selectedProvider
     }
     public func makeCoordinator() -> Coordinator { Coordinator() }
+@MainActor
 public final class Coordinator: NSObject {
     fileprivate var renderer: MetalCanvasRenderer?
     fileprivate var instrument: MetalInstrument?
@@ -145,6 +146,153 @@ public final class Coordinator: NSObject {
     fileprivate var lastDoc: CGPoint? = nil
     fileprivate var draggingIds: Set<String> = []
     fileprivate var marqueeStart: CGPoint? = nil
+    private var marqueeStartDoc: CGPoint? = nil
+    private var marqueeSelectionMode: Int = 0
+
+    override init() {
+        super.init()
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(handleMarqueeNotification(_:)),
+                                               name: .MetalCanvasMarqueeCommand,
+                                               object: nil)
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc
+    private func handleMarqueeNotification(_ note: Notification) {
+        let info = note.userInfo ?? [:]
+        let op = info["op"] as? String
+        var originPoint: CGPoint? = nil
+        if let ox = info["origin.doc.x"] as? Double, let oy = info["origin.doc.y"] as? Double {
+            originPoint = CGPoint(x: ox, y: oy)
+        }
+        var currentPoint: CGPoint? = nil
+        if let cx = info["current.doc.x"] as? Double, let cy = info["current.doc.y"] as? Double {
+            currentPoint = CGPoint(x: cx, y: cy)
+        }
+        var modeOverride: Int? = nil
+        if let mode = info["selectionMode"] as? Int {
+            modeOverride = mode
+        } else if let modeDouble = info["selectionMode"] as? Double {
+            modeOverride = Int(modeDouble.rounded())
+        }
+        handleMarqueeCommand(op: op, origin: originPoint, current: currentPoint, modeOverride: modeOverride)
+    }
+
+    @MainActor
+    private func handleMarqueeCommand(op: String?, origin: CGPoint?, current: CGPoint?, modeOverride: Int?) {
+        guard let renderer else { return }
+        guard let op else { return }
+        if let origin {
+            marqueeStartDoc = origin
+        }
+        switch op {
+        case "begin":
+            guard let startDoc = marqueeStartDoc else { return }
+            let activeMode = modeOverride ?? 0
+            marqueeSelectionMode = activeMode
+            renderer.marqueeDocRect = CGRect(origin: startDoc, size: .zero)
+            let viewPoint = CGPoint(
+                x: (startDoc.x + renderer.currentTranslation.x) * renderer.currentZoom,
+                y: (startDoc.y + renderer.currentTranslation.y) * renderer.currentZoom
+            )
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                "type": "marquee.start",
+                "view.x": Double(viewPoint.x),
+                "view.y": Double(viewPoint.y),
+                "doc.x": Double(startDoc.x),
+                "doc.y": Double(startDoc.y),
+                "selectionMode": activeMode
+            ])
+        case "update":
+            guard
+                let startDoc = marqueeStartDoc,
+                let currentDoc = current
+            else { return }
+            let rect = CGRect(
+                x: min(startDoc.x, currentDoc.x),
+                y: min(startDoc.y, currentDoc.y),
+                width: abs(currentDoc.x - startDoc.x),
+                height: abs(currentDoc.y - startDoc.y)
+            )
+            renderer.marqueeDocRect = rect
+            let activeMode = modeOverride ?? marqueeSelectionMode
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                "type": "marquee.update",
+                "min.doc.x": Double(rect.minX),
+                "min.doc.y": Double(rect.minY),
+                "max.doc.x": Double(rect.maxX),
+                "max.doc.y": Double(rect.maxY),
+                "selectionMode": activeMode
+            ])
+        case "end":
+            guard
+                let startDoc = marqueeStartDoc,
+                let currentDoc = current
+            else {
+                clearRemoteMarquee()
+                NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                    "type": "marquee.cancel"
+                ])
+                return
+            }
+            let activeMode = modeOverride ?? marqueeSelectionMode
+            let rect = CGRect(
+                x: min(startDoc.x, currentDoc.x),
+                y: min(startDoc.y, currentDoc.y),
+                width: abs(currentDoc.x - startDoc.x),
+                height: abs(currentDoc.y - startDoc.y)
+            )
+            renderer.marqueeDocRect = nil
+            marqueeStartDoc = nil
+            let hitIds: Set<String> = Set(renderer.nodesSnapshot.compactMap { node in
+                node.frameDoc.intersects(rect) ? node.id : nil
+            })
+            var newSelection = selectedProvider()
+            switch activeMode {
+            case 1:
+                newSelection.formUnion(hitIds)
+            case 2:
+                for id in hitIds {
+                    if newSelection.contains(id) {
+                        newSelection.remove(id)
+                    } else {
+                        newSelection.insert(id)
+                    }
+                }
+            default:
+                newSelection = hitIds
+            }
+            onSelect(newSelection)
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                "type": "marquee.end",
+                "min.doc.x": Double(rect.minX),
+                "min.doc.y": Double(rect.minY),
+                "max.doc.x": Double(rect.maxX),
+                "max.doc.y": Double(rect.maxY),
+                "selected": Array(newSelection),
+                "selectionMode": activeMode
+            ])
+            marqueeSelectionMode = 0
+        case "cancel":
+            clearRemoteMarquee()
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                "type": "marquee.cancel"
+            ])
+        default:
+            break
+        }
+    }
+
+    @MainActor
+    private func clearRemoteMarquee() {
+        renderer?.marqueeDocRect = nil
+        marqueeStartDoc = nil
+        marqueeSelectionMode = 0
+    }
 }
 }
 @MainActor

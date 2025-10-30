@@ -175,6 +175,45 @@ public final class MetalInstrument: @unchecked Sendable {
                 // Convert roughly via notification consumer; keeping both forms for flexibility
                 NotificationCenter.default.post(name: Notification.Name("MetalCanvasRendererCommand"), object: nil, userInfo: ["op": "panByView", "dx": vx, "dy": vy])
             }
+        case "marquee.begin":
+            guard desc.product == "Marquee" else { return }
+            guard let ox = data["origin.doc.x"] as? Double, let oy = data["origin.doc.y"] as? Double else { return }
+            let mode = (data["selectionMode"] as? Double).map { Int($0.rounded()) } ?? (data["selectionMode"] as? Int) ?? 0
+            NotificationCenter.default.post(name: .MetalCanvasMarqueeCommand, object: nil, userInfo: [
+                "op": "begin",
+                "origin.doc.x": ox,
+                "origin.doc.y": oy,
+                "selectionMode": mode
+            ])
+        case "marquee.update":
+            guard desc.product == "Marquee" else { return }
+            guard let cx = data["current.doc.x"] as? Double, let cy = data["current.doc.y"] as? Double else { return }
+            var info: [String: Any] = [
+                "op": "update",
+                "current.doc.x": cx,
+                "current.doc.y": cy
+            ]
+            if let ox = data["origin.doc.x"] as? Double, let oy = data["origin.doc.y"] as? Double {
+                info["origin.doc.x"] = ox
+                info["origin.doc.y"] = oy
+            }
+            NotificationCenter.default.post(name: .MetalCanvasMarqueeCommand, object: nil, userInfo: info)
+        case "marquee.end":
+            guard desc.product == "Marquee" else { return }
+            guard let cx = data["current.doc.x"] as? Double, let cy = data["current.doc.y"] as? Double else { return }
+            var info: [String: Any] = [
+                "op": "end",
+                "current.doc.x": cx,
+                "current.doc.y": cy
+            ]
+            if let ox = data["origin.doc.x"] as? Double, let oy = data["origin.doc.y"] as? Double {
+                info["origin.doc.x"] = ox
+                info["origin.doc.y"] = oy
+            }
+            NotificationCenter.default.post(name: .MetalCanvasMarqueeCommand, object: nil, userInfo: info)
+        case "marquee.cancel":
+            guard desc.product == "Marquee" else { return }
+            NotificationCenter.default.post(name: .MetalCanvasMarqueeCommand, object: nil, userInfo: ["op": "cancel"])
         default:
             break
         }
@@ -377,4 +416,5 @@ private final class TransportHolder: @unchecked Sendable {
 
 public extension Notification.Name {
     static let MetalInstrumentTransportError = Notification.Name("MetalInstrumentTransportError")
+    static let MetalCanvasMarqueeCommand = Notification.Name("MetalCanvasMarqueeCommand")
 }

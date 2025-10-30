@@ -72,6 +72,8 @@ struct MetalCanvasHost: View {
                             instrument: MetalInstrumentDescriptor(manufacturer: "Fountain", product: "PatchBayCanvas", instanceId: "main", displayName: "PatchBay Canvas"))
             // Right-edge hover hit area for MIDI monitor
             MidiMonitorHitArea()
+            // Marquee instrument for robot-controlled selection
+            MarqueeInstrumentBinder()
             // Per-Stage MIDI 2.0 instruments: expose PE for page/margins/baseline
             StageInstrumentsBinder()
             // Per-Replay MIDI 2.0 instruments: expose PE for play/fps/frame
@@ -114,6 +116,107 @@ fileprivate struct MidiMonitorHitArea: View {
 }
 
 // Bind one MetalInstrument per Stage node, mapping PE setUniform → AppState dashboard props.
+fileprivate final class MarqueeSink: MetalSceneRenderer {
+    private var origin = CGPoint.zero
+    private var current = CGPoint.zero
+    private var selectionMode: Int = 0
+    private var active = false
+
+    func setUniform(_ name: String, float: Float) {
+        switch name {
+        case "marquee.origin.doc.x":
+            origin.x = CGFloat(float)
+        case "marquee.origin.doc.y":
+            origin.y = CGFloat(float)
+        case "marquee.current.doc.x":
+            current.x = CGFloat(float)
+        case "marquee.current.doc.y":
+            current.y = CGFloat(float)
+        case "marquee.selection.mode":
+            selectionMode = Int(float.rounded())
+        case "marquee.command":
+            let command = Int(float.rounded())
+            switch command {
+            case 0:
+                active = false
+                post(op: "cancel")
+            case 1:
+                active = true
+                post(op: "begin")
+            case 2:
+                guard active else { return }
+                post(op: "update")
+            case 3:
+                guard active else { return }
+                post(op: "end")
+                active = false
+            default:
+                break
+            }
+        default:
+            break
+        }
+    }
+
+    func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
+    func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
+    func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+
+    func stateSnapshot() -> [String: Any] {
+        [
+            "marquee.active": active ? 1.0 : 0.0,
+            "marquee.origin.doc.x": Double(origin.x),
+            "marquee.origin.doc.y": Double(origin.y),
+            "marquee.current.doc.x": Double(current.x),
+            "marquee.current.doc.y": Double(current.y),
+            "marquee.selection.mode": Double(selectionMode)
+        ]
+    }
+
+    private func post(op: String) {
+        NotificationCenter.default.post(name: .MetalCanvasMarqueeCommand, object: nil, userInfo: [
+            "op": op,
+            "origin.doc.x": Double(origin.x),
+            "origin.doc.y": Double(origin.y),
+            "current.doc.x": Double(current.x),
+            "current.doc.y": Double(current.y),
+            "selectionMode": selectionMode
+        ])
+    }
+}
+
+fileprivate struct MarqueeInstrumentBinder: NSViewRepresentable {
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        if context.coordinator.instrument == nil {
+            let sink = MarqueeSink()
+            let descriptor = MetalInstrumentDescriptor(
+                manufacturer: "Fountain",
+                product: "Marquee",
+                instanceId: "marquee",
+                displayName: "Marquee Tool"
+            )
+            let instrument = MetalInstrument(sink: sink, descriptor: descriptor)
+            instrument.stateProvider = { sink.stateSnapshot() }
+            instrument.enable()
+            context.coordinator.instrument = instrument
+            context.coordinator.sink = sink
+        }
+        return view
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.instrument?.disable()
+        coordinator.instrument = nil
+        coordinator.sink = nil
+    }
+    final class Coordinator {
+        var instrument: MetalInstrument?
+        var sink: MarqueeSink?
+    }
+}
+
 fileprivate struct StageInstrumentsBinder: NSViewRepresentable {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var vm: EditorVM
@@ -227,6 +330,8 @@ fileprivate struct NodeInteractionOverlay: View {
     @EnvironmentObject var state: AppState
     @State private var pressStart: CGPoint? = nil
     @State private var marqueeRect: CGRect? = nil
+    @State private var pressStartDoc: CGPoint? = nil
+    @State private var marqueeSelectionMode: Int = 0
     @State private var draggingIds: Set<String> = []
     @State private var initialPositions: [String:(x:Int,y:Int)] = [:]
     @State private var lastPoint: CGPoint? = nil
@@ -246,6 +351,7 @@ fileprivate struct NodeInteractionOverlay: View {
         initialPositions = [:]
         for id in ids { if let n = vm.node(by: id) { initialPositions[id] = (n.x, n.y) } }
         pressStart = start
+        pressStartDoc = viewToDoc(start)
         lastPoint = start
         // Emit drag.start with anchor point in doc-space
         let doc = viewToDoc(start)
@@ -280,6 +386,125 @@ fileprivate struct NodeInteractionOverlay: View {
         extra.forEach { payload[$0.key] = $0.value }
         NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: payload)
     }
+    private func handleMarqueeNotification(_ note: Notification) {
+        guard let op = note.userInfo?["op"] as? String else { return }
+        if let ox = note.userInfo?["origin.doc.x"] as? Double,
+           let oy = note.userInfo?["origin.doc.y"] as? Double {
+            pressStartDoc = CGPoint(x: ox, y: oy)
+        }
+        let selectionModeValue: Int
+        if let mode = note.userInfo?["selectionMode"] as? Int {
+            selectionModeValue = mode
+        } else if let modeDouble = note.userInfo?["selectionMode"] as? Double {
+            selectionModeValue = Int(modeDouble.rounded())
+        } else {
+            selectionModeValue = 0
+        }
+        switch op {
+        case "begin":
+            guard let startDoc = pressStartDoc else { return }
+            marqueeSelectionMode = selectionModeValue
+            let startView = transform().docToView(startDoc)
+            pressStart = startView
+            marqueeRect = CGRect(origin: startView, size: .zero)
+            draggingIds.removeAll()
+            initialPositions.removeAll()
+            lastPoint = nil
+            postActivity(type: "marquee.start", [
+                "view.x": Double(startView.x),
+                "view.y": Double(startView.y),
+                "doc.x": Double(startDoc.x),
+                "doc.y": Double(startDoc.y)
+            ])
+        case "update":
+            guard
+                let startDoc = pressStartDoc,
+                let cx = note.userInfo?["current.doc.x"] as? Double,
+                let cy = note.userInfo?["current.doc.y"] as? Double
+            else { return }
+            updateMarqueeFromDoc(start: startDoc, current: CGPoint(x: cx, y: cy))
+        case "end":
+            guard
+                let startDoc = pressStartDoc,
+                let cx = note.userInfo?["current.doc.x"] as? Double,
+                let cy = note.userInfo?["current.doc.y"] as? Double
+            else {
+                resetMarqueeState()
+                return
+            }
+            completeMarqueeSelection(startDoc: startDoc, currentDoc: CGPoint(x: cx, y: cy), mode: selectionModeValue)
+        case "cancel":
+            resetMarqueeState()
+        default:
+            break
+        }
+    }
+    private func updateMarqueeFromDoc(start: CGPoint, current: CGPoint) {
+        let startView = transform().docToView(start)
+        let currentView = transform().docToView(current)
+        let rect = CGRect(
+            x: min(startView.x, currentView.x),
+            y: min(startView.y, currentView.y),
+            width: abs(currentView.x - startView.x),
+            height: abs(currentView.y - startView.y)
+        )
+        marqueeRect = rect
+        postActivity(type: "marquee.update", [
+            "min.doc.x": Double(min(start.x, current.x)),
+            "min.doc.y": Double(min(start.y, current.y)),
+            "max.doc.x": Double(max(start.x, current.x)),
+            "max.doc.y": Double(max(start.y, current.y))
+        ])
+    }
+    private func completeMarqueeSelection(startDoc: CGPoint, currentDoc: CGPoint, mode: Int) {
+        let rectDoc = CGRect(
+            x: min(startDoc.x, currentDoc.x),
+            y: min(startDoc.y, currentDoc.y),
+            width: abs(currentDoc.x - startDoc.x),
+            height: abs(currentDoc.y - startDoc.y)
+        )
+        applyMarqueeSelection(docRect: rectDoc, selectionMode: mode)
+        resetMarqueeState()
+    }
+    private func applyMarqueeSelection(docRect: CGRect, selectionMode mode: Int) {
+        var sel: Set<String> = []
+        for n in vm.nodes {
+            let nodeRect = CGRect(x: CGFloat(n.x), y: CGFloat(n.y), width: CGFloat(n.w), height: CGFloat(n.h))
+            if nodeRect.intersects(docRect) {
+                sel.insert(n.id)
+            }
+        }
+        var newSelection = vm.selected
+        switch mode {
+        case 1: // additive
+            newSelection = newSelection.union(sel)
+        case 2: // toggle
+            for id in sel {
+                if newSelection.contains(id) {
+                    newSelection.remove(id)
+                } else {
+                    newSelection.insert(id)
+                }
+            }
+        default:
+            newSelection = sel
+        }
+        vm.selected = newSelection
+        vm.selection = newSelection.first
+        postActivity(type: "marquee.end", [
+            "min.doc.x": Double(docRect.minX),
+            "min.doc.y": Double(docRect.minY),
+            "max.doc.x": Double(docRect.maxX),
+            "max.doc.y": Double(docRect.maxY),
+            "selected": Array(newSelection)
+        ])
+    }
+    private func resetMarqueeState() {
+        marqueeRect = nil
+        pressStart = nil
+        pressStartDoc = nil
+        marqueeSelectionMode = 0
+    }
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
@@ -304,6 +529,7 @@ fileprivate struct NodeInteractionOverlay: View {
                         let isCmd = flags.contains(.command)
                         let isShift = flags.contains(.shift)
                         let docP = viewToDoc(p)
+                        pressStartDoc = docP
                         postActivity(type: "ui.pointer.down", [
                             "view.x": Double(p.x), "view.y": Double(p.y),
                             "doc.x": Double(docP.x), "doc.y": Double(docP.y),
@@ -366,7 +592,7 @@ fileprivate struct NodeInteractionOverlay: View {
                 .onEnded { v in
                     let p = v.location
                     defer {
-                        pressStart = nil; marqueeRect = nil; draggingIds.removeAll(); initialPositions.removeAll(); lastPoint = nil
+                        pressStart = nil; pressStartDoc = nil; marqueeRect = nil; draggingIds.removeAll(); initialPositions.removeAll(); lastPoint = nil
                     }
                     if !draggingIds.isEmpty {
                         // Drag finished — selection stays; emit end event
@@ -414,6 +640,9 @@ fileprivate struct NodeInteractionOverlay: View {
                     postActivity(type: "ui.pointer.up", ["view.x": Double(p.x), "view.y": Double(p.y), "doc.x": Double(docP.x), "doc.y": Double(docP.y)])
                 }
             )
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .MetalCanvasMarqueeCommand)) { note in
+            handleMarqueeNotification(note)
         }
     }
 }

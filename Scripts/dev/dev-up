@@ -87,6 +87,7 @@ port_for() {
     tools-factory) echo "${TOOLS_FACTORY_PORT:-8011}" ;;
     tool-server) echo "${PORT:-8012}" ;;
     patchbay) echo "${PATCHBAY_PORT:-7090}" ;;
+    patchbay-ui) echo 0 ;;
     *) echo 0 ;;
   esac
 }
@@ -276,6 +277,11 @@ echo "[dev-up] Building PatchBay app (compile only)…"
 swift build --package-path "$REPO_ROOT/Packages/FountainApps" --configuration "$CONFIGURATION" --target patchbay-app
 echo "[dev-up] Building PatchBayAppUITests (compile only)…"
 swift build --package-path "$REPO_ROOT/Packages/FountainApps" --configuration "$CONFIGURATION" --target PatchBayAppUITests
+
+# Launch PatchBay UI as the default face (unless disabled)
+if [[ "${DEV_UP_NO_PATCHBAY_UI:-0}" != "1" ]]; then
+  start_bg patchbay-ui patchbay-app Packages/FountainApps
+fi
 if [[ "$CHECK" == "1" ]]; then
   echo "[dev-up] UI smoke (PatchBay goldens)…"
   bash "$REPO_ROOT/Scripts/ci/ui-smoke.sh" || {

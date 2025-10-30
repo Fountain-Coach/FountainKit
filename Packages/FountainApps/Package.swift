@@ -85,6 +85,7 @@ let package = Package(
         .package(path: "../FountainServiceKit-Awareness"),
         .package(path: "../FountainServiceKit-Persist"),
         .package(path: "../FountainServiceKit-AudioTalk"),
+        .package(path: "../FountainServiceKit-MIDI"),
         
         .package(path: "../FountainServiceKit-ToolsFactory"),
         .package(path: "../FountainServiceKit-ToolServer"),

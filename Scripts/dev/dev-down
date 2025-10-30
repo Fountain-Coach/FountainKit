@@ -45,7 +45,7 @@ stop_pid() {
 }
 
 # Core
-for svc in baseline-awareness bootstrap planner function-caller persist gateway; do
+for svc in baseline-awareness bootstrap planner function-caller persist midi gateway; do
   stop_pid "$svc"
 done
 
@@ -60,8 +60,8 @@ echo "[dev-down] Stopping LocalAgent (and mock fallback if present)"
 
 if [[ "$FORCE" == "1" ]]; then
   if command -v lsof >/dev/null 2>&1; then
-    echo "[dev-down] --force: killing listeners on dev ports (8001-8012)"
-    for port in 8001 8002 8003 8004 8005 8010 8011 8012; do
+    echo "[dev-down] --force: killing listeners on dev ports (8001-8012 + 7180)"
+    for port in 8001 8002 8003 8004 8005 7180 8010 8011 8012; do
       pids=$(lsof -t -nP -iTCP:$port -sTCP:LISTEN 2>/dev/null || true)
       if [[ -n "${pids:-}" ]]; then
         echo "$pids" | xargs -I{} sh -c 'echo "  killing pid {} on :$0"; kill {} >/dev/null 2>&1 || true' $port
@@ -71,4 +71,3 @@ if [[ "$FORCE" == "1" ]]; then
 fi
 
 echo "[dev-down] Done."
-

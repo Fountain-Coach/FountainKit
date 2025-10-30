@@ -85,6 +85,7 @@ port_for() {
     planner) echo "${PLANNER_PORT:-8003}" ;;
     function-caller) echo "${FUNCTION_CALLER_PORT:-8004}" ;;
     persist) echo "${FOUNTAINSTORE_PORT:-8005}" ;;
+    midi) echo "${MIDI_SERVICE_PORT:-7180}" ;;
     gateway) echo "${GATEWAY_PORT:-${PORT:-8010}}" ;;
     semantic-browser) echo "${SEMANTIC_BROWSER_PORT:-8007}" ;;
     tools-factory) echo "${TOOLS_FACTORY_PORT:-8011}" ;;
@@ -282,6 +283,7 @@ if [[ "$PATCHBAY_ONLY" == "1" ]]; then
   start_bg midi "midi-service-server" Packages/FountainApps
   start_bg patchbay patchbay-service-server Packages/FountainApps
   if [[ "$CHECK" == "1" ]]; then
+    wait_ready_json midi "http://127.0.0.1:$(port_for midi)/health" 10 || true
     wait_ready patchbay "http://127.0.0.1:$(port_for patchbay)/health" 20 || true
   fi
 else
@@ -295,6 +297,7 @@ else
   start_bg gateway gateway-server Packages/FountainApps
   start_bg patchbay patchbay-service-server Packages/FountainApps
   if [[ "$CHECK" == "1" ]]; then
+    wait_ready_json midi "http://127.0.0.1:$(port_for midi)/health" 10 || true
     wait_ready patchbay "http://127.0.0.1:$(port_for patchbay)/health" 20 || true
   fi
 fi

@@ -165,6 +165,7 @@ case "${1:-help}" in
   {"target":"planner","port":8003,"metrics":"http://$host:8003/metrics","schema":"http://$host:8003/openapi.yaml"},
   {"target":"function-caller","port":8004,"metrics":"http://$host:8004/metrics","schema":"http://$host:8004/openapi.yaml"},
   {"target":"persist","port":8005,"metrics":"http://$host:8005/metrics","schema":"http://$host:8005/openapi.yaml"},
+  {"target":"midi-service","port":7180,"status":"http://$host:7180/health","schema":"http://$host:7180/openapi.yaml"},
   {"target":"semantic-browser","port":8007,"metrics":"http://$host:8007/metrics","schema":"http://$host:8007/openapi.yaml"},
   {"target":"tools-factory","port":8011,"metrics":"http://$host:8011/metrics","schema":"http://$host:8011/openapi.yaml"},
   {"target":"tool-server","port":8012,"status":"http://$host:8012/_status","schema":"http://$host:8012/openapi.yaml"}
@@ -179,6 +180,7 @@ bootstrap         8002   http://$host:8002/metrics                   http://$hos
 planner           8003   http://$host:8003/metrics                   http://$host:8003/openapi.yaml
 function-caller   8004   http://$host:8004/metrics                   http://$host:8004/openapi.yaml
 persist           8005   http://$host:8005/metrics                   http://$host:8005/openapi.yaml
+midi-service      7180   http://$host:7180/health                    http://$host:7180/openapi.yaml
 semantic-browser  8007   http://$host:8007/metrics                   http://$host:8007/openapi.yaml
 tools-factory     8011   http://$host:8011/metrics                   http://$host:8011/openapi.yaml
 tool-server       8012   http://$host:8012/_status                  http://$host:8012/openapi.yaml
@@ -189,7 +191,7 @@ LIST
     if [[ "${1:-}" == "schema" ]]; then
       shift
       tgt=${1:-}; shift || true
-      [[ -n "$tgt" ]] || { echo "usage: fk open schema <gateway|planner|function-caller|persist|bootstrap|awareness|tools-factory|tool-server|semantic-browser>"; exit 1; }
+      [[ -n "$tgt" ]] || { echo "usage: fk open schema <gateway|planner|function-caller|persist|bootstrap|awareness|tools-factory|tool-server|semantic-browser|midi-service>"; exit 1; }
       case "$tgt" in
         gateway) url=http://127.0.0.1:8010/openapi.yaml ;;
         planner) url=http://127.0.0.1:8003/openapi.yaml ;;
@@ -200,11 +202,12 @@ LIST
         tools-factory) url=http://127.0.0.1:8011/openapi.yaml ;;
         tool-server) url=http://127.0.0.1:8012/openapi.yaml ;;
         semantic-browser) url=http://127.0.0.1:8007/openapi.yaml ;;
+        midi-service) url=http://127.0.0.1:7180/openapi.yaml ;;
         *) echo "unknown target: $tgt"; exit 1;;
       esac
     else
       tgt=${1:-}; shift || true
-      [[ -n "$tgt" ]] || { echo "usage: fk open <gateway|planner|function-caller|persist|bootstrap|awareness|tools-factory|tool-server|semantic-browser>"; exit 1; }
+      [[ -n "$tgt" ]] || { echo "usage: fk open <gateway|planner|function-caller|persist|bootstrap|awareness|tools-factory|tool-server|semantic-browser|midi-service>"; exit 1; }
       case "$tgt" in
         gateway) url=http://127.0.0.1:8010/metrics ;;
         planner) url=http://127.0.0.1:8003/metrics ;;
@@ -215,6 +218,7 @@ LIST
         tools-factory) url=http://127.0.0.1:8011/metrics ;;
         tool-server) url=http://127.0.0.1:8012/_status ;;
         semantic-browser) url=http://127.0.0.1:8007/metrics ;;
+        midi-service) url=http://127.0.0.1:7180/health ;;
         *) echo "unknown target: $tgt"; exit 1;;
       esac
     fi

@@ -28,6 +28,9 @@ curl -sf --max-time 5 http://127.0.0.1:8004/metrics >/dev/null
 echo "[ci-smoke] Probing persist metrics…"
 curl -sf --max-time 5 http://127.0.0.1:8005/metrics >/dev/null
 
+echo "[ci-smoke] Probing midi-service health…"
+curl -sf --max-time 5 -H 'Accept: application/json' http://127.0.0.1:7180/health | jq -e '.status == "ok"' >/dev/null
+
 echo "[ci-smoke] Exercising gateway ChatKit flows via generated client…"
 GATEWAY_BASE_URL=${GATEWAY_BASE_URL:-http://127.0.0.1:8010} \
   swift run --package-path "$ROOT/Packages/FountainApps" gateway-ci-smoke

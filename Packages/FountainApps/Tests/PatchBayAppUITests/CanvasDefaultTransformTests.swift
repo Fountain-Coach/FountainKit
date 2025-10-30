@@ -15,9 +15,11 @@ final class CanvasDefaultTransformTests: XCTestCase {
         var readyRenderer: AnyObject? = nil
         let readyExp = expectation(description: "renderer ready")
         let obs = NotificationCenter.default.addObserver(forName: Notification.Name("MetalCanvasRendererReady"), object: nil, queue: .main) { note in
-            gotReady = true
-            readyRenderer = note.userInfo?["renderer"] as AnyObject?
-            readyExp.fulfill()
+            if !gotReady {
+                gotReady = true
+                readyRenderer = note.userInfo?["renderer"] as AnyObject?
+                readyExp.fulfill()
+            }
         }
         defer { NotificationCenter.default.removeObserver(obs) }
 
@@ -38,4 +40,3 @@ final class CanvasDefaultTransformTests: XCTestCase {
         _ = readyRenderer
     }
 }
-

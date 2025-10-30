@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<USAGE
 Usage:
-  $(basename "$0") [env|prebuild] [--all] [--check] [--patchbay-only]
+  $(basename "$0") [env|prebuild] [--all] [--check] [--patchbay-only] [--robot]
 
 Commands:
   env       Export LAUNCHER_SIGNATURE into current shell (when sourced)
@@ -14,6 +14,7 @@ Options:
   --all            Start optional extras (semantic-browser, tools-factory, tool-server, publishing-frontend)
   --check          Wait for readiness on common endpoints (timeout ~30s per service)
   --patchbay-only  Fast profile: start MIDI + PatchBay only (service + UI); skip other servers
+  --robot         After --check, run robot tests subset (fast)
 USAGE
 }
 
@@ -43,6 +44,7 @@ ALL=0
 CHECK=0
 CONFIGURATION="${DEV_UP_CONFIGURATION:-debug}"
 PATCHBAY_ONLY=0
+RUN_ROBOT=${DEV_UP_RUN_ROBOT:-0}
 for a in "$@"; do
   if [[ "$a" == "--help" || "$a" == "-h" ]]; then
     usage
@@ -51,6 +53,7 @@ for a in "$@"; do
   if [[ "$a" == "--all" ]]; then ALL=1; fi
   if [[ "$a" == "--check" ]]; then CHECK=1; fi
   if [[ "$a" == "--patchbay-only" ]]; then PATCHBAY_ONLY=1; fi
+  if [[ "$a" == "--robot" ]]; then RUN_ROBOT=1; fi
 done
 
 # Populate optional OpenAI configuration from Keychain when available.
@@ -318,4 +321,8 @@ if [[ "$CHECK" == "1" ]]; then
     echo "[dev-up] UI smoke failed (see .fountain/artifacts)." >&2
     exit 3
   }
+fi
+if [[ "$RUN_ROBOT" == "1" ]]; then
+  echo "[dev-up] Running robot tests subset…"
+  bash "$REPO_ROOT/Scripts/ci/robot-run.sh" || true
 fi

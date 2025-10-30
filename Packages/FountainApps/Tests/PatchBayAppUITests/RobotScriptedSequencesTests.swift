@@ -12,12 +12,19 @@ final class RobotScriptedSequencesTests: XCTestCase {
         let host = NSHostingView(rootView: MetalCanvasHost().environmentObject(vm).environmentObject(state))
         host.frame = NSRect(x: 0, y: 0, width: 1024, height: 768)
         host.layoutSubtreeIfNeeded()
+        let win = NSWindow(contentRect: host.frame, styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        win.contentView = host
+        win.makeKeyAndOrderFront(nil)
+        var ready = false
+        let readyExp = expectation(description: "renderer ready")
+        let readyObs = NotificationCenter.default.addObserver(forName: Notification.Name("MetalCanvasRendererReady"), object: nil, queue: .main) { _ in
+            if !ready { ready = true; readyExp.fulfill() }
+        }
 
         var lastZoom: CGFloat = 1.0
         var lastTx: CGFloat = 0
         var lastTy: CGFloat = 0
-        let changeExp = expectation(description: "transform changed")
-        changeExp.isInverted = false
+        _ = win
         let obs = NotificationCenter.default.addObserver(forName: Notification.Name("MetalCanvasTransformChanged"), object: nil, queue: .main) { note in
             let u = note.userInfo ?? [:]
             let z = (u["zoom"] as? Double)
@@ -29,8 +36,8 @@ final class RobotScriptedSequencesTests: XCTestCase {
                 if let ty { lastTy = CGFloat(ty) }
             }
         }
-        // Warm up run loop
-        try? await Task.sleep(nanoseconds: 200_000_000)
+        // Ensure renderer ready
+        await fulfillment(of: [readyExp], timeout: 2.0)
 
         guard let robot = MIDIRobot(destName: "PatchBay Canvas") else {
             throw XCTSkip("Robot could not attach to PatchBay Canvas destination")
@@ -66,6 +73,7 @@ final class RobotScriptedSequencesTests: XCTestCase {
         XCTAssertEqual(lastTy, expectTy, accuracy: 1.0)
 
         NotificationCenter.default.removeObserver(obs)
+        NotificationCenter.default.removeObserver(readyObs)
     }
 
     @MainActor

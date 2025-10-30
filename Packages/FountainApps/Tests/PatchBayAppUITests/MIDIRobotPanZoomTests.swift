@@ -10,6 +10,9 @@ final class MIDIRobotPanZoomTests: XCTestCase {
         let host = NSHostingView(rootView: MetalCanvasHost().environmentObject(vm).environmentObject(state))
         host.frame = NSRect(x: 0, y: 0, width: 800, height: 600)
         host.layoutSubtreeIfNeeded()
+        let win = NSWindow(contentRect: host.frame, styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        win.contentView = host
+        win.makeKeyAndOrderFront(nil)
 
         var gotReady = false
         var gotChange = false
@@ -22,8 +25,10 @@ final class MIDIRobotPanZoomTests: XCTestCase {
         let changeExp = expectation(description: "transform changed")
 
         let readyObs = NotificationCenter.default.addObserver(forName: Notification.Name("MetalCanvasRendererReady"), object: nil, queue: .main) { note in
-            gotReady = true
-            readyExp.fulfill()
+            if !gotReady {
+                gotReady = true
+                readyExp.fulfill()
+            }
         }
         let changeObs = NotificationCenter.default.addObserver(forName: Notification.Name("MetalCanvasTransformChanged"), object: nil, queue: .main) { note in
             let u = note.userInfo ?? [:]
@@ -51,6 +56,6 @@ final class MIDIRobotPanZoomTests: XCTestCase {
         wait(for: [changeExp], timeout: 2.0)
         XCTAssertTrue(gotChange)
         XCTAssertGreaterThan(lastZoom, 1.01)
-        _ = readyObs; _ = changeObs
+        _ = readyObs; _ = changeObs; _ = win
     }
 }

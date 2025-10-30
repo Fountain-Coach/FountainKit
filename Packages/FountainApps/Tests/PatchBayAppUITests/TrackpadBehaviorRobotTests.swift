@@ -7,9 +7,16 @@ import MetalViewKit
 final class TrackpadBehaviorRobotTests: XCTestCase {
     // Contract: follow‑finger pan — translation increases by viewDelta/zoom on both axes
     func testPanViewDeltaAtZoom1() throws {
-        let (host, _, _) = makeHost()
+        let (win, host, _, _) = makeHost()
+        // Wait for renderer ready to avoid race
+        var gotReady = false
+        let readyExp = expectation(description: "renderer ready")
+        let readyObs = NotificationCenter.default.addObserver(forName: Notification.Name("MetalCanvasRendererReady"), object: nil, queue: .main) { _ in
+            if !gotReady { gotReady = true; readyExp.fulfill() }
+        }
         guard let robot = MIDIRobot(destName: "PatchBay Canvas") else { throw XCTSkip("Canvas dest not found") }
         // reset
+        wait(for: [readyExp], timeout: 2.0)
         robot.setProperties(["zoom": 1.0, "translation.x": 0.0, "translation.y": 0.0])
         RunLoop.current.run(until: Date().addingTimeInterval(0.15))
         var last: (tx: Double, ty: Double, z: Double) = (0,0,1)
@@ -29,12 +36,19 @@ final class TrackpadBehaviorRobotTests: XCTestCase {
         XCTAssertEqual(last.z, 1.0, accuracy: 0.001)
         XCTAssertEqual(last.tx, 120.0, accuracy: 1.0)
         XCTAssertEqual(last.ty, 80.0, accuracy: 1.0)
-        _ = host
+        NotificationCenter.default.removeObserver(readyObs)
+        _ = host; _ = win
     }
 
     func testPanViewDeltaRespectsZoom() throws {
-        let (host, _, _) = makeHost()
+        let (win2, host, _, _) = makeHost()
+        var gotReady = false
+        let readyExp = expectation(description: "renderer ready")
+        let readyObs = NotificationCenter.default.addObserver(forName: Notification.Name("MetalCanvasRendererReady"), object: nil, queue: .main) { _ in
+            if !gotReady { gotReady = true; readyExp.fulfill() }
+        }
         guard let robot = MIDIRobot(destName: "PatchBay Canvas") else { throw XCTSkip("Canvas dest not found") }
+        wait(for: [readyExp], timeout: 2.0)
         robot.setProperties(["zoom": 2.0, "translation.x": 0.0, "translation.y": 0.0])
         RunLoop.current.run(until: Date().addingTimeInterval(0.15))
         var last: (tx: Double, ty: Double, z: Double) = (0,0,2)
@@ -54,12 +68,19 @@ final class TrackpadBehaviorRobotTests: XCTestCase {
         XCTAssertEqual(last.z, 2.0, accuracy: 0.001)
         XCTAssertEqual(last.tx, 60.0, accuracy: 1.0)
         XCTAssertEqual(last.ty, -30.0, accuracy: 1.0)
-        _ = host
+        NotificationCenter.default.removeObserver(readyObs)
+        _ = host; _ = win2
     }
 
     func testPinchAnchorStable() throws {
-        let (host, _, _) = makeHost()
+        let (win3, host, _, _) = makeHost()
+        var gotReady = false
+        let readyExp = expectation(description: "renderer ready")
+        let readyObs = NotificationCenter.default.addObserver(forName: Notification.Name("MetalCanvasRendererReady"), object: nil, queue: .main) { _ in
+            if !gotReady { gotReady = true; readyExp.fulfill() }
+        }
         guard let robot = MIDIRobot(destName: "PatchBay Canvas") else { throw XCTSkip("Canvas dest not found") }
+        wait(for: [readyExp], timeout: 2.0)
         robot.setProperties(["zoom": 1.0, "translation.x": 0.0, "translation.y": 0.0])
         RunLoop.current.run(until: Date().addingTimeInterval(0.15))
         let anchor = CGPoint(x: 512, y: 384)
@@ -91,16 +112,20 @@ final class TrackpadBehaviorRobotTests: XCTestCase {
         let newView = c.docToView(doc)
         XCTAssertLessThan(abs(newView.x - anchor.x), 1.0)
         XCTAssertLessThan(abs(newView.y - anchor.y), 1.0)
-        _ = host
+        NotificationCenter.default.removeObserver(readyObs)
+        _ = host; _ = win3
     }
 
     // Helpers
-    private func makeHost() -> (NSHostingView<AnyView>, EditorVM, AppState) {
+    private func makeHost() -> (NSWindow, NSHostingView<AnyView>, EditorVM, AppState) {
         let vm = EditorVM(); let state = AppState()
         let content = AnyView(MetalCanvasHost().environmentObject(vm).environmentObject(state))
         let host = NSHostingView(rootView: content)
         host.frame = NSRect(x: 0, y: 0, width: 1024, height: 768)
         host.layoutSubtreeIfNeeded()
-        return (host, vm, state)
+        let win = NSWindow(contentRect: host.frame, styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        win.contentView = host
+        win.makeKeyAndOrderFront(nil)
+        return (win, host, vm, state)
     }
 }

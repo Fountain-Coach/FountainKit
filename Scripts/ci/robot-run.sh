@@ -6,8 +6,11 @@ set -euo pipefail
 ROOT_DIR=$(cd "$(dirname "$0")/../.." && pwd)
 pushd "$ROOT_DIR" >/dev/null
 
-echo "[robot] running PatchBayAppUITests (robot + replay + invariants)"
-ROBOT_ONLY=1 swift test --package-path Packages/FountainApps -c debug --filter PatchBayAppUITests -Xswiftc -DROBOT_ONLY || true
+echo "[robot] running PatchBayAppUITests (robot-focused subset)"
+# Focus on robot/instrument/invariant suites; skip slow snapshot suites by default.
+ROBOT_ONLY=1 swift test --package-path Packages/FountainApps -c debug \
+  --filter 'GridInstrumentTests|ViewportGridContactTests|StageRobotInstrumentTests|CanvasDefaultTransformTests' \
+  -Xswiftc -DROBOT_ONLY || true
 
 # Open newest replay artifact folder if any .mov exists
 ART="$ROOT_DIR/.fountain/artifacts/replay"

@@ -238,7 +238,7 @@ if [[ "${1:-}" == "prebuild" ]]; then
   done
   echo "[dev-up] Prebuilding server binaries (configuration=$CONFIGURATION)…"
   # Core servers (FountainApps)
-  core_targets=(baseline-awareness-server bootstrap-server planner-server function-caller-server persist-server gateway-server)
+  core_targets=(baseline-awareness-server bootstrap-server planner-server function-caller-server persist-server midi-service-server gateway-server)
   for t in "${core_targets[@]}"; do
     build_product "$REPO_ROOT/Packages/FountainApps" "$t" || exit 1
   done
@@ -264,6 +264,7 @@ start_bg bootstrap bootstrap-server Packages/FountainApps
 start_bg planner planner-server Packages/FountainApps
 start_bg function-caller function-caller-server Packages/FountainApps
 start_bg persist persist-server Packages/FountainApps
+start_bg midi "midi-service-server" Packages/FountainApps
 start_bg gateway gateway-server Packages/FountainApps
 start_bg patchbay patchbay-service-server Packages/FountainApps
 if [[ "$CHECK" == "1" ]]; then

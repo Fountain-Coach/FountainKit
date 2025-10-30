@@ -200,6 +200,15 @@ let package = Package(
             ]
         ),
         .executableTarget(
+            name: "midi-service-server",
+            dependencies: [
+                .product(name: "FountainRuntime", package: "FountainCore"),
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "MIDIService", package: "FountainServiceKit-MIDI")
+            ],
+            path: "Sources/midi-service-server"
+        ),
+        .executableTarget(
             name: "ml-sampler-smoke",
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser")

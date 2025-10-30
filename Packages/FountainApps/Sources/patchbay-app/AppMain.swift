@@ -21,6 +21,19 @@ struct PatchBayStudioApp: App {
                         .keyboardShortcut("0", modifiers: [.command])
                     Button("Actual Size (100%)") { NotificationCenter.default.post(name: .pbZoomActual, object: nil) }
                         .keyboardShortcut("1", modifiers: [.command])
+                    Button("Reset Transform") {
+                        NotificationCenter.default.post(
+                            name: Notification.Name("MetalCanvasRendererCommand"),
+                            object: nil,
+                            userInfo: [
+                                "op": "set",
+                                "zoom": Canvas2D.defaultZoom,
+                                "tx": Canvas2D.defaultTranslation.x,
+                                "ty": Canvas2D.defaultTranslation.y
+                            ]
+                        )
+                    }
+                    .keyboardShortcut("0", modifiers: [.command, .shift])
                     Button("Zoom In") { /* handled in toolbar */ }
                         .keyboardShortcut("=", modifiers: [.command])
                     Button("Zoom Out") { /* handled in toolbar */ }

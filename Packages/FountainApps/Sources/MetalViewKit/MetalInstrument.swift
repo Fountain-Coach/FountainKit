@@ -175,6 +175,18 @@ public final class MetalInstrument: @unchecked Sendable {
                 // Convert roughly via notification consumer; keeping both forms for flexibility
                 NotificationCenter.default.post(name: Notification.Name("MetalCanvasRendererCommand"), object: nil, userInfo: ["op": "panByView", "dx": vx, "dy": vy])
             }
+        case "canvas.reset":
+            // Reset canvas transform to canonical defaults
+            NotificationCenter.default.post(
+                name: Notification.Name("MetalCanvasRendererCommand"),
+                object: nil,
+                userInfo: [
+                    "op": "set",
+                    "zoom": Double(Canvas2D.defaultZoom),
+                    "tx": Double(Canvas2D.defaultTranslation.x),
+                    "ty": Double(Canvas2D.defaultTranslation.y)
+                ]
+            )
         case "marquee.begin":
             guard desc.product == "Marquee" else { return }
             guard let ox = data["origin.doc.x"] as? Double, let oy = data["origin.doc.y"] as? Double else { return }

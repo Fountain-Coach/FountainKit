@@ -1,0 +1,184 @@
+openapi: 3.1.0
+info:
+  title: MIDI Service API
+  version: 0.1.0
+  description: |
+    Cross‑platform MIDI 2.0 bridge for instruments and PatchBay.
+    - Provides health, transport enumeration, endpoint lifecycle, and basic UMP send.
+    - Backed by FountainTelemetryKit transports (CoreMIDI on macOS, ALSA on Linux, loopback fallback).
+servers:
+  - url: http://localhost:7180
+    description: Local development
+tags:
+  - name: Health
+  - name: Transport
+  - name: Endpoints
+  - name: Devices
+  - name: UMP
+paths:
+  /health:
+    get:
+      tags: [Health]
+      operationId: getHealth
+      x-fountain.visibility: public
+      x-fountain.reason: readiness for operator UIs and CI smoke
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+
+  /transports:
+    get:
+      tags: [Transport]
+      operationId: listTransports
+      x-fountain.visibility: public
+      x-fountain.reason: discover supported transport backends
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: Supported transports
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  supported:
+                    type: array
+                    items: { $ref: '#/components/schemas/TransportMode' }
+                  default: { $ref: '#/components/schemas/TransportMode' }
+
+  /devices:
+    get:
+      tags: [Devices]
+      operationId: listDevices
+      x-fountain.visibility: public
+      x-fountain.reason: enumerate external MIDI endpoints visible to the host
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: Device list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Device' }
+
+  /endpoints:
+    get:
+      tags: [Endpoints]
+      operationId: listEndpoints
+      x-fountain.visibility: public
+      x-fountain.reason: list managed virtual endpoints
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: Endpoints
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Endpoint' }
+    post:
+      tags: [Endpoints]
+      operationId: createEndpoint
+      x-fountain.visibility: public
+      x-fountain.reason: create a virtual endpoint pair for a client
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                transport: { $ref: '#/components/schemas/TransportMode' }
+                hasInput: { type: boolean, default: true }
+                hasOutput: { type: boolean, default: true }
+      responses:
+        '201':
+          description: Created endpoint
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Endpoint' }
+
+  /endpoints/{id}:
+    delete:
+      tags: [Endpoints]
+      operationId: deleteEndpoint
+      x-fountain.visibility: public
+      x-fountain.reason: remove a virtual endpoint
+      x-fountain.allow-as-tool: true
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Deleted }
+
+  /ump/send:
+    post:
+      tags: [UMP]
+      operationId: sendUMP
+      x-fountain.visibility: public
+      x-fountain.reason: basic UMP send for testing and tools
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target, words]
+              properties:
+                target:
+                  type: object
+                  properties:
+                    endpointId: { type: string }
+                    displayName: { type: string }
+                words:
+                  type: array
+                  items: { type: integer, format: uint32, minimum: 0 }
+      responses:
+        '202':
+          description: Accepted for delivery
+
+components:
+  schemas:
+    Health:
+      type: object
+      properties:
+        status: { type: string, enum: [ok] }
+        uptimeSec: { type: number }
+
+    TransportMode:
+      type: string
+      enum: [coremidi, midi2, alsa, loopback, noop]
+
+    Device:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        sources: { type: array, items: { type: string } }
+        destinations: { type: array, items: { type: string } }
+
+    Endpoint:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        hasInput: { type: boolean }
+        hasOutput: { type: boolean }
+        transport: { $ref: '#/components/schemas/TransportMode' }
+
+  securitySchemes: {}
+

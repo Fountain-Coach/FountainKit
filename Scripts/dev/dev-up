@@ -200,6 +200,13 @@ start_bg() {
   local pkg_path="$REPO_ROOT/$pkg_rel_path"
   local pid_file="$PID_DIR/$name.pid"
   local log_file="$LOG_DIR/$name.log"
+  # Migrate any legacy pid files accidentally written to the logs directory by older scripts
+  local legacy_pid1="$LOG_DIR/$name.pid"
+  if [[ -f "$legacy_pid1" ]]; then mv -f "$legacy_pid1" "$pid_file" 2>/dev/null || true; fi
+  # Also migrate pid files named after the product without the '-server' suffix (e.g., patchbay-service)
+  local base_target="${target%-server}"
+  local legacy_pid2="$LOG_DIR/$base_target.pid"
+  if [[ -f "$legacy_pid2" ]]; then mv -f "$legacy_pid2" "$PID_DIR/$base_target.pid" 2>/dev/null || true; fi
   local port
   port=$(port_for "$name")
   if [[ -f "$pid_file" ]] && kill -0 "$(cat "$pid_file" 2>/dev/null)" 2>/dev/null; then

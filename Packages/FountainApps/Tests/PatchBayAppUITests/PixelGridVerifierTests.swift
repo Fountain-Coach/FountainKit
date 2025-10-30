@@ -17,30 +17,36 @@ final class PixelGridVerifierTests: XCTestCase {
         let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds)!
         host.cacheDisplay(in: host.bounds, to: rep)
 
-        let y = Int(host.bounds.height * 0.4)
+        let h = Int(host.bounds.height)
         let w = Int(host.bounds.width)
+        let scale = max(1.0, Double(rep.pixelsWide) / Double(w))
 
         // Detect vertical grid lines by brightness gradient
-        var prevBrightness: Double = 0
         func brightness(_ c: NSColor?) -> Double {
             guard let c else { return 0 }
             let cc = c.usingColorSpace(.deviceRGB) ?? c
             return Double((cc.redComponent + cc.greenComponent + cc.blueComponent) / 3.0)
         }
-        var edges: [Int] = []
-        for x in 1..<w {
-            let b = brightness(rep.colorAt(x: x, y: y))
-            let db = abs(b - prevBrightness)
-            if db > 0.08 { // robust threshold for grid line transitions
-                edges.append(x)
+        var diffs: [Double] = []
+        let sampleRows = stride(from: max(2, h / 5), through: h - 2, by: max(8, h / 6))
+        for y in sampleRows {
+            var prevBrightness: Double = 0
+            var edges: [Int] = []
+            for x in 1..<w {
+                let b = brightness(rep.colorAt(x: x, y: y))
+                let db = abs(b - prevBrightness)
+                if db > 0.08 { // robust threshold for grid line transitions
+                    edges.append(x)
+                }
+                prevBrightness = b
             }
-            prevBrightness = b
+            let pixelDiffs = zip(edges, edges.dropFirst()).map { Double($1 - $0) / scale }
+            let rowDiffs = pixelDiffs.filter { $0 > 6 && $0 < 60 }
+            diffs.append(contentsOf: rowDiffs)
         }
-        // Compute spacing between successive edges; filter obvious outliers
-        let diffs = zip(edges, edges.dropFirst()).map { $1 - $0 }.filter { $0 > 6 && $0 < 60 }
-        guard diffs.count > 5 else { throw XCTSkip("insufficient edges to measure grid spacing") }
+        guard diffs.count > 5 else { throw XCTSkip("insufficient edges to measure grid spacing across sampled rows") }
         let sorted = diffs.sorted()
-        let median = Double(sorted[sorted.count/2])
+        let median = sorted[sorted.count/2]
 
         // Expected minor spacing in view pixels
         let expected = Double(CGFloat(vm.grid) * vm.zoom)

@@ -354,6 +354,13 @@ final class EditorVM: ObservableObject {
     }
 }
 
+private enum GridPalette {
+    static let background = Color(.sRGB, red: 0.985, green: 0.985, blue: 0.99, opacity: 1.0)
+    static let minorLine = Color(.sRGB, red: 0.63, green: 0.66, blue: 0.74, opacity: 1.0)
+    static let majorLine = Color(.sRGB, red: 0.46, green: 0.5, blue: 0.62, opacity: 1.0)
+    static let label = Color(.sRGB, red: 0.36, green: 0.38, blue: 0.46, opacity: 1.0)
+}
+
 struct GridBackground: View {
     var size: CGSize
     var minorStepPoints: CGFloat
@@ -372,9 +379,7 @@ struct GridBackground: View {
 
     var body: some View {
         Canvas { ctx, sz in
-            let W = size.width, H = size.height
-            let g1 = Color(NSColor.quaternaryLabelColor)
-            let g5 = Color(NSColor.tertiaryLabelColor)
+            let W = sz.width, H = sz.height
             let s = max(scale, 0.0001)
             let minorStepView = minorStepPoints * s
             let majorStepView = majorStepPoints * s
@@ -384,7 +389,7 @@ struct GridBackground: View {
 
             // Background fill
             let rect = CGRect(x: 0, y: 0, width: W, height: H)
-            ctx.fill(Path(rect), with: .color(Color(NSColor.textBackgroundColor)))
+            ctx.fill(Path(rect), with: .color(GridPalette.background))
 
             // Grid lines (full page, Y-down) with translation (panning)
             let startX = GridBackground.periodicOffset(translation.x, s, minorStepView)
@@ -394,11 +399,16 @@ struct GridBackground: View {
             while x <= W {
                 if (i % majorRatio) == 0 {
                     var path = Path(); path.move(to: CGPoint(x: x, y: 0)); path.addLine(to: CGPoint(x: x, y: H))
-                    ctx.stroke(path, with: .color(g5), lineWidth: lw)
-                    if showLabels { let text = Text("\(i * majorRatio)").font(.system(size: 8)); ctx.draw(text, at: CGPoint(x: x+2, y: 8)) }
+                    ctx.stroke(path, with: .color(GridPalette.majorLine), lineWidth: lw)
+                    if showLabels {
+                        let text = Text("\(i * majorRatio)")
+                            .font(.system(size: 8))
+                            .foregroundColor(GridPalette.label)
+                        ctx.draw(text, at: CGPoint(x: x+2, y: 8))
+                    }
                 } else if showMinor {
                     var path = Path(); path.move(to: CGPoint(x: x, y: 0)); path.addLine(to: CGPoint(x: x, y: H))
-                    ctx.stroke(path, with: .color(g1), lineWidth: lw)
+                    ctx.stroke(path, with: .color(GridPalette.minorLine), lineWidth: lw)
                 }
                 x += minorStepView; i += 1
             }
@@ -406,10 +416,10 @@ struct GridBackground: View {
             while y <= H {
                 if (i % majorRatio) == 0 {
                     var path = Path(); path.move(to: CGPoint(x: 0, y: y)); path.addLine(to: CGPoint(x: W, y: y))
-                    ctx.stroke(path, with: .color(g5), lineWidth: lw)
+                    ctx.stroke(path, with: .color(GridPalette.majorLine), lineWidth: lw)
                 } else if showMinor {
                     var path = Path(); path.move(to: CGPoint(x: 0, y: y)); path.addLine(to: CGPoint(x: W, y: y))
-                    ctx.stroke(path, with: .color(g1), lineWidth: lw)
+                    ctx.stroke(path, with: .color(GridPalette.minorLine), lineWidth: lw)
                 }
                 y += minorStepView; i += 1
             }

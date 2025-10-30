@@ -327,6 +327,7 @@ let package = Package(
                 "QCMockServiceCore"
             ],
             path: "Sources/qc-mock-service",
+            exclude: ["AGENTS.md"],
             plugins: [
                 .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
@@ -340,6 +341,7 @@ let package = Package(
                 .product(name: "SecretStore", package: "swift-secretstore")
             ],
             path: "Sources/patchbay-service",
+            exclude: ["AGENTS.md"],
             plugins: [
                 .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")

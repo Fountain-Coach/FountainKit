@@ -1,0 +1,6 @@
+generate:
+  - types
+  - server
+accessModifier: internal
+additionalImports: []
+

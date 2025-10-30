@@ -11,5 +11,6 @@
   { "name": "FKOps Service", "path": "Packages/FountainServiceKit-FKOps/Sources/FKOpsService/openapi.yaml" },
   { "name": "SemanticBrowser Service", "path": "Packages/FountainServiceKit-SemanticBrowser/Sources/SemanticBrowserService/openapi.yaml" },
   { "name": "ToolServer Service", "path": "Packages/FountainServiceKit-ToolServer/Sources/ToolServerService/openapi.yaml" }
+ ,
+  { "name": "MIDI Service", "path": "Packages/FountainServiceKit-MIDI/Sources/MIDIService/openapi.yaml" }
 ]
-

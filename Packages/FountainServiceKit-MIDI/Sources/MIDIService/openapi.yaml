@@ -1,0 +1,123 @@
+openapi: 3.1.0
+info:
+  title: MIDI Service API
+  version: 0.1.0
+  description: |
+    This local spec mirrors the curated source of truth at
+    `Packages/FountainSpecCuration/openapi/v1/midi-service.yml`.
+    Update the curated spec first, then build to regenerate server types.
+servers:
+  - url: http://localhost:7180
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [ok] }
+                  uptimeSec: { type: number }
+  /transports:
+    get:
+      operationId: listTransports
+      responses:
+        '200':
+          description: Transports
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  supported: { type: array, items: { $ref: '#/components/schemas/TransportMode' } }
+                  default: { $ref: '#/components/schemas/TransportMode' }
+  /devices:
+    get:
+      operationId: listDevices
+      responses:
+        '200':
+          description: Devices
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Device' }
+  /endpoints:
+    get:
+      operationId: listEndpoints
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Endpoint' } } } } }
+    post:
+      operationId: createEndpoint
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                transport: { $ref: '#/components/schemas/TransportMode' }
+                hasInput: { type: boolean, default: true }
+                hasOutput: { type: boolean, default: true }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Endpoint' } } } }
+  /endpoints/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    delete:
+      operationId: deleteEndpoint
+      responses: { '204': { description: Deleted } }
+  /ump/send:
+    post:
+      operationId: sendUMP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target, words]
+              properties:
+                target:
+                  type: object
+                  properties:
+                    endpointId: { type: string }
+                    displayName: { type: string }
+                words:
+                  type: array
+                  items: { type: integer, format: uint32, minimum: 0 }
+      responses:
+        '202': { description: Accepted }
+
+components:
+  schemas:
+    TransportMode:
+      type: string
+      enum: [coremidi, midi2, alsa, loopback, noop]
+    Device:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        sources: { type: array, items: { type: string } }
+        destinations: { type: array, items: { type: string } }
+    Endpoint:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        hasInput: { type: boolean }
+        hasOutput: { type: boolean }
+        transport: { $ref: '#/components/schemas/TransportMode' }
+

@@ -1168,6 +1168,72 @@ final class AppState: ObservableObject {
     }
 }
 
+// MARK: - App‑level MIDI Instrument
+fileprivate struct PatchBayAppInstrumentBinder: NSViewRepresentable {
+    @EnvironmentObject var state: AppState
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        if context.coordinator.instrument == nil {
+            let sink = AppInstrumentSink(state: state)
+            let desc = MetalInstrumentDescriptor(
+                manufacturer: "Fountain",
+                product: "PatchBayApp",
+                instanceId: "app-main",
+                displayName: "PatchBay App"
+            )
+            let inst = MetalInstrument(sink: sink, descriptor: desc)
+            inst.stateProvider = { sink.snapshot() }
+            inst.enable()
+            context.coordinator.instrument = inst
+            context.coordinator.sink = sink
+        }
+        return view
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.instrument?.disable()
+        coordinator.instrument = nil
+        coordinator.sink = nil
+    }
+    final class Coordinator {
+        var instrument: MetalInstrument?
+        var sink: AppInstrumentSink?
+    }
+}
+
+fileprivate final class AppInstrumentSink: MetalSceneRenderer {
+    private weak var state: AppState?
+    init(state: AppState) { self.state = state }
+    // PE setters
+    func setUniform(_ name: String, float: Float) {
+        if let st = self.state {
+            DispatchQueue.main.async {
+                switch name {
+                case "app.robot.enabled":
+                    st.robotMode = (float >= 0.5)
+                case "app.transport.mode":
+                    let idx = Int(float.rounded())
+                    let mode: AppState.MIDITransportMode = {
+                        switch idx { case 1: return .midi2; case 2: return .coremidi; case 3: return .loopback; case 4: return .noop; default: return .auto }
+                    }()
+                    st.updateMIDITransportMode(mode)
+                default:
+                    break
+                }
+            }
+        }
+    }
+    // Unused MIDI messages for app sink
+    func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
+    func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
+    func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+    // PE GET snapshot
+    func snapshot() -> [String: Any] {
+        return ["app.identity": "PatchBay"]
+    }
+}
+
 struct ContentView: View {
     @StateObject var state: AppState
     @StateObject var vm = EditorVM()
@@ -1195,6 +1261,9 @@ struct ContentView: View {
                 }
             }) {
                 HStack(spacing: 0) {
+                    // App‑level MIDI 2.0 instrument (PatchBay App)
+                    PatchBayAppInstrumentBinder()
+                        .environmentObject(state)
                     MetalCanvasHost()
                         .environmentObject(vm)
                         .environmentObject(state)

@@ -1390,6 +1390,16 @@ struct ContentView: View {
             // Ensure a sane initial transform for Metal canvas on fresh boot
             vm.translation = .zero
             vm.zoom = 1.0
+            NotificationCenter.default.post(
+                name: Notification.Name("MetalCanvasRendererCommand"),
+                object: nil,
+                userInfo: [
+                    "op": "set",
+                    "zoom": Canvas2D.defaultZoom,
+                    "tx": Canvas2D.defaultTranslation.x,
+                    "ty": Canvas2D.defaultTranslation.y,
+                ]
+            )
             state.startRefresh()
             state.startRefreshStore()
             state.refreshArtifacts()

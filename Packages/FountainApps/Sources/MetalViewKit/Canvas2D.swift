@@ -9,6 +9,8 @@ public struct Canvas2D {
     public var translation: CGPoint // doc-space translation (pre-scale)
     public var minZoom: CGFloat = 0.25
     public var maxZoom: CGFloat = 3.0
+    public static let defaultZoom: CGFloat = 1.0
+    public static let defaultTranslation: CGPoint = .zero
 
     public init(zoom: CGFloat = 1.0, translation: CGPoint = .zero) {
         self.zoom = zoom
@@ -44,4 +46,3 @@ public struct Canvas2D {
 }
 
 #endif
-

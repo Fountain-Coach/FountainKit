@@ -75,6 +75,8 @@ struct MetalCanvasHost: View {
             // Marquee removed: selection is command-click/toggle only
             // Cursor instrument: expose pointer position as a MIDI 2.0 instrument
             CursorInstrumentBinder()
+            // Grid instrument: control spacing and majors via MIDI 2.0
+            GridInstrumentBinder()
             // Per-Stage MIDI 2.0 instruments: expose PE for page/margins/baseline
             StageInstrumentsBinder()
             // Per-Replay MIDI 2.0 instruments: expose PE for play/fps/frame
@@ -348,6 +350,69 @@ fileprivate struct CursorInstrumentBinder: NSViewRepresentable {
         }
         override func mouseEntered(with event: NSEvent) { coordinator?.handleEntered() }
         override func mouseExited(with event: NSEvent) { coordinator?.handleExited() }
+    }
+}
+
+// MARK: - Grid Instrument (minor spacing + majorEvery)
+fileprivate final class GridSink: MetalSceneRenderer {
+    var onSet: ((String, Float) -> Void)?
+    func setUniform(_ name: String, float: Float) { onSet?(name, float) }
+    func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
+    func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
+    func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+    var snapshot: (() -> [String: Any])? = nil
+}
+
+fileprivate struct GridInstrumentBinder: NSViewRepresentable {
+    @EnvironmentObject var vm: EditorVM
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        if context.coordinator.instrument == nil {
+            let sink = GridSink()
+            sink.onSet = { [weak vm] name, value in
+                guard let vm else { return }
+                Task { @MainActor in
+                    switch name {
+                    case "grid.minor": vm.grid = max(1, Int(value.rounded()))
+                    case "grid.majorEvery": vm.majorEvery = max(1, Int(value.rounded()))
+                    default: break
+                    }
+                }
+            }
+            sink.snapshot = { [weak vm] in
+                guard let vm else { return [:] }
+                return [
+                    "grid.minor": Double(vm.grid),
+                    "grid.majorEvery": vm.majorEvery,
+                    "zoom": Double(vm.zoom),
+                    "translation.x": Double(vm.translation.x),
+                    "translation.y": Double(vm.translation.y)
+                ]
+            }
+            let desc = MetalInstrumentDescriptor(
+                manufacturer: "Fountain",
+                product: "Grid",
+                instanceId: "grid",
+                displayName: "Grid"
+            )
+            let inst = MetalInstrument(sink: sink, descriptor: desc)
+            inst.stateProvider = { sink.snapshot?() ?? [:] }
+            inst.enable()
+            context.coordinator.instrument = inst
+            context.coordinator.sink = sink
+        }
+        return view
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.instrument?.disable()
+        coordinator.instrument = nil
+        coordinator.sink = nil
+    }
+    final class Coordinator {
+        var instrument: MetalInstrument?
+        var sink: GridSink?
     }
 }
 

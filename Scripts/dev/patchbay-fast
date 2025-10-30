@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT_DIR="$(cd "$(dirname "$0")"/../.. && pwd)"
+DEV_UP_USE_BIN=1 "$ROOT_DIR"/Scripts/dev/dev-up prebuild --patchbay-only
+DEV_UP_USE_BIN=1 "$ROOT_DIR"/Scripts/dev/dev-up --patchbay-only --check
+

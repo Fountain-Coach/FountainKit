@@ -4,15 +4,16 @@ set -euo pipefail
 usage() {
   cat <<USAGE
 Usage:
-  $(basename "$0") [env|prebuild] [--all] [--check]
+  $(basename "$0") [env|prebuild] [--all] [--check] [--patchbay-only]
 
 Commands:
   env       Export LAUNCHER_SIGNATURE into current shell (when sourced)
   prebuild  Compile required server binaries up-front (fast boot)
 
 Options:
-  --all     Start optional extras (semantic-browser, tools-factory, tool-server, publishing-frontend)
-  --check   Wait for readiness on common endpoints (timeout ~30s per service)
+  --all            Start optional extras (semantic-browser, tools-factory, tool-server, publishing-frontend)
+  --check          Wait for readiness on common endpoints (timeout ~30s per service)
+  --patchbay-only  Fast profile: start MIDI + PatchBay only (service + UI); skip other servers
 USAGE
 }
 
@@ -41,6 +42,7 @@ fi
 ALL=0
 CHECK=0
 CONFIGURATION="${DEV_UP_CONFIGURATION:-debug}"
+PATCHBAY_ONLY=0
 for a in "$@"; do
   if [[ "$a" == "--help" || "$a" == "-h" ]]; then
     usage
@@ -48,6 +50,7 @@ for a in "$@"; do
   fi
   if [[ "$a" == "--all" ]]; then ALL=1; fi
   if [[ "$a" == "--check" ]]; then CHECK=1; fi
+  if [[ "$a" == "--patchbay-only" ]]; then PATCHBAY_ONLY=1; fi
 done
 
 # Populate optional OpenAI configuration from Keychain when available.
@@ -236,19 +239,27 @@ if [[ "${1:-}" == "prebuild" ]]; then
   # Parse flags again for --all
   for a in "$@"; do
     if [[ "$a" == "--all" ]]; then ALL=1; fi
+    if [[ "$a" == "--patchbay-only" ]]; then PATCHBAY_ONLY=1; fi
   done
   echo "[dev-up] Prebuilding server binaries (configuration=$CONFIGURATION)…"
-  # Core servers (FountainApps)
-  core_targets=(baseline-awareness-server bootstrap-server planner-server function-caller-server persist-server midi-service-server gateway-server)
-  for t in "${core_targets[@]}"; do
-    build_product "$REPO_ROOT/Packages/FountainApps" "$t" || exit 1
-  done
-  # Optional extras
-  if [[ "$ALL" == "1" ]]; then
-    build_product "$REPO_ROOT/Packages/FountainApps" tools-factory-server || exit 1
-    build_product "$REPO_ROOT/Packages/FountainApps" tool-server || exit 1
-    build_product "$REPO_ROOT/Packages/FountainApps" publishing-frontend || exit 1
-    build_product "$REPO_ROOT/Packages/FountainApps-SemanticBrowser" semantic-browser-server || exit 1
+  if [[ "$PATCHBAY_ONLY" == "1" ]]; then
+    # Fast path: only PatchBay service/UI + MIDI service
+    build_product "$REPO_ROOT/Packages/FountainApps" midi-service-server || exit 1
+    build_product "$REPO_ROOT/Packages/FountainApps" patchbay-service-server || exit 1
+    build_product "$REPO_ROOT/Packages/FountainApps" patchbay-app || exit 1
+  else
+    # Core servers (FountainApps)
+    core_targets=(baseline-awareness-server bootstrap-server planner-server function-caller-server persist-server midi-service-server gateway-server)
+    for t in "${core_targets[@]}"; do
+      build_product "$REPO_ROOT/Packages/FountainApps" "$t" || exit 1
+    done
+    # Optional extras
+    if [[ "$ALL" == "1" ]]; then
+      build_product "$REPO_ROOT/Packages/FountainApps" tools-factory-server || exit 1
+      build_product "$REPO_ROOT/Packages/FountainApps" tool-server || exit 1
+      build_product "$REPO_ROOT/Packages/FountainApps" publishing-frontend || exit 1
+      build_product "$REPO_ROOT/Packages/FountainApps-SemanticBrowser" semantic-browser-server || exit 1
+    fi
   fi
   echo "[dev-up] Prebuild complete. Binaries under Packages/*/.build/$CONFIGURATION"
   exit 0
@@ -259,17 +270,26 @@ if [[ "${DEV_UP_NO_START_LOCAL_AGENT:-0}" != "1" ]]; then
   "$REPO_ROOT/Scripts/launcher" start || true
 fi
 
-# Core services (ordered: deps first, gateway last)
-start_bg baseline-awareness baseline-awareness-server Packages/FountainApps
-start_bg bootstrap bootstrap-server Packages/FountainApps
-start_bg planner planner-server Packages/FountainApps
-start_bg function-caller function-caller-server Packages/FountainApps
-start_bg persist persist-server Packages/FountainApps
-start_bg midi "midi-service-server" Packages/FountainApps
-start_bg gateway gateway-server Packages/FountainApps
-start_bg patchbay patchbay-service-server Packages/FountainApps
-if [[ "$CHECK" == "1" ]]; then
-  wait_ready patchbay "http://127.0.0.1:$(port_for patchbay)/health" 20 || true
+if [[ "$PATCHBAY_ONLY" == "1" ]]; then
+  # Fast profile: start MIDI service + PatchBay service/UI only
+  start_bg midi "midi-service-server" Packages/FountainApps
+  start_bg patchbay patchbay-service-server Packages/FountainApps
+  if [[ "$CHECK" == "1" ]]; then
+    wait_ready patchbay "http://127.0.0.1:$(port_for patchbay)/health" 20 || true
+  fi
+else
+  # Core services (ordered: deps first, gateway last)
+  start_bg baseline-awareness baseline-awareness-server Packages/FountainApps
+  start_bg bootstrap bootstrap-server Packages/FountainApps
+  start_bg planner planner-server Packages/FountainApps
+  start_bg function-caller function-caller-server Packages/FountainApps
+  start_bg persist persist-server Packages/FountainApps
+  start_bg midi "midi-service-server" Packages/FountainApps
+  start_bg gateway gateway-server Packages/FountainApps
+  start_bg patchbay patchbay-service-server Packages/FountainApps
+  if [[ "$CHECK" == "1" ]]; then
+    wait_ready patchbay "http://127.0.0.1:$(port_for patchbay)/health" 20 || true
+  fi
 fi
 
 # Build PatchBay app and its GUI tests (compile-time gate for UI focus invariants)

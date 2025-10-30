@@ -46,6 +46,9 @@ struct PatchBayStudioApp: App {
                             .disabled(!mode.isSupported)
                         }
                         Divider()
+                        Toggle("Robot Testing Mode", isOn: Binding(get: { appState.robotMode }, set: { appState.robotMode = $0 }))
+                            .keyboardShortcut("r", modifiers: [.command, .shift])
+                        Divider()
                         Text(appState.midiTransportStatusLine())
                             .font(.footnote)
                     }
@@ -182,6 +185,7 @@ final class AppState: ObservableObject {
     @Published var vendor: Components.Schemas.VendorIdentity? = nil
     @Published var snapshotSummary: String = ""
     @Published var midiTransportStatusMessage: String? = nil
+    @Published var robotMode: Bool = false { didSet { applyRobotMode() } }
     enum MIDITransportMode: String, CaseIterable, Identifiable {
         case auto
         case midi2
@@ -419,6 +423,14 @@ final class AppState: ObservableObject {
             #else
             MetalInstrument.setTransportOverride(nil)
             #endif
+        }
+    }
+    private func applyRobotMode() {
+        if robotMode {
+            MetalInstrument.setTransportOverride(LoopbackMetalInstrumentTransport.shared)
+            midiTransportStatusMessage = "Robot mode: Loopback active"
+        } else {
+            applyMIDITransport(mode: midiTransportMode)
         }
     }
     func updateMIDITransportMode(_ mode: MIDITransportMode) {

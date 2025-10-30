@@ -160,8 +160,58 @@ final class AppState: ObservableObject {
     // Simple network activity tracker for UI feedback
     struct Activity { let label: String; let startedAt: Date }
     @Published var activity: Activity? = nil
+    private var activityTask: Task<Void, Never>? = nil
     func beginActivity(_ label: String) { activity = .init(label: label, startedAt: Date()); NetDebug.log("activity: begin — \(label)") }
-    func endActivity() { if let a = activity { NetDebug.log(String(format: "activity: end — %@ (%.2fs)", a.label, Date().timeIntervalSince(a.startedAt))) }; activity = nil }
+    func endActivity() { if let a = activity { NetDebug.log(String(format: "activity: end — %@ (%.2fs)", a.label, Date().timeIntervalSince(a.startedAt))) }; activity = nil; activityTask = nil }
+    func cancelActivity() { activityTask?.cancel(); endActivity() }
+    func startRefresh() {
+        activityTask?.cancel()
+        activityTask = Task { [weak self] in await self?.refresh() }
+    }
+    func startRefreshLinks() {
+        activityTask?.cancel()
+        activityTask = Task { [weak self] in await self?.refreshLinks() }
+    }
+    func startRefreshStore() {
+        activityTask?.cancel()
+        activityTask = Task { [weak self] in await self?.refreshStore() }
+    }
+
+    // Startup readiness
+    enum StartupStatus { case checking, ok, bad(String) }
+    @Published var startupStatus: StartupStatus = .checking
+    @Published var showStartupBanner: Bool = true
+    func serviceBaseURL() -> URL {
+        if let c = api as? PatchBayClient { return c.baseURL }
+        return URL(string: "http://127.0.0.1:7090")!
+    }
+    func checkStartup() async {
+        startupStatus = .checking
+        let base = serviceBaseURL()
+        func quickSession() -> URLSession {
+            let cfg = URLSessionConfiguration.ephemeral
+            cfg.timeoutIntervalForRequest = 3
+            cfg.timeoutIntervalForResource = 6
+            cfg.waitsForConnectivity = false
+            return URLSession(configuration: cfg)
+        }
+        let session = quickSession()
+        func ok(_ resp: URLResponse?) -> Bool { guard let http = resp as? HTTPURLResponse else { return false }; return (200..<300).contains(http.statusCode) }
+        do {
+            var req = URLRequest(url: base.appending(path: "/openapi.yaml")); req.httpMethod = "GET"
+            let (_, r1) = try await session.data(for: req)
+            if ok(r1) { startupStatus = .ok; return }
+        } catch { /* fall through */ }
+        do {
+            var req = URLRequest(url: base.appending(path: "/health")); req.httpMethod = "GET"
+            let (_, r2) = try await session.data(for: req)
+            if ok(r2) { startupStatus = .ok; return }
+        } catch {
+            startupStatus = .bad(error.localizedDescription)
+            return
+        }
+        startupStatus = .bad("unreachable or non-2xx")
+    }
 
     // Open or focus a live preview window for a renderer node (panel.*)
     func openRendererPreview(id: String, vm: EditorVM) {
@@ -1067,8 +1117,9 @@ struct ContentView: View {
             }
         }
         .task {
-            await state.refresh()
-            await state.refreshStore()
+            await state.checkStartup()
+            state.startRefresh()
+            state.startRefreshStore()
             state.refreshArtifacts()
             state.loadLeftMode()
             state.loadUseLLM()
@@ -1091,11 +1142,47 @@ struct ContentView: View {
                     Text(act.label)
                         .font(.caption)
                         .lineLimit(1)
+                    Button("Cancel") { state.cancelActivity() }
+                        .buttonStyle(.borderless)
+                        .font(.caption)
                 }
                 .padding(.horizontal, 10).padding(.vertical, 6)
                 .background(.thinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .padding(10)
+            }
+        }
+        .overlay(alignment: .top) {
+            switch state.startupStatus {
+            case .checking:
+                HStack(spacing: 10) {
+                    ProgressView().controlSize(.small)
+                    Text("Checking PatchBay service readiness…").font(.caption)
+                }
+                .padding(8)
+                .background(.thinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .padding(.top, 8)
+            case .bad(let msg):
+                if state.showStartupBanner {
+                    HStack(spacing: 12) {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
+                        Text("PatchBay service unreachable at \(state.serviceBaseURL().absoluteString)").font(.caption)
+                        Text("(\(msg))").font(.caption2).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Retry") { Task { await state.checkStartup() } }
+                            .controlSize(.small)
+                        Button("Dismiss") { state.showStartupBanner = false }
+                            .controlSize(.small)
+                    }
+                    .padding(10)
+                    .background(.thinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+                }
+            case .ok:
+                EmptyView()
             }
         }
     }

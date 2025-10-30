@@ -110,6 +110,9 @@ public struct MetalCanvasView: NSViewRepresentable {
                     ]
                 }
             }
+        } else {
+            v.isPaused = true
+            v.enableSetNeedsDisplay = true
         }
         // Wire interaction callbacks and shared state for hit-testing
         context.coordinator.gridMinor = gridMinor

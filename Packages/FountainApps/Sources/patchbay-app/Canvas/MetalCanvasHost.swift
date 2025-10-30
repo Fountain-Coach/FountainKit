@@ -127,6 +127,7 @@ fileprivate struct StageInstrumentsBinder: NSViewRepresentable {
     }
     final class Coordinator {
         var instruments: [String: MetalInstrument] = [:] // stageId → instrument
+        var sinks: [String: StageSink] = [:]
     }
     func makeCoordinator() -> Coordinator { Coordinator() }
     func makeNSView(context: Context) -> NSView { NSView(frame: .zero) }
@@ -134,46 +135,51 @@ fileprivate struct StageInstrumentsBinder: NSViewRepresentable {
         // Compute current stage ids
         let stageIds = vm.nodes.compactMap { n in state.dashboard[n.id]?.kind == .stageA4 ? n.id : nil }
         // Remove instruments for deleted stages
-        for (sid, inst) in context.coordinator.instruments where !stageIds.contains(sid) { inst.disable(); context.coordinator.instruments.removeValue(forKey: sid) }
+        for (sid, inst) in context.coordinator.instruments where !stageIds.contains(sid) {
+            inst.disable()
+            context.coordinator.instruments.removeValue(forKey: sid)
+            context.coordinator.sinks.removeValue(forKey: sid)
+        }
         // Ensure instruments for current stages
         for sid in stageIds {
             if context.coordinator.instruments[sid] == nil {
                 let sink = StageSink(stageId: sid)
                 sink.onSet = { name, value, stageId in
-                    guard var node = state.dashboard[stageId], node.kind == .stageA4 else { return }
-                    var p = node.props
-                    func set(_ k: String, _ v: Double) { p[k] = String(format: "%.3f", v) }
-                    switch name {
-                    case "stage.baseline": set("baseline", Double(value))
-                    case "stage.margins.top": set("margins.top", Double(value))
-                    case "stage.margins.left": set("margins.left", Double(value))
-                    case "stage.margins.bottom": set("margins.bottom", Double(value))
-                    case "stage.margins.right": set("margins.right", Double(value))
-                    case "stage.page": p["page"] = (Int(value.rounded()) == 1) ? "Letter" : "A4"
-                    default: break
-                    }
-                    state.updateDashProps(id: stageId, props: p)
-                    // Reflow Stage ports to match new baseline count; resize to canonical page size
-                    if let i = vm.nodeIndex(by: stageId) {
-                        func baselineCount(_ props: [String:String]) -> Int {
-                            let page = props["page"]?.lowercased() ?? "a4"
-                            let height: Double = (page == "letter") ? 792.0 : 842.0
-                            let baseline = Double(props["baseline"] ?? "12") ?? 12.0
-                            let mparts = (props["margins"] ?? "18,18,18,18").split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
-                            let top = mparts.count == 4 ? mparts[0] : (Double(props["margins.top"] ?? "18") ?? 18)
-                            let bottom = mparts.count == 4 ? mparts[2] : (Double(props["margins.bottom"] ?? "18") ?? 18)
-                            let usable = max(0.0, height - top - bottom)
-                            return max(1, Int(floor(usable / max(1.0, baseline))))
+                    Task { @MainActor in
+                        guard let node = state.dashboard[stageId], node.kind == .stageA4 else { return }
+                        var p = node.props
+                        func set(_ k: String, _ v: Double) { p[k] = String(format: "%.3f", v) }
+                        switch name {
+                        case "stage.baseline": set("baseline", Double(value))
+                        case "stage.margins.top": set("margins.top", Double(value))
+                        case "stage.margins.left": set("margins.left", Double(value))
+                        case "stage.margins.bottom": set("margins.bottom", Double(value))
+                        case "stage.margins.right": set("margins.right", Double(value))
+                        case "stage.page": p["page"] = (Int(value.rounded()) == 1) ? "Letter" : "A4"
+                        default: break
                         }
-                        func pageSize(_ props: [String:String]) -> (Int,Int) {
-                            let page = props["page"]?.lowercased() ?? "a4"
-                            return page == "letter" ? (612, 792) : (595, 842)
+                        state.updateDashProps(id: stageId, props: p)
+                        if let i = vm.nodeIndex(by: stageId) {
+                            func baselineCount(_ props: [String:String]) -> Int {
+                                let page = props["page"]?.lowercased() ?? "a4"
+                                let height: Double = (page == "letter") ? 792.0 : 842.0
+                                let baseline = Double(props["baseline"] ?? "12") ?? 12.0
+                                let mparts = (props["margins"] ?? "18,18,18,18").split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+                                let top = mparts.count == 4 ? mparts[0] : (Double(props["margins.top"] ?? "18") ?? 18)
+                                let bottom = mparts.count == 4 ? mparts[2] : (Double(props["margins.bottom"] ?? "18") ?? 18)
+                                let usable = max(0.0, height - top - bottom)
+                                return max(1, Int(floor(usable / max(1.0, baseline))))
+                            }
+                            func pageSize(_ props: [String:String]) -> (Int,Int) {
+                                let page = props["page"]?.lowercased() ?? "a4"
+                                return page == "letter" ? (612, 792) : (595, 842)
+                            }
+                            let newCount = baselineCount(p)
+                            var ports: [PBPort] = []
+                            for k in 0..<newCount { ports.append(.init(id: "in\(k)", side: .left, dir: .input, type: "view")) }
+                            vm.nodes[i].ports = canonicalSortPorts(ports)
+                            let sz = pageSize(p); vm.nodes[i].w = sz.0; vm.nodes[i].h = sz.1
                         }
-                        let newCount = baselineCount(p)
-                        var ports: [PBPort] = []
-                        for k in 0..<newCount { ports.append(.init(id: "in\(k)", side: .left, dir: .input, type: "view")) }
-                        vm.nodes[i].ports = canonicalSortPorts(ports)
-                        let sz = pageSize(p); vm.nodes[i].w = sz.0; vm.nodes[i].h = sz.1
                     }
                 }
                 let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "Stage", instanceId: "stage-\(sid)", displayName: "Stage #\(sid)")
@@ -205,12 +211,14 @@ fileprivate struct StageInstrumentsBinder: NSViewRepresentable {
                 }
                 inst.enable()
                 context.coordinator.instruments[sid] = inst
+                context.coordinator.sinks[sid] = sink
             }
         }
     }
     static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
         for (_, inst) in coordinator.instruments { inst.disable() }
         coordinator.instruments.removeAll()
+        coordinator.sinks.removeAll()
     }
 }
 // Overlay to support selection, marquee selection, and drag-moving nodes on the Metal canvas.
@@ -470,12 +478,12 @@ final class ReplayMetalNode: MetalCanvasNode {
         let tr = transform.docToNDC(x: frameDoc.maxX, y: frameDoc.minY)
         let bl = transform.docToNDC(x: frameDoc.minX, y: frameDoc.maxY)
         let br = transform.docToNDC(x: frameDoc.maxX, y: frameDoc.maxY)
-        var bgVerts = [tl, bl, tr, tr, bl, br]
+        let bgVerts = [tl, bl, tr, tr, bl, br]
         encoder.setVertexBytes(bgVerts, length: bgVerts.count * MemoryLayout<SIMD2<Float>>.stride, index: 0)
         var bg = SIMD4<Float>(0.98, 0.98, 0.985, 1)
         encoder.setFragmentBytes(&bg, length: MemoryLayout<SIMD4<Float>>.size, index: 0)
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
-        var border = [tl, tr, tr, br, br, bl, bl, tl]
+        let border = [tl, tr, tr, br, br, bl, bl, tl]
         encoder.setVertexBytes(border, length: border.count * MemoryLayout<SIMD2<Float>>.stride, index: 0)
         var c = SIMD4<Float>(0.72, 0.74, 0.78, 1)
         encoder.setFragmentBytes(&c, length: MemoryLayout<SIMD4<Float>>.size, index: 0)
@@ -485,7 +493,7 @@ final class ReplayMetalNode: MetalCanvasNode {
         let a = transform.docToNDC(x: frameDoc.minX + inset, y: frameDoc.minY + inset)
         let b = transform.docToNDC(x: frameDoc.minX + inset, y: frameDoc.minY + inset + 14)
         let d = transform.docToNDC(x: frameDoc.minX + inset + 12, y: frameDoc.minY + inset + 7)
-        var tri = [a, b, d]
+        let tri = [a, b, d]
         encoder.setVertexBytes(tri, length: tri.count * MemoryLayout<SIMD2<Float>>.stride, index: 0)
         var triColor = playing ? SIMD4<Float>(0.20,0.65,0.35,1) : SIMD4<Float>(0.75,0.75,0.78,1)
         encoder.setFragmentBytes(&triColor, length: MemoryLayout<SIMD4<Float>>.size, index: 0)

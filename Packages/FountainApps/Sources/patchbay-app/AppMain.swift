@@ -5,12 +5,14 @@ import LLMGatewayAPI
 import ApiClientsCore
 import TutorDashboard
 import AppKit
+import MetalViewKit
 
 @main
 struct PatchBayStudioApp: App {
+    @StateObject private var appState = AppState()
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     var body: some Scene {
-        WindowGroup("PatchBay Studio") { ContentView() }
+        WindowGroup("PatchBay Studio") { ContentView(state: appState) }
             .windowStyle(.titleBar)
             .windowToolbarStyle(.expanded)
             .commands {
@@ -29,6 +31,23 @@ struct PatchBayStudioApp: App {
                 CommandMenu("Debug") {
                     Button("Dump Focus State") {
                         FocusManager.dumpFocus(label: "dump")
+                    }
+                    Menu("MIDI Transport") {
+                        ForEach(AppState.MIDITransportMode.allCases) { mode in
+                            Button {
+                                appState.updateMIDITransportMode(mode)
+                            } label: {
+                                if appState.midiTransportMode == mode {
+                                    Label(mode.displayName, systemImage: "checkmark")
+                                } else {
+                                    Text(mode.displayName)
+                                }
+                            }
+                            .disabled(!mode.isSupported)
+                        }
+                        Divider()
+                        Text(appState.midiTransportStatusLine())
+                            .font(.footnote)
                     }
                 }
             }
@@ -51,6 +70,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { attemptActivate(remaining - 1) }
         }
         attemptActivate(12) // ~1s
+        if let transportEnv = ProcessInfo.processInfo.environment["PATCHBAY_MIDI_TRANSPORT"]?.lowercased() {
+            switch transportEnv {
+            case "noop", "disabled":
+                MetalInstrument.setTransportOverride(NoopMetalInstrumentTransport())
+            #if canImport(CoreMIDI)
+            case "coremidi", "system":
+                MetalInstrument.setTransportOverride(CoreMIDIMetalInstrumentTransport.shared)
+            #endif
+            default:
+                break
+            }
+        }
         if ProcessInfo.processInfo.environment["PATCHBAY_WRITE_BASELINES"] == "1" {
             Task { @MainActor in
                 await writeBaselinesAndExit()
@@ -148,6 +179,36 @@ final class AppState: ObservableObject {
     @Published var stored: [Components.Schemas.StoredGraph] = []
     @Published var vendor: Components.Schemas.VendorIdentity? = nil
     @Published var snapshotSummary: String = ""
+    @Published var midiTransportStatusMessage: String? = nil
+    enum MIDITransportMode: String, CaseIterable, Identifiable {
+        case auto
+        case coremidi
+        case loopback
+        case noop
+        var id: String { rawValue }
+        var displayName: String {
+            switch self {
+            case .auto: return "Auto (system default)"
+            case .coremidi: return "CoreMIDI"
+            case .loopback: return "Loopback"
+            case .noop: return "Disabled (no transport)"
+            }
+        }
+        var isSupported: Bool {
+            switch self {
+            case .auto, .noop, .loopback: return true
+            case .coremidi:
+                #if canImport(CoreMIDI)
+                return true
+                #else
+                return false
+                #endif
+            }
+        }
+    }
+    @Published private(set) var midiTransportMode: MIDITransportMode = .auto
+    private let midiTransportKey = "pb.midiTransport.v1"
+    private var midiTransportEnvOverride: Bool = false
     struct ActionLogItem: Identifiable { let id = UUID().uuidString; let time = Date(); let action: String; let detail: String; let diff: String }
     @Published var runLog: [ActionLogItem] = []
     struct ChatMessage: Identifiable { let id = UUID().uuidString; let role: String; let text: String }
@@ -161,6 +222,7 @@ final class AppState: ObservableObject {
     struct Activity { let label: String; let startedAt: Date }
     @Published var activity: Activity? = nil
     private var activityTask: Task<Void, Never>? = nil
+    @preconcurrency private var transportObserver: NSObjectProtocol? = nil
     func beginActivity(_ label: String) { activity = .init(label: label, startedAt: Date()); NetDebug.log("activity: begin — \(label)") }
     func endActivity() { if let a = activity { NetDebug.log(String(format: "activity: end — %@ (%.2fs)", a.label, Date().timeIntervalSince(a.startedAt))) }; activity = nil; activityTask = nil }
     func cancelActivity() { activityTask?.cancel(); endActivity() }
@@ -277,6 +339,8 @@ final class AppState: ObservableObject {
         self.templates = templatesStore.load()
         loadDashboard()
         loadServersMeta()
+        setupTransportObserver()
+        loadMIDITransport()
     }
     func loadUseLLM() {
         if UserDefaults.standard.object(forKey: useLLMKey) == nil {
@@ -303,6 +367,71 @@ final class AppState: ObservableObject {
         if let s = ProcessInfo.processInfo.environment["GATEWAY_URL"], let u = URL(string: s) { gatewayURL = u }
     }
     func saveGatewayURL() { UserDefaults.standard.set(gatewayURL.absoluteString, forKey: gatewayURLKey) }
+    private func loadMIDITransport() {
+        midiTransportEnvOverride = false
+        if let env = ProcessInfo.processInfo.environment["PATCHBAY_MIDI_TRANSPORT"],
+           let mode = MIDITransportMode(rawValue: env.lowercased()) {
+            midiTransportEnvOverride = true
+            midiTransportMode = mode
+            applyMIDITransport(mode: mode)
+            return
+        }
+        if let stored = UserDefaults.standard.string(forKey: midiTransportKey),
+           let mode = MIDITransportMode(rawValue: stored) {
+            midiTransportMode = mode
+        } else {
+            midiTransportMode = .auto
+        }
+        applyMIDITransport(mode: midiTransportMode)
+    }
+    private func saveMIDITransport() {
+        guard !midiTransportEnvOverride else { return }
+        UserDefaults.standard.set(midiTransportMode.rawValue, forKey: midiTransportKey)
+    }
+    private func applyMIDITransport(mode: MIDITransportMode) {
+        midiTransportStatusMessage = nil
+        switch mode {
+        case .auto:
+            MetalInstrument.setTransportOverride(nil)
+        case .noop:
+            MetalInstrument.setTransportOverride(NoopMetalInstrumentTransport())
+        case .loopback:
+            MetalInstrument.setTransportOverride(LoopbackMetalInstrumentTransport.shared)
+        case .coremidi:
+            #if canImport(CoreMIDI)
+            MetalInstrument.setTransportOverride(CoreMIDIMetalInstrumentTransport.shared)
+            #else
+            MetalInstrument.setTransportOverride(nil)
+            #endif
+        }
+    }
+    func updateMIDITransportMode(_ mode: MIDITransportMode) {
+        midiTransportEnvOverride = false
+        midiTransportMode = mode
+        applyMIDITransport(mode: mode)
+        saveMIDITransport()
+    }
+    func midiTransportStatusLine() -> String {
+        let base: String
+        switch midiTransportMode {
+        case .auto:
+            base = "Auto mode uses CoreMIDI when available."
+        case .coremidi:
+            #if canImport(CoreMIDI)
+            base = "CoreMIDI endpoints will be provisioned."
+            #else
+            base = "CoreMIDI unavailable on this platform."
+            #endif
+        case .loopback:
+            base = "Loopback transport keeps MIDI in-process for tests."
+        case .noop:
+            base = "Transport disabled; instruments won't publish MIDI."
+        }
+        if let status = midiTransportStatusMessage, !status.isEmpty {
+            return base + " — " + status
+        }
+        return base
+    }
     func checkGateway() async {
         await MainActor.run { gatewayStatus = .checking }
         var url = normalizedGatewayBase()
@@ -442,6 +571,30 @@ final class AppState: ObservableObject {
         n.props = props
         dashboard[id] = n
         saveDashboard()
+    }
+    private func setupTransportObserver() {
+        transportObserver = NotificationCenter.default.addObserver(forName: .MetalInstrumentTransportError, object: nil, queue: .main) { [weak self] note in
+            guard let self else { return }
+            let descriptor = note.userInfo?["displayName"] as? String ?? ""
+            let baseMessage = note.userInfo?["message"] as? String ?? "Transport error"
+            let detail = note.userInfo?["error"] as? String ?? ""
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                var status = baseMessage
+                if !descriptor.isEmpty { status += " (\(descriptor))" }
+                if !detail.isEmpty { status += " – \(detail)" }
+                if self.midiTransportEnvOverride {
+                    self.midiTransportStatusMessage = status
+                    return
+                }
+                if self.midiTransportMode == .auto {
+                    MetalInstrument.setTransportOverride(LoopbackMetalInstrumentTransport.shared)
+                    self.midiTransportStatusMessage = status + " — switched to loopback"
+                } else {
+                    self.midiTransportStatusMessage = status
+                }
+            }
+        }
     }
     func removeDashNode(id: String) {
         dashboard.removeValue(forKey: id)

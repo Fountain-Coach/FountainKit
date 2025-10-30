@@ -147,10 +147,9 @@ final class PatchBayClient: PatchBayAPI {
 }
 
 // Minimal network debug logger that writes to .fountain/logs/patchbay-app.log when PATCHBAY_DEBUG=1
+@MainActor
 enum NetDebug {
-    private static let enabled: Bool = {
-        ProcessInfo.processInfo.environment["PATCHBAY_DEBUG"] == "1"
-    }()
+    private static let enabled = ProcessInfo.processInfo.environment["PATCHBAY_DEBUG"] == "1"
     static func log(_ message: String) {
         guard enabled else { return }
         let fm = FileManager.default

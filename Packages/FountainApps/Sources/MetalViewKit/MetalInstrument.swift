@@ -7,9 +7,6 @@ import Foundation
 import MIDI2
 import MIDI2CI
 
-#if canImport(CoreMIDI)
-import CoreMIDI
-
 public struct MetalInstrumentDescriptor: Sendable, Equatable {
     public var manufacturer: String
     public var product: String
@@ -30,54 +27,63 @@ public final class MetalInstrument: @unchecked Sendable {
     private let desc: MetalInstrumentDescriptor
     public var stateProvider: (() -> [String: Any])? = nil
 
-    private var client: MIDIClientRef = 0
-    private var src: MIDIEndpointRef = 0
-    private var dest: MIDIEndpointRef = 0
+    private let transport: any MetalInstrumentTransport
+    private var session: (any MetalInstrumentTransportSession)?
+    private static let transportHolder = TransportHolder(defaultTransport: MetalInstrument.makeSystemDefaultTransport())
+    private static let enableQueue = DispatchQueue(label: "MetalInstrument.enable", qos: .userInitiated)
+    private static let enableTimeout: TimeInterval = 2.0
+    private var enableToken: UUID?
 
-    public init(sink: MetalSceneRenderer, descriptor: MetalInstrumentDescriptor) {
+    public init(sink: MetalSceneRenderer,
+                descriptor: MetalInstrumentDescriptor,
+                transport: (any MetalInstrumentTransport)? = nil) {
         self.sink = sink
         self.desc = descriptor
+        self.transport = transport ?? MetalInstrument.defaultTransport()
     }
 
     public func enable() {
-        guard client == 0 else { return }
-        let nameCF = (desc.displayName as CFString)
-        let clientName = "\(desc.product)#\(desc.instanceId)" as CFString
-        _ = MIDIClientCreateWithBlock(clientName, &client) { _ in }
-
-        // Create virtual source and destination with MIDI 2.0 protocol
-        MIDISourceCreateWithProtocol(client, nameCF, ._2_0, &src)
-        MIDIDestinationCreateWithProtocol(client, nameCF, ._2_0, &dest, { [weak self] (list, _) in
-            self?.handleEventList(list)
-        })
-
-        // Publish initial state via CI envelope (JSON payload)
-        publishStateCI()
+        guard session == nil else { return }
+        let token = UUID()
+        enableToken = token
+        let descriptor = desc
+        MetalInstrument.enableQueue.async { [weak self] in
+            guard let self else { return }
+            do {
+                let newSession = try self.transport.makeSession(descriptor: descriptor) { [weak self] words in
+                    self?.handleUMP(words)
+                }
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else {
+                        newSession.close()
+                        return
+                    }
+                    guard self.enableToken == token else {
+                        newSession.close()
+                        return
+                    }
+                    self.session = newSession
+                    self.enableToken = nil
+                    self.publishStateCI()
+                }
+            } catch {
+                DispatchQueue.main.async { [weak self] in
+                    self?.handleEnableFailure(token: token, message: "Transport setup failed", error: error)
+                }
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + MetalInstrument.enableTimeout) { [weak self] in
+            guard let self else { return }
+            if self.enableToken == token, self.session == nil {
+                self.handleEnableFailure(token: token, message: "Transport setup timed out", error: nil)
+            }
+        }
     }
 
     public func disable() {
-        if src != 0 { MIDIEndpointDispose(src); src = 0 }
-        if dest != 0 { MIDIEndpointDispose(dest); dest = 0 }
-        if client != 0 { MIDIClientDispose(client); client = 0 }
-    }
-
-    private func handleEventList(_ listPtr: UnsafePointer<MIDIEventList>) {
-        let list = listPtr.pointee
-        var packet = list.packet
-        for _ in 0..<list.numPackets {
-            let count = Int(packet.wordCount)
-            if count > 0 {
-                // Copy words
-                var words: [UInt32] = []
-                withUnsafePointer(to: packet.words) { base in
-                    let u32 = UnsafeRawPointer(base).assumingMemoryBound(to: UInt32.self)
-                    let buf = UnsafeBufferPointer(start: u32, count: count)
-                    words.append(contentsOf: buf)
-                }
-                handleUMP(words)
-            }
-            packet = MIDIEventPacketNext(&packet).pointee
-        }
+        enableToken = nil
+        session?.close()
+        session = nil
     }
 
     private func handleUMP(_ words: [UInt32]) {
@@ -202,7 +208,9 @@ public final class MetalInstrument: @unchecked Sendable {
 
     private func applyProperty(_ item: [String: Any]) {
         guard let name = item["name"] as? String else { return }
-        if let value = item["value"] as? Double { sink?.setUniform(name, float: Float(value)) }
+        if let value = item["value"] as? Double {
+            sink?.setUniform(name, float: Float(value))
+        }
     }
 
     func publishStateCI(requestId: UInt32? = nil) {
@@ -269,7 +277,6 @@ public final class MetalInstrument: @unchecked Sendable {
 
     // Send SysEx7 UMP stream with correct packet headers (Single/Start/Continue/End), 6 bytes per packet
     private func buildSysEx7Words(bytes: [UInt8], group: UInt8 = 0) -> [UInt32] {
-        guard client != 0, src != 0 else { return [] }
         let chunks: [[UInt8]] = stride(from: 0, to: bytes.count, by: 6).map { Array(bytes[$0..<min($0+6, bytes.count)]) }
         var words: [UInt32] = []
         for (idx, chunk) in chunks.enumerated() {
@@ -283,8 +290,8 @@ public final class MetalInstrument: @unchecked Sendable {
             b[0] = (0x3 << 4) | (group & 0xF)
             b[1] = (status << 4) | (num & 0xF)
             for i in 0..<min(6, chunk.count) { b[2 + i] = chunk[i] }
-            let w1 = UInt32(bigEndian: (UInt32(b[0]) << 24) | (UInt32(b[1]) << 16) | (UInt32(b[2]) << 8) | UInt32(b[3]))
-            let w2 = UInt32(bigEndian: (UInt32(b[4]) << 24) | (UInt32(b[5]) << 16) | (UInt32(b[6]) << 8) | UInt32(b[7]))
+            let w1 = (UInt32(b[0]) << 24) | (UInt32(b[1]) << 16) | (UInt32(b[2]) << 8) | UInt32(b[3])
+            let w2 = (UInt32(b[4]) << 24) | (UInt32(b[5]) << 16) | (UInt32(b[6]) << 8) | UInt32(b[7])
             words.append(w1); words.append(w2)
         }
         return words
@@ -292,16 +299,8 @@ public final class MetalInstrument: @unchecked Sendable {
 
     private func sendSysEx7UMP(bytes: [UInt8], group: UInt8 = 0) {
         let words = buildSysEx7Words(bytes: bytes, group: group)
-        // Emit via virtual source
-        let byteCount = MemoryLayout<MIDIEventList>.size + MemoryLayout<UInt32>.size * (max(1, words.count) - 1)
-        let raw = UnsafeMutableRawPointer.allocate(byteCount: byteCount, alignment: MemoryLayout<MIDIEventList>.alignment)
-        defer { raw.deallocate() }
-        let listPtr = raw.bindMemory(to: MIDIEventList.self, capacity: 1)
-        var cur = MIDIEventListInit(listPtr, ._2_0)
-        words.withUnsafeBufferPointer { buf in
-            cur = MIDIEventListAdd(listPtr, byteCount, cur, 0, buf.count, buf.baseAddress!)
-        }
-        _ = MIDIReceivedEventList(src, listPtr)
+        guard let session else { return }
+        session.send(words: words)
     }
 
     public func sendVendorJSONEvent(topic: String, dict: [String: Any], group: UInt8 = 0) {
@@ -317,6 +316,65 @@ public final class MetalInstrument: @unchecked Sendable {
         // Publish for recorders
         NotificationCenter.default.post(name: .MetalCanvasUMPOut, object: nil, userInfo: ["topic": topic, "data": body, "words": words])
     }
+
+    private func handleEnableFailure(token: UUID, message: String, error: Error?) {
+        guard enableToken == token else { return }
+        enableToken = nil
+        notifyTransportFailure(message: message, error: error)
+    }
+
+    private func notifyTransportFailure(message: String, error: Error?) {
+        NotificationCenter.default.post(name: .MetalInstrumentTransportError, object: nil, userInfo: [
+            "displayName": desc.displayName,
+            "message": message,
+            "error": error?.localizedDescription ?? ""
+        ])
+    }
+
+    public static func setTransportOverride(_ transport: (any MetalInstrumentTransport)?) {
+        transportHolder.set(transport)
+    }
+
+    public static func defaultTransport() -> any MetalInstrumentTransport {
+        transportHolder.get()
+    }
+
+    private static func makeSystemDefaultTransport() -> any MetalInstrumentTransport {
+        #if canImport(CoreMIDI)
+        return CoreMIDIMetalInstrumentTransport.shared
+        #else
+        return NoopMetalInstrumentTransport()
+        #endif
+    }
 }
 
-#endif
+private final class TransportHolder: @unchecked Sendable {
+    private let lock = NSLock()
+    private let defaultTransport: any MetalInstrumentTransport
+    private var current: any MetalInstrumentTransport
+
+    init(defaultTransport: any MetalInstrumentTransport) {
+        self.defaultTransport = defaultTransport
+        self.current = defaultTransport
+    }
+
+    func get() -> any MetalInstrumentTransport {
+        lock.lock()
+        defer { lock.unlock() }
+        return current
+    }
+
+    func set(_ transport: (any MetalInstrumentTransport)?) {
+        lock.lock()
+        if let transport {
+            current = transport
+        } else {
+            current = defaultTransport
+        }
+        lock.unlock()
+    }
+}
+
+public extension Notification.Name {
+    static let MetalInstrumentTransportError = Notification.Name("MetalInstrumentTransportError")
+}

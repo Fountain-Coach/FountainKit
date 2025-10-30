@@ -1,30 +1,56 @@
 import Foundation
 import XCTest
-import CoreMIDI
 import MIDI2
+import MetalViewKit
+#if canImport(CoreMIDI)
+import CoreMIDI
+#endif
 
 final class MIDIRobot {
-    private var client: MIDIClientRef = 0
-    private var outPort: MIDIPortRef = 0
-    private var dest: MIDIEndpointRef = 0
+    private enum Mode {
+        case loopback(instanceId: String)
+        #if canImport(CoreMIDI)
+        case coreMIDI(client: MIDIClientRef, port: MIDIPortRef, destination: MIDIEndpointRef)
+        #endif
+    }
+
+    private let mode: Mode
     private let clientName: CFString = "MIDIRobot" as CFString
 
     init?(destName: String = "PatchBay Canvas") {
+        if let handle = LoopbackMetalInstrumentTransport.shared.waitForInstrument(displayNameContains: destName, timeout: 2.0) {
+            mode = .loopback(instanceId: handle.descriptor.instanceId)
+            return
+        }
+
+        #if canImport(CoreMIDI)
+        var client: MIDIClientRef = 0
         guard MIDIClientCreateWithBlock(clientName, &client, { _ in }) == noErr else { return nil }
-        // Create a traditional output port; we still send UMP via MIDIEventList
-        guard MIDIOutputPortCreate(client, clientName, &outPort) == noErr else { return nil }
-        // Find destination by name
+        var outPort: MIDIPortRef = 0
+        guard MIDIOutputPortCreate(client, clientName, &outPort) == noErr else {
+            MIDIClientDispose(client)
+            return nil
+        }
+        var destination: MIDIEndpointRef = 0
         let count = MIDIGetNumberOfDestinations()
         for i in 0..<count {
             let ep = MIDIGetDestination(i)
             var name: Unmanaged<CFString>? = nil
             MIDIObjectGetStringProperty(ep, kMIDIPropertyName, &name)
             if let s = name?.takeRetainedValue() as String?, s.contains(destName) {
-                dest = ep
+                destination = ep
                 break
             }
         }
-        if dest == 0 { return nil }
+        if destination == 0 {
+            MIDIPortDispose(outPort)
+            MIDIClientDispose(client)
+            return nil
+        }
+        mode = .coreMIDI(client: client, port: outPort, destination: destination)
+        #else
+        return nil
+        #endif
     }
 
     // Send vendor JSON command as SysEx7 UMP with developer ID 0x7D
@@ -38,8 +64,12 @@ final class MIDIRobot {
     }
 
     deinit {
-        if outPort != 0 { MIDIPortDispose(outPort) }
-        if client != 0 { MIDIClientDispose(client) }
+        #if canImport(CoreMIDI)
+        if case .coreMIDI(let client, let port, _) = mode {
+            MIDIPortDispose(port)
+            MIDIClientDispose(client)
+        }
+        #endif
     }
 
     // Send MIDI-CI PE SET { properties:[{name,value},...] } via SysEx7 UMP
@@ -67,20 +97,26 @@ final class MIDIRobot {
             b[0] = (0x3 << 4) | (group & 0xF)
             b[1] = (status << 4) | (num & 0xF)
             for i in 0..<min(6, chunk.count) { b[2 + i] = chunk[i] }
-            let w1 = UInt32(bigEndian: (UInt32(b[0]) << 24) | (UInt32(b[1]) << 16) | (UInt32(b[2]) << 8) | UInt32(b[3]))
-            let w2 = UInt32(bigEndian: (UInt32(b[4]) << 24) | (UInt32(b[5]) << 16) | (UInt32(b[6]) << 8) | UInt32(b[7]))
+            let w1 = (UInt32(b[0]) << 24) | (UInt32(b[1]) << 16) | (UInt32(b[2]) << 8) | UInt32(b[3])
+            let w2 = (UInt32(b[4]) << 24) | (UInt32(b[5]) << 16) | (UInt32(b[6]) << 8) | UInt32(b[7])
             words.append(w1); words.append(w2)
         }
 
-        // Build MIDIEventList and send
-        let byteCount = MemoryLayout<MIDIEventList>.size + MemoryLayout<UInt32>.size * (max(1, words.count) - 1)
-        let raw = UnsafeMutableRawPointer.allocate(byteCount: byteCount, alignment: MemoryLayout<MIDIEventList>.alignment)
-        defer { raw.deallocate() }
-        let listPtr = raw.bindMemory(to: MIDIEventList.self, capacity: 1)
-        var cur = MIDIEventListInit(listPtr, MIDIProtocolID._2_0)
-        words.withUnsafeBufferPointer { buf in
-            cur = MIDIEventListAdd(listPtr, byteCount, cur, 0, buf.count, buf.baseAddress!)
+        switch mode {
+        case .loopback(let instanceId):
+            _ = LoopbackMetalInstrumentTransport.shared.send(words: words, toInstanceId: instanceId)
+        #if canImport(CoreMIDI)
+        case .coreMIDI(_, let port, let destination):
+            let byteCount = MemoryLayout<MIDIEventList>.size + MemoryLayout<UInt32>.size * (max(1, words.count) - 1)
+            let raw = UnsafeMutableRawPointer.allocate(byteCount: byteCount, alignment: MemoryLayout<MIDIEventList>.alignment)
+            defer { raw.deallocate() }
+            let listPtr = raw.bindMemory(to: MIDIEventList.self, capacity: 1)
+            var cur = MIDIEventListInit(listPtr, MIDIProtocolID._2_0)
+            words.withUnsafeBufferPointer { buf in
+                cur = MIDIEventListAdd(listPtr, byteCount, cur, 0, buf.count, buf.baseAddress!)
+            }
+            MIDISendEventList(port, destination, listPtr)
+        #endif
         }
-        MIDISendEventList(outPort, dest, listPtr)
     }
 }

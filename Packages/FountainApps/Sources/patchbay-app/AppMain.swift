@@ -74,6 +74,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             switch transportEnv {
             case "noop", "disabled":
                 MetalInstrument.setTransportOverride(NoopMetalInstrumentTransport())
+            case "midi2":
+                MetalInstrument.setTransportOverride(MIDI2SystemInstrumentTransport())
             #if canImport(CoreMIDI)
             case "coremidi", "system":
                 MetalInstrument.setTransportOverride(CoreMIDIMetalInstrumentTransport.shared)
@@ -182,6 +184,7 @@ final class AppState: ObservableObject {
     @Published var midiTransportStatusMessage: String? = nil
     enum MIDITransportMode: String, CaseIterable, Identifiable {
         case auto
+        case midi2
         case coremidi
         case loopback
         case noop
@@ -189,6 +192,7 @@ final class AppState: ObservableObject {
         var displayName: String {
             switch self {
             case .auto: return "Auto (system default)"
+            case .midi2: return "MIDI 2.0"
             case .coremidi: return "CoreMIDI"
             case .loopback: return "Loopback"
             case .noop: return "Disabled (no transport)"
@@ -197,6 +201,12 @@ final class AppState: ObservableObject {
         var isSupported: Bool {
             switch self {
             case .auto, .noop, .loopback: return true
+            case .midi2:
+                #if canImport(MIDI2Transports)
+                return true
+                #else
+                return false
+                #endif
             case .coremidi:
                 #if canImport(CoreMIDI)
                 return true
@@ -392,7 +402,13 @@ final class AppState: ObservableObject {
         midiTransportStatusMessage = nil
         switch mode {
         case .auto:
+            #if canImport(CoreMIDI)
             MetalInstrument.setTransportOverride(nil)
+            #else
+            MetalInstrument.setTransportOverride(MIDI2SystemInstrumentTransport())
+            #endif
+        case .midi2:
+            MetalInstrument.setTransportOverride(MIDI2SystemInstrumentTransport())
         case .noop:
             MetalInstrument.setTransportOverride(NoopMetalInstrumentTransport())
         case .loopback:
@@ -415,7 +431,13 @@ final class AppState: ObservableObject {
         let base: String
         switch midiTransportMode {
         case .auto:
+            #if canImport(CoreMIDI)
             base = "Auto mode uses CoreMIDI when available."
+            #else
+            base = "Auto mode uses the MIDI 2.0 transport."
+            #endif
+        case .midi2:
+            base = "MIDI 2.0 transport uses FountainTelemetryKit drivers."
         case .coremidi:
             #if canImport(CoreMIDI)
             base = "CoreMIDI endpoints will be provisioned."

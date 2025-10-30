@@ -114,7 +114,8 @@ let package = Package(
         .target(
             name: "MetalViewKit",
             dependencies: [
-                .product(name: "MIDI2CI", package: "midi2")
+                .product(name: "MIDI2CI", package: "midi2"),
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit")
             ],
             path: "Sources/MetalViewKit",
             exclude: ["AGENTS.md"]
@@ -259,7 +260,8 @@ let package = Package(
         .target(
             name: "MetalViewKit",
             dependencies: [
-                .product(name: "MIDI2CI", package: "midi2")
+                .product(name: "MIDI2CI", package: "midi2"),
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit")
             ],
             path: "Sources/MetalViewKit",
             exclude: ["AGENTS.md"]

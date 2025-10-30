@@ -16,7 +16,11 @@ final class InitialFitFixtureTests: XCTestCase {
     }
 
     func testInitialFitMatchesFixture() throws {
-        let url = Bundle.module.url(forResource: "initial-fit-a4-portrait-1200x900", withExtension: "json", subdirectory: "Fixtures")!
+        let url = Bundle.module.url(forResource: "initial-fit-a4-portrait-1200x900", withExtension: "json", subdirectory: "Fixtures") ?? {
+            // Fallback: resolve from source tree to avoid bundle resource issues
+            let here = URL(fileURLWithPath: #filePath)
+            return here.deletingLastPathComponent().appendingPathComponent("Fixtures/initial-fit-a4-portrait-1200x900.json")
+        }()
         let data = try Data(contentsOf: url)
         let f = try JSONDecoder().decode(Fixture.self, from: data)
         let view = CGSize(width: f.viewWidth, height: f.viewHeight)
@@ -28,4 +32,3 @@ final class InitialFitFixtureTests: XCTestCase {
         XCTAssertEqual(t.y, f.expectedTranslationY, accuracy: f.toleranceTranslation)
     }
 }
-

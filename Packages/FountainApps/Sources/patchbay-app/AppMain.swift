@@ -157,6 +157,11 @@ final class AppState: ObservableObject {
     // Dashboard executor outputs for overlay rendering
     @Published var dashOutputs: [String:Payload] = [:]
     private var previewWindows: [String: NSWindow] = [:]
+    // Simple network activity tracker for UI feedback
+    struct Activity { let label: String; let startedAt: Date }
+    @Published var activity: Activity? = nil
+    func beginActivity(_ label: String) { activity = .init(label: label, startedAt: Date()); NetDebug.log("activity: begin — \(label)") }
+    func endActivity() { if let a = activity { NetDebug.log(String(format: "activity: end — %@ (%.2fs)", a.label, Date().timeIntervalSince(a.startedAt))) }; activity = nil }
 
     // Open or focus a live preview window for a renderer node (panel.*)
     func openRendererPreview(id: String, vm: EditorVM) {
@@ -343,6 +348,8 @@ final class AppState: ObservableObject {
         return url
     }
     func refresh() async {
+        beginActivity("GET /instruments")
+        defer { endActivity() }
         if let list = try? await api.listInstruments() { instruments = list }
     }
     func refreshArtifacts() {
@@ -657,6 +664,8 @@ final class AppState: ObservableObject {
 
     func refreshLinks() async {
         guard let c = api as? PatchBayClient else { return }
+        beginActivity("GET /links")
+        defer { endActivity() }
         if let list = try? await c.listLinks() { links = list }
     }
     func deleteLink(_ id: String) async {
@@ -670,6 +679,8 @@ final class AppState: ObservableObject {
 
     func refreshStore() async {
         guard let c = api as? PatchBayClient else { return }
+        beginActivity("GET /store/graphs")
+        defer { endActivity() }
         if let list = try? await c.listStoredGraphs() { stored = list }
     }
     func addLog(action: String, detail: String, diff: String) {
@@ -1072,6 +1083,21 @@ struct ContentView: View {
             }
         }
         .environmentObject(vm)
+        // Lightweight activity overlay for visibility into what's stuck
+        .overlay(alignment: .topTrailing) {
+            if let act = state.activity {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(act.label)
+                        .font(.caption)
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(.thinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .padding(10)
+            }
+        }
     }
 
     // Compute the next Stage name from the canvas only (ignores stale persisted entries).
@@ -1203,7 +1229,9 @@ struct ContentView: View {
                     return (kind, id, snap(docX), snap(docY), w, h)
                 }
                 let (kind, id, x, y, w2, h2) = input
-                if let c = state.api as? PatchBayClient {
+                // Access MainActor-isolated API safely
+                let c: PatchBayClient? = await MainActor.run { state.api as? PatchBayClient }
+                if let c = c {
                     do {
                         if let inst = try await c.createInstrument(id: id, kind: kind, title: title, x: x, y: y, w: w2, h: h2) {
                             await MainActor.run {
@@ -1774,22 +1802,28 @@ struct TemplateRow: View {
     }
 
     private func createNearOrigin(template t: InstrumentTemplate) {
-        guard let c = state.api as? PatchBayClient else { return }
-        Task { @MainActor in
-            let baseId = base(for: t.kind.rawValue, title: t.title)
-            let id = nextId(base: baseId)
-            let g = max(4, vm.grid)
-            let x = g * 5, y = g * 5
+        Task {
+            // Access API and compute geometry on MainActor
+            let (c, id, x, y, w, h): (PatchBayClient?, String, Int, Int, Int, Int) = await MainActor.run {
+                let client = state.api as? PatchBayClient
+                let baseId = base(for: t.kind.rawValue, title: t.title)
+                let nid = nextId(base: baseId)
+                let g = max(4, vm.grid)
+                return (client, nid, g * 5, g * 5, t.defaultWidth, t.defaultHeight)
+            }
+            guard let c = c else { return }
             do {
-                if let inst = try await c.createInstrument(id: id, kind: t.kind, title: t.title, x: x, y: y, w: t.defaultWidth, h: t.defaultHeight) {
-                    var node = PBNode(id: inst.id, title: inst.title, x: inst.x, y: inst.y, w: inst.w, h: inst.h, ports: [])
-                    node.ports.append(.init(id: "in", side: .left, dir: .input, type: "data"))
-                    node.ports.append(.init(id: "out", side: .right, dir: .output, type: "data"))
-                    if inst.identity.hasUMPInput == true { node.ports.append(.init(id: "umpIn", side: .left, dir: .input, type: "ump")) }
-                    if inst.identity.hasUMPOutput == true { node.ports.append(.init(id: "umpOut", side: .right, dir: .output, type: "ump")) }
-                    vm.nodes.append(node)
-                    vm.selection = inst.id
-                    vm.selected = [inst.id]
+                if let inst = try await c.createInstrument(id: id, kind: t.kind, title: t.title, x: x, y: y, w: w, h: h) {
+                    await MainActor.run {
+                        var node = PBNode(id: inst.id, title: inst.title, x: inst.x, y: inst.y, w: inst.w, h: inst.h, ports: [])
+                        node.ports.append(.init(id: "in", side: .left, dir: .input, type: "data"))
+                        node.ports.append(.init(id: "out", side: .right, dir: .output, type: "data"))
+                        if inst.identity.hasUMPInput == true { node.ports.append(.init(id: "umpIn", side: .left, dir: .input, type: "ump")) }
+                        if inst.identity.hasUMPOutput == true { node.ports.append(.init(id: "umpOut", side: .right, dir: .output, type: "ump")) }
+                        vm.nodes.append(node)
+                        vm.selection = inst.id
+                        vm.selected = [inst.id]
+                    }
                 }
             } catch { }
         }

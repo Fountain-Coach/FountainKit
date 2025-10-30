@@ -161,8 +161,9 @@ final class EditorVM: ObservableObject {
 
     // MARK: - MIDI 2.0 activity helpers (UI-level events)
     nonisolated private static func postNodeDiffEvents(oldValue: [PBNode], newValue: [PBNode]) {
-        let oldById = Dictionary(uniqueKeysWithValues: oldValue.map { ($0.id, $0) })
-        let newById = Dictionary(uniqueKeysWithValues: newValue.map { ($0.id, $0) })
+        // Be tolerant of duplicate ids: last occurrence wins to avoid crashes in tests
+        let oldById = Dictionary(oldValue.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
+        let newById = Dictionary(newValue.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
         // Added
         for (id, n) in newById where oldById[id] == nil {
             NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type":"node.add", "id": id, "x": n.x, "y": n.y, "w": n.w, "h": n.h])
@@ -254,7 +255,7 @@ final class EditorVM: ObservableObject {
         let content = contentBounds(margin: 40)
         let canvas = Components.Schemas.GraphDoc.canvasPayload(width: Int(max(1, content.width)), height: Int(max(1, content.height)), theme: .light, grid: grid)
         // Map instruments by id if a node with same id exists; otherwise include instrument as-is
-        let instById = Dictionary(uniqueKeysWithValues: instruments.map { ($0.id, $0) })
+        let instById = Dictionary(instruments.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
         var mapped: [Components.Schemas.Instrument] = []
         for n in nodes {
             if var i = instById[n.id] {

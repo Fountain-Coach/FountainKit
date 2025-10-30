@@ -2,7 +2,8 @@
 
 Scope: `Scripts/dev/**`.
 
-This area manages the local Fountain stack: start/stop/status, prebuild helpers, and one‑time Keychain seeding. The scripts are idempotent and safe to re‑run; they surface a clear `Usage:` and avoid interactive prompts.
+What/Why
+Manage the local Fountain stack: start/stop/status, prebuild helpers, and one‑time Keychain seeding. Scripts are idempotent, safe to re‑run, include a `Usage:` section, and avoid interactive prompts.
 
 Included tools
 - `dev-up` — Starts core services (add `--all` for extras); readiness checks with `--check`.
@@ -12,5 +13,6 @@ Included tools
 - `seed-secrets-keychain.sh` — Seeds `GATEWAY_BEARER` and `OPENAI_API_KEY` into macOS Keychain.
 
 Conventions
+- No `.env` in repo; secrets come from Keychain. Always set `LAUNCHER_SIGNATURE` (default provided).
 - Logs under `.fountain/logs/*.log`; PIDs under `.fountain/pids/*.pid` at repo root.
-- Always set `LAUNCHER_SIGNATURE` (defaults to an embedded value); prefer Keychain‑backed secrets and avoid prompting.
+- Defensive shell (`set -euo pipefail`) and deterministic behaviour across re‑runs.

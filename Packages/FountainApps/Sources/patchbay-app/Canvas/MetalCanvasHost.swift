@@ -72,8 +72,7 @@ struct MetalCanvasHost: View {
                             instrument: MetalInstrumentDescriptor(manufacturer: "Fountain", product: "PatchBayCanvas", instanceId: "main", displayName: "PatchBay Canvas"))
             // Right-edge hover hit area for MIDI monitor
             MidiMonitorHitArea()
-            // Marquee instrument for robot-controlled selection
-            MarqueeInstrumentBinder()
+            // Marquee removed: selection is command-click/toggle only
             // Cursor instrument: expose pointer position as a MIDI 2.0 instrument
             CursorInstrumentBinder()
             // Per-Stage MIDI 2.0 instruments: expose PE for page/margins/baseline

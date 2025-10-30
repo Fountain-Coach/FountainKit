@@ -616,12 +616,8 @@ final class MetalCanvasNSView: MTKView {
                 "type":"drag.start", "ids": Array(sel), "anchor.doc.x": Double(doc.x), "anchor.doc.y": Double(doc.y)
             ])
         } else {
-            // Start marquee
-            c.marqueeStart = p
-            if let r = c.renderer { r.marqueeDocRect = CGRect(origin: doc, size: .zero) }
-            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
-                "type":"marquee.start", "view.x": Double(p.x), "view.y": Double(p.y), "doc.x": Double(doc.x), "doc.y": Double(doc.y)
-            ])
+            // Blank click: clear selection (no marquee)
+            c.onSelect([])
         }
     }
     override func mouseDragged(with event: NSEvent) {
@@ -643,16 +639,6 @@ final class MetalCanvasNSView: MTKView {
                     "dx.snap": Double(sdx), "dy.snap": Double(sdy), "grid": Int(c.gridMinor)
                 ])
             }
-        } else if let start = c.marqueeStart, let r = c.renderer {
-            // Update marquee rect in doc-space
-            let a = viewToDoc(start)
-            let b = viewToDoc(p)
-            let x0 = min(a.x, b.x), y0 = min(a.y, b.y)
-            r.marqueeDocRect = CGRect(x: x0, y: y0, width: abs(a.x - b.x), height: abs(a.y - b.y))
-            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
-                "type":"marquee.update", "min.doc.x": Double(r.marqueeDocRect!.minX), "min.doc.y": Double(r.marqueeDocRect!.minY),
-                "max.doc.x": Double(r.marqueeDocRect!.maxX), "max.doc.y": Double(r.marqueeDocRect!.maxY)
-            ])
         }
     }
     override func mouseUp(with event: NSEvent) {
@@ -665,24 +651,6 @@ final class MetalCanvasNSView: MTKView {
                 "type":"drag.end", "ids": Array(c.draggingIds), "doc.x": Double(doc.x), "doc.y": Double(doc.y)
             ])
             return
-        }
-        if let r = c.renderer, let m = r.marqueeDocRect {
-            // Apply marquee selection
-            var sel: Set<String> = []
-            for n in r.nodesSnapshot { if n.frameDoc.intersects(m) { sel.insert(n.id) } }
-            let mods = event.modifierFlags
-            var base = c.selectedProvider()
-            if mods.contains(.command) {
-                for id in sel { if base.contains(id) { base.remove(id) } else { base.insert(id) } }
-                c.onSelect(base)
-            } else if mods.contains(.shift) {
-                c.onSelect(base.union(sel))
-            } else {
-                c.onSelect(sel)
-            }
-            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
-                "type":"marquee.end", "selected": Array(sel)
-            ])
         }
     }
     // Trackpad pan (scroll)

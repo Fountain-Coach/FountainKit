@@ -305,6 +305,8 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
     private var edges: [MetalCanvasEdge] = []
     private var gridMinor: CGFloat = 24
     private var majorEvery: Int = 5
+    // Align grid to viewport top-left so the leftmost vertical line sits exactly at view.x=0
+    private var anchorGridToViewportTopLeft: Bool = true
     private var canvas = Canvas2D()
     // PE overrides
     private var overrideGridMinor: CGFloat? = nil
@@ -503,38 +505,71 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
     }
     private func drawGrid(in view: MTKView, encoder: MTLRenderCommandEncoder, xf: MetalCanvasTransform) {
         let z = max(0.0001, CGFloat(canvas.zoom))
-        let minDocX = 0 / z - canvas.translation.x
-        let maxDocX = CGFloat(view.drawableSize.width) / z - canvas.translation.x
-        let minDocY = 0 / z - canvas.translation.y
-        let maxDocY = CGFloat(view.drawableSize.height) / z - canvas.translation.y
         let step = max(1.0, overrideGridMinor ?? gridMinor)
-        // Vertical lines
+        let W = CGFloat(view.bounds.width)
+        let H = CGFloat(view.bounds.height)
+        // Convert view rect to doc-space bounds
+        let minDocX = 0 / z - canvas.translation.x
+        let maxDocX = W / z - canvas.translation.x
+        let minDocY = 0 / z - canvas.translation.y
+        let maxDocY = H / z - canvas.translation.y
+        // Buckets
         var vMinor: [SIMD2<Float>] = []
         var vMajor: [SIMD2<Float>] = []
-        let startVX = floor(minDocX / step)
-        let endVX = ceil(maxDocX / step)
-        var idx = Int(startVX)
-        var x = startVX * step
-        while x <= endVX * step {
-            let a = xf.docToNDC(x: x, y: minDocY)
-            let b = xf.docToNDC(x: x, y: maxDocY)
-            if (idx % max(1, overrideMajorEvery ?? majorEvery)) == 0 { vMajor.append(contentsOf: [a,b]) } else { vMinor.append(contentsOf: [a,b]) }
-            idx += 1
-            x += step
-        }
-        // Horizontal lines
         var hMinor: [SIMD2<Float>] = []
         var hMajor: [SIMD2<Float>] = []
-        let startHY = floor(minDocY / step)
-        let endHY = ceil(maxDocY / step)
-        var idy = Int(startHY)
-        var y = startHY * step
-        while y <= endHY * step {
-            let a = xf.docToNDC(x: minDocX, y: y)
-            let b = xf.docToNDC(x: maxDocX, y: y)
-            if (idy % max(1, overrideMajorEvery ?? majorEvery)) == 0 { hMajor.append(contentsOf: [a,b]) } else { hMinor.append(contentsOf: [a,b]) }
-            idy += 1
-            y += step
+        if anchorGridToViewportTopLeft {
+            // Vertical lines at xV = 0, step*z, 2*step*z, ...
+            var xV: CGFloat = 0
+            // Base doc index for left edge (nearest grid column index)
+            let baseIdx = Int(floor(minDocX / step))
+            var col = 0
+            while xV <= W + 0.5 {
+                let docX = xV / z - canvas.translation.x
+                let a = xf.docToNDC(x: docX, y: minDocY)
+                let b = xf.docToNDC(x: docX, y: maxDocY)
+                let idx = baseIdx + col
+                if (idx % max(1, overrideMajorEvery ?? majorEvery)) == 0 { vMajor.append(contentsOf: [a,b]) } else { vMinor.append(contentsOf: [a,b]) }
+                xV += step * z
+                col += 1
+            }
+            // Horizontal lines at yV = 0, step*z, ...
+            var yV: CGFloat = 0
+            let baseRow = Int(floor(minDocY / step))
+            var row = 0
+            while yV <= H + 0.5 {
+                let docY = yV / z - canvas.translation.y
+                let a = xf.docToNDC(x: minDocX, y: docY)
+                let b = xf.docToNDC(x: maxDocX, y: docY)
+                let idx = baseRow + row
+                if (idx % max(1, overrideMajorEvery ?? majorEvery)) == 0 { hMajor.append(contentsOf: [a,b]) } else { hMinor.append(contentsOf: [a,b]) }
+                yV += step * z
+                row += 1
+            }
+        } else {
+            // Original doc-anchored grid
+            let startVX = floor(minDocX / step)
+            let endVX = ceil(maxDocX / step)
+            var idx = Int(startVX)
+            var x = startVX * step
+            while x <= endVX * step {
+                let a = xf.docToNDC(x: x, y: minDocY)
+                let b = xf.docToNDC(x: x, y: maxDocY)
+                if (idx % max(1, overrideMajorEvery ?? majorEvery)) == 0 { vMajor.append(contentsOf: [a,b]) } else { vMinor.append(contentsOf: [a,b]) }
+                idx += 1
+                x += step
+            }
+            let startHY = floor(minDocY / step)
+            let endHY = ceil(maxDocY / step)
+            var idy = Int(startHY)
+            var y = startHY * step
+            while y <= endHY * step {
+                let a = xf.docToNDC(x: minDocX, y: y)
+                let b = xf.docToNDC(x: maxDocX, y: y)
+                if (idy % max(1, overrideMajorEvery ?? majorEvery)) == 0 { hMajor.append(contentsOf: [a,b]) } else { hMinor.append(contentsOf: [a,b]) }
+                idy += 1
+                y += step
+            }
         }
         func draw(_ verts: [SIMD2<Float>], rgba: SIMD4<Float>) {
             guard !verts.isEmpty else { return }
@@ -549,7 +584,7 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
         draw(hMinor, rgba: minor)
         draw(vMajor, rgba: major)
         draw(hMajor, rgba: major)
-        // Origin axes (compass)
+        // Origin axes (compass) stay doc-anchored
         let oH = [xf.docToNDC(x: -9999, y: 0), xf.docToNDC(x: 9999, y: 0)]
         let oV = [xf.docToNDC(x: 0, y: -9999), xf.docToNDC(x: 0, y: 9999)]
         let axis = SIMD4<Float>(0.75, 0.20, 0.20, 1)

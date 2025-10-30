@@ -439,11 +439,9 @@ fileprivate struct ViewportInstrumentBinder: NSViewRepresentable {
                 let zoom = max(0.0001, vm.zoom)
                 let tx = vm.translation.x
                 let ty = vm.translation.y
-                // Contact point: leftmost visible grid line in view-space
+                // With grid anchored to viewport left, contact point sits at x=0 regardless of translation.
                 let g = max(1, vm.grid)
-                let gx = CGFloat(g)
-                let leftDoc = floor((-tx) / gx) * gx
-                let contactX = (leftDoc + tx) * zoom
+                let contactX: CGFloat = 0
                 return [
                     "viewport.zoom": Double(zoom),
                     "viewport.tx": Double(tx),

@@ -1374,6 +1374,9 @@ struct ContentView: View {
         }
         .task {
             await state.checkStartup()
+            // Ensure a sane initial transform for Metal canvas on fresh boot
+            vm.translation = .zero
+            vm.zoom = 1.0
             state.startRefresh()
             state.startRefreshStore()
             state.refreshArtifacts()

@@ -74,6 +74,8 @@ struct MetalCanvasHost: View {
             MidiMonitorHitArea()
             // Marquee instrument for robot-controlled selection
             MarqueeInstrumentBinder()
+            // Cursor instrument: expose pointer position as a MIDI 2.0 instrument
+            CursorInstrumentBinder()
             // Per-Stage MIDI 2.0 instruments: expose PE for page/margins/baseline
             StageInstrumentsBinder()
             // Per-Replay MIDI 2.0 instruments: expose PE for play/fps/frame
@@ -214,6 +216,139 @@ fileprivate struct MarqueeInstrumentBinder: NSViewRepresentable {
     final class Coordinator {
         var instrument: MetalInstrument?
         var sink: MarqueeSink?
+    }
+}
+
+// MARK: - Cursor Instrument (view/doc position + visibility)
+fileprivate final class CursorSink: MetalSceneRenderer {
+    // Latest cursor positions
+    private(set) var viewPoint: CGPoint = .zero
+    private(set) var docPoint: CGPoint = .zero
+    private(set) var visible: Bool = true
+    // Converters provided by the binder (thread-safe snapshots)
+    var viewToDoc: ((CGPoint) -> CGPoint)?
+    var docToView: ((CGPoint) -> CGPoint)?
+
+    func setUniform(_ name: String, float: Float) {
+        switch name {
+        case "cursor.visible":
+            visible = (float >= 0.5)
+        case "cursor.view.x":
+            viewPoint.x = CGFloat(float)
+            if let toDoc = viewToDoc { docPoint = toDoc(viewPoint) }
+            postActivity()
+        case "cursor.view.y":
+            viewPoint.y = CGFloat(float)
+            if let toDoc = viewToDoc { docPoint = toDoc(viewPoint) }
+            postActivity()
+        case "cursor.doc.x":
+            docPoint.x = CGFloat(float)
+            if let toView = docToView { viewPoint = toView(docPoint) }
+            postActivity()
+        case "cursor.doc.y":
+            docPoint.y = CGFloat(float)
+            if let toView = docToView { viewPoint = toView(docPoint) }
+            postActivity()
+        default:
+            break
+        }
+    }
+    func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
+    func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
+    func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+    func stateSnapshot() -> [String: Any] {
+        [
+            "cursor.visible": visible ? 1.0 : 0.0,
+            "cursor.view.x": Double(viewPoint.x),
+            "cursor.view.y": Double(viewPoint.y),
+            "cursor.doc.x": Double(docPoint.x),
+            "cursor.doc.y": Double(docPoint.y)
+        ]
+    }
+    private func postActivity() {
+        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+            "type": "ui.cursor.move",
+            "view.x": Double(viewPoint.x),
+            "view.y": Double(viewPoint.y),
+            "doc.x": Double(docPoint.x),
+            "doc.y": Double(docPoint.y),
+            "visible": visible ? 1 : 0
+        ])
+    }
+}
+
+fileprivate struct CursorInstrumentBinder: NSViewRepresentable {
+    @EnvironmentObject var vm: EditorVM
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeNSView(context: Context) -> NSView {
+        let v = CursorTrackingView()
+        v.coordinator = context.coordinator
+        if context.coordinator.instrument == nil {
+            let sink = CursorSink()
+            context.coordinator.sink = sink
+            let desc = MetalInstrumentDescriptor(
+                manufacturer: "Fountain",
+                product: "Cursor",
+                instanceId: "cursor",
+                displayName: "PatchBay Cursor"
+            )
+            let inst = MetalInstrument(sink: sink, descriptor: desc)
+            inst.stateProvider = { sink.stateSnapshot() }
+            inst.enable()
+            context.coordinator.instrument = inst
+        }
+        // Install tracking
+        v.setupTracking()
+        // Seed converters
+        updateConverters(coordinator: context.coordinator)
+        return v
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {
+        updateConverters(coordinator: context.coordinator)
+    }
+    private func updateConverters(coordinator: Coordinator) {
+        guard let sink = coordinator.sink else { return }
+        let s = max(0.0001, vm.zoom)
+        let t = vm.translation
+        sink.viewToDoc = { p in CGPoint(x: (p.x / s) - t.x, y: (p.y / s) - t.y) }
+        sink.docToView = { d in CGPoint(x: (d.x + t.x) * s, y: (d.y + t.y) * s) }
+    }
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.instrument?.disable()
+        coordinator.instrument = nil
+        coordinator.sink = nil
+    }
+    final class Coordinator {
+        var instrument: MetalInstrument?
+        var sink: CursorSink?
+        @MainActor fileprivate func handleMouseMoved(in view: NSView, event: NSEvent) {
+            guard let sink else { return }
+            let p = view.convert(event.locationInWindow, from: nil)
+            sink.setUniform("cursor.view.x", float: Float(p.x))
+            sink.setUniform("cursor.view.y", float: Float(p.y))
+        }
+        @MainActor fileprivate func handleEntered() { sink?.setUniform("cursor.visible", float: 1) }
+        @MainActor fileprivate func handleExited() { sink?.setUniform("cursor.visible", float: 0) }
+    }
+    final class CursorTrackingView: NSView {
+        weak var coordinator: Coordinator?
+        private var area: NSTrackingArea?
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            setupTracking()
+        }
+        func setupTracking() {
+            if let a = area { removeTrackingArea(a) }
+            let opts: NSTrackingArea.Options = [.mouseMoved, .activeInKeyWindow, .inVisibleRect, .mouseEnteredAndExited]
+            let a = NSTrackingArea(rect: self.bounds, options: opts, owner: self, userInfo: nil)
+            addTrackingArea(a)
+            area = a
+        }
+        override func mouseMoved(with event: NSEvent) {
+            coordinator?.handleMouseMoved(in: self, event: event)
+        }
+        override func mouseEntered(with event: NSEvent) { coordinator?.handleEntered() }
+        override func mouseExited(with event: NSEvent) { coordinator?.handleExited() }
     }
 }
 

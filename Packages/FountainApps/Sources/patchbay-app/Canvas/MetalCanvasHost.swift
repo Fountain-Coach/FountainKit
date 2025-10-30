@@ -77,6 +77,8 @@ struct MetalCanvasHost: View {
             CursorInstrumentBinder()
             // Grid instrument: control spacing and majors via MIDI 2.0
             GridInstrumentBinder()
+            // Right Pane (Viewport) instrument: expose view/doc edges for grid alignment tests
+            ViewportInstrumentBinder()
             // Per-Stage MIDI 2.0 instruments: expose PE for page/margins/baseline
             StageInstrumentsBinder()
             // Per-Replay MIDI 2.0 instruments: expose PE for play/fps/frame
@@ -413,6 +415,66 @@ fileprivate struct GridInstrumentBinder: NSViewRepresentable {
     final class Coordinator {
         var instrument: MetalInstrument?
         var sink: GridSink?
+    }
+}
+
+// MARK: - Viewport Instrument (right pane)
+fileprivate final class ViewportSink: MetalSceneRenderer {
+    var snapshot: (() -> [String: Any])? = nil
+    func setUniform(_ name: String, float: Float) {}
+    func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
+    func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
+    func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+}
+
+fileprivate struct ViewportInstrumentBinder: NSViewRepresentable {
+    @EnvironmentObject var vm: EditorVM
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeNSView(context: Context) -> NSView {
+        let v = NSView(frame: .zero)
+        if context.coordinator.instrument == nil {
+            let sink = ViewportSink()
+            sink.snapshot = { [weak vm] in
+                guard let vm else { return [:] }
+                let zoom = max(0.0001, vm.zoom)
+                let tx = vm.translation.x
+                let ty = vm.translation.y
+                // Contact point: leftmost visible grid line in view-space
+                let g = max(1, vm.grid)
+                let gx = CGFloat(g)
+                let leftDoc = floor((-tx) / gx) * gx
+                let contactX = (leftDoc + tx) * zoom
+                return [
+                    "viewport.zoom": Double(zoom),
+                    "viewport.tx": Double(tx),
+                    "viewport.ty": Double(ty),
+                    "grid.minor": Double(vm.grid),
+                    "contact.grid.left.view.x": Double(contactX)
+                ]
+            }
+            let desc = MetalInstrumentDescriptor(
+                manufacturer: "Fountain",
+                product: "Viewport",
+                instanceId: "viewport",
+                displayName: "Right Pane"
+            )
+            let inst = MetalInstrument(sink: sink, descriptor: desc)
+            inst.stateProvider = { sink.snapshot?() ?? [:] }
+            inst.enable()
+            context.coordinator.instrument = inst
+            context.coordinator.sink = sink
+        }
+        return v
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.instrument?.disable()
+        coordinator.instrument = nil
+        coordinator.sink = nil
+    }
+    final class Coordinator {
+        var instrument: MetalInstrument?
+        var sink: ViewportSink?
     }
 }
 

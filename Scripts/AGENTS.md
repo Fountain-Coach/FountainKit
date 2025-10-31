@@ -17,6 +17,9 @@ Areas (canonical)
 - `Scripts/apps/` — app launchers (composer, legacy studio, engraver, memchat).
 - `Scripts/memchat/` — deprecated; runnable but not active product work.
 
+Baseline policy
+- `Scripts/apps/baseline-patchbay` launches the Baseline‑PatchBay UI. This baseline is authoritative for viewport/math invariants; any change to the baseline app must be paired with a matching MRTS Teatro prompt printed on boot and persisted via `baseline-robot-seed`. Run the invariants subset with `Scripts/ci/baseline-robot.sh`.
+
 Migration
 - New scripts must land under the correct subdirectory. If legacy root paths are referenced by external tools or CI, keep a thin wrapper at `Scripts/` that delegates to the canonical path. Do not add new functional scripts at the root.
 

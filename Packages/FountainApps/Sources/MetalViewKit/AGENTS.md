@@ -75,6 +75,9 @@ Where
 - Renderer hooks live in `MetalCanvasView.swift`.
 - Knowledge harvester: `patchbay-app/Monitor/KnowledgeAuto.swift` (auto‑harvest on launch).
 
+Baseline default
+- The default UI baseline is Baseline‑PatchBay (grid‑dev‑app). Any change to baseline viewport math must be paired with an MRTS Teatro prompt and matching robot tests. Baseline prints both prompts on boot (creation + MRTS). See `Scripts/ci/baseline-robot.sh` for the invariants subset and `baseline-robot-seed` for persisting the MRTS prompt.
+
 Maintenance
 - Keep property names stable (PE schema in lockstep with renderer). Extend via additive properties. Update tests and docs together when invariants evolve. Apps should assume instruments exist and are robot‑testable by default.
 

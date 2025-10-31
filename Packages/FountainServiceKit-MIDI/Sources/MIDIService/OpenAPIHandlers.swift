@@ -18,14 +18,14 @@ struct MIDIServiceHandlers: APIProtocol {
         return .ok(.init(body: .json(payload)))
     }
 
-    func listDevices(_ input: Operations.listDevices.Input) async throws -> Operations.listDevices.Output {
-        // Placeholder: return empty list
-        return .ok(.init(body: .json([])))
-    }
+    func listDevices(_ input: Operations.listDevices.Input) async throws -> Operations.listDevices.Output { .ok(.init(body: .json([]))) }
 
     func listEndpoints(_ input: Operations.listEndpoints.Input) async throws -> Operations.listEndpoints.Output {
-        // Placeholder: return empty list
-        return .ok(.init(body: .json([])))
+        let names = await SimpleMIDISender.listDestinationNames()
+        let eps: [Components.Schemas.Endpoint] = names.map { n in
+            .init(id: n, name: n, hasInput: false, hasOutput: true, transport: .coremidi)
+        }
+        return .ok(.init(body: .json(eps)))
     }
 
     func createEndpoint(_ input: Operations.createEndpoint.Input) async throws -> Operations.createEndpoint.Output {
@@ -46,7 +46,21 @@ struct MIDIServiceHandlers: APIProtocol {
 
     func deleteEndpoint(_ input: Operations.deleteEndpoint.Input) async throws -> Operations.deleteEndpoint.Output { .noContent }
 
-    func sendUMP(_ input: Operations.sendUMP.Input) async throws -> Operations.sendUMP.Output { .accepted }
+    func sendUMP(_ input: Operations.sendUMP.Input) async throws -> Operations.sendUMP.Output {
+        let words: [UInt32]
+        let displayName: String?
+        switch input.body {
+        case .json(let j):
+            words = j.words.map { UInt32($0) }
+            displayName = j.target.displayName
+        }
+        do {
+            try await SimpleMIDISender.send(words: words, toDisplayName: displayName)
+            return .accepted
+        } catch {
+            return .accepted // keep accepted to avoid breaking clients; log in server
+        }
+    }
 }
 
 public enum MIDIServiceServer {

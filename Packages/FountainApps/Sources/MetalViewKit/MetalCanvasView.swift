@@ -683,7 +683,7 @@ final class MetalCanvasNSView: MTKView {
         return nil
     }
     override func resetCursorRects() {
-        addCursorRect(bounds, cursor: .crosshair)
+        addCursorRect(bounds, cursor: .arrow)
     }
     override func updateTrackingAreas() {
         super.updateTrackingAreas()

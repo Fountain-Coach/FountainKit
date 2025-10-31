@@ -61,19 +61,15 @@ struct GridDevView: View {
                 .padding(.vertical, 4)
                 .background(.thinMaterial, in: Capsule())
                 .padding(8)
+                .allowsHitTesting(false)
         }
         // Overlays
         content
-            // MIDI monitor pinned to top-right
+            // MIDI monitor pinned to top-right (non-interactive)
             .overlay(alignment: .topTrailing) {
-                GridDevMidiMonitorOverlay(isHot: .constant(true)).padding(8)
-            }
-            // Cursor instrument readout under the zoom badge (top-left)
-            .overlay(alignment: .topLeading) {
-                VStack(alignment: .leading, spacing: 0) {
-                    Spacer().frame(height: 30)
-                    GridDevCursorOverlay(vm: vm).padding(8)
-                }
+                GridDevMidiMonitorOverlay(isHot: .constant(true))
+                    .padding(8)
+                    .allowsHitTesting(false)
             }
         .frame(minWidth: 800, minHeight: 600)
     }

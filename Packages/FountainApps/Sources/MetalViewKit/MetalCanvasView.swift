@@ -622,6 +622,12 @@ final class MetalCanvasNSView: MTKView {
     private var panVY: CGFloat = 0
     private let panSmoothingAlpha: CGFloat = 0.35
     private let createdAt = Date()
+    // Cursor overlay layers and tracking
+    private var cursorRoot: CALayer?
+    private var crossLayer: CAShapeLayer?
+    private var zeroLayer: CATextLayer?
+    private var labelLayer: CATextLayer?
+    private var cursorArea: NSTrackingArea?
     private func viewToDoc(_ p: CGPoint) -> CGPoint {
         guard let r = coordinator?.renderer else { return .zero }
         let s = max(0.0001, r.currentZoom)
@@ -632,6 +638,87 @@ final class MetalCanvasNSView: MTKView {
         guard let r = coordinator?.renderer else { return nil }
         for n in r.nodesSnapshot.reversed() { if n.frameDoc.contains(doc) { return n.id } }
         return nil
+    }
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .crosshair)
+    }
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let a = cursorArea { removeTrackingArea(a) }
+        let opts: NSTrackingArea.Options = [.mouseMoved, .activeInKeyWindow, .inVisibleRect, .mouseEnteredAndExited]
+        let a = NSTrackingArea(rect: self.bounds, options: opts, owner: self, userInfo: nil)
+        addTrackingArea(a)
+        cursorArea = a
+    }
+    private func ensureCursorLayers() {
+        wantsLayer = true
+        guard let root = layer else { return }
+        if cursorRoot == nil {
+            let container = CALayer()
+            container.bounds = CGRect(x: 0, y: 0, width: 1, height: 1)
+            container.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+            root.addSublayer(container)
+            cursorRoot = container
+
+            let cross = CAShapeLayer()
+            cross.strokeColor = NSColor.systemBlue.cgColor
+            cross.fillColor = NSColor.clear.cgColor
+            cross.lineWidth = 1.0
+            container.addSublayer(cross)
+            crossLayer = cross
+
+            let zero = CATextLayer()
+            zero.string = "0"
+            zero.fontSize = 9
+            zero.alignmentMode = .center
+            zero.foregroundColor = NSColor.secondaryLabelColor.cgColor
+            zero.contentsScale = NSScreen.main?.backingScaleFactor ?? 2.0
+            container.addSublayer(zero)
+            zeroLayer = zero
+
+            let label = CATextLayer()
+            label.fontSize = 11
+            label.alignmentMode = .left
+            label.foregroundColor = NSColor.labelColor.cgColor
+            label.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.6).cgColor
+            label.cornerRadius = 6
+            label.contentsScale = NSScreen.main?.backingScaleFactor ?? 2.0
+            root.addSublayer(label)
+            labelLayer = label
+        }
+    }
+    private func updateCursorGraphics(viewPoint p: CGPoint) {
+        ensureCursorLayers()
+        guard let r = coordinator?.renderer, let container = cursorRoot, let cross = crossLayer, let zero = zeroLayer, let label = labelLayer else { return }
+        container.position = p
+        // Crosshair + ring
+        let path = CGMutablePath()
+        let L: CGFloat = 6
+        path.move(to: CGPoint(x: p.x - L, y: p.y)); path.addLine(to: CGPoint(x: p.x + L, y: p.y))
+        path.move(to: CGPoint(x: p.x, y: p.y - L)); path.addLine(to: CGPoint(x: p.x, y: p.y + L))
+        path.addEllipse(in: CGRect(x: p.x - 9, y: p.y - 9, width: 18, height: 18))
+        // Convert to local container path
+        let local = CGMutablePath()
+        local.move(to: CGPoint(x: -L, y: 0)); local.addLine(to: CGPoint(x: L, y: 0))
+        local.move(to: CGPoint(x: 0, y: -L)); local.addLine(to: CGPoint(x: 0, y: L))
+        local.addEllipse(in: CGRect(x: -9, y: -9, width: 18, height: 18))
+        cross.path = local
+        zero.string = "0"
+        zero.frame = CGRect(x: -3.5, y: -4.0, width: 7, height: 8)
+        // Grid coordinates relative to viewport-anchored grid
+        let z = max(0.0001, r.currentZoom)
+        let leftDoc = (0.0 / z) - r.currentTranslation.x
+        let topDoc  = (0.0 / z) - r.currentTranslation.y
+        let doc = CGPoint(x: (p.x / z) - r.currentTranslation.x,
+                          y: (p.y / z) - r.currentTranslation.y)
+        let step = max(1.0, r.currentGridMinor)
+        let gx = Int(round((doc.x - leftDoc) / step))
+        let gy = Int(round((doc.y - topDoc) / step))
+        let text = "g: \(gx),\(gy)  v: \(Int(p.x)),\(Int(p.y))"
+        let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)]
+        let size = (text as NSString).size(withAttributes: attrs)
+        label.string = text
+        label.frame = CGRect(x: p.x + 12, y: p.y + 12, width: size.width + 10, height: size.height + 6)
     }
     override func mouseDown(with event: NSEvent) {
         guard let c = coordinator else { return }
@@ -687,6 +774,18 @@ final class MetalCanvasNSView: MTKView {
             ])
             return
         }
+    }
+    override func mouseMoved(with event: NSEvent) {
+        let p = convert(event.locationInWindow, from: nil)
+        updateCursorGraphics(viewPoint: p)
+    }
+    override func mouseEntered(with event: NSEvent) {
+        // Keep cursor visible when entering
+        resetCursorRects()
+    }
+    override func mouseExited(with event: NSEvent) {
+        // Hide label when leaving
+        labelLayer?.isHidden = true
     }
     // Trackpad pan (scroll)
     override func scrollWheel(with event: NSEvent) {

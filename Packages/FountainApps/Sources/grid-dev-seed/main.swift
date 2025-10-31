@@ -83,9 +83,10 @@ struct GridDevSeed {
         - Cursor Instrument (always on): { manufacturer: Fountain, product: Cursor, displayName: "Grid Cursor", instanceId: "grid-cursor" }
           - PE properties:
             - cursor.visible (Float: 0 or 1; default 1)
-            - cursor.view.x, cursor.view.y (Float: view‑space coordinates in points)
-            - cursor.doc.x, cursor.doc.y (Float: doc‑space coordinates)
-          - Display: a small overlay box near the top‑left under the zoom badge; updates continuously as the cursor moves; shows both view and doc coordinates.
+            - cursor.view.x, cursor.view.y (Float: view‑space points)
+            - cursor.doc.x, cursor.doc.y (Float: doc‑space)
+          - Display: draw directly in the canvas at the pointer — crosshair + ring + tiny “0” at center, with the label offset so it never occludes the zero.
+          - Hit‑testing policy: rendered via CALayers inside the Metal canvas; never intercepts events.
         - Vendor JSON ops (SysEx7 UMP):
           - ui.panBy {dx.doc, dy.doc} or {dx.view, dy.view}; convert view→doc via /zoom. Grid stays viewport‑anchored; axes reflect world movement.
           - ui.zoomAround {anchor.view.x, anchor.view.y, magnification}; anchor‑stable.
@@ -94,7 +95,7 @@ struct GridDevSeed {
           - Left contact point pinned: first vertical grid line renders at x=0.0±0.5 px at all transforms.
           - Major spacing in pixels = grid.minor × majorEvery × zoom.
         - Defaults at boot: zoom=1.0, translation=(0,0), grid.minor=24, grid.majorEvery=5.
-        - Optional overlay on by default: “MIDI 2.0 Monitor” pinned to the top‑right, showing recent vendor JSON/PE events.
+        - Optional overlay on by default: “MIDI 2.0 Monitor” pinned to the top‑right (non‑interactive), showing recent vendor JSON/PE events.
 
         Persistence — FountainStore (Corpus: grid-dev)
         - Create corpus id: grid-dev (metadata: {app: grid-dev, kind: teatro+instruments}).

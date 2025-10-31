@@ -321,6 +321,8 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
     // UI selection and marquee (drawn in Metal)
     var selectionProvider: (() -> Set<String>)?
     var marqueeDocRect: CGRect? = nil
+    // Contact publishing (to avoid spamming identical events)
+    private var lastContactSignature: (w: Int, zMilli: Int, txMilli: Int, tyMilli: Int, stepMilli: Int)? = nil
 
     init?(mtkView: MTKView) {
         guard let device = mtkView.device ?? MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue() else { return nil }
@@ -603,6 +605,8 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
         let oV = [xf.docToNDC(x: 0, y: -9999), xf.docToNDC(x: 0, y: 9999)]
         let axis = SIMD4<Float>(0.75, 0.20, 0.20, 1)
         draw(oH, rgba: axis); draw(oV, rgba: axis)
+        // Publish grid contact summary (left pinned, right derived) sparingly
+        publishGridContactIfNeeded(viewBounds: view.bounds)
     }
     private func buildPipeline(pixelFormat: MTLPixelFormat) throws {
         let src = Self.shaderSource
@@ -626,6 +630,32 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
         VSOut o; o.pos = float4(pos[vid], 0, 1); return o; }
     fragment float4 node_ps(const VSOut in [[stage_in]], constant float4 &color [[ buffer(0) ]]) { return color; }
     """
+}
+
+extension MetalCanvasRenderer {
+    @MainActor private func publishGridContactIfNeeded(viewBounds: CGRect) {
+        let W = max(0.0, viewBounds.width)
+        let step = max(0.0001, (overrideGridMinor ?? gridMinor) * canvas.zoom)
+        let rightIndex = Int(floor(W / step))
+        let sig: (Int, Int, Int, Int, Int) = (
+            Int(W.rounded()),
+            Int((canvas.zoom * 1000).rounded()),
+            Int((canvas.translation.x * 1000).rounded()),
+            Int((canvas.translation.y * 1000).rounded()),
+            Int((step * 1000).rounded())
+        )
+        if let last = lastContactSignature, last == sig { return }
+        lastContactSignature = sig
+        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+            "type": "grid.contact",
+            "viewport.width": Double(W),
+            "grid.step": Double(step),
+            "contact.grid.left.view.x": 0.0,
+            "contact.grid.right.index": rightIndex,
+            "contact.grid.right.view.x": Double(rightIndex) * Double(step),
+            "visible.grid.columns": rightIndex + 1
+        ])
+    }
 }
 
 // MARK: - Interaction (Mouse) — MTKView subclass

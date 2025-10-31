@@ -435,12 +435,23 @@ fileprivate struct ViewportInstrumentBinder: NSViewRepresentable {
                 // With grid anchored to viewport left, contact point sits at x=0 regardless of translation.
                 let g = max(1, vm.grid)
                 let contactX: CGFloat = 0
+                // Derive right contact info and visible columns from current window width when available
+                let W: CGFloat = NSApp.keyWindow?.contentView?.bounds.width ?? 0
+                let step = CGFloat(g) * zoom
+                let rightIndex = step > 0 ? Int(floor(W / step)) : 0
+                let rightX = CGFloat(rightIndex) * step
+                let visibleCols = rightIndex + 1 // include left contact at 0
                 return [
                     "viewport.zoom": Double(zoom),
                     "viewport.tx": Double(tx),
                     "viewport.ty": Double(ty),
                     "grid.minor": Double(vm.grid),
-                    "contact.grid.left.view.x": Double(contactX)
+                    "contact.grid.left.view.x": Double(contactX),
+                    "viewport.width": Double(W),
+                    "grid.step": Double(step),
+                    "contact.grid.right.index": rightIndex,
+                    "contact.grid.right.view.x": Double(rightX),
+                    "visible.grid.columns": visibleCols
                 ]
             }
             let desc = MetalInstrumentDescriptor(

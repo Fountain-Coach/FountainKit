@@ -74,6 +74,8 @@ let package = Package(
         .executable(name: "baseline-patchbay", targets: ["grid-dev-app"]),
         .executable(name: "grid-dev-app", targets: ["grid-dev-app"]),
         .executable(name: "grid-dev-seed", targets: ["grid-dev-seed"])
+        ,
+        .executable(name: "baseline-robot-seed", targets: ["baseline-robot-seed"])
     ],
     dependencies: [
         .package(path: "../FountainCore"),
@@ -408,6 +410,14 @@ let package = Package(
                 .product(name: "LauncherSignature", package: "FountainCore")
             ],
             path: "Sources/grid-dev-seed"
+        ),
+        .executableTarget(
+            name: "baseline-robot-seed",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ],
+            path: "Sources/baseline-robot-seed"
         ),
         .executableTarget(
             name: "img-rmse",

@@ -16,6 +16,8 @@ Areas (canonical)
 - `Scripts/audiotalk/` — AudioTalk stack runners and tool registration.
 - `Scripts/apps/` — app launchers (composer, legacy studio, engraver, memchat).
 - `Scripts/memchat/` — deprecated; runnable but not active product work.
+ - `Scripts/apps/baseline-patchbay-web` — seeds prompts and starts the external web mirror (Vite).
+ - `Scripts/apps/midi-service` — starts the MIDI 2.0 HTTP bridge for UMP send/record and headless instruments.
 
 Baseline policy
 - `Scripts/apps/baseline-patchbay` launches the Baseline‑PatchBay UI. This baseline is authoritative for viewport/math invariants; any change to the baseline app must be paired with a matching MRTS Teatro prompt printed on boot and persisted via `baseline-robot-seed`. Run the invariants subset with `Scripts/ci/baseline-robot.sh`.
@@ -34,3 +36,15 @@ Register external OpenAPI as tools
 
 CI smoke for Prompt Field Guide
 - `Scripts/ci/teatro-guide-smoke.sh` registers tools (idempotent), invokes one via FunctionCaller, and writes an ETag under `.fountain/artifacts/`. Inputs: `TOOLS_FACTORY_URL`, `FUNCTION_CALLER_URL`, `TEATRO_GUIDE_CORPUS`, `TEATRO_GUIDE_SPEC`, `TEATRO_GUIDE_BASE_URL` (optional; sensible defaults).
+MIDI service (for Web MRTS)
+- Start: `Scripts/apps/midi-service` (macOS default `coremidi`; Linux default `alsa`).
+- Backends: `MIDI_SERVICE_BACKEND=coremidi|alsa|rtp|loopback`.
+- Recorder (NDJSON): set `MIDI_UMP_LOG_DIR` (default `.fountain/corpus/ump`).
+- OpenAPI routes:
+  - UMP send/record: `POST /ump/send`, `GET /ump/events`, `POST /ump/events`.
+  - Headless instruments: `GET /headless/instruments`, `POST /headless/instruments`, `DELETE /headless/instruments/{displayName}`.
+
+Web mirror (Baseline‑PatchBay)
+- Launcher: `Scripts/apps/baseline-patchbay-web` (seeds Teatro + MRTS prompts; starts Vite).
+- Env: `PATCHBAY_URL`, `MIDI_SERVICE_URL`.
+- Drive: set target to “PatchBay Canvas” (macOS) or “Headless Canvas” (Linux/headless) and keep “MIDI 2.0” mode with “Sync PE” on.

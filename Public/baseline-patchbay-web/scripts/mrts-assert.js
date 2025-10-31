@@ -21,11 +21,11 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 const mrts = await import('../dist/midi2/mrts.js')
 
 async function flush() {
-  await fetch(`${MIDI_SERVICE_URL}/ump/flush`, { method: 'POST' }).catch(() => {})
+  await fetch(`${MIDI_SERVICE_URL}/ump/events`, { method: 'POST' }).catch(() => {})
 }
 
 async function tail(limit = 256) {
-  const r = await fetch(`${MIDI_SERVICE_URL}/ump/tail`)
+  const r = await fetch(`${MIDI_SERVICE_URL}/ump/events?limit=${limit}`)
   if (!r.ok) throw new Error(`tail failed: ${r.status}`)
   const j = await r.json()
   return (j.events || [])
@@ -94,4 +94,3 @@ async function main() {
 }
 
 main().catch((e) => { console.error('[assert] failed', e); process.exit(1) })
-

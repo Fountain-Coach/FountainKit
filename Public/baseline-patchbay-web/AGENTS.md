@@ -20,7 +20,11 @@ How
 
 Routes used
 - PatchBay (REST): `GET /canvas`, `POST /canvas/zoom`, `POST /canvas/pan`.
-- MIDI bridge: `GET /endpoints` (select target), `POST /ump/send` (vendor JSON UMP).
+- MIDI service (OpenAPI):
+  - `GET /endpoints` (list destinations)
+  - `POST /ump/send` (deliver UMP to `target.displayName`)
+  - `GET /ump/events` (tail recorder events), `POST /ump/events` (flush)
+  - `GET /headless/instruments`, `POST /headless/instruments`, `DELETE /headless/instruments/{displayName}`
 
 Where
 - App shell: `Public/baseline-patchbay-web/index.html`.

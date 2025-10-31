@@ -10,6 +10,8 @@ Quick dev helpers:
 - `Scripts/dev-status` – show service/port/PID status at a glance
 - `Scripts/dev-servers-up.sh` – prebuild all servers, then start with readiness checks (`--no-extras`, `--release`)
  - `Scripts/apps/baseline-patchbay` – launch the Baseline‑PatchBay UI (grid‑only baseline)
+ - `Scripts/apps/baseline-patchbay-web` – launch the external Baseline‑PatchBay mirror (Vite, MIDI‑driven)
+ - `Scripts/apps/midi-service` – start the MIDI 2.0 HTTP bridge (UMP send/record + headless instruments)
 
 Quickstart (fk)
 - `Scripts/fk doctor` — verify swift, docker, jq, curl

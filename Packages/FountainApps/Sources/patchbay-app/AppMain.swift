@@ -6,6 +6,7 @@ import ApiClientsCore
 import TutorDashboard
 import AppKit
 import MetalViewKit
+import FountainStoreClient
 
 @main
 struct PatchBayStudioApp: App {
@@ -86,6 +87,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { attemptActivate(remaining - 1) }
         }
         attemptActivate(12) // ~1s
+        // Seed + print Teatro prompt (default policy)
+        Task.detached {
+            let prompt = PatchBayStudioApp_buildTeatroPrompt()
+            await PromptSeeder.seedAndPrint(appId: "patchbay-app", prompt: prompt, facts: [
+                "instruments": [
+                    ["product": "Canvas", "displayName": "PatchBay Canvas"],
+                    ["product": "Grid", "displayName": "Grid"],
+                    ["product": "Viewport", "displayName": "Right Pane"],
+                    ["product": "Cursor", "displayName": "PatchBay Cursor"]
+                ]
+            ])
+        }
         if let transportEnv = ProcessInfo.processInfo.environment["PATCHBAY_MIDI_TRANSPORT"]?.lowercased() {
             switch transportEnv {
             case "noop", "disabled":
@@ -187,6 +200,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         exit(0)
     }
+}
+
+// Keep outside the main actor to avoid async access warnings in detached tasks
+fileprivate func PatchBayStudioApp_buildTeatroPrompt() -> String {
+    return """
+    Scene: PatchBay Studio (Canvas + Instruments)
+    Text:
+    - Layout: three-pane UI. Canvas (right) renders a viewport‑anchored grid (minor=24, major every 5).
+    - Canvas Instrument: zoom, translation.x/y; anchor‑stable zoom; follow‑finger pan.
+    - Grid Instrument: grid.minor, grid.majorEvery via PE.
+    - Viewport Instrument: reports contact.grid.left.view.x and viewport transform snapshot.
+    - Cursor Instrument: crosshair rendered in canvas; posts ui.cursor.move with grid/view/doc coords; never intercepts input.
+    - MIDI 2.0 Monitor: pinned top‑right (non‑interactive), shows activity including cursor g:x,y.
+    Invariants:
+    - Left grid contact pinned at x=0 at defaults.
+    - Major spacing pixels = grid.minor × majorEvery × zoom.
+    - Zoom around anchor keeps anchor within ≤1 px.
+    """
 }
 
 @MainActor

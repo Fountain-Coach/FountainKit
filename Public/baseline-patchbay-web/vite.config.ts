@@ -12,7 +12,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/patchbay/, ''),
       },
+      '/api/midi': {
+        target: process.env.MIDI_SERVICE_URL || 'http://127.0.0.1:7180',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/midi/, ''),
+      },
     },
   },
 })
-

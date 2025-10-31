@@ -12,16 +12,15 @@ Why
 
 How
 - Start PatchBay: `swift run --package-path Packages/FountainApps patchbay-service-server`.
-- Start MIDI bridge: `swift run --package-path Packages/FountainApps midi-service-server` (default `http://127.0.0.1:7180`).
+- Start MIDI bridge: `Scripts/apps/midi-service` (or `swift run --package-path Packages/FountainApps midi-service-server`).
 - Seed prompts (optional): `npm run seed` (runs `grid-dev-seed` + `baseline-robot-seed`).
 - Dev server: `PATCHBAY_URL=http://127.0.0.1:7090 MIDI_SERVICE_URL=http://127.0.0.1:7180 npm run dev` (or `Scripts/apps/baseline-patchbay-web`).
 - Build static: `npm run build` (emits `dist/`).
-- Proxy: Vite dev proxy rewrites `/api/patchbay/*` → `PATCHBAY_URL`.
+- Proxy: Vite dev proxy rewrites `/api/patchbay/*` → `PATCHBAY_URL`, `/api/midi/*` → `MIDI_SERVICE_URL`.
 
 Routes used
-- `GET /canvas` → initial `CanvasState { transform: { scale, translation }, gridStep }`.
-- `POST /canvas/zoom { scale, anchorView? }`.
-- `POST /canvas/pan { dx, dy }` (doc‑space deltas).
+- PatchBay (REST): `GET /canvas`, `POST /canvas/zoom`, `POST /canvas/pan`.
+- MIDI bridge: `GET /endpoints` (select target), `POST /ump/send` (vendor JSON UMP).
 
 Where
 - App shell: `Public/baseline-patchbay-web/index.html`.

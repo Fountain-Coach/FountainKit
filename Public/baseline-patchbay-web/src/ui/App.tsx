@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { getCanvas, panBy, zoomSet, resetTransform } from '../ws/patchbay'
+import { listEndpoints, sendVendorJSON } from '../ws/midi'
 import { drawGrid } from './Grid'
 
 export default function App() {
@@ -8,6 +9,10 @@ export default function App() {
   const [ty, setTy] = useState(0)
   const [gridStep, setGridStep] = useState(24)
   const [loading, setLoading] = useState(true)
+  const [driveMode, setDriveMode] = useState<'rest' | 'midi'>('midi')
+  const [endpoints, setEndpoints] = useState<{ id: string; name: string }[]>([])
+  const [target, setTarget] = useState<string>('PatchBay Canvas')
+  const [log, setLog] = useState<string[]>([])
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const dpr = useMemo(() => window.devicePixelRatio || 1, [])
 
@@ -24,6 +29,20 @@ export default function App() {
         console.warn('patchbay not reachable, using defaults', e)
       } finally {
         setLoading(false)
+      }
+    })()
+  }, [])
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const eps = await listEndpoints()
+        setEndpoints(eps)
+        const canvas = eps.find(e => e.name.includes('PatchBay Canvas'))
+        if (canvas) setTarget(canvas.name)
+      } catch (e) {
+        console.warn('midi-service not reachable; MIDI drive disabled', e)
+        setDriveMode('rest')
       }
     })()
   }, [])
@@ -51,7 +70,12 @@ export default function App() {
       const newScale = Math.min(16, Math.max(0.1, scale * factor))
       setScale(newScale)
       try {
-        await zoomSet({ scale: newScale, anchorView: { x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY } })
+        if (driveMode === 'midi') {
+          await sendVendorJSON('ui.zoomAround', { 'anchor.view.x': e.nativeEvent.offsetX, 'anchor.view.y': e.nativeEvent.offsetY, magnification: newScale / scale - 1 }, target)
+        } else {
+          await zoomSet({ scale: newScale, anchorView: { x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY } })
+        }
+        setLog(l => [`zoomAround z=${newScale.toFixed(2)} anchor=(${e.nativeEvent.offsetX.toFixed(0)},${e.nativeEvent.offsetY.toFixed(0)})`, ...l].slice(0, 6))
       } catch {}
     } else {
       // pan
@@ -59,7 +83,14 @@ export default function App() {
       const dy = -e.deltaY / scale
       setTx((v) => v + dx)
       setTy((v) => v + dy)
-      try { await panBy({ dx, dy }) } catch {}
+      try {
+        if (driveMode === 'midi') {
+          await sendVendorJSON('ui.panBy', { 'dx.view': -e.deltaX, 'dy.view': -e.deltaY }, target)
+        } else {
+          await panBy({ dx, dy })
+        }
+        setLog(l => [`pan dx=${(-e.deltaX).toFixed(1)} dy=${(-e.deltaY).toFixed(1)}`, ...l].slice(0, 6))
+      } catch {}
     }
   }
 
@@ -77,7 +108,13 @@ export default function App() {
     const dy = dyView / scale
     setTx((v) => v + dx)
     setTy((v) => v + dy)
-    try { await panBy({ dx, dy }) } catch {}
+    try {
+      if (driveMode === 'midi') {
+        await sendVendorJSON('ui.panBy', { 'dx.view': dxView, 'dy.view': dyView }, target)
+      } else {
+        await panBy({ dx, dy })
+      }
+    } catch {}
   }
 
   const doReset = async () => {
@@ -85,7 +122,14 @@ export default function App() {
     setScale(nextScale)
     setTx((v) => v + dx)
     setTy((v) => v + dy)
-    try { await panBy({ dx, dy }); await zoomSet({ scale: nextScale }) } catch {}
+    try {
+      if (driveMode === 'midi') {
+        await sendVendorJSON('canvas.reset', {}, target)
+      } else {
+        await panBy({ dx, dy }); await zoomSet({ scale: nextScale })
+      }
+      setLog(l => ["reset", ...l].slice(0, 6))
+    } catch {}
   }
 
   return (
@@ -93,7 +137,21 @@ export default function App() {
       <header style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0 12px', borderBottom: '1px solid #E6EAF2' }}>
         <strong>Baseline‑PatchBay (Web)</strong>
         <span style={{ opacity: 0.7 }}>zoom={scale.toFixed(2)} tx={tx.toFixed(1)} ty={ty.toFixed(1)} step={gridStep}</span>
-        <button onClick={doReset} style={{ marginLeft: 'auto' }}>Reset</button>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <label style={{ fontSize: 12, opacity: 0.7 }}>Drive:</label>
+          <select value={driveMode} onChange={(e) => setDriveMode(e.target.value as any)}>
+            <option value="midi">MIDI 2.0</option>
+            <option value="rest">REST</option>
+          </select>
+          {driveMode === 'midi' && (
+            <select value={target} onChange={(e) => setTarget(e.target.value)}>
+              {[target, ...endpoints.map(e => e.name)].filter((v, i, a) => a.indexOf(v) === i).map(n => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+          )}
+          <button onClick={doReset}>Reset</button>
+        </div>
       </header>
       <div style={{ position: 'relative' }}>
         {loading && <div style={{ position: 'absolute', top: 8, left: 8, opacity: 0.6 }}>Loading canvas…</div>}
@@ -107,12 +165,14 @@ export default function App() {
           style={{ width: '100%', height: '100%', display: 'block', cursor: 'grab' }}
         />
         {/* Simple monitor */}
-        <div style={{ position: 'absolute', right: 8, top: 8, background: 'rgba(255,255,255,0.9)', border: '1px solid #E6EAF2', borderRadius: 6, padding: '6px 8px', fontSize: 12 }}>
+        <div style={{ position: 'absolute', right: 8, top: 8, background: 'rgba(255,255,255,0.9)', border: '1px solid #E6EAF2', borderRadius: 6, padding: '6px 8px', fontSize: 12, minWidth: 240 }}>
           <div style={{ fontWeight: 600, marginBottom: 4 }}>MIDI 2.0 Monitor</div>
-          <div>ui.zoomAround / ui.panBy mirrored to REST</div>
+          <div style={{ opacity: 0.7, marginBottom: 4 }}>mode: {driveMode.toUpperCase()} target: {target}</div>
+          {log.slice(0, 5).map((l, i) => (
+            <div key={i} style={{ whiteSpace: 'pre' }}>{l}</div>
+          ))}
         </div>
       </div>
     </div>
   )
 }
-

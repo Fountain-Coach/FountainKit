@@ -24,6 +24,23 @@ Welcome to FountainKit, the modular SwiftPM workspace for the Fountain Coach org
 - Scripts lifecycle — `Scripts/AGENTS.md`.
 - Composer Studio design — `Design/COMPOSER_STUDIO_STORY.md` (full story + SVG prompts). SVGs live in `Design/` and are the UI source of truth.
 
+## Baseline App — Baseline‑PatchBay
+
+Baseline‑PatchBay is the default baseline for new FountainAI apps. It’s an alias of the PatchBay UI with instruments, monitor, and reset controls wired for robot testing.
+
+What
+- Product alias: `baseline-patchbay` (points to the `patchbay-app` target).
+- Launch script: `Scripts/apps/baseline-patchbay`.
+- App-level PE: `canvas.reset`, `canvas.zoom`, `canvas.translation.{x,y}`.
+- Monitor PE: `monitor.fadeSeconds`, `monitor.opacity.min`, `monitor.maxLines`, `monitor.opacity.now`.
+
+Why
+- Canonical baseline for interactivity, viewport invariants, and instrument wiring.
+
+How
+- Run UI: `Scripts/dev/dev-up` (UI auto‑launches) or `Scripts/apps/baseline-patchbay`.
+- Robot: see `Packages/FountainApps/Tests/PatchBayAppUITests/*` for examples.
+
 ## Teatro Prompt & FountainStore — Default Policy
 
 Every interactive app must carry a concise Teatro prompt that describes its UI, instruments, PE schema, and invariants. On boot, the app persists this prompt into FountainStore and prints the exact prompt to stdout for observability.

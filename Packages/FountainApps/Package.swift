@@ -70,6 +70,8 @@ let package = Package(
         .executable(name: "patchbay-service-server", targets: ["patchbay-service-server"]),
         .executable(name: "patchbay-app", targets: ["patchbay-app"]),
         .executable(name: "replay-export", targets: ["replay-export"]),
+        // Baseline app alias for PatchBay UI (default starting point for FountainAI apps)
+        .executable(name: "baseline-patchbay", targets: ["patchbay-app"]),
         .executable(name: "grid-dev-app", targets: ["grid-dev-app"]),
         .executable(name: "grid-dev-seed", targets: ["grid-dev-seed"])
     ],

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Launch the Baseline PatchBay UI (alias of patchbay-app).
+# Usage: Scripts/apps/baseline-patchbay [--no-build]
+
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")"/../.. && pwd)
+BUILD=1
+for a in "$@"; do [[ "$a" == "--no-build" ]] && BUILD=0; done
+
+export LAUNCHER_SIGNATURE=${LAUNCHER_SIGNATURE:-B86D7CEE-24C4-4C4C-A107-8D0542D1965B}
+if (( BUILD )); then
+  swift build --package-path "$ROOT_DIR/Packages/FountainApps" -c debug --product baseline-patchbay >/dev/null
+fi
+swift run --package-path "$ROOT_DIR/Packages/FountainApps" -c debug baseline-patchbay
+

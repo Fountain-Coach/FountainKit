@@ -635,7 +635,7 @@ final class MetalCanvasNSView: MTKView {
     private var panVX: CGFloat = 0
     private var panVY: CGFloat = 0
     private let panSmoothingAlpha: CGFloat = 0.35
-    private let createdAt = Date()
+    // Accept user scroll input only when the window is focused (key).
     // Cursor overlay layers and tracking
     private var cursorRoot: CALayer?
     private var crossLayer: CAShapeLayer?
@@ -780,8 +780,8 @@ final class MetalCanvasNSView: MTKView {
     // Trackpad pan (scroll)
     override func scrollWheel(with event: NSEvent) {
         guard let c = coordinator, let r = c.renderer else { return }
-        // Ignore stray startup scrolls for a brief period to avoid initial transform drift
-        if Date().timeIntervalSince(createdAt) < 0.3 { return }
+        // Focus-aware gating: ignore scrolls until the window is key to prevent initial transform drift
+        if let win = self.window, !win.isKeyWindow { return }
         let s = max(0.0001, r.currentZoom)
         let rawX = event.scrollingDeltaX
         let rawY = event.scrollingDeltaY

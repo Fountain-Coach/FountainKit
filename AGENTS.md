@@ -24,6 +24,29 @@ Welcome to FountainKit, the modular SwiftPM workspace for the Fountain Coach org
 - Scripts lifecycle — `Scripts/AGENTS.md`.
 - Composer Studio design — `Design/COMPOSER_STUDIO_STORY.md` (full story + SVG prompts). SVGs live in `Design/` and are the UI source of truth.
 
+## Teatro Prompt & FountainStore — Default Policy
+
+Every interactive app must carry a concise Teatro prompt that describes its UI, instruments, PE schema, and invariants. On boot, the app persists this prompt into FountainStore and prints the exact prompt to stdout for observability.
+
+What
+- Teatro prompt is the single, human‑readable description of the surface. It is kept current and reviewed like code.
+- The prompt is seeded into an app‑specific corpus as a page `prompt:<app-id>` with segments:
+  - `teatro.prompt` → full prompt text
+  - `facts` → structured JSON (instrument identities, PE fields, vendor ops, robot subset, invariants)
+- The prompt used on this run is printed during boot (no modal UI required).
+
+Why
+- Provenance and determinism across builds; agents and humans can diff and reason about behavior.
+
+How
+- Corpus: `CORPUS_ID` (default `<app-id>`). Store root: `FOUNTAINSTORE_DIR` (default `.fountain/store`).
+- Seeder pattern: add a small `*-seed` executable to write/update the prompt and facts.
+- Launcher pattern: add `Scripts/apps/<app>` to seed then launch.
+
+Where
+- Example: `Packages/FountainApps/Sources/grid-dev-seed` and `Scripts/apps/grid-dev`.
+- Store client: `Packages/FountainCore/Sources/FountainStoreClient/*`.
+
 ## Documentation Tone & Style (for humans and LLMs)
 
 Write for a human first, with just enough structure for machines. Use short paragraphs to carry the story; reserve lists for commands, routes, and tight checklists. Prefer “why” before “how”, then link to the exact files and commands.

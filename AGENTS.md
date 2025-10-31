@@ -29,7 +29,7 @@ Welcome to FountainKit, the modular SwiftPM workspace for the Fountain Coach org
 Baseline‑PatchBay is the default baseline for new FountainAI apps. It’s an alias of the PatchBay UI with instruments, monitor, and reset controls wired for robot testing.
 
 What
-- Product alias: `baseline-patchbay` (points to the `patchbay-app` target).
+- Product alias: `baseline-patchbay` (points to the `grid-dev-app` target).
 - Launch script: `Scripts/apps/baseline-patchbay`.
 - App-level PE: `canvas.reset`, `canvas.zoom`, `canvas.translation.{x,y}`.
 - Monitor PE: `monitor.fadeSeconds`, `monitor.opacity.min`, `monitor.maxLines`, `monitor.opacity.now`.

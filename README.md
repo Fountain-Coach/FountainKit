@@ -9,6 +9,7 @@ Quick dev helpers:
 - `Scripts/dev-down` – stop services (use `--force` to clear ports)
 - `Scripts/dev-status` – show service/port/PID status at a glance
 - `Scripts/dev-servers-up.sh` – prebuild all servers, then start with readiness checks (`--no-extras`, `--release`)
+ - `Scripts/apps/baseline-patchbay` – launch the Baseline‑PatchBay UI (grid‑only baseline)
 
 Quickstart (fk)
 - `Scripts/fk doctor` — verify swift, docker, jq, curl
@@ -164,3 +165,16 @@ coverage alongside the package tests.
 ## License
 
 FountainKit inherits the licensing terms of the original FountainAI project; consult the repository’s `LICENSES/` directory for details.
+### Launch the Baseline UI (recommended for local UI runs)
+
+Baselined UI for instrument development and robot testing:
+
+```bash
+# Start core services and auto-launch the baseline UI
+Scripts/dev/dev-up --check
+
+# Or launch the UI directly
+Scripts/apps/baseline-patchbay
+```
+
+The baseline UI speaks MIDI 2.0 for Canvas/Grid/Viewport/Cursor, exposes App‑level PE for `canvas.reset`, and includes a MIDI monitor that fades on idle and wakes on activity. PE knobs for monitor fade and reset UI are available.

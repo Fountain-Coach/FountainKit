@@ -127,6 +127,16 @@ struct GridDevView: View {
                             manufacturer: "Fountain", product: "GridDev", instanceId: "grid-dev-1", displayName: "Grid Dev"
                         )
                     )
+                    // Accept drops directly on the canvas wrapper to avoid intercepting gestures with an overlay.
+                    .onDrop(of: [UTType.plainText], isTargeted: .constant(false)) { providers in
+                        if let id = loadFirstString(from: providers) {
+                            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                                "type": "ui.dnd.drop", "item.id": id, "target": "center"
+                            ])
+                            return true
+                        }
+                        return false
+                    }
                     .overlay(GridDevUXBinder(onSet: { name, value in
                         switch name {
                         case "reset.opacity.min":
@@ -149,18 +159,6 @@ struct GridDevView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                         .padding(8)
                         .allowsHitTesting(false)
-                    // Accept text drops into the canvas area (log the event)
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onDrop(of: [UTType.plainText], isTargeted: .constant(false)) { providers in
-                            if let id = loadFirstString(from: providers) {
-                                NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
-                                    "type": "ui.dnd.drop", "item.id": id, "target": "center"
-                                ])
-                                return true
-                            }
-                            return false
-                        }
                     VStack(alignment: .leading, spacing: 6) {
                         Button {
                             NotificationCenter.default.post(

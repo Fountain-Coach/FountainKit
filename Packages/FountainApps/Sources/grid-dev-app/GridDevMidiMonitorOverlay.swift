@@ -106,5 +106,36 @@ struct GridDevMidiMonitorOverlay: View {
             // Wake on activity and fade after inactivity window
             stopFade(); scheduleFade()
         }
+        .overlay(InstrumentBinder(onSet: { name, value in
+            switch name {
+            case "monitor.fadeSeconds": self.fadeSeconds = Double(value); self.scheduleFade()
+            case "monitor.opacity.min": self.minOpacity = Double(value); self.scheduleFade()
+            case "monitor.maxLines": self.maxLines = max(1, Int(value)); self.trim()
+            default: break
+            }
+        }))
     }
+}
+
+// Binds a MetalInstrument (MIDI 2.0) to this overlay and maps PE setUniform to overlay properties.
+fileprivate struct InstrumentBinder: NSViewRepresentable {
+    let onSet: (String, Float) -> Void
+    final class Sink: MetalSceneRenderer { var onSet: ((String, Float)->Void)?; func setUniform(_ name: String, float: Float) { onSet?(name, float) }
+        func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
+        func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
+        func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+    }
+    final class Coordinator { var instrument: MetalInstrument? = nil }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeNSView(context: Context) -> NSView {
+        let v = NSView(frame: .zero)
+        let sink = Sink(); sink.onSet = onSet
+        let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "GridDevMonitor", instanceId: "griddev-monitor", displayName: "MIDI Monitor Overlay")
+        let inst = MetalInstrument(sink: sink, descriptor: desc)
+        inst.enable()
+        context.coordinator.instrument = inst
+        return v
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) { coordinator.instrument?.disable(); coordinator.instrument = nil }
 }

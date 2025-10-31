@@ -10,7 +10,7 @@ const run = (cmd, args, opts = {}) => new Promise((resolve, reject) => {
 
 const root = process.cwd() + '/..'
 const MIDI_SERVICE_URL = process.env.MIDI_SERVICE_URL || 'http://127.0.0.1:7180'
-const TARGET_NAME = process.env.TARGET_NAME || 'PatchBay Canvas'
+const TARGET_NAME = process.env.TARGET_NAME || 'Headless Canvas'
 process.env.MIDI_SERVICE_URL = MIDI_SERVICE_URL
 
 // Dist modules (built via `npm run build`)
@@ -53,4 +53,3 @@ async function main() {
 }
 
 main().catch((e) => { console.error('[mrts] failed', e); process.exit(1) })
-

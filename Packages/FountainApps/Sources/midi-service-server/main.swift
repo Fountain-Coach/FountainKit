@@ -17,12 +17,12 @@ struct Main {
                     return HTTPResponse(status: 200, headers: ["Content-Type": "application/yaml"], body: data)
                 }
             }
-            if req.path == "/ump/tail" {
+            if req.path == "/ump/tail" || req.path == "/ump/events" && req.method.uppercased() == "GET" {
                 let items = await MIDIServiceRuntime.shared.tail(limit: 256)
                 let payload = try? JSONEncoder().encode(["events": items])
                 return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: payload ?? Data("{}".utf8))
             }
-            if req.path == "/ump/flush" {
+            if req.path == "/ump/flush" || req.path == "/ump/events" && req.method.uppercased() == "POST" {
                 await MIDIServiceRuntime.shared.flush()
                 return HTTPResponse(status: 204)
             }
@@ -59,7 +59,13 @@ struct Main {
         let server = NIOHTTPServer(kernel: transport.asKernel())
 
         // Ensure listener to record incoming UMP from all sources
-        Task { await MIDIServiceRuntime.shared.ensureListener(); await MIDIServiceRuntime.shared.registerHeadlessCanvas() }
+        Task {
+            await MIDIServiceRuntime.shared.ensureListener()
+            await MIDIServiceRuntime.shared.registerHeadlessCanvas()
+            // Register Fountain Editor headless instrument for web/app MRTS
+            await HeadlessRegistry.shared.register(FountainEditorHeadlessInstrument(displayName: "Headless Canvas"))
+            await HeadlessRegistry.shared.register(FountainEditorHeadlessInstrument(displayName: "Fountain Editor"))
+        }
 
         Task {
             do {

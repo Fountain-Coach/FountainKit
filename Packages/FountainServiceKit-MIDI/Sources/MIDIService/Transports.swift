@@ -181,6 +181,212 @@ final class CanvasHeadlessInstrument: HeadlessInstrument {
     }
 }
 
+// MARK: - Fountain Editor (A4 Typewriter) headless instrument
+final class FountainEditorHeadlessInstrument: HeadlessInstrument {
+    let displayName: String
+    // Editor state
+    private var content: String = ""
+    private var cursor: Int = 0 // UTF-16 index
+    // Page + font
+    private var pageSize: String = "A4"
+    private var marginTopMM: Double = 25
+    private var marginLeftMM: Double = 35
+    private var marginRightMM: Double = 20
+    private var marginBottomMM: Double = 25
+    private var fontName: String = "Courier Prime"
+    private var fontSizePT: Int = 12
+    private var lineHeightEM: Double = 1.10
+    // Memory + roles + suggestions
+    private var corpusId: String = ""
+    private var overlays: [String: Bool] = ["drifts": false, "patterns": false, "reflections": false, "history": false, "arcs": false]
+    private var memoryCounts: [String: Int] = ["drifts": 0, "patterns": 0, "reflections": 0, "history": 0, "arcs": 0]
+    private var suggestions: [String: (text: String, policy: String, cursor: Int?)] = [:]
+    private var rolesEnabled: Bool = true
+    private var rolesAvailable: [String] = ["Drift","Patterns","Reflections","History","SemanticArc","ViewCreator"]
+    private var rolesActive: String? = nil
+
+    init(displayName: String = "Fountain Editor") { self.displayName = displayName }
+
+    func handleVendor(topic: String, data: [String : Any]) -> String? {
+        switch topic {
+        case "text.set":
+            let t = (data["text"] as? String) ?? ""
+            content = t
+            if let c = data["cursor"] as? Int { cursor = max(0, min(c, utf16Count(content))) }
+            return snapshot()
+        case "text.insert":
+            let t = (data["text"] as? String) ?? ""
+            insertAtCursor(t)
+            return snapshot()
+        case "text.replace":
+            let start = (data["start"] as? Int) ?? cursor
+            let end = (data["end"] as? Int) ?? cursor
+            let t = (data["text"] as? String) ?? ""
+            replaceRange(start: start, end: end, with: t)
+            return snapshot()
+        case "text.clear":
+            content = ""; cursor = 0
+            return snapshot()
+        case "agent.delta":
+            let id = (data["id"] as? String) ?? "agent"
+            let t = (data["text"] as? String) ?? ""
+            let cur = suggestions[id]?.text ?? ""
+            suggestions[id] = (text: cur + t, policy: suggestions[id]?.policy ?? "append", cursor: suggestions[id]?.cursor)
+            return snapshot()
+        case "agent.suggest":
+            guard let id = data["id"] as? String, let t = data["text"] as? String else { return snapshot() }
+            let policy = (data["policy"] as? String) ?? "append"
+            let c = data["cursor"] as? Int
+            suggestions[id] = (text: t, policy: policy, cursor: c)
+            return snapshot()
+        case "suggestion.apply":
+            guard let id = data["id"] as? String, let s = suggestions[id] else { return snapshot() }
+            applySuggestion(id: id, suggestion: s)
+            suggestions.removeValue(forKey: id)
+            return snapshot()
+        case "awareness.setCorpus":
+            corpusId = (data["corpusId"] as? String) ?? corpusId
+            return snapshot(awarenessSynced: true)
+        case "awareness.refresh":
+            // In headless mode, just acknowledge refresh; counts reflect memory.inject.* calls
+            return snapshot(awarenessSynced: true)
+        case let s where s.hasPrefix("memory.inject."):
+            let kind = String(s.split(separator: ".").last ?? "")
+            if var arr = data["items"] as? [[String: Any]] {
+                memoryCounts[kind] = arr.count
+            } else {
+                memoryCounts[kind] = 0
+            }
+            return snapshot(memoryUpdated: true)
+        case "memory.promote":
+            // Turn a memory card into a suggestion
+            let slot = (data["slot"] as? String) ?? "reflections"
+            guard let id = data["id"] as? String else { return snapshot() }
+            let policy = (data["policy"] as? String) ?? "append"
+            let c = data["cursor"] as? Int
+            let text = (data["text"] as? String) ?? ""
+            suggestions[id] = (text: text, policy: policy, cursor: c)
+            rolesActive = nil
+            return snapshot()
+        case "role.suggest":
+            guard let role = data["role"] as? String, let id = data["id"] as? String, let text = data["text"] as? String else { return snapshot() }
+            let policy = (data["policy"] as? String) ?? "append"
+            let c = data["cursor"] as? Int
+            rolesActive = role
+            suggestions[id] = (text: text, policy: policy, cursor: c)
+            return snapshot()
+        default:
+            return nil
+        }
+    }
+
+    func handlePESet(properties: [String : Double]) -> String? {
+        for (k,v) in properties {
+            switch k {
+            case "cursor.index": cursor = max(0, min(Int(v.rounded()), utf16Count(content)))
+            case "page.margins.top": marginTopMM = v
+            case "page.margins.left": marginLeftMM = v
+            case "page.margins.right": marginRightMM = v
+            case "page.margins.bottom": marginBottomMM = v
+            case "font.size.pt": fontSizePT = Int(v.rounded())
+            case "line.height.em": lineHeightEM = v
+            case "overlays.show.drifts": overlays["drifts"] = v >= 0.5
+            case "overlays.show.patterns": overlays["patterns"] = v >= 0.5
+            case "overlays.show.reflections": overlays["reflections"] = v >= 0.5
+            case "overlays.show.history": overlays["history"] = v >= 0.5
+            case "overlays.show.arcs": overlays["arcs"] = v >= 0.5
+            default: break
+            }
+        }
+        return snapshot()
+    }
+
+    // MARK: - Helpers
+    private func utf16Count(_ s: String) -> Int { s.utf16.count }
+    private func indexAtUTF16(_ s: String, offset: Int) -> String.Index {
+        var idx = s.startIndex
+        var remaining = max(0, min(offset, s.utf16.count))
+        while remaining > 0 && idx < s.endIndex {
+            let next = s.index(after: idx)
+            let u16 = s[idx..<next].utf16.count
+            remaining -= u16
+            idx = next
+        }
+        return idx
+    }
+    private func insertAtCursor(_ t: String) {
+        let idx = indexAtUTF16(content, offset: cursor)
+        content.insert(contentsOf: t, at: idx)
+        cursor = utf16Count(content)
+    }
+    private func replaceRange(start: Int, end: Int, with t: String) {
+        let i0 = indexAtUTF16(content, offset: min(start, end))
+        let i1 = indexAtUTF16(content, offset: max(start, end))
+        content.replaceSubrange(i0..<i1, with: t)
+        cursor = utf16Count(content)
+    }
+    private func applySuggestion(id: String, suggestion: (text: String, policy: String, cursor: Int?)) {
+        switch suggestion.policy.lowercased() {
+        case "insertat":
+            if let c = suggestion.cursor { cursor = max(0, min(c, utf16Count(content))) }
+            insertAtCursor(suggestion.text)
+        case "replace":
+            content = suggestion.text
+            cursor = utf16Count(content)
+        default: // append
+            content += suggestion.text
+            cursor = utf16Count(content)
+        }
+    }
+    private func wrapColumnEstimate() -> Int {
+        // A4 210mm; estimate chars per inch ~10 for Courier 12pt
+        let widthIn = 210.0/25.4 - ((marginLeftMM + marginRightMM)/25.4)
+        let columns = Int((widthIn * 10.0).rounded())
+        return max(40, min(120, columns))
+    }
+    private func lineCount(_ s: String) -> Int { s.isEmpty ? 0 : s.split(separator: "\n", omittingEmptySubsequences: false).count }
+    @MainActor private func snapshot(memoryUpdated: Bool = false, awarenessSynced: Bool = false) -> String? {
+        let lines = lineCount(content)
+        let chars = utf16Count(content)
+        let wrapCol = wrapColumnEstimate()
+        var props: [[String: Any]] = []
+        func add(_ name: String, _ value: Any) { props.append(["name": name, "value": value]) }
+        add("text.content", content)
+        add("cursor.index", cursor)
+        add("page.size", 0) // R/O label not numeric; skip for numeric PE — included in monitor only
+        add("page.margins.top", marginTopMM)
+        add("page.margins.left", marginLeftMM)
+        add("page.margins.right", marginRightMM)
+        add("page.margins.bottom", marginBottomMM)
+        add("font.size.pt", fontSizePT)
+        add("line.height.em", lineHeightEM)
+        add("wrap.column", wrapCol)
+        add("suggestions.count", suggestions.count)
+        add("memory.counts.drifts", memoryCounts["drifts"] ?? 0)
+        add("memory.counts.patterns", memoryCounts["patterns"] ?? 0)
+        add("memory.counts.reflections", memoryCounts["reflections"] ?? 0)
+        add("memory.counts.history", memoryCounts["history"] ?? 0)
+        add("memory.counts.arcs", memoryCounts["arcs"] ?? 0)
+        let obj: [String: Any] = [
+            "properties": props,
+            "meta": [
+                "lines": lines,
+                "chars": chars,
+                "types": [:],
+                "page": ["size": pageSize, "margins": ["top": marginTopMM, "left": marginLeftMM, "right": marginRightMM, "bottom": marginBottomMM]],
+                "wrapColumn": wrapCol
+            ]
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: obj), let s = String(data: data, encoding: .utf8) {
+            // Also post monitor events: suggestion/memory/awareness events implicit via counts
+            if memoryUpdated { SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"memory.slots.updated\"}") }
+            if awarenessSynced { SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"awareness.synced\",\"corpusId\":\"\(corpusId)\"}") }
+            return s
+        }
+        return nil
+    }
+}
+
 enum MIDISendError: Error { case unsupportedTransport, destinationNotFound }
 
 @MainActor
@@ -211,7 +417,7 @@ final class SimpleMIDISender {
 
     static func send(words: [UInt32], toDisplayName name: String?) async throws {
         // If a headless instrument is registered under the target name, interpret UMP locally
-        if let name, let inst = await HeadlessRegistry.shared.resolve(name) as? CanvasHeadlessInstrument {
+        if let name, let inst = await HeadlessRegistry.shared.resolve(name) as? HeadlessInstrument {
             if let vj = Self.decodeVendorJSON(words) {
                 if let body = try? JSONSerialization.jsonObject(with: Data(vj.utf8)) as? [String: Any],
                    let topic = body["topic"] as? String, let data = body["data"] as? [String: Any] {

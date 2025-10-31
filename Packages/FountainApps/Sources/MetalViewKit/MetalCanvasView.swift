@@ -397,13 +397,35 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
     }
     @MainActor
     func applyUniform(_ name: String, value: Float) {
+        var didTransformChange = false
         switch name {
-        case "zoom": self.canvas.zoom = CGFloat(max(self.canvas.minZoom, min(self.canvas.maxZoom, CGFloat(value))))
-        case "translation.x": self.canvas.translation.x = CGFloat(value)
-        case "translation.y": self.canvas.translation.y = CGFloat(value)
-        case "grid.minor": self.overrideGridMinor = CGFloat(max(1.0, value))
-        case "grid.majorEvery": self.overrideMajorEvery = max(1, Int(value.rounded()))
-        default: break
+        case "zoom":
+            self.canvas.zoom = CGFloat(max(self.canvas.minZoom, min(self.canvas.maxZoom, CGFloat(value))))
+            didTransformChange = true
+        case "translation.x":
+            self.canvas.translation.x = CGFloat(value)
+            didTransformChange = true
+        case "translation.y":
+            self.canvas.translation.y = CGFloat(value)
+            didTransformChange = true
+        case "grid.minor":
+            self.overrideGridMinor = CGFloat(max(1.0, value))
+        case "grid.majorEvery":
+            self.overrideMajorEvery = max(1, Int(value.rounded()))
+        default:
+            break
+        }
+        if didTransformChange {
+            NotificationCenter.default.post(name: Notification.Name("MetalCanvasTransformChanged"), object: nil, userInfo: [
+                "zoom": canvas.zoom, "tx": canvas.translation.x, "ty": canvas.translation.y, "op": "setUniform"
+            ])
+            // Mirror activity to the MIDI monitor for determinism in tests and overlays
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                "type":"ui.zoom.debug","zoom": Double(canvas.zoom)
+            ])
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                "type":"ui.pan.debug","x": Double(canvas.translation.x),"y": Double(canvas.translation.y)
+            ])
         }
     }
     @MainActor func panBy(docDX: CGFloat, docDY: CGFloat) {

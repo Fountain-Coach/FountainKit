@@ -176,20 +176,37 @@ public final class MetalInstrument: @unchecked Sendable {
                 "magnification": Double(mag)
             ])
         case "ui.panBy":
+            // Resolve current zoom/translation from state provider (renderer snapshot)
+            var z: Double = 1.0
+            var txCur: Double = 0.0
+            var tyCur: Double = 0.0
+            if let props = stateProvider?() {
+                if let zoom = props["zoom"] as? Double { z = max(0.0001, zoom) }
+                else if let zoomNum = props["zoom"] as? NSNumber { z = max(0.0001, zoomNum.doubleValue) }
+                if let tx = props["translation.x"] as? Double { txCur = tx }
+                if let ty = props["translation.y"] as? Double { tyCur = ty }
+            }
             if let dx = data["dx.doc"] as? Double, let dy = data["dy.doc"] as? Double {
-                NotificationCenter.default.post(name: Notification.Name("MetalCanvasRendererCommand"), object: nil, userInfo: ["op": "panBy", "dx": dx, "dy": dy])
+                // Apply directly via sink uniforms to ensure transform-change notifications
+                sink?.setUniform("translation.x", float: Float(txCur + dx))
+                sink?.setUniform("translation.y", float: Float(tyCur + dy))
                 NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
                     "type": "ui.pan.debug",
                     "dx.doc": dx,
                     "dy.doc": dy
                 ])
             } else if let vx = data["dx.view"] as? Double, let vy = data["dy.view"] as? Double {
-                // Convert roughly via notification consumer; keeping both forms for flexibility
-                NotificationCenter.default.post(name: Notification.Name("MetalCanvasRendererCommand"), object: nil, userInfo: ["op": "panByView", "dx": vx, "dy": vy])
+                // Convert view deltas to doc deltas and apply
+                let dxDoc = vx / z
+                let dyDoc = vy / z
+                sink?.setUniform("translation.x", float: Float(txCur + dxDoc))
+                sink?.setUniform("translation.y", float: Float(tyCur + dyDoc))
                 NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
                     "type": "ui.pan.debug",
                     "dx.view": vx,
-                    "dy.view": vy
+                    "dy.view": vy,
+                    "dx.doc": dxDoc,
+                    "dy.doc": dyDoc
                 ])
             }
         case "canvas.reset":

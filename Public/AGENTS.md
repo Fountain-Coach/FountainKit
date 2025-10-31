@@ -4,14 +4,14 @@ The `Public/` area hosts the publishing frontend for FountainAI: static docs/ass
 
 What
 - Static pages and assets: `index.html`, `styles.css`, `reports/**`, `Audio/**`, `Models/**`.
-- Web apps (TS/Node toolchain): `baseline-patchbay-web` — a grid‑only mirror of Baseline‑PatchBay.
+- Web apps (TS/Node toolchain): `baseline-patchbay-web` — a three‑pane Baseline‑PatchBay mirror (left/center/right panes, draggable gutters, DnD items).
 - Launchers live under `Scripts/apps/` and are listed in that area’s AGENTS.
 
 Why
 - Provide a portable, deterministic frontend for publishing and demos without requiring the macOS app runtime.
 
 How
-- Start PatchBay: `swift run --package-path Packages/FountainApps patchbay-service-server`.
+- Start PatchBay service (REST): `swift run --package-path Packages/FountainApps patchbay-service-server`.
 - Start MIDI service (UMP bridge): `Scripts/apps/midi-service`.
   - Backends: `MIDI_SERVICE_BACKEND=coremidi|alsa|rtp|loopback` (macOS default coremidi; Linux default alsa).
   - Recorder: NDJSON logs to `.fountain/corpus/ump` (override `MIDI_UMP_LOG_DIR`).
@@ -32,5 +32,5 @@ Where
 - PatchBay spec: `Packages/FountainApps/Sources/patchbay-service/openapi.yaml` (source of truth curated at `Packages/FountainSpecCuration/openapi/v1/patchbay.yml`).
 - MIDI Service spec/server: `Packages/FountainSpecCuration/openapi/v1/midi-service.yml`, `Packages/FountainServiceKit-MIDI/Sources/MIDIService/*` (bridge for UMP send).
 - Recorder/headless (OpenAPI):
-  - `GET /ump/events` (tail), `POST /ump/events` (flush)
-  - `GET /headless/instruments`, `POST /headless/instruments`, `DELETE /headless/instruments/{displayName}`
+  - `GET /ump/tail` (tail), `POST /ump/flush` (flush) — compatibility aliases: `GET/POST /ump/events`.
+  - `GET /headless/list`, `POST /headless/register`, `POST /headless/unregister`.

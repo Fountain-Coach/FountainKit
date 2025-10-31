@@ -4,6 +4,74 @@ import { listEndpoints, sendVendorJSON, peSetProperties } from '../ws/midi'
 import { drawGrid } from './Grid'
 
 export default function App() {
+  // Layout state (three panes)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const [containerW, setContainerW] = useState(1200)
+  const [leftFrac, setLeftFrac] = useState(0.22)
+  const [rightFrac, setRightFrac] = useState(0.26)
+  const MIN_PX = 160
+  const GUTTER = 6
+  useEffect(() => {
+    const update = () => {
+      if (containerRef.current) {
+        setContainerW(containerRef.current.getBoundingClientRect().width)
+      }
+    }
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [])
+  // Compute clamped widths
+  const leftW = Math.max(MIN_PX, Math.min(containerW - MIN_PX * 2 - GUTTER * 2, leftFrac * containerW))
+  const rightW = Math.max(MIN_PX, Math.min(containerW - leftW - MIN_PX - GUTTER * 2, rightFrac * containerW))
+  const centerW = Math.max(MIN_PX, containerW - leftW - rightW - GUTTER * 2)
+  // Gutter dragging
+  const dragState = useRef<{ which: 'left' | 'right' | null } | null>({ which: null })
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!dragState.current || !dragState.current.which) return
+      if (!containerRef.current) return
+      const rect = containerRef.current.getBoundingClientRect()
+      const relX = e.clientX - rect.left
+      if (dragState.current.which === 'left') {
+        const newLeft = Math.max(MIN_PX, Math.min(containerW - MIN_PX * 2 - GUTTER * 2, relX))
+        setLeftFrac(newLeft / containerW)
+      } else {
+        // right gutter position is leftW + GUTTER + centerW
+        const rightEdge = Math.max(MIN_PX, Math.min(containerW - MIN_PX, containerW - relX))
+        const newRight = Math.max(MIN_PX, Math.min(containerW - leftW - MIN_PX - GUTTER * 2, rightEdge))
+        setRightFrac(newRight / containerW)
+      }
+    }
+    const onUp = () => { if (dragState.current) dragState.current.which = null }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+  }, [containerW, leftW])
+
+  // Pane items (DnD) — mirror baseline behaviors
+  const [leftItems, setLeftItems] = useState<string[]>(Array.from({ length: 12 }, (_, i) => `Item #${i}`))
+  const [rightItems, setRightItems] = useState<string[]>(Array.from({ length: 6 }, (_, i) => `Log #${i}`))
+  const onDragStart = (id: string) => (e: React.DragEvent) => { e.dataTransfer.setData('text/plain', id) }
+  const onDragOver: React.DragEventHandler = (e) => { e.preventDefault() }
+  const onDropList = (side: 'left' | 'right') => (e: React.DragEvent) => {
+    e.preventDefault()
+    const id = e.dataTransfer.getData('text/plain')
+    if (!id) return
+    if (side === 'left') {
+      setRightItems((r) => r.filter(x => x !== id))
+      setLeftItems((l) => (l.includes(id) ? l : [...l, id]))
+    } else {
+      setLeftItems((l) => l.filter(x => x !== id))
+      setRightItems((r) => (r.includes(id) ? r : [...r, id]))
+    }
+    setLog(l => [`ui.dnd.drop item=${id} target=${side}`, ...l].slice(0, 6))
+  }
+  const onDropCenter: React.DragEventHandler = (e) => {
+    e.preventDefault()
+    const id = e.dataTransfer.getData('text/plain')
+    if (id) setLog(l => [`ui.dnd.drop item=${id} target=center`, ...l].slice(0, 6))
+  }
   const [scale, setScale] = useState(1)
   const [tx, setTx] = useState(0)
   const [ty, setTy] = useState(0)
@@ -175,23 +243,44 @@ export default function App() {
           <button onClick={doReset}>Reset</button>
         </div>
       </header>
-      <div style={{ position: 'relative' }}>
-        {loading && <div style={{ position: 'absolute', top: 8, left: 8, opacity: 0.6 }}>Loading canvas…</div>}
-        <canvas
-          ref={canvasRef}
-          onWheel={onWheel}
-          onMouseDown={onMouseDown}
-          onMouseUp={onMouseUp}
-          onMouseLeave={onMouseUp}
-          onMouseMove={onMouseMove}
-          style={{ width: '100%', height: '100%', display: 'block', cursor: 'grab' }}
-        />
-        {/* Simple monitor */}
-        <div style={{ position: 'absolute', right: 8, top: 8, background: 'rgba(255,255,255,0.9)', border: '1px solid #E6EAF2', borderRadius: 6, padding: '6px 8px', fontSize: 12, minWidth: 240 }}>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>MIDI 2.0 Monitor</div>
-          <div style={{ opacity: 0.7, marginBottom: 4 }}>mode: {driveMode.toUpperCase()} target: {target}</div>
-          {log.slice(0, 5).map((l, i) => (
-            <div key={i} style={{ whiteSpace: 'pre' }}>{l}</div>
+      <div ref={containerRef} style={{ height: '100%', display: 'grid', gridTemplateColumns: `${leftW}px ${GUTTER}px ${centerW}px ${GUTTER}px ${rightW}px` }}>
+        {/* Left pane */}
+        <div onDragOver={onDragOver} onDrop={onDropList('left')} style={{ overflowY: 'auto', borderRight: '1px solid #E6EAF2', padding: 8 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Left Pane</div>
+          {leftItems.map(id => (
+            <div key={id} draggable onDragStart={onDragStart(id)} style={{ fontSize: 12, padding: '4px 6px', cursor: 'grab' }}>{id}</div>
+          ))}
+        </div>
+        {/* Left gutter */}
+        <div onMouseDown={() => { if (dragState.current) dragState.current.which = 'left' }} style={{ cursor: 'col-resize', background: '#E6EAF2' }} />
+        {/* Center (canvas) */}
+        <div onDragOver={onDragOver} onDrop={onDropCenter} style={{ position: 'relative' }}>
+          {loading && <div style={{ position: 'absolute', top: 8, left: 8, opacity: 0.6 }}>Loading canvas…</div>}
+          <canvas
+            ref={canvasRef}
+            onWheel={onWheel}
+            onMouseDown={onMouseDown}
+            onMouseUp={onMouseUp}
+            onMouseLeave={onMouseUp}
+            onMouseMove={onMouseMove}
+            style={{ width: '100%', height: '100%', display: 'block', cursor: 'grab' }}
+          />
+          {/* Simple monitor */}
+          <div style={{ position: 'absolute', right: 8, top: 8, background: 'rgba(255,255,255,0.9)', border: '1px solid #E6EAF2', borderRadius: 6, padding: '6px 8px', fontSize: 12, minWidth: 240 }}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>MIDI 2.0 Monitor</div>
+            <div style={{ opacity: 0.7, marginBottom: 4 }}>mode: {driveMode.toUpperCase()} target: {target}</div>
+            {log.slice(0, 5).map((l, i) => (
+              <div key={i} style={{ whiteSpace: 'pre' }}>{l}</div>
+            ))}
+          </div>
+        </div>
+        {/* Right gutter */}
+        <div onMouseDown={() => { if (dragState.current) dragState.current.which = 'right' }} style={{ cursor: 'col-resize', background: '#E6EAF2' }} />
+        {/* Right pane */}
+        <div onDragOver={onDragOver} onDrop={onDropList('right')} style={{ overflowY: 'auto', borderLeft: '1px solid #E6EAF2', padding: 8 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Right Pane</div>
+          {rightItems.map(id => (
+            <div key={id} draggable onDragStart={onDragStart(id)} style={{ fontSize: 12, padding: '4px 6px', cursor: 'grab' }}>{id}</div>
           ))}
         </div>
       </div>

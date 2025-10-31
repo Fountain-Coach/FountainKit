@@ -8,11 +8,12 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "seed": "node ./scripts/seed-teatro.js",
-    "mrts:reset": "node ./scripts/mrts-reset.js",
-    "mrts:pan": "node ./scripts/mrts-pan.js",
-    "mrts:zoom": "node ./scripts/mrts-zoom.js",
-    "mrts:run": "npm run build && node ./scripts/mrts-run.js",
-    "mrts:assert": "npm run build && node ./scripts/mrts-assert.js"
+    "build:mrts": "tsc -p tsconfig.mrts.json",
+    "mrts:reset": "npm run build:mrts && node ./scripts/mrts-reset.js",
+    "mrts:pan": "npm run build:mrts && node ./scripts/mrts-pan.js",
+    "mrts:zoom": "npm run build:mrts && node ./scripts/mrts-zoom.js",
+    "mrts:run": "npm run build:mrts && node ./scripts/mrts-run.js",
+    "mrts:assert": "npm run build:mrts && node ./scripts/mrts-assert.js"
   },
   "dependencies": {
     "react": "18.3.1",

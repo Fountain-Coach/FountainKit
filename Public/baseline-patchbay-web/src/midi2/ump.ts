@@ -37,4 +37,3 @@ export function buildVendorJSON(topic: string, data: any): Uint8Array {
   buf.set(tail, header.length + json.length)
   return buf
 }
-

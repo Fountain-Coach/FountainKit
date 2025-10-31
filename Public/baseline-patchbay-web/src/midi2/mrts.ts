@@ -1,5 +1,5 @@
 // Web MRTS helpers to drive the native app via MIDI 2.0 using the midi-service bridge
-import { buildVendorJSON, encodeSysEx7UMP, UmpWords } from './ump'
+import { buildVendorJSON, encodeSysEx7UMP, UmpWords } from './ump.js'
 
 const midiBase = () => (process.env.MIDI_SERVICE_URL || 'http://127.0.0.1:7180')
 
@@ -29,4 +29,3 @@ export async function zoomAround(anchorViewX: number, anchorViewY: number, magni
 export async function canvasReset(targetDisplayName?: string) {
   await vendorJSON('canvas.reset', {}, targetDisplayName)
 }
-

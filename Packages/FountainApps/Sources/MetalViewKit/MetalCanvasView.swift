@@ -65,6 +65,10 @@ public struct MetalCanvasView: NSViewRepresentable {
             renderer.selectionProvider = selectedProvider
             // Test hook: publish renderer for observers (tests only)
             NotificationCenter.default.post(name: Notification.Name("MetalCanvasRendererReady"), object: nil, userInfo: ["renderer": renderer])
+            // Also re-post shortly to avoid races where observers are attached after the first post
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                NotificationCenter.default.post(name: Notification.Name("MetalCanvasRendererReady"), object: nil, userInfo: ["renderer": renderer])
+            }
             if let desc = instrument {
                 let sink = CanvasInstrumentSink(renderer: renderer)
                 let inst = MetalInstrument(sink: sink, descriptor: desc)
@@ -800,6 +804,20 @@ final class MetalCanvasNSView: MTKView {
                     "dx.snap": Double(sdx), "dy.snap": Double(sdy), "grid": Int(c.gridMinor)
                 ])
             }
+        } else if let start = c.pressView, let r = c.renderer {
+            // Blank drag → viewport pan (mirror web: follow-finger)
+            let dxView = p.x - start.x
+            let dyView = p.y - start.y
+            let s = max(0.0001, r.currentZoom)
+            let dxDoc = dxView / s
+            let dyDoc = dyView / s
+            r.panBy(docDX: dxDoc, docDY: dyDoc)
+            c.onTransformChanged(r.currentTranslation, r.currentZoom)
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                "type":"ui.pan", "x": Double(r.currentTranslation.x), "y": Double(r.currentTranslation.y),
+                "dx.doc": Double(dxDoc), "dy.doc": Double(dyDoc), "via": "drag.blank"
+            ])
+            c.pressView = p
         }
     }
     override func mouseUp(with event: NSEvent) {

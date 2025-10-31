@@ -2,6 +2,7 @@ import Foundation
 #if canImport(SwiftUI) && canImport(AppKit)
 import SwiftUI
 import AppKit
+import FountainStoreClient
 
 @main
 struct ComposerStudioApp: App {
@@ -9,6 +10,26 @@ struct ComposerStudioApp: App {
         WindowGroup {
             ComposerRootView()
                 .onAppear { if #available(macOS 14.0, *) { NSApp.activate() } else { NSApp.activate(ignoringOtherApps: true) } }
+                .task {
+                    // Seed & print Teatro prompt and minimal facts on boot (default policy)
+                    await PromptSeeder.seedAndPrint(
+                        appId: "composer-studio",
+                        prompt: ComposerStudioApp.buildTeatroPrompt(),
+                        facts: [
+                            "instruments": [[
+                                "manufacturer": "Fountain",
+                                "product": "ComposerStudio",
+                                "instanceId": "composer-studio-1",
+                                "displayName": "Composer Studio"
+                            ]],
+                            "flow": ["screenplay.save", "parse", "map.cues", "apply"],
+                            "invariants": [
+                                "session.hasETag": true,
+                                "actions.gatedByPreconditions": true
+                            ]
+                        ]
+                    )
+                }
         }
     }
 }
@@ -132,6 +153,25 @@ The composer sits at the desk.
     private func saveDraft() {
         UserDefaults.standard.set(screenplay, forKey: "ComposerStudio.Screenplay")
         UserDefaults.standard.set(projectName, forKey: "ComposerStudio.ProjectName")
+    }
+}
+@MainActor
+extension ComposerStudioApp {
+    static func buildTeatroPrompt() -> String {
+        return """
+        Scene: Composer Studio (Screenplay‑first Flow)
+        Text:
+        - Single window app for composing from screenplay text (.fountain) with inline tags.
+        - Left: screenplay editor. Right: preview card area (+ chat below).
+        - Actions: Parse → Map Cues → Apply; each action produces a result card with warnings/counts.
+        - Journal lists steps (stored/parsed/cued/applied) with timestamps.
+        - Session carries an ETag for determinism; actions are gated by preconditions.
+        Invariants:
+        - Parse does not mutate source; Apply is idempotent for the same ETag.
+        - Preview card appears only when analysis is available; Apply updates journal.
+        Where:
+        - Code: Packages/FountainApps/Sources/composer-studio/ComposerStudioApp.swift and related views.
+        """
     }
 }
 #else

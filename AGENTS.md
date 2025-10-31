@@ -45,6 +45,10 @@ How
 
 Every interactive app must carry a concise Teatro prompt that describes its UI, instruments, PE schema, and invariants. On boot, the app persists this prompt into FountainStore and prints the exact prompt to stdout for observability.
 
+Baseline default (required):
+- Baseline‑PatchBay is the default baseline for new FountainAI apps. Any change to the baseline app must be paired with a matching MRTS (MIDI Robot Test Script) Teatro prompt that codifies the numeric invariants and robot coverage.
+- On boot, the Baseline app prints both prompts side‑by‑side: the creation prompt and the MRTS prompt (for visibility). Use `baseline-robot-seed` to persist the MRTS prompt into the corpus.
+
 What
 - Teatro prompt is the single, human‑readable description of the surface. It is kept current and reviewed like code.
 - The prompt is seeded into an app‑specific corpus as a page `prompt:<app-id>` with segments:

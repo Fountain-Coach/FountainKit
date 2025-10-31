@@ -39,6 +39,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     "displayName": "Grid Cursor"
                 ]]
             ])
+            // Show MRTS prompt alongside creation prompt (policy)
+            let mrts = GridDevApp.buildMRTSPrompt()
+            print("\n=== MRTS Teatro Prompt (baseline) ===\n\(mrts)\n=== end mrtsprompt ===\n")
         }
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
@@ -165,6 +168,29 @@ extension GridDevApp {
             • leftDoc = 0/zoom − tx, topDoc = 0/zoom − ty
             • col = round((doc.x − leftDoc)/step), row = round((doc.y − topDoc)/step)
             • step = grid.minor
+        """
+    }
+}
+
+extension GridDevApp {
+    static func buildMRTSPrompt() -> String {
+        return """
+        Scene: Baseline‑PatchBay — MIDI Robot Test Script (MRTS)
+        Text:
+        - Objective: create a one‑shot runner that executes the baseline robot/invariant test subset against the Baseline‑PatchBay UI (grid‑only, instrument‑first).
+        - Output: write a shell script at `Scripts/ci/baseline-robot.sh` (executable) that:
+          • Builds the baseline UI product `baseline-patchbay` (grid-dev-app target).
+          • Runs the robot/invariant test subset in `Packages/FountainApps/Tests/PatchBayAppUITests`:
+            `GridInstrumentTests`, `ViewportGridContactTests`, `PixelGridVerifierTests`, `MIDIMonitorEventsTests`, `CanvasDefaultTransformTests`, `RightEdgeContactTests`.
+          • Uses `ROBOT_ONLY=1` and `-Xswiftc -DROBOT_ONLY` to keep the surface minimal; exits non‑fatally if tests fail so artifacts can be inspected.
+
+        Numeric invariants:
+        - Default transform: zoom=1.0, translation=(0,0).
+        - Left grid contact pinned at view.x=0 across translations/zoom.
+        - Minor spacing px = grid.minor × zoom; major spacing = grid.minor × majorEvery × zoom.
+        - Anchor‑stable zoom: drift ≤ 1 px.
+        - Right edge contact: floor(view.width / (grid.minor × zoom)) at x = index × step.
+        - Monitor emits `ui.zoom`/`ui.pan` (and debug variants) on zoomAround/pan/reset.
         """
     }
 }

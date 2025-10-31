@@ -5,8 +5,8 @@ import LauncherSignature
 @main
 struct GridDevSeed {
     static func main() async {
-        verifyLauncherSignature()
         let env = ProcessInfo.processInfo.environment
+        if env["FOUNTAIN_SKIP_LAUNCHER_SIG"] != "1" { verifyLauncherSignature() }
         let corpusId = env["CORPUS_ID"] ?? "grid-dev"
         let store = resolveStore()
         do { _ = try await store.createCorpus(corpusId, metadata: ["app": "grid-dev", "kind": "teatro+instruments"]) } catch { /* ignore */ }

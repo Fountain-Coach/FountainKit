@@ -16,7 +16,8 @@ struct GridDevApp: App {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        verifyLauncherSignature()
+        let env = ProcessInfo.processInfo.environment
+        if env["FOUNTAIN_SKIP_LAUNCHER_SIG"] != "1" { verifyLauncherSignature() }
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -64,4 +65,3 @@ struct GridDevView: View {
         .frame(minWidth: 800, minHeight: 600)
     }
 }
-

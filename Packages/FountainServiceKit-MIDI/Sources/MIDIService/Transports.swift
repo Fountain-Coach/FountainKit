@@ -12,6 +12,8 @@ public struct UMPEvent: Codable, Sendable {
 final class UmpRecorder {
     private var buf: [UMPEvent] = []
     private let capacity: Int
+    private var fh: FileHandle?
+    private var logPath: String?
     init(capacity: Int = 2048) { self.capacity = capacity }
 
     func record(words: [UInt32]) {
@@ -20,6 +22,7 @@ final class UmpRecorder {
         else if let pj = decodePENotifyJSON(words) { event.peJSON = pj }
         buf.append(event)
         if buf.count > capacity { buf.removeFirst(buf.count - capacity) }
+        write(event)
     }
 
     func tail(limit: Int) -> [UMPEvent] {
@@ -33,6 +36,7 @@ final class UmpRecorder {
         let ev = UMPEvent(ts: Date().timeIntervalSince1970, words: [], vendorJSON: vendorJSON, peJSON: peJSON)
         buf.append(ev)
         if buf.count > capacity { buf.removeFirst(buf.count - capacity) }
+        write(ev)
     }
 
     private func decodeVendorJSON(_ words: [UInt32]) -> String? {
@@ -91,6 +95,38 @@ final class UmpRecorder {
         }
         return out
     }
+
+    // MARK: - File logging (NDJSON)
+    func enableFileLog(dirPath: String) {
+        let fm = FileManager.default
+        do {
+            var isDir: ObjCBool = false
+            if !fm.fileExists(atPath: dirPath, isDirectory: &isDir) {
+                try fm.createDirectory(atPath: dirPath, withIntermediateDirectories: true)
+            }
+            let ts = Int(Date().timeIntervalSince1970)
+            let file = (dirPath as NSString).appendingPathComponent("midi-service-ump-\(ts).ndjson")
+            fm.createFile(atPath: file, contents: nil)
+            fh = try FileHandle(forWritingTo: URL(fileURLWithPath: file))
+            logPath = file
+        } catch {
+            fh = nil; logPath = nil
+        }
+    }
+
+    private func write(_ ev: UMPEvent) {
+        guard let fh else { return }
+        do {
+            let data = try JSONEncoder().encode(ev)
+            if #available(macOS 13.0, *) {
+                try fh.write(contentsOf: data)
+                try fh.write(contentsOf: Data("\n".utf8))
+            } else {
+                fh.write(data)
+                fh.write(Data("\n".utf8))
+            }
+        } catch { /* ignore */ }
+    }
 }
 
 // MARK: - Headless instruments (co-located for simplicity)
@@ -105,6 +141,7 @@ final class HeadlessRegistry {
     static let shared = HeadlessRegistry()
     private var byName: [String: any HeadlessInstrument] = [:]
     func register(_ inst: any HeadlessInstrument) { byName[inst.displayName] = inst }
+    func unregister(_ name: String) { byName.removeValue(forKey: name) }
     func list() -> [String] { Array(byName.keys).sorted() }
     func resolve(_ name: String?) -> (any HeadlessInstrument)? { guard let name else { return nil }; return byName[name] }
 }
@@ -152,13 +189,24 @@ final class SimpleMIDISender {
     private static var transports: [String: CoreMIDITransport] = [:] // key -> transport
     #endif
     static let recorder = UmpRecorder()
+    private static var backend: String = {
+        let env = ProcessInfo.processInfo.environment
+        if let b = env["MIDI_SERVICE_BACKEND"], !b.isEmpty { return b.lowercased() }
+        #if os(macOS)
+        return "coremidi"
+        #else
+        return "alsa"
+        #endif
+    }()
 
     static func listDestinationNames() -> [String] {
+        var names: [String] = []
         #if canImport(CoreMIDI)
-        return CoreMIDITransport.destinationNames()
-        #else
-        return []
+        if backend == "coremidi" { names.append(contentsOf: CoreMIDITransport.destinationNames()) }
         #endif
+        if backend == "alsa" { names.append(contentsOf: ALSATransport.availableEndpoints()) }
+        names.append(contentsOf: HeadlessRegistry.shared.list())
+        return names
     }
 
     static func send(words: [UInt32], toDisplayName name: String?) async throws {
@@ -177,16 +225,33 @@ final class SimpleMIDISender {
             }
         }
         #if canImport(CoreMIDI)
-        let key = name ?? "__first__"
-        let transport = try ensureTransport(key: key, destinationName: name)
-        try transport.send(umpWords: words)
-        #else
-        throw MIDISendError.unsupportedTransport
+        if backend == "coremidi" {
+            let key = name ?? "__first__"
+            let transport = try ensureCoreMIDITransport(key: key, destinationName: name)
+            try transport.send(umpWords: words)
+            return
+        }
         #endif
+        if backend == "alsa" {
+            let t = ensureALSATransport()
+            try t.send(umpWords: words)
+            return
+        }
+        if backend == "rtp" {
+            let t = ensureRTP()
+            try t.send(umpWords: words)
+            return
+        }
+        if backend == "loopback" {
+            let t = ensureLoopback()
+            try t.send(umpWords: words)
+            return
+        }
+        throw MIDISendError.unsupportedTransport
     }
 
     #if canImport(CoreMIDI)
-    private static func ensureTransport(key: String, destinationName: String?) throws -> CoreMIDITransport {
+    private static func ensureCoreMIDITransport(key: String, destinationName: String?) throws -> CoreMIDITransport {
         if let t = transports[key] { return t }
         let t = CoreMIDITransport(name: "midi-service", destinationName: destinationName, enableVirtualEndpoints: false)
         t.onReceiveUMP = { words in Task { await recorder.record(words: words) } }
@@ -196,7 +261,9 @@ final class SimpleMIDISender {
     }
 
     static func ensureListener() {
-        _ = try? ensureTransport(key: "__listener__", destinationName: nil)
+        #if canImport(CoreMIDI)
+        if backend == "coremidi" { _ = try? ensureCoreMIDITransport(key: "__listener__", destinationName: nil) }
+        #endif
     }
     #endif
 
@@ -260,6 +327,37 @@ final class SimpleMIDISender {
         }
         return props
     }
+
+    // MARK: - Backends (non-CoreMIDI)
+    private static var alsaTransport: ALSATransport?
+    private static func ensureALSATransport() -> ALSATransport {
+        if let t = alsaTransport { return t }
+        let t = ALSATransport(useLoopback: true)
+        try? t.open()
+        t.onReceiveUMP = { words in Task { await recorder.record(words: words) } }
+        alsaTransport = t
+        return t
+    }
+
+    private static var rtp: RTPMidiSession?
+    private static func ensureRTP() -> RTPMidiSession {
+        if let t = rtp { return t }
+        let t = RTPMidiSession(localName: "midi-service", mtu: 1500, enableDiscovery: false, enableCINegotiation: false)
+        try? t.open()
+        t.onReceiveUMP = { words in Task { await recorder.record(words: words) } }
+        rtp = t
+        return t
+    }
+
+    private static var loopback: LoopbackTransport?
+    private static func ensureLoopback() -> LoopbackTransport {
+        if let t = loopback { return t }
+        let t = LoopbackTransport()
+        try? t.open()
+        t.onReceiveUMP = { words in Task { await recorder.record(words: words) } }
+        loopback = t
+        return t
+    }
 }
 
 public actor MIDIServiceRuntime {
@@ -270,4 +368,11 @@ public actor MIDIServiceRuntime {
     public func registerHeadlessCanvas(displayName: String = "Headless Canvas") async {
         await HeadlessRegistry.shared.register(CanvasHeadlessInstrument(displayName: displayName))
     }
+    public func enableUMPLog(at dirPath: String) async { await MainActor.run { SimpleMIDISender.recorder.enableFileLog(dirPath: dirPath) } }
+    public func listHeadless() async -> [String] { await HeadlessRegistry.shared.list() }
+    public func registerHeadless(displayName: String, kind: String? = nil) async {
+        // For now, only canvas
+        await HeadlessRegistry.shared.register(CanvasHeadlessInstrument(displayName: displayName))
+    }
+    public func unregisterHeadless(displayName: String) async { await HeadlessRegistry.shared.unregister(displayName) }
 }

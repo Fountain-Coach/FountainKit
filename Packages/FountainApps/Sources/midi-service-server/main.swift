@@ -26,6 +26,27 @@ struct Main {
                 await MIDIServiceRuntime.shared.flush()
                 return HTTPResponse(status: 204)
             }
+            if req.path == "/headless/list" {
+                let names = await MIDIServiceRuntime.shared.listHeadless()
+                let payload = try? JSONSerialization.data(withJSONObject: ["names": names])
+                return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: payload ?? Data("{}".utf8))
+            }
+            if req.path == "/headless/register" && req.method.uppercased() == "POST" {
+                let body = req.body
+                guard let obj = try? JSONSerialization.jsonObject(with: body) as? [String: Any], let name = obj["displayName"] as? String else {
+                    return HTTPResponse(status: 400)
+                }
+                await MIDIServiceRuntime.shared.registerHeadless(displayName: name)
+                return HTTPResponse(status: 201)
+            }
+            if req.path == "/headless/unregister" && req.method.uppercased() == "POST" {
+                let body = req.body
+                guard let obj = try? JSONSerialization.jsonObject(with: body) as? [String: Any], let name = obj["displayName"] as? String else {
+                    return HTTPResponse(status: 400)
+                }
+                await MIDIServiceRuntime.shared.unregisterHeadless(displayName: name)
+                return HTTPResponse(status: 204)
+            }
             return HTTPResponse(status: 404)
         }
 
@@ -48,6 +69,14 @@ struct Main {
             } catch {
                 FileHandle.standardError.write(Data("[midi-service] failed to start: \(error)\n".utf8))
             }
+        }
+        if let dir = ProcessInfo.processInfo.environment["MIDI_UMP_LOG_DIR"], !dir.isEmpty {
+            Task { await MIDIServiceRuntime.shared.enableUMPLog(at: dir) }
+        } else {
+            // default to repo-local .fountain/corpus/ump
+            let cwd = FileManager.default.currentDirectoryPath
+            let dir = (cwd as NSString).appendingPathComponent(".fountain/corpus/ump")
+            Task { await MIDIServiceRuntime.shared.enableUMPLog(at: dir) }
         }
         dispatchMain()
     }

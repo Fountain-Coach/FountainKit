@@ -12,9 +12,13 @@ What
 - Fallback (non‑OpenAPI; dev aid):
   - `GET /ump/tail` — recent UMP events with optional decoded payloads `{events:[{ts,words[],vendorJSON?,peJSON?}]}`.
   - `POST /ump/flush` — clear recorder buffer.
- - Headless registry (pluggable; no tight coupling):
-   - Internals allow registering any number of headless instruments at runtime; the server registers a built‑in `Headless Canvas` via `MIDIServiceRuntime.registerHeadlessCanvas()`.
-   - To route UMP to a headless instrument, post to `/ump/send` with `target.displayName = "Headless Canvas"` (or the registered name).
+- Headless registry (pluggable; no tight coupling):
+  - Internals allow registering any number of headless instruments at runtime; the server registers a built‑in `Headless Canvas` via `MIDIServiceRuntime.registerHeadlessCanvas()`.
+  - To route UMP to a headless instrument, post to `/ump/send` with `target.displayName = "Headless Canvas"` (or the registered name).
+ - Runtime HTTP helpers (fallback routes):
+   - `GET /headless/list` → `{names: [..]}`
+   - `POST /headless/register` with `{displayName}` → 201
+   - `POST /headless/unregister` with `{displayName}` → 204
 
 How
 - Build/run: `swift run --package-path Packages/FountainApps midi-service-server`.
@@ -24,4 +28,5 @@ How
 Notes
 - `sendUMP` uses CoreMIDI when available; it looks up or creates a per‑destination sender and keeps it open.
 - This service doesn’t interpret UMP; instruments do. Vendor JSON topics like `ui.panBy`/`ui.zoomAround` and MIDI‑CI PE SET are interpreted by the macOS app’s instruments.
- - For Web MRTS, the recorder extracts vendor JSON payloads and Property Exchange JSON snapshots (notify/setReply) for numeric assertions.
+- For Web MRTS, the recorder extracts vendor JSON payloads and Property Exchange JSON snapshots (notify/setReply) for numeric assertions.
+ - Backends: set `MIDI_SERVICE_BACKEND` to `coremidi` (macOS default), `alsa` (Linux default), `rtp`, or `loopback`. Recorder writes NDJSON to `.fountain/corpus/ump` (override with `MIDI_UMP_LOG_DIR`).

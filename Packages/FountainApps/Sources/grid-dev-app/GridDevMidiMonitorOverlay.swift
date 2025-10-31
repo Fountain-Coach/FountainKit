@@ -111,6 +111,7 @@ struct GridDevMidiMonitorOverlay: View {
             case "monitor.fadeSeconds": self.fadeSeconds = Double(value); self.scheduleFade()
             case "monitor.opacity.min": self.minOpacity = Double(value); self.scheduleFade()
             case "monitor.maxLines": self.maxLines = max(1, Int(value)); self.trim()
+            case "monitor.opacity.now": withAnimation(.easeOut(duration: 0.12)) { self.targetOpacity = Double(value) }
             default: break
             }
         }))

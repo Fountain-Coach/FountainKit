@@ -83,6 +83,25 @@ struct GridDevView: View {
                 )
             )
             .ignoresSafeArea()
+            // UX instrument binder (no visible UI): tune reset fade/opacity via PE
+            .overlay(GridDevUXBinder(onSet: { name, value in
+                switch name {
+                case "reset.opacity.min":
+                    resetMinOpacity = Double(value)
+                    // if target below new min, snap to min
+                    if resetOpacity < resetMinOpacity { resetOpacity = resetMinOpacity }
+                    bumpResetAndScheduleFade()
+                case "reset.fadeSeconds":
+                    resetFadeSeconds = Double(value)
+                    bumpResetAndScheduleFade()
+                case "reset.opacity.now":
+                    withAnimation(.easeOut(duration: 0.12)) { resetOpacity = Double(value) }
+                case "reset.bump":
+                    bumpResetAndScheduleFade()
+                default:
+                    break
+                }
+            }).allowsHitTesting(false))
         }
         // Overlays
         content
@@ -144,4 +163,27 @@ extension GridDevApp {
             • step = grid.minor
         """
     }
+}
+
+// MIDI 2.0 binder for GridDev UX knobs (reset fade/opacity)
+fileprivate struct GridDevUXBinder: NSViewRepresentable {
+    let onSet: (String, Float) -> Void
+    final class Sink: MetalSceneRenderer { var onSet: ((String, Float)->Void)?; func setUniform(_ name: String, float: Float) { onSet?(name, float) }
+        func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
+        func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
+        func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+    }
+    final class Coordinator { var instrument: MetalInstrument? = nil }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeNSView(context: Context) -> NSView {
+        let v = NSView(frame: .zero)
+        let sink = Sink(); sink.onSet = onSet
+        let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "GridDevUX", instanceId: "griddev-ux", displayName: "Grid Dev UX")
+        let inst = MetalInstrument(sink: sink, descriptor: desc)
+        inst.enable()
+        context.coordinator.instrument = inst
+        return v
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) { coordinator.instrument?.disable(); coordinator.instrument = nil }
 }

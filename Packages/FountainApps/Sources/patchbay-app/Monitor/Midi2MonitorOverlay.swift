@@ -118,6 +118,8 @@ struct Midi2MonitorOverlay: View {
                 self.scheduleFade()
             case "monitor.maxLines":
                 self.maxLines = max(1, Int(value)); self.trim()
+            case "monitor.opacity.now":
+                withAnimation(.easeOut(duration: 0.12)) { self.targetOpacity = Double(value) }
             default: break
             }
         }))

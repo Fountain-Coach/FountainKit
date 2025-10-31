@@ -392,7 +392,8 @@ let package = Package(
             name: "grid-dev-app",
             dependencies: [
                 "MetalViewKit",
-                .product(name: "LauncherSignature", package: "FountainCore")
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
             ],
             path: "Sources/grid-dev-app"
         ),

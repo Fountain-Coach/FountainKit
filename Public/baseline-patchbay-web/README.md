@@ -32,9 +32,10 @@ Web MRTS (MIDI 2.0)
   - Zoom: `AX=512 AY=384 MAG=0.2 npm run mrts:zoom`
 - Under the hood: scripts use `src/midi2/*` to build SysEx7 UMP and post to `midi-service` `/ump/send`.
 
- MRTS runner
- - One‑shot sequence (reset → pan → zoom): `MIDI_SERVICE_URL=http://127.0.0.1:7180 TARGET_NAME="PatchBay Canvas" npm run mrts:run`
- - Reads MRTS facts via `store-dump` (Teatro/MRTS seeded segments) when available.
+MRTS runner
+- One‑shot sequence (reset → pan → zoom): `MIDI_SERVICE_URL=http://127.0.0.1:7180 TARGET_NAME="PatchBay Canvas" npm run mrts:run`
+- Reads MRTS facts via `store-dump` (Teatro/MRTS seeded segments) when available.
+ - Numeric invariants: `npm run mrts:assert` (asserts follow‑finger pan and anchor‑stable zoom via CI notify snapshots; eps defaults to 1.0 px).
 
 Notes
 - Reset via REST is two calls; with MIDI 2.0 you can also emit the vendor JSON `canvas.reset`.

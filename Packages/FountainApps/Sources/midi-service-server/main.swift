@@ -1,6 +1,7 @@
 import Foundation
 import FountainRuntime
 import MIDIService
+import MIDIService
 
 @main
 struct Main {
@@ -16,6 +17,15 @@ struct Main {
                     return HTTPResponse(status: 200, headers: ["Content-Type": "application/yaml"], body: data)
                 }
             }
+            if req.path == "/ump/tail" {
+                let items = await MIDIServiceRuntime.shared.tail(limit: 256)
+                let payload = try? JSONEncoder().encode(["events": items])
+                return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: payload ?? Data("{}".utf8))
+            }
+            if req.path == "/ump/flush" {
+                await MIDIServiceRuntime.shared.flush()
+                return HTTPResponse(status: 204)
+            }
             return HTTPResponse(status: 404)
         }
 
@@ -26,6 +36,9 @@ struct Main {
             FileHandle.standardError.write(Data("[midi-service] register failed: \(error)\n".utf8))
         }
         let server = NIOHTTPServer(kernel: transport.asKernel())
+
+        // Ensure listener to record incoming UMP from all sources
+        Task { await MIDIServiceRuntime.shared.ensureListener() }
 
         Task {
             do {
@@ -39,4 +52,3 @@ struct Main {
         dispatchMain()
     }
 }
-

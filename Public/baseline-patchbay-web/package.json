@@ -11,7 +11,8 @@
     "mrts:reset": "node ./scripts/mrts-reset.js",
     "mrts:pan": "node ./scripts/mrts-pan.js",
     "mrts:zoom": "node ./scripts/mrts-zoom.js",
-    "mrts:run": "npm run build && node ./scripts/mrts-run.js"
+    "mrts:run": "npm run build && node ./scripts/mrts-run.js",
+    "mrts:assert": "npm run build && node ./scripts/mrts-assert.js"
   },
   "dependencies": {
     "react": "18.3.1",

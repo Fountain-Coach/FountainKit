@@ -9,6 +9,9 @@ What
   - `GET /endpoints` — list visible CoreMIDI destinations (name only).
   - `POST /endpoints` (stub) — create managed endpoints.
   - `POST /ump/send { target.displayName, words[] }` — send UMP to a destination.
+ - Fallback (non‑OpenAPI; dev aid):
+   - `GET /ump/tail` — recent UMP events with optional decoded payloads `{events:[{ts,words[],vendorJSON?,peJSON?}]}`.
+   - `POST /ump/flush` — clear recorder buffer.
 
 How
 - Build/run: `swift run --package-path Packages/FountainApps midi-service-server`.
@@ -18,4 +21,4 @@ How
 Notes
 - `sendUMP` uses CoreMIDI when available; it looks up or creates a per‑destination sender and keeps it open.
 - This service doesn’t interpret UMP; instruments do. Vendor JSON topics like `ui.panBy`/`ui.zoomAround` and MIDI‑CI PE SET are interpreted by the macOS app’s instruments.
-
+ - For Web MRTS, the recorder extracts vendor JSON payloads and Property Exchange JSON snapshots (notify/setReply) for numeric assertions.

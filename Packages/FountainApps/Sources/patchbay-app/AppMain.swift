@@ -1213,7 +1213,7 @@ final class AppState: ObservableObject {
 }
 
 // MARK: - App‑level MIDI Instrument
-fileprivate struct PatchBayAppInstrumentBinder: NSViewRepresentable {
+struct PatchBayAppInstrumentBinder: NSViewRepresentable {
     @EnvironmentObject var state: AppState
     func makeCoordinator() -> Coordinator { Coordinator() }
     func makeNSView(context: Context) -> NSView {
@@ -1242,7 +1242,7 @@ fileprivate struct PatchBayAppInstrumentBinder: NSViewRepresentable {
     }
     final class Coordinator {
         var instrument: MetalInstrument?
-        var sink: AppInstrumentSink?
+        fileprivate var sink: AppInstrumentSink?
     }
 }
 
@@ -1262,6 +1262,30 @@ fileprivate final class AppInstrumentSink: MetalSceneRenderer {
                         switch idx { case 1: return .midi2; case 2: return .coremidi; case 3: return .loopback; case 4: return .noop; default: return .auto }
                     }()
                     st.updateMIDITransportMode(mode)
+                case "canvas.reset":
+                    // Reset canvas transform to canonical defaults
+                    NotificationCenter.default.post(
+                        name: Notification.Name("MetalCanvasRendererCommand"),
+                        object: nil,
+                        userInfo: [
+                            "op": "set",
+                            "zoom": Double(Canvas2D.defaultZoom),
+                            "tx": Double(Canvas2D.defaultTranslation.x),
+                            "ty": Double(Canvas2D.defaultTranslation.y)
+                        ]
+                    )
+                    // Emit monitor activity so overlays wake up
+                    NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type": "ui.zoom", "zoom": Double(Canvas2D.defaultZoom)])
+                    NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type": "ui.pan", "x": 0.0, "y": 0.0])
+                case "canvas.zoom":
+                    NotificationCenter.default.post(name: Notification.Name("MetalCanvasRendererCommand"), object: nil, userInfo: ["op": "set", "zoom": Double(float)])
+                    NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type": "ui.zoom", "zoom": Double(float)])
+                case "canvas.translation.x":
+                    NotificationCenter.default.post(name: Notification.Name("MetalCanvasRendererCommand"), object: nil, userInfo: ["op": "set", "tx": Double(float)])
+                    NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type": "ui.pan", "x": Double(float)])
+                case "canvas.translation.y":
+                    NotificationCenter.default.post(name: Notification.Name("MetalCanvasRendererCommand"), object: nil, userInfo: ["op": "set", "ty": Double(float)])
+                    NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type": "ui.pan", "y": Double(float)])
                 default:
                     break
                 }

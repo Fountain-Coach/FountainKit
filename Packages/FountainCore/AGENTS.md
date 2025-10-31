@@ -16,3 +16,6 @@ Focus on behavior: store capabilities and ETag semantics, HTTP transport behavio
 
 CI
 `swift build` and `swift test` must pass for this package; no generated sources are committed. When behavior changes, document it in the root AGENTS master plan and bump a minor version for additive APIs.
+
+Baseline policy (cross‑package)
+- The default UI baseline is Baseline‑PatchBay (grid‑dev‑app). Changes that affect viewport math or instrument semantics should coordinate with the baseline’s MRTS Teatro prompt and robot invariants. The baseline prints the creation + MRTS prompts on boot; seed MRTS via `baseline-robot-seed` and run invariants with `Scripts/ci/baseline-robot.sh`.

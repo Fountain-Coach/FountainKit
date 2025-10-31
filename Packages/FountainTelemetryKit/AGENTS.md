@@ -13,3 +13,6 @@ Build/test
 
 Testing
 Cover encoders/decoders and timebase consistency. When hardware isn’t available, simulate long‑running streams to probe resilience. CI builds/tests this package; telemetry tests may be skipped without supported hardware.
+
+Baseline policy (cross‑package)
+- The default UI baseline is Baseline‑PatchBay (grid‑dev‑app). MIDI‑driven invariants and instrument semantics tested there (MRTS prompt + robot tests) are the reference when adjusting telemetry adapters and transports. Keep identifiers stable and ensure loopback/CoreMIDI modes continue to satisfy the Baseline robot suites (`Scripts/ci/baseline-robot.sh`).

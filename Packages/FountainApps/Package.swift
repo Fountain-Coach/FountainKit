@@ -69,7 +69,9 @@ let package = Package(
         .executable(name: "qcmockcore-tests", targets: ["qcmockcore-tests"]),
         .executable(name: "patchbay-service-server", targets: ["patchbay-service-server"]),
         .executable(name: "patchbay-app", targets: ["patchbay-app"]),
-        .executable(name: "replay-export", targets: ["replay-export"])
+        .executable(name: "replay-export", targets: ["replay-export"]),
+        .executable(name: "grid-dev-app", targets: ["grid-dev-app"]),
+        .executable(name: "grid-dev-seed", targets: ["grid-dev-seed"])
     ],
     dependencies: [
         .package(path: "../FountainCore"),
@@ -385,6 +387,22 @@ let package = Package(
             name: "patchbay-snapshots",
             dependencies: ["patchbay-app"],
             path: "Sources/patchbay-snapshots"
+        ),
+        .executableTarget(
+            name: "grid-dev-app",
+            dependencies: [
+                "MetalViewKit",
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ],
+            path: "Sources/grid-dev-app"
+        ),
+        .executableTarget(
+            name: "grid-dev-seed",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ],
+            path: "Sources/grid-dev-seed"
         ),
         .executableTarget(
             name: "img-rmse",

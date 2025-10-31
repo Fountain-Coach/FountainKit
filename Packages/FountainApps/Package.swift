@@ -26,6 +26,7 @@ let package = Package(
         .executable(name: "bootstrap-server", targets: ["bootstrap-server"]),
         .executable(name: "publishing-frontend", targets: ["publishing-frontend"]),
         .executable(name: "tutor-dashboard", targets: ["tutor-dashboard"]),
+        // removed: add-instruments-seed (context menu removed from baseline)
         .executable(name: "store-dump", targets: ["store-dump"]),
         .executable(name: "FountainLauncherUI", targets: ["FountainLauncherUI"]),
         .executable(name: "local-agent-manager", targets: ["local-agent-manager"]),
@@ -660,6 +661,7 @@ let package = Package(
             ],
             exclude: ["README.md"]
         ),
+        // removed: add-instruments-seed target
         .executableTarget(
             name: "store-dump",
             dependencies: [

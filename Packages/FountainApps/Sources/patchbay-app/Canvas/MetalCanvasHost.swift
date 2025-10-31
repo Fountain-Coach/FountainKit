@@ -89,6 +89,7 @@ struct MetalCanvasHost: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 .padding(.top, 8)
                 .padding(.trailing, 8)
+            // Add-Instruments context menu removed in baseline; no right-click UI
         }
     }
 }

@@ -1,6 +1,36 @@
-# Baseline‑PatchBay — “Add Instruments” Context Menu Prompt
+# Baseline‑PatchBay — Add Instruments (Deprecated)
 
-This Teatro prompt extends the baseline scene so a right-click on the grid summons an instrument picker and pairs the surface description with a matching MRTS brief. Feed the creation prompt to Teatro when you need to materialize the picker without touching runtime code, and seed the MRTS prompt alongside it so robot runs keep the interaction anchored.
+This document described a right‑click “Add Instruments” context menu and its Teatro/MRTS prompts. We rolled this feature back: the baseline web surface cannot rely on right‑click and the baseline macOS app does not ship this menu. Use the new three‑pane baseline instead.
+
+What to use now
+- Baseline layout: three vertical panes with the canvas instrument centered and draggable gutters.
+- Prompts: seeded and printed on boot by `grid-dev-app`.
+  - Creation prompt: see `Packages/FountainApps/Sources/grid-dev-app/AppMain.swift:buildTeatroPrompt()`.
+  - MRTS prompt: see `Packages/FountainApps/Sources/grid-dev-app/AppMain.swift:buildMRTSPrompt()`.
+- PE controls for layout: `layout.left.frac`, `layout.right.frac` (0..1), emit `ui.layout.changed`.
+
+Where
+- Baseline app: `Packages/FountainApps/Sources/grid-dev-app/` (launcher `Scripts/apps/baseline-patchbay`).
+- Robot tests: `Packages/FountainApps/Tests/PatchBayAppUITests/*` (grid/contact/monitor suites).
+
+Note: The historical content of this file is kept below for reference but is no longer authoritative.
+
+What (historical)
+- Right‑click “Add Instruments” picker. Superseded by the three‑pane baseline.
+
+Why
+- The Baseline app is authoritative for viewport/math invariants. Any UI change (like the picker) must carry an updated Teatro prompt and an MRTS brief. We seed both into FountainStore for provenance and robot runs.
+
+How (historical)
+- Spec‑first updates for instrument kinds and seeders; superseded.
+
+Where
+- Curated spec: `Packages/FountainSpecCuration/openapi/v1/patchbay.yml`
+- Service spec: `Packages/FountainApps/Sources/patchbay-service/openapi.yaml`
+- App UI: `Packages/FountainApps/Sources/patchbay-app/**`
+- Seeders: `Packages/FountainApps/Sources/baseline-robot-seed`, `Packages/FountainApps/Sources/grid-dev-seed`
+- Tests/snapshots: `Packages/FountainApps/Tests/PatchBayAppUITests/**` and `…/Baselines/`
+- Recorder + headless (for Web/Linx): `Packages/FountainServiceKit-MIDI/AGENTS.md`
 
 ## Creation Prompt
 
@@ -46,5 +76,63 @@ Numeric invariants:
 - Picker width locked at 320 pt; content scroll frictionless with no elastic bounce.
 - Row typography: title SF Pro 13 pt medium; subtitle 11 pt regular with #6E7683.
 - Robot logs include `mrts.addInstruments.open`, `mrts.addInstruments.added`, and `mrts.addInstruments.dismissed` markers in order.
+
+Tolerances and spaces
+- Treat view‑space values with ±0.5 pt tolerance in numeric checks (anti‑aliasing, DPI rounding).
+- Use the canonical transforms for conversions: `doc = (view/zoom) − translation`.
+
+Robot wiring (MIDI 2.0 and events)
+- Preferred: drive via dedicated vendor‑JSON ops (for parity with Web MRTS and Linux/headless):
+  - `ui.contextMenuAt { "view.x": <px>, "view.y": <px> }` → opens picker (anchored offset 12 pt, 12 pt).
+  - `ui.addInstrument { "kind": "<instrumentKind>" }` → adds the selected instrument and closes the popover.
+- If the UI path is used in XCTest, still emit the same log markers (`mrts.addInstruments.*`) so recorder traces remain comparable across platforms.
+
+Snapshot policy (visual regression)
+- Sizes: 1440×900 and 1280×800; store baselines under `Packages/FountainApps/Tests/PatchBayAppUITests/Baselines`.
+- Rebaseline only after numeric invariants pass: run `Scripts/ci/ui-rebaseline.sh`.
+
+MRTS facts (seeded)
+```json
+{
+  "product": "baseline-patchbay",
+  "tests": ["AddInstrumentsContextMenuTests"],
+  "vendorJSON": ["ui.contextMenuAt", "ui.addInstrument"],
+  "invariants": [
+    "pickerAnchoredOffset12pt",
+    "pickerWidth320pt",
+    "rowHeight40pt"
+  ]
+}
 ```
 
+Commands (scan‑friendly)
+- Build service: `swift build --package-path Packages/FountainApps -c debug --target patchbay-service`
+- Seed MRTS prompt: `swift run --package-path Packages/FountainApps baseline-robot-seed`
+- Enum drift check: `bash Scripts/ci/check-patchbay-spec-sync.sh`
+
+Routes (reference)
+- PatchBay (OpenAPI): `/instruments` (CRUD), `/instruments/{id}/schema`, `/canvas/zoom`, `/canvas/pan`
+- MIDI service (OpenAPI, for Web/Linux): `POST /ump/send`, `GET /ump/events`, `POST /ump/events`, `GET/POST/DELETE /headless/instruments`
+MRTS facts (seeded)
+```json
+{
+  "product": "baseline-patchbay",
+  "tests": ["AddInstrumentsContextMenuTests"],
+  "vendorJSON": ["ui.contextMenuAt", "ui.addInstrument"],
+  "invariants": [
+    "pickerAnchoredOffset12pt",
+    "pickerWidth320pt",
+    "rowHeight40pt"
+  ]
+}
+```
+
+Commands (scan‑friendly)
+- Build service: `swift build --package-path Packages/FountainApps -c debug --target patchbay-service`
+- Seed MRTS prompt: `swift run --package-path Packages/FountainApps baseline-robot-seed`
+- Enum drift check: `bash Scripts/ci/check-patchbay-spec-sync.sh`
+
+Routes (reference)
+- PatchBay (OpenAPI): `/instruments` (CRUD), `/instruments/{id}/schema`, `/canvas/zoom`, `/canvas/pan`
+- MIDI service (OpenAPI, for Web/Linux): `POST /ump/send`, `GET /ump/events`, `POST /ump/events`, `GET/POST/DELETE /headless/instruments`
+```

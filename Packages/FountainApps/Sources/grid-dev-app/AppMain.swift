@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import MetalViewKit
 import LauncherSignature
 import FountainStoreClient
@@ -62,6 +63,10 @@ struct GridDevView: View {
     @State private var resetMinOpacity: Double = 0.18
     @State private var resetFadeSeconds: Double = 3.0
     @State private var resetFadeWork: DispatchWorkItem? = nil
+    @State private var leftFrac: CGFloat = 0.22
+    @State private var rightFrac: CGFloat = 0.26
+    @State private var leftItems: [String] = (0..<20).map { "Item #\($0)" }
+    @State private var rightItems: [String] = (0..<8).map { "Log #\($0)" }
     private func bumpResetAndScheduleFade() {
         withAnimation(.easeOut(duration: 0.12)) { resetOpacity = 1.0 }
         resetFadeWork?.cancel()
@@ -70,104 +75,215 @@ struct GridDevView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + resetFadeSeconds, execute: w)
     }
     var body: some View {
-        let content = ZStack(alignment: .topLeading) {
-            MetalCanvasView(
-                zoom: vm.zoom,
-                translation: vm.translation,
-                gridMinor: CGFloat(vm.grid),
-                majorEvery: vm.majorEvery,
-                nodes: { [] },
-                edges: { [] },
-                selected: { [] },
-                onSelect: { _ in },
-                onMoveBy: { _,_ in },
-                onTransformChanged: { t, z in vm.translation = t; vm.zoom = z },
-                instrument: MetalInstrumentDescriptor(
-                    manufacturer: "Fountain",
-                    product: "GridDev",
-                    instanceId: "grid-dev-1",
-                    displayName: "Grid Dev"
-                )
-            )
-            .ignoresSafeArea()
-            // UX instrument binder (no visible UI): tune reset fade/opacity via PE
-            .overlay(GridDevUXBinder(onSet: { name, value in
-                switch name {
-                case "reset.opacity.min":
-                    resetMinOpacity = Double(value)
-                    // if target below new min, snap to min
-                    if resetOpacity < resetMinOpacity { resetOpacity = resetMinOpacity }
-                    bumpResetAndScheduleFade()
-                case "reset.fadeSeconds":
-                    resetFadeSeconds = Double(value)
-                    bumpResetAndScheduleFade()
-                case "reset.opacity.now":
-                    withAnimation(.easeOut(duration: 0.12)) { resetOpacity = Double(value) }
-                case "reset.bump":
-                    bumpResetAndScheduleFade()
-                default:
-                    break
+        GeometryReader { geo in
+            let minPane: CGFloat = 160
+            let total = max(geo.size.width, minPane * 3 + 12)
+            let leftW = max(minPane, min(total - minPane*2, leftFrac * total))
+            let rightW = max(minPane, min(total - leftW - minPane - 12, rightFrac * total))
+            let centerW = max(minPane, total - leftW - rightW - 12)
+            HStack(spacing: 6) {
+                // Left scroll pane
+                ScrollView(.vertical) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Left Pane").font(.system(size: 12, weight: .semibold))
+                        ForEach(leftItems, id: \.self) { id in
+                            Text(id)
+                                .font(.system(size: 12))
+                                .padding(.vertical, 2)
+                                .onDrag { beginDrag(for: id, from: "left") }
+                        }
+                    }.padding(8)
                 }
-            }).allowsHitTesting(false))
-        }
-        // Overlays
-        content
-            // MIDI monitor pinned to top-right (non-interactive)
-            .overlay(alignment: .topTrailing) {
-                GridDevMidiMonitorOverlay(isHot: .constant(true))
-                    .padding(8)
-                    .allowsHitTesting(false)
-            }
-            // Reset grid button (top-left)
-            .overlay(alignment: .topLeading) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Button {
-                        NotificationCenter.default.post(
-                            name: Notification.Name("MetalCanvasRendererCommand"),
-                            object: nil,
-                            userInfo: ["op": "set", "zoom": 1.0, "tx": 0.0, "ty": 0.0]
+                .onDrop(of: [UTType.plainText], isTargeted: .constant(false)) { providers in
+                    acceptDrop(into: "left", providers: providers)
+                }
+                .frame(width: leftW)
+                .background(Color(nsColor: .textBackgroundColor))
+                // Left gutter (draggable)
+                Rectangle()
+                    .fill(Color(nsColor: .separatorColor))
+                    .frame(width: 6)
+                    .gesture(DragGesture(minimumDistance: 0).onChanged { value in
+                        let new = max(minPane, min(total - minPane*2, leftW + value.translation.width))
+                        leftFrac = new / total
+                        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                            "type": "ui.layout.changed", "left.frac": Double(leftFrac), "right.frac": Double(rightFrac)
+                        ])
+                    })
+                // Center canvas
+                ZStack(alignment: .topLeading) {
+                    MetalCanvasView(
+                        zoom: vm.zoom,
+                        translation: vm.translation,
+                        gridMinor: CGFloat(vm.grid),
+                        majorEvery: vm.majorEvery,
+                        nodes: { [] },
+                        edges: { [] },
+                        selected: { [] },
+                        onSelect: { _ in },
+                        onMoveBy: { _,_ in },
+                        onTransformChanged: { t, z in vm.translation = t; vm.zoom = z },
+                        instrument: MetalInstrumentDescriptor(
+                            manufacturer: "Fountain", product: "GridDev", instanceId: "grid-dev-1", displayName: "Grid Dev"
                         )
-                        // Emit MIDI activity so the monitor reflects the reset immediately
-                        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
-                            "type": "ui.zoom", "zoom": 1.0
-                        ])
-                        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
-                            "type": "ui.pan", "x": 0.0, "y": 0.0
-                        ])
-                        bumpResetAndScheduleFade()
-                    } label: {
-                        Text("Reset Grid").font(.system(size: 11, weight: .medium)).padding(.horizontal, 8).padding(.vertical, 5)
+                    )
+                    .overlay(GridDevUXBinder(onSet: { name, value in
+                        switch name {
+                        case "reset.opacity.min":
+                            resetMinOpacity = Double(value)
+                            if resetOpacity < resetMinOpacity { resetOpacity = resetMinOpacity }
+                            bumpResetAndScheduleFade()
+                        case "reset.fadeSeconds":
+                            resetFadeSeconds = Double(value)
+                            bumpResetAndScheduleFade()
+                        case "reset.opacity.now":
+                            withAnimation(.easeOut(duration: 0.12)) { resetOpacity = Double(value) }
+                        case "reset.bump":
+                            bumpResetAndScheduleFade()
+                        default:
+                            break
+                        }
+                    }).allowsHitTesting(false))
+                    // Monitor (top-right) + Reset (top-left)
+                    GridDevMidiMonitorOverlay(isHot: .constant(true))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                        .padding(8)
+                        .allowsHitTesting(false)
+                    // Accept text drops into the canvas area (log the event)
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onDrop(of: [UTType.plainText], isTargeted: .constant(false)) { providers in
+                            if let id = loadFirstString(from: providers) {
+                                NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                                    "type": "ui.dnd.drop", "item.id": id, "target": "center"
+                                ])
+                                return true
+                            }
+                            return false
+                        }
+                    VStack(alignment: .leading, spacing: 6) {
+                        Button {
+                            NotificationCenter.default.post(
+                                name: Notification.Name("MetalCanvasRendererCommand"),
+                                object: nil,
+                                userInfo: ["op": "set", "zoom": 1.0, "tx": 0.0, "ty": 0.0]
+                            )
+                            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type": "ui.zoom", "zoom": 1.0])
+                            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type": "ui.pan", "x": 0.0, "y": 0.0])
+                            bumpResetAndScheduleFade()
+                        } label: {
+                            Text("Reset Grid").font(.system(size: 11, weight: .medium)).padding(.horizontal, 8).padding(.vertical, 5)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .onHover { hovering in if hovering { withAnimation(.easeOut(duration: 0.12)) { resetOpacity = 1.0 } } else { bumpResetAndScheduleFade() } }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .onHover { hovering in if hovering { withAnimation(.easeOut(duration: 0.12)) { resetOpacity = 1.0 } } else { bumpResetAndScheduleFade() } }
+                    .opacity(resetOpacity)
+                    .onReceive(NotificationCenter.default.publisher(for: .MetalCanvasMIDIActivity)) { _ in bumpResetAndScheduleFade() }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding(.leading, 6)
+                    .padding(.top, 6)
                 }
-                .opacity(resetOpacity)
-                .onReceive(NotificationCenter.default.publisher(for: .MetalCanvasMIDIActivity)) { _ in bumpResetAndScheduleFade() }
-                .padding(.leading, 6)
-                .padding(.top, 6)
+                .frame(width: centerW)
+                // Right gutter (draggable)
+                Rectangle()
+                    .fill(Color(nsColor: .separatorColor))
+                    .frame(width: 6)
+                    .gesture(DragGesture(minimumDistance: 0).onChanged { value in
+                        let newRight = max(minPane, min(total - leftW - minPane - 12, rightW - value.translation.width))
+                        rightFrac = (total - leftW - 12 - newRight) / total
+                        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                            "type": "ui.layout.changed", "left.frac": Double(leftFrac), "right.frac": Double(rightFrac)
+                        ])
+                    })
+                // Right scroll pane
+                ScrollView(.vertical) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Right Pane").font(.system(size: 12, weight: .semibold))
+                        ForEach(rightItems, id: \.self) { id in
+                            Text(id)
+                                .font(.system(size: 12))
+                                .padding(.vertical, 2)
+                                .onDrag { beginDrag(for: id, from: "right") }
+                        }
+                    }.padding(8)
+                }
+                .onDrop(of: [UTType.plainText], isTargeted: .constant(false)) { providers in
+                    acceptDrop(into: "right", providers: providers)
+                }
+                .frame(width: rightW)
+                .background(Color(nsColor: .textBackgroundColor))
             }
-        .frame(minWidth: 800, minHeight: 600)
+        }
+        .overlay(GridDevLayoutBinder(onSet: { name, value in
+            let v = CGFloat(max(0.05, min(0.9, Double(value))))
+            switch name {
+            case "layout.left.frac": leftFrac = v
+            case "layout.right.frac": rightFrac = v
+            default: break
+            }
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                "type": "ui.layout.changed", "left.frac": Double(leftFrac), "right.frac": Double(rightFrac)
+            ])
+        }).allowsHitTesting(false))
+        .frame(minWidth: 960, minHeight: 640)
+    }
+
+    // MARK: - Drag & Drop
+    private func beginDrag(for id: String, from source: String) -> NSItemProvider {
+        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+            "type": "ui.dnd.begin", "item.id": id, "source": source
+        ])
+        return NSItemProvider(object: id as NSString)
+    }
+    private func acceptDrop(into target: String, providers: [NSItemProvider]) -> Bool {
+        guard let id = loadFirstString(from: providers) else { return false }
+        var moved = false
+        if target == "left" {
+            if let idx = rightItems.firstIndex(of: id) { rightItems.remove(at: idx); moved = true }
+            if !leftItems.contains(id) { leftItems.append(id); moved = true }
+        } else if target == "right" {
+            if let idx = leftItems.firstIndex(of: id) { leftItems.remove(at: idx); moved = true }
+            if !rightItems.contains(id) { rightItems.append(id); moved = true }
+        }
+        if moved {
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                "type": "ui.dnd.drop", "item.id": id, "target": target
+            ])
+        }
+        return moved
+    }
+    private func loadFirstString(from providers: [NSItemProvider]) -> String? {
+        for p in providers {
+            let sem = DispatchSemaphore(value: 0)
+            var out: String? = nil
+            p.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { item, _ in
+                defer { sem.signal() }
+                if let data = item as? Data, let s = String(data: data, encoding: .utf8) { out = s }
+                else if let s = item as? String { out = s }
+                else if let ns = item as? NSString { out = String(ns) }
+            }
+            _ = sem.wait(timeout: .now() + 0.5)
+            if let s = out { return s }
+        }
+        return nil
     }
 }
 
 extension GridDevApp {
     @MainActor static func buildTeatroPrompt() -> String {
         return """
-        Scene: GridDevApp (Grid‑Only with Persistent Corpus)
+        Scene: GridDevApp — Three‑Pane Baseline (Canvas Center)
         Text:
-        - Window: macOS titlebar window, 1440×900pt. Content background white (#FAFBFD).
-        - Layout: single full‑bleed canvas; no sidebar, no extra panes, minimal chrome.
-        - Only view: “Grid” Instrument filling the content.
-          - Grid anchoring: viewport‑anchored. Leftmost vertical line renders at view.x = 0 across all translations/zoom. Topmost horizontal line at view.y = 0.
-          - Minor spacing: 24 pt; Major every 5 minors (120 pt). Minor #ECEEF3, Major #D1D6E0. Crisp 1 px.
-          - Axes: Doc‑anchored origin lines (x=0/y=0) in faint red (#BF3434) for orientation.
-        - MIDI 2.0 Monitor pinned top‑right (non‑interactive); fades out after inactivity; wakes on MIDI activity.
-        - Cursor Instrument (always on): crosshair + ring + tiny “0” rendered at the pointer; label offset so it never occludes the zero.
-          - Grid coordinates: g: col,row where
-            • doc = (view/zoom) − translation
-            • leftDoc = 0/zoom − tx, topDoc = 0/zoom − ty
-            • col = round((doc.x − leftDoc)/step), row = round((doc.y − topDoc)/step)
-            • step = grid.minor
+        - Window: macOS titlebar window, 1440×900 pt; content background #FAFBFD.
+        - Layout: three vertical scroll panes with draggable borders (gutters 6 pt):
+          • Left Pane (scrollable): list scaffold. Default width ≈ 22% (min 160 pt).
+          • Center Pane: contains the “Grid” canvas instrument (fills center).
+          • Right Pane (scrollable): monitor/log scaffold. Default width ≈ 26% (min 160 pt).
+          • Gutters draggable horizontally; widths clamp to ≥160 pt; proportions persist during resize.
+        - Canvas (center): Baseline grid instrument with viewport‑anchored grid (left contact at view.x=0, top at view.y=0), minor=24 pt, majorEvery=5, axes at doc origin.
+        - MIDI overlay: monitor/controls fade after inactivity; wake on MIDI activity.
+        - Layout control via MIDI‑CI PE: `layout.left.frac`, `layout.right.frac` (0..1) adjust pane fractions and emit `ui.layout.changed`.
+        - Drag & Drop (panes): items can be dragged from Left → Right and back; drops emit `ui.dnd.begin` and `ui.dnd.drop` events. Center accepts drops (logged only).
         """
     }
 }
@@ -175,22 +291,24 @@ extension GridDevApp {
 extension GridDevApp {
     static func buildMRTSPrompt() -> String {
         return """
-        Scene: Baseline‑PatchBay — MIDI Robot Test Script (MRTS)
+        Scene: Baseline‑PatchBay — Three‑Pane Layout (MRTS)
         Text:
-        - Objective: create a one‑shot runner that executes the baseline robot/invariant test subset against the Baseline‑PatchBay UI (grid‑only, instrument‑first).
-        - Output: write a shell script at `Scripts/ci/baseline-robot.sh` (executable) that:
-          • Builds the baseline UI product `baseline-patchbay` (grid-dev-app target).
-          • Runs the robot/invariant test subset in `Packages/FountainApps/Tests/PatchBayAppUITests`:
-            `GridInstrumentTests`, `ViewportGridContactTests`, `PixelGridVerifierTests`, `MIDIMonitorEventsTests`, `CanvasDefaultTransformTests`, `RightEdgeContactTests`.
-          • Uses `ROBOT_ONLY=1` and `-Xswiftc -DROBOT_ONLY` to keep the surface minimal; exits non‑fatally if tests fail so artifacts can be inspected.
+        - Objective: verify three‑pane draggable layout plus baseline canvas invariants and pane drag‑and‑drop.
+        - Steps:
+          • PE SET `layout.left.frac=0.25` and `layout.right.frac=0.25`; expect `ui.layout.changed`.
+          • Simulate window resize (+300 pt width) and assert panes ≥160 pt and center ≥160 pt.
+          • Drag left gutter +80 pt right; left fraction increases; event emitted.
+          • Drag right gutter +100 pt right; right fraction decreases; event emitted.
+          • Drag an item from Left → Right; assert counts (left−1, right+1) and `ui.dnd.*` events.
+          • Drag an item from Right → Left; assert counts (right−1, left+1) and `ui.dnd.*` events.
+          • Drop an item onto Center; assert `ui.dnd.drop` with target=center.
+          • Validate canvas grid contact/spacing and anchor‑stable zoom drift ≤ 1 px.
 
         Numeric invariants:
-        - Default transform: zoom=1.0, translation=(0,0).
-        - Left grid contact pinned at view.x=0 across translations/zoom.
-        - Minor spacing px = grid.minor × zoom; major spacing = grid.minor × majorEvery × zoom.
-        - Anchor‑stable zoom: drift ≤ 1 px.
-        - Right edge contact: floor(view.width / (grid.minor × zoom)) at x = index × step.
-        - Monitor emits `ui.zoom`/`ui.pan` (and debug variants) on zoomAround/pan/reset.
+        - Pane minimum widths: left/right/center ≥ 160 pt; gutters 6 pt.
+        - Fractions clamp [0.05, 0.9]; gutters never cross.
+        - Grid contact left at view.x=0; spacing: minor px = grid.minor × zoom; major px = grid.minor × majorEvery × zoom.
+        - Monitor emits `ui.zoom(.debug)`/`ui.pan(.debug)`, `ui.layout.changed`, and `ui.dnd.begin/ui.dnd.drop` during DnD.
         """
     }
 }
@@ -209,6 +327,29 @@ fileprivate struct GridDevUXBinder: NSViewRepresentable {
         let v = NSView(frame: .zero)
         let sink = Sink(); sink.onSet = onSet
         let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "GridDevUX", instanceId: "griddev-ux", displayName: "Grid Dev UX")
+        let inst = MetalInstrument(sink: sink, descriptor: desc)
+        inst.enable()
+        context.coordinator.instrument = inst
+        return v
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) { coordinator.instrument?.disable(); coordinator.instrument = nil }
+}
+
+// MIDI 2.0 binder for layout control (pane fractions)
+fileprivate struct GridDevLayoutBinder: NSViewRepresentable {
+    let onSet: (String, Float) -> Void
+    final class Sink: MetalSceneRenderer { var onSet: ((String, Float)->Void)?; func setUniform(_ name: String, float: Float) { onSet?(name, float) }
+        func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
+        func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
+        func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+    }
+    final class Coordinator { var instrument: MetalInstrument? = nil }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeNSView(context: Context) -> NSView {
+        let v = NSView(frame: .zero)
+        let sink = Sink(); sink.onSet = onSet
+        let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "GridDevLayout", instanceId: "griddev-layout", displayName: "Grid Dev Layout")
         let inst = MetalInstrument(sink: sink, descriptor: desc)
         inst.enable()
         context.coordinator.instrument = inst

@@ -168,12 +168,29 @@ public final class MetalInstrument: @unchecked Sendable {
             let ay = CGFloat((data["anchor.view.y"] as? Double) ?? 0)
             let mag = CGFloat((data["magnification"] as? Double) ?? 0)
             NotificationCenter.default.post(name: Notification.Name("MetalCanvasRendererCommand"), object: nil, userInfo: ["op": "zoomAround", "anchor.x": ax, "anchor.y": ay, "magnification": mag])
+            // Emit a matching monitor activity event so tests observing only monitor traffic see it deterministically
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                "type": "ui.zoom.debug",
+                "anchor.view.x": Double(ax),
+                "anchor.view.y": Double(ay),
+                "magnification": Double(mag)
+            ])
         case "ui.panBy":
             if let dx = data["dx.doc"] as? Double, let dy = data["dy.doc"] as? Double {
                 NotificationCenter.default.post(name: Notification.Name("MetalCanvasRendererCommand"), object: nil, userInfo: ["op": "panBy", "dx": dx, "dy": dy])
+                NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                    "type": "ui.pan.debug",
+                    "dx.doc": dx,
+                    "dy.doc": dy
+                ])
             } else if let vx = data["dx.view"] as? Double, let vy = data["dy.view"] as? Double {
                 // Convert roughly via notification consumer; keeping both forms for flexibility
                 NotificationCenter.default.post(name: Notification.Name("MetalCanvasRendererCommand"), object: nil, userInfo: ["op": "panByView", "dx": vx, "dy": vy])
+                NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                    "type": "ui.pan.debug",
+                    "dx.view": vx,
+                    "dy.view": vy
+                ])
             }
         case "canvas.reset":
             // Reset canvas transform to canonical defaults
@@ -187,6 +204,10 @@ public final class MetalInstrument: @unchecked Sendable {
                     "ty": Double(Canvas2D.defaultTranslation.y)
                 ]
             )
+            // Emit monitor activity like App sink does so tests and overlays wake
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type": "ui.zoom", "zoom": Double(Canvas2D.defaultZoom)])
+            NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: ["type": "ui.pan", "x": 0.0, "y": 0.0])
+        // Removed: context menu and add-instrument vendor JSON are not supported in baseline
         case "marquee.begin", "marquee.update", "marquee.end", "marquee.cancel":
             // Marquee selection removed: ignore gracefully for backward compatibility
             break
@@ -355,6 +376,10 @@ public final class MetalInstrument: @unchecked Sendable {
     }
 
     private static func makeSystemDefaultTransport() -> any MetalInstrumentTransport {
+        // Prefer loopback in robot-only mode to avoid CoreMIDI flakiness in tests
+        if ProcessInfo.processInfo.environment["ROBOT_ONLY"] == "1" || ProcessInfo.processInfo.environment["FK_ROBOT_ONLY"] == "1" {
+            return LoopbackMetalInstrumentTransport.shared
+        }
         #if canImport(CoreMIDI)
         return CoreMIDIMetalInstrumentTransport.shared
         #else

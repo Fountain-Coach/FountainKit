@@ -20,6 +20,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         let env = ProcessInfo.processInfo.environment
         if env["FOUNTAIN_SKIP_LAUNCHER_SIG"] != "1" { verifyLauncherSignature() }
+        // Console banner for Baseline‑PatchBay (observability)
+        let title = env["APP_TITLE"] ?? "Baseline‑PatchBay"
+        print("\n=== \(title) ===\nproduct: baseline-patchbay (grid-dev-app)\nmonitor: fades on idle; wakes on MIDI activity (PE: monitor.fadeSeconds, monitor.opacity.min, monitor.opacity.now)\nreset: button fades/wakes (PE: reset.fadeSeconds, reset.opacity.min, reset.opacity.now, reset.bump)\n===\n")
         Task.detached {
             // Seed & print prompt on boot (policy)
             let prompt = await GridDevApp.buildTeatroPrompt()

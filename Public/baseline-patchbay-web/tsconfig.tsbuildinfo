@@ -1,0 +1,1 @@
+{"root":["./src/main.tsx","./src/midi2/mrts.ts","./src/midi2/ump.ts","./src/ui/app.tsx","./src/ui/grid.ts","./src/ws/patchbay.ts"],"version":"5.6.3"}

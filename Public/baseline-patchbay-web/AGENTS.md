@@ -8,12 +8,13 @@ What
 - REST wiring to PatchBay: read `CanvasState`, apply `zoom` and `pan`.
 
 Why
-- Portable publishing frontend for docs/demos and future Playwright snapshot tests without requiring the macOS app runtime. Follows the same OpenAPI contract as the Swift app to reduce drift.
+- Portable publishing frontend for docs/demos without requiring the macOS app runtime. Mirrors the same OpenAPI contract and MRTS over MIDI 2.0 to reduce drift.
 
 How
-- Start backend: `swift run --package-path Packages/FountainApps patchbay-service-server`.
+- Start PatchBay: `swift run --package-path Packages/FountainApps patchbay-service-server`.
+- Start MIDI bridge: `swift run --package-path Packages/FountainApps midi-service-server` (default `http://127.0.0.1:7180`).
 - Seed prompts (optional): `npm run seed` (runs `grid-dev-seed` + `baseline-robot-seed`).
-- Dev server: `PATCHBAY_URL=http://127.0.0.1:7090 npm run dev` (or `Scripts/apps/baseline-patchbay-web`).
+- Dev server: `PATCHBAY_URL=http://127.0.0.1:7090 MIDI_SERVICE_URL=http://127.0.0.1:7180 npm run dev` (or `Scripts/apps/baseline-patchbay-web`).
 - Build static: `npm run build` (emits `dist/`).
 - Proxy: Vite dev proxy rewrites `/api/patchbay/*` → `PATCHBAY_URL`.
 
@@ -29,15 +30,17 @@ Where
 - REST client: `Public/baseline-patchbay-web/src/ws/patchbay.ts`.
 - Dev config: `Public/baseline-patchbay-web/vite.config.ts`.
 - Launcher: `Scripts/apps/baseline-patchbay-web`.
+- Web MRTS helpers: `Public/baseline-patchbay-web/src/midi2/*` and `Public/baseline-patchbay-web/scripts/mrts-*.js`.
 - Spec: `Packages/FountainApps/Sources/patchbay-service/openapi.yaml` (curated at `Packages/FountainSpecCuration/openapi/v1/patchbay.yml`).
+- MIDI bridge spec/server: `Packages/FountainSpecCuration/openapi/v1/midi-service.yml`, `Packages/FountainServiceKit-MIDI/Sources/MIDIService/*`.
 
 Conventions
 - OpenAPI‑first; do not hand‑edit generated clients if added later.
-- No secrets or `.env` committed; pick up `PATCHBAY_URL` from the environment.
+- No secrets or `.env` committed; pick up `PATCHBAY_URL` and `MIDI_SERVICE_URL` from env.
 - Mirror numeric invariants from Baseline‑PatchBay (grid spacing = minor×majorEvery×zoom; anchor‑stable zoom ≤ 1 px drift).
+- Web MRTS uses MIDI 2.0 UMP (SysEx7 vendor JSON, and later MIDI‑CI PE) sent via the MIDI service; same prompts and facts as Swift tests.
 
 Roadmap
-- Add TS OpenAPI client generation from the curated spec.
-- Add Playwright snapshot tests at 1440×900 and 1280×800.
+- Add TS OpenAPI client generation from curated specs.
+- Add minimal PE SET encoder in TS (or server‑side helpers in `midi-service`).
 - Optional Python mirror (FastAPI) alongside this app if needed for docs hosting.
-

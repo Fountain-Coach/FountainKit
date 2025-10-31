@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage: Scripts/apps/baseline-patchbay-web [--no-seed] [--port <vitePort>] [--patchbay <url>]
+
+Seeds the Teatro prompts (grid-dev + baseline robot) and launches the web Baseline‑PatchBay app (Vite).
+
+Examples:
+  Scripts/apps/baseline-patchbay-web
+  Scripts/apps/baseline-patchbay-web --patchbay http://127.0.0.1:7090 --port 5173
+USAGE
+}
+
+NO_SEED=0
+VITE_PORT=${VITE_PORT:-5173}
+PATCHBAY_URL=${PATCHBAY_URL:-http://127.0.0.1:7090}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --no-seed) NO_SEED=1; shift ;;
+    --port) VITE_PORT=${2:?}; shift 2 ;;
+    --patchbay) PATCHBAY_URL=${2:?}; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown arg: $1"; usage; exit 1 ;;
+  esac
+done
+
+export PATCHBAY_URL
+
+pushd Public/baseline-patchbay-web >/dev/null
+
+if [[ $NO_SEED -eq 0 ]]; then
+  echo "[web] Seeding Teatro prompts…"
+  npm run -s seed || true
+fi
+
+echo "[web] Installing deps…"
+if [[ -f package-lock.json ]]; then npm ci; else npm install; fi
+
+echo "[web] Launching Vite on port $VITE_PORT (PATCHBAY_URL=$PATCHBAY_URL)…"
+VITE_PORT=$VITE_PORT PATCHBAY_URL=$PATCHBAY_URL npm run dev
+
+popd >/dev/null
+

@@ -700,6 +700,13 @@ final class MetalCanvasNSView: MTKView {
             let container = CALayer()
             container.bounds = CGRect(x: 0, y: 0, width: 1, height: 1)
             container.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+            // Disable implicit animations on cursor container (position/bounds)
+            container.actions = [
+                "position": NSNull(),
+                "bounds": NSNull(),
+                "contents": NSNull(),
+                "sublayers": NSNull()
+            ]
             root.addSublayer(container)
             cursorRoot = container
 
@@ -707,6 +714,15 @@ final class MetalCanvasNSView: MTKView {
             cross.strokeColor = NSColor.systemBlue.cgColor
             cross.fillColor = NSColor.clear.cgColor
             cross.lineWidth = 1.0
+            // Disable implicit animations for crosshair layer updates
+            cross.actions = [
+                "position": NSNull(),
+                "bounds": NSNull(),
+                "path": NSNull(),
+                "lineWidth": NSNull(),
+                "strokeColor": NSNull(),
+                "fillColor": NSNull()
+            ]
             container.addSublayer(cross)
             crossLayer = cross
 
@@ -716,14 +732,16 @@ final class MetalCanvasNSView: MTKView {
     private func updateCursorGraphics(viewPoint p: CGPoint) {
         ensureCursorLayers()
         guard let r = coordinator?.renderer, let container = cursorRoot, let cross = crossLayer else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         container.position = p
         // Crosshair only
-        let path = CGMutablePath()
         let L: CGFloat = 6
         let local = CGMutablePath()
         local.move(to: CGPoint(x: -L, y: 0)); local.addLine(to: CGPoint(x: L, y: 0))
         local.move(to: CGPoint(x: 0, y: -L)); local.addLine(to: CGPoint(x: 0, y: L))
         cross.path = local
+        CATransaction.commit()
         // Grid coordinates relative to viewport-anchored grid
         let z = max(0.0001, r.currentZoom)
         let leftDoc = (0.0 / z) - r.currentTranslation.x

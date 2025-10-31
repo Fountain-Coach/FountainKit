@@ -40,7 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 ]]
             ])
             // Show MRTS prompt alongside creation prompt (policy)
-            let mrts = GridDevApp.buildMRTSPrompt()
+            let mrts = await GridDevApp.buildMRTSPrompt()
             print("\n=== MRTS Teatro Prompt (baseline) ===\n\(mrts)\n=== end mrtsprompt ===\n")
         }
         NSApp.setActivationPolicy(.regular)

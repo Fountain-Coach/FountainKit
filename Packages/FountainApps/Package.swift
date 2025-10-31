@@ -26,6 +26,7 @@ let package = Package(
         .executable(name: "bootstrap-server", targets: ["bootstrap-server"]),
         .executable(name: "publishing-frontend", targets: ["publishing-frontend"]),
         .executable(name: "tutor-dashboard", targets: ["tutor-dashboard"]),
+        .executable(name: "store-dump", targets: ["store-dump"]),
         .executable(name: "FountainLauncherUI", targets: ["FountainLauncherUI"]),
         .executable(name: "local-agent-manager", targets: ["local-agent-manager"]),
         .executable(name: "mock-localagent-server", targets: ["mock-localagent-server"]),
@@ -400,7 +401,8 @@ let package = Package(
                 .product(name: "LauncherSignature", package: "FountainCore"),
                 .product(name: "FountainStoreClient", package: "FountainCore")
             ],
-            path: "Sources/grid-dev-app"
+            path: "Sources/grid-dev-app",
+            exclude: ["AGENTS.md"]
         ),
         
         .executableTarget(
@@ -657,6 +659,12 @@ let package = Package(
                 .product(name: "SwiftCursesKit", package: "swiftcurseskit")
             ],
             exclude: ["README.md"]
+        ),
+        .executableTarget(
+            name: "store-dump",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ]
         ),
         .executableTarget(
             name: "FountainLauncherUI",

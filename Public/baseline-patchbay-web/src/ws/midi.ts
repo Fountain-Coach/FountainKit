@@ -1,4 +1,5 @@
 import { encodeSysEx7UMP, buildVendorJSON } from '../midi2/ump'
+import { buildPESetSysEx7 } from '../midi2/pe'
 
 export type Endpoint = { id: string; name: string }
 
@@ -25,3 +26,8 @@ export async function sendVendorJSON(topic: string, data: any, targetDisplayName
   await sendUMP(words, targetDisplayName)
 }
 
+export async function peSetProperties(props: Record<string, number>, targetDisplayName: string, requestId = 1) {
+  const bytes = buildPESetSysEx7(props, requestId)
+  const words = encodeSysEx7UMP(bytes)
+  await sendUMP(words, targetDisplayName)
+}

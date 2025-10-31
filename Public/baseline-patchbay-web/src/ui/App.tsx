@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { getCanvas, panBy, zoomSet, resetTransform } from '../ws/patchbay'
-import { listEndpoints, sendVendorJSON } from '../ws/midi'
+import { listEndpoints, sendVendorJSON, peSetProperties } from '../ws/midi'
 import { drawGrid } from './Grid'
 
 export default function App() {
@@ -13,6 +13,8 @@ export default function App() {
   const [endpoints, setEndpoints] = useState<{ id: string; name: string }[]>([])
   const [target, setTarget] = useState<string>('PatchBay Canvas')
   const [log, setLog] = useState<string[]>([])
+  const [syncPE, setSyncPE] = useState(true)
+  const [health, setHealth] = useState<{ patchbay?: 'ok'|'bad', midi?: 'ok'|'bad' }>({})
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const dpr = useMemo(() => window.devicePixelRatio || 1, [])
 
@@ -47,6 +49,17 @@ export default function App() {
     })()
   }, [])
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const r1 = await fetch('/api/patchbay/health'); setHealth(h => ({...h, patchbay: r1.ok ? 'ok' : 'bad'}))
+      } catch { setHealth(h => ({...h, patchbay: 'bad'})) }
+      try {
+        const r2 = await fetch('/api/midi/health'); setHealth(h => ({...h, midi: r2.ok ? 'ok' : 'bad'}))
+      } catch { setHealth(h => ({...h, midi: 'bad'})) }
+    })()
+  }, [])
+
   // Draw
   useEffect(() => {
     const el = canvasRef.current
@@ -72,6 +85,7 @@ export default function App() {
       try {
         if (driveMode === 'midi') {
           await sendVendorJSON('ui.zoomAround', { 'anchor.view.x': e.nativeEvent.offsetX, 'anchor.view.y': e.nativeEvent.offsetY, magnification: newScale / scale - 1 }, target)
+          if (syncPE) { await peSetProperties({ 'zoom': newScale }, target) }
         } else {
           await zoomSet({ scale: newScale, anchorView: { x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY } })
         }
@@ -86,6 +100,7 @@ export default function App() {
       try {
         if (driveMode === 'midi') {
           await sendVendorJSON('ui.panBy', { 'dx.view': -e.deltaX, 'dy.view': -e.deltaY }, target)
+          if (syncPE) { await peSetProperties({ 'translation.x': tx + dx, 'translation.y': ty + dy }, target) }
         } else {
           await panBy({ dx, dy })
         }
@@ -125,6 +140,7 @@ export default function App() {
     try {
       if (driveMode === 'midi') {
         await sendVendorJSON('canvas.reset', {}, target)
+        if (syncPE) { await peSetProperties({ 'zoom': 1.0, 'translation.x': 0.0, 'translation.y': 0.0 }, target) }
       } else {
         await panBy({ dx, dy }); await zoomSet({ scale: nextScale })
       }
@@ -138,6 +154,7 @@ export default function App() {
         <strong>Baseline‑PatchBay (Web)</strong>
         <span style={{ opacity: 0.7 }}>zoom={scale.toFixed(2)} tx={tx.toFixed(1)} ty={ty.toFixed(1)} step={gridStep}</span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ fontSize: 12, opacity: 0.7 }}>PB: {health.patchbay ?? '…'} | MIDI: {health.midi ?? '…'}</div>
           <label style={{ fontSize: 12, opacity: 0.7 }}>Drive:</label>
           <select value={driveMode} onChange={(e) => setDriveMode(e.target.value as any)}>
             <option value="midi">MIDI 2.0</option>
@@ -149,6 +166,11 @@ export default function App() {
                 <option key={n} value={n}>{n}</option>
               ))}
             </select>
+          )}
+          {driveMode === 'midi' && (
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <input type="checkbox" checked={syncPE} onChange={(e) => setSyncPE(e.target.checked)} /> Sync PE
+            </label>
           )}
           <button onClick={doReset}>Reset</button>
         </div>

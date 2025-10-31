@@ -19,6 +19,11 @@ const run = (cmd, args, opts = {}) => new Promise((resolve, reject) => {
   } catch (e) {
     console.warn('[seed] baseline-robot-seed failed or unavailable:', e.message)
   }
+  try {
+    console.log('[seed] Dumping MRTS facts…')
+    await run('swift', ['run', '--package-path', 'Packages/FountainApps', 'store-dump'], { cwd: process.cwd() + '/..' })
+  } catch (e) {
+    console.warn('[seed] store-dump failed:', e.message)
+  }
   console.log('[seed] Done.')
 })()
-

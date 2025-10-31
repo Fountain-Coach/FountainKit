@@ -48,8 +48,18 @@ struct BaselineRobotSeed {
                 "CanvasDefaultTransformTests",
                 "RightEdgeContactTests"
             ],
-            "pe": ["grid.minor","grid.majorEvery","zoom","translation.x","translation.y"],
-            "vendorJSON": ["ui.panBy","ui.zoomAround","canvas.reset"]
+            "pe": [
+                "grid.minor","grid.majorEvery","zoom","translation.x","translation.y",
+                "layout.left.frac","layout.right.frac"
+            ],
+            "vendorJSON": ["ui.panBy","ui.zoomAround","canvas.reset"],
+            "invariants": [
+                "paneMinimumWidths >= 160pt",
+                "ui.layout.changed emits on gutter/PE",
+                "ui.dnd.begin/ui.dnd.drop during DnD",
+                "leftGridContactPinnedAt0",
+                "majorSpacingPixels = minor*majorEvery*zoom"
+            ]
         ]
         if let data = try? JSONSerialization.data(withJSONObject: facts, options: [.prettyPrinted]), let json = String(data: data, encoding: .utf8) {
             _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(pageId):facts", pageId: pageId, kind: "facts", text: json))
@@ -59,33 +69,32 @@ struct BaselineRobotSeed {
 
     static func teatroPrompt() -> String {
         return """
-        Scene: Baseline‑PatchBay — MIDI Robot Test Script (MRTS)
+        Scene: Baseline‑PatchBay — MRTS: Three‑Pane Layout + Grid Invariants
         Text:
-        - Objective: create a one‑shot runner that executes the baseline robot/invariant test subset against the Baseline‑PatchBay UI (grid‑only, instrument‑first).
-        - Output: write a shell script at `Scripts/ci/baseline-robot.sh` (executable) that:
-          • Builds the baseline UI product `baseline-patchbay` (grid-dev-app target).
-          • Runs the robot/invariant test subset in `Packages/FountainApps/Tests/PatchBayAppUITests`:
-            `GridInstrumentTests`, `ViewportGridContactTests`, `PixelGridVerifierTests`,
-            `MIDIMonitorEventsTests`, `CanvasDefaultTransformTests`, `RightEdgeContactTests`.
-          • Uses `ROBOT_ONLY=1` and `-Xswiftc -DROBOT_ONLY` to keep the surface minimal; exits non‑fatally if tests fail so artifacts can be inspected.
+        - Objective: execute baseline robot tests against the three‑pane Baseline‑PatchBay (grid center) validating layout, DnD, and grid invariants.
+        - Runner: `Scripts/ci/baseline-robot.sh` builds `baseline-patchbay` and runs a focused suite.
+        - Steps:
+          • Set `layout.left.frac=0.25`, `layout.right.frac=0.25` via PE; expect `ui.layout.changed`.
+          • Resize window (+300 pt width); assert panes ≥160 pt, center ≥160 pt.
+          • Drag left gutter +80 pt right; assert left fraction increased; event emitted.
+          • Drag right gutter +100 pt right; assert right fraction decreased; event emitted.
+          • Drag an item Left→Right; assert counts (+1/−1) and `ui.dnd.begin/drop`.
+          • Drag an item Right→Left; assert counts (+1/−1) and `ui.dnd.begin/drop`.
+          • Drop an item to Center; assert `ui.dnd.drop` with `target=center`.
+          • Validate grid contact/spacing and anchor‑stable zoom drift ≤ 1 px.
 
-        Instruments (loopback transport in tests):
+        Instruments (loopback in tests):
         - Canvas: { manufacturer: Fountain, product: GridDev, instanceId: grid-dev-1, displayName: "Grid Dev" }
-        - Grid: { manufacturer: Fountain, product: Grid, instanceId: grid-1, displayName: "Grid" }
         - Viewport: { manufacturer: Fountain, product: Viewport, instanceId: viewport, displayName: "Right Pane" }
 
         Numeric invariants:
-        - Default transform: zoom=1.0, translation=(0,0).
-        - Left grid contact pinned at view.x=0 across translations/zoom.
-        - Minor spacing px = grid.minor × zoom; major spacing = grid.minor × majorEvery × zoom.
-        - Anchor‑stable zoom: drift ≤ 1 px.
-        - Right edge contact: floor(view.width / (grid.minor × zoom)) and view.x = index × step.
-        - Monitor emits `ui.zoom`/`ui.pan` (and debug variants) on zoomAround/pan/reset.
+        - Pane mins: left/right/center ≥ 160 pt; gutters 6 pt; fractions clamp [0.05, 0.9].
+        - Grid: left contact pinned; minor px = grid.minor × zoom; major px = grid.minor × majorEvery × zoom.
+        - Monitor emits `ui.zoom(.debug)`/`ui.pan(.debug)`, `ui.layout.changed`, and `ui.dnd.begin/drop`.
 
         Ops/PE (reference):
         - Vendor JSON: `ui.panBy {dx.view, dy.view}`, `ui.zoomAround {anchor.view.x, anchor.view.y, magnification}`, `canvas.reset`.
-        - PE SET (SysEx7/CI): `grid.minor`, `grid.majorEvery`, `zoom`, `translation.x`, `translation.y`.
+        - PE SET: `grid.minor`, `grid.majorEvery`, `zoom`, `translation.x`, `translation.y`, `layout.left.frac`, `layout.right.frac`.
         """
     }
 }
-

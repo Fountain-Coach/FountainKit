@@ -190,7 +190,7 @@ struct GridDevView: View {
                     .frame(width: 6)
                     .gesture(DragGesture(minimumDistance: 0).onChanged { value in
                         let newRight = max(minPane, min(total - leftW - minPane - 12, rightW - value.translation.width))
-                        rightFrac = (total - leftW - 12 - newRight) / total
+                        rightFrac = newRight / total
                         NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
                             "type": "ui.layout.changed", "left.frac": Double(leftFrac), "right.frac": Double(rightFrac)
                         ])

@@ -25,14 +25,22 @@ struct GridDevSeed {
                 "product": "GridDev",
                 "instanceId": "grid-dev-1",
                 "displayName": "Grid Dev",
-                "pe": ["grid.minor", "grid.majorEvery", "zoom", "translation.x", "translation.y"],
+                "pe": [
+                    "grid.minor", "grid.majorEvery", "zoom", "translation.x", "translation.y",
+                    "layout.left.frac", "layout.right.frac"
+                ],
                 "vendorJSON": ["ui.panBy", "ui.zoomAround", "canvas.reset"]
             ]],
             "robot": [
-                "subset": ["ViewportGridContactTests", "GridInstrumentTests", "CanvasDefaultTransformTests"],
+                "subset": [
+                    "ViewportGridContactTests", "GridInstrumentTests", "CanvasDefaultTransformTests", "MIDIMonitorEventsTests"
+                ],
                 "invariants": [
                     "leftGridContactPinnedAt0",
-                    "majorSpacingPixels = minor*majorEvery*zoom"
+                    "majorSpacingPixels = minor*majorEvery*zoom",
+                    "paneMinimumWidths >= 160pt",
+                    "ui.layout.changed emits on gutter/PE",
+                    "ui.dnd.begin/drop emit on drag-and-drop"
                 ]
             ]
         ]
@@ -63,38 +71,18 @@ struct GridDevSeed {
 
     static func teatroPrompt() -> String {
         return """
-        Scene: GridDevApp (Grid‑Only with Persistent Corpus)
+        Scene: GridDevApp — Three‑Pane Baseline (Canvas Center)
         Text:
-        - Window: macOS titlebar window, 1440×900pt. Content background white (#FAFBFD).
-        - Layout: single full‑bleed canvas; no sidebar, no extra panes, minimal chrome.
-        - Only view: “Grid” Instrument filling the content.
-          - Grid anchoring: viewport‑anchored. Leftmost vertical line renders at view.x = 0 across all translations/zoom. Topmost horizontal line at view.y = 0.
-          - Minor spacing: 24 pt; Major every 5 minors (120 pt). Minor #ECEEF3, Major #D1D6E0. Crisp 1 px.
-          - Axes: Doc‑anchored origin lines (x=0/y=0) in faint red (#BF3434) for orientation.
-          - No nodes, edges, ports, selection.
-        - MIDI 2.0 Identity (instrument): { manufacturer: Fountain, product: GridDev, displayName: "Grid Dev", instanceId: "grid-dev-1" }
-        - Property Exchange (PE): floats/ints
-          - grid.minor (Int, default 24)
-          - grid.majorEvery (Int, default 5)
-          - zoom (Float, default 1.0, clamp 0.1…8.0)
-          - translation.x (Float, default 0)
-          - translation.y (Float, default 0)
-        - Cursor Instrument (always on): { manufacturer: Fountain, product: Cursor, displayName: "Grid Cursor", instanceId: "grid-cursor" }
-          - PE properties:
-            - cursor.visible (Float: 0 or 1; default 1)
-            - cursor.view.x, cursor.view.y (Float: view‑space points)
-            - cursor.doc.x, cursor.doc.y (Float: doc‑space)
-          - Display: draw directly in the canvas at the pointer — crosshair + ring + tiny “0” at center, with the label offset so it never occludes the zero.
-          - Hit‑testing policy: rendered via CALayers inside the Metal canvas; never intercepts events.
-        - Vendor JSON ops (SysEx7 UMP):
-          - ui.panBy {dx.doc, dy.doc} or {dx.view, dy.view}; convert view→doc via /zoom. Grid stays viewport‑anchored; axes reflect world movement.
-          - ui.zoomAround {anchor.view.x, anchor.view.y, magnification}; anchor‑stable.
-          - canvas.reset → zoom=1.0, tx=0, ty=0.
-        - Visual rules:
-          - Left contact point pinned: first vertical grid line renders at x=0.0±0.5 px at all transforms.
-          - Major spacing in pixels = grid.minor × majorEvery × zoom.
-        - Defaults at boot: zoom=1.0, translation=(0,0), grid.minor=24, grid.majorEvery=5.
-        - Optional overlay on by default: “MIDI 2.0 Monitor” pinned to the top‑right (non‑interactive), showing recent vendor JSON/PE events including ui.zoom/ui.pan.
+        - Window: macOS titlebar window, 1440×900 pt; content background #FAFBFD.
+        - Layout: three vertical scroll panes with draggable borders (gutters 6 pt):
+          • Left Pane (scrollable): list scaffold. Default width ≈ 22% (min 160 pt).
+          • Center Pane: contains the “Grid” canvas instrument (fills center).
+          • Right Pane (scrollable): monitor/log scaffold. Default width ≈ 26% (min 160 pt).
+          • Gutters draggable horizontally; widths clamp to ≥160 pt; proportions persist during resize.
+        - Canvas (center): Baseline grid instrument with viewport‑anchored grid (left contact at view.x=0, top at view.y=0), minor=24 pt, majorEvery=5, axes at doc origin.
+        - MIDI overlay: monitor/controls fade after inactivity; wake on MIDI activity.
+        - Drag & Drop: items can be dragged between left/right panes; center accepts drops and logs events (no reflow).
+        - Property Exchange (PE): layout.left.frac, layout.right.frac (0..1) adjust pane fractions and emit `ui.layout.changed`. Base PE: grid.minor, grid.majorEvery, zoom, translation.x, translation.y.
 
         Persistence — FountainStore (Corpus: grid-dev)
         - Create corpus id: grid-dev (metadata: {app: grid-dev, kind: teatro+instruments}).
@@ -109,8 +97,8 @@ struct GridDevSeed {
           - Replay artifacts → .fountain/artifacts/replay/<log>/*.mov
 
         Robot testing (subset)
-        - Suites: ViewportGridContactTests (left contact pinned), GridInstrumentTests (PE updates), CanvasDefaultTransformTests (startup defaults).
-        - Invariants: leftGridContactPinnedAt0; pixelMajorSpacing = minor×majorEvery×zoom.
+        - Suites: ViewportGridContactTests (left contact pinned), GridInstrumentTests (PE), CanvasDefaultTransformTests (defaults), MIDIMonitorEventsTests (ui.zoom/ui.pan emissions).
+        - Invariants: leftGridContactPinnedAt0; pixelMajorSpacing = minor×majorEvery×zoom; ui.layout.changed posts on adjustments; DnD emits begin/drop.
         """
     }
 }

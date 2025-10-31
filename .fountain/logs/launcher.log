@@ -2,15 +2,10 @@
 [0/3] Write swift-version--58304C5D6DBC2206.txt
 [0/1] Planning build
 Building for debugging...
-[0/4] Write swift-version--58304C5D6DBC2206.txt
-[2/6] Emitting module local_agent_manager
-[3/6] Compiling local_agent_manager main.swift
-[3/6] Write Objects.LinkFileList
-[4/6] Linking local-agent-manager
-[5/6] Applying local-agent-manager
-Build of product 'local-agent-manager' complete! (14.93s)
+[0/3] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'local-agent-manager' complete! (13.73s)
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'local-agent-manager' complete! (0.48s)
+Build of product 'local-agent-manager' complete! (0.49s)
 failed to become healthy after 30s; attempting fallback mock-localagent
-mock-localagent started pid 14630
+mock-localagent started pid 34898

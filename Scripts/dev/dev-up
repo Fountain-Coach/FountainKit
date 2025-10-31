@@ -233,12 +233,23 @@ start_bg() {
         return 1
       }
     fi
-    nohup env LAUNCHER_SIGNATURE="$SIG" \
-      "$bin_dir/$target" >>"$log_file" 2>&1 &
+    if [[ "$name" == "patchbay-ui" ]]; then
+      nohup env LAUNCHER_SIGNATURE="$SIG" APP_TITLE="Baseline‑PatchBay" \
+        "$bin_dir/$target" >>"$log_file" 2>&1 &
+    else
+      nohup env LAUNCHER_SIGNATURE="$SIG" \
+        "$bin_dir/$target" >>"$log_file" 2>&1 &
+    fi
   else
-    nohup env LAUNCHER_SIGNATURE="$SIG" \
-      swift run --package-path "$pkg_path" "$target" \
-        >>"$log_file" 2>&1 &
+    if [[ "$name" == "patchbay-ui" ]]; then
+      nohup env LAUNCHER_SIGNATURE="$SIG" APP_TITLE="Baseline‑PatchBay" \
+        swift run --package-path "$pkg_path" "$target" \
+          >>"$log_file" 2>&1 &
+    else
+      nohup env LAUNCHER_SIGNATURE="$SIG" \
+        swift run --package-path "$pkg_path" "$target" \
+          >>"$log_file" 2>&1 &
+    fi
   fi
   echo $! >"$pid_file"
   sleep 0.2
@@ -305,15 +316,16 @@ else
   fi
 fi
 
-# Build PatchBay app and its GUI tests (compile-time gate for UI focus invariants)
-echo "[dev-up] Building PatchBay app (compile only)…"
-swift build --package-path "$REPO_ROOT/Packages/FountainApps" --configuration "$CONFIGURATION" --target patchbay-app
+# Build Baseline PatchBay app and its GUI tests (compile-time gate for UI focus invariants)
+echo "[dev-up] Building Baseline PatchBay app (compile only)…"
+swift build --package-path "$REPO_ROOT/Packages/FountainApps" --configuration "$CONFIGURATION" --product baseline-patchbay
 echo "[dev-up] Building PatchBayAppUITests (compile only)…"
 swift build --package-path "$REPO_ROOT/Packages/FountainApps" --configuration "$CONFIGURATION" --target PatchBayAppUITests
 
 # Launch PatchBay UI as the default face (unless disabled)
 if [[ "${DEV_UP_NO_PATCHBAY_UI:-0}" != "1" ]]; then
-  start_bg patchbay-ui patchbay-app Packages/FountainApps
+  # Launch Baseline PatchBay UI (baseline-patchbay product)
+  start_bg patchbay-ui baseline-patchbay Packages/FountainApps
 fi
 if [[ "$CHECK" == "1" ]]; then
   echo "[dev-up] UI smoke (PatchBay goldens)…"

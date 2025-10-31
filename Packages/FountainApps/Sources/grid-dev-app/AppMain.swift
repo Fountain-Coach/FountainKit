@@ -7,7 +7,8 @@ import FountainStoreClient
 struct GridDevApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     var body: some Scene {
-        WindowGroup("Grid Dev") {
+        let title = ProcessInfo.processInfo.environment["APP_TITLE"] ?? "Baseline‑PatchBay"
+        WindowGroup(title) {
             GridDevView()
         }
         .windowStyle(.titleBar)

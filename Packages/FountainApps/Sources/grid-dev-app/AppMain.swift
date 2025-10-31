@@ -34,7 +34,7 @@ final class GridVM: ObservableObject {
 struct GridDevView: View {
     @StateObject private var vm = GridVM()
     var body: some View {
-        ZStack(alignment: .topLeading) {
+        let content = ZStack(alignment: .topLeading) {
             MetalCanvasView(
                 zoom: vm.zoom,
                 translation: vm.translation,
@@ -62,6 +62,12 @@ struct GridDevView: View {
                 .background(.thinMaterial, in: Capsule())
                 .padding(8)
         }
+        // Always-on MIDI monitor (top-right), like PatchBay
+        content
+            .overlay(alignment: .topTrailing) {
+                GridDevMidiMonitorOverlay(isHot: .constant(true))
+                    .padding(8)
+            }
         .frame(minWidth: 800, minHeight: 600)
     }
 }

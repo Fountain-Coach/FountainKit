@@ -88,7 +88,7 @@ struct GridDevSeed {
           - Left contact point pinned: first vertical grid line renders at x=0.0±0.5 px at all transforms.
           - Major spacing in pixels = grid.minor × majorEvery × zoom.
         - Defaults at boot: zoom=1.0, translation=(0,0), grid.minor=24, grid.majorEvery=5.
-        - Optional overlay off: “MIDI 2.0 Monitor” (top‑right) showing recent vendor JSON/PE events.
+        - Optional overlay on by default: “MIDI 2.0 Monitor” pinned to the top‑right, showing recent vendor JSON/PE events.
 
         Persistence — FountainStore (Corpus: grid-dev)
         - Create corpus id: grid-dev (metadata: {app: grid-dev, kind: teatro+instruments}).

@@ -400,7 +400,8 @@ let package = Package(
             dependencies: [
                 "MetalViewKit",
                 .product(name: "LauncherSignature", package: "FountainCore"),
-                .product(name: "FountainStoreClient", package: "FountainCore")
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "TeatroRenderAPI", package: "TeatroFull")
             ],
             path: "Sources/grid-dev-app",
             exclude: ["AGENTS.md"]
@@ -413,6 +414,14 @@ let package = Package(
                 .product(name: "LauncherSignature", package: "FountainCore")
             ],
             path: "Sources/grid-dev-seed"
+        ),
+        .executableTarget(
+            name: "fountain-editor-seed",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ],
+            path: "Sources/fountain-editor-seed"
         ),
         .executableTarget(
             name: "baseline-robot-seed",

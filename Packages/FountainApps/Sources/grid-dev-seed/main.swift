@@ -80,6 +80,12 @@ struct GridDevSeed {
           - zoom (Float, default 1.0, clamp 0.1…8.0)
           - translation.x (Float, default 0)
           - translation.y (Float, default 0)
+        - Cursor Instrument (always on): { manufacturer: Fountain, product: Cursor, displayName: "Grid Cursor", instanceId: "grid-cursor" }
+          - PE properties:
+            - cursor.visible (Float: 0 or 1; default 1)
+            - cursor.view.x, cursor.view.y (Float: view‑space coordinates in points)
+            - cursor.doc.x, cursor.doc.y (Float: doc‑space coordinates)
+          - Display: a small overlay box near the top‑left under the zoom badge; updates continuously as the cursor moves; shows both view and doc coordinates.
         - Vendor JSON ops (SysEx7 UMP):
           - ui.panBy {dx.doc, dy.doc} or {dx.view, dy.view}; convert view→doc via /zoom. Grid stays viewport‑anchored; axes reflect world movement.
           - ui.zoomAround {anchor.view.x, anchor.view.y, magnification}; anchor‑stable.

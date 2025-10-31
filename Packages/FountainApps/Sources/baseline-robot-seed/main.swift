@@ -46,7 +46,8 @@ struct BaselineRobotSeed {
                 "PixelGridVerifierTests",
                 "MIDIMonitorEventsTests",
                 "CanvasDefaultTransformTests",
-                "RightEdgeContactTests"
+                "RightEdgeContactTests",
+                "TrackpadGestureTests"
             ],
             "pe": [
                 "grid.minor","grid.majorEvery","zoom","translation.x","translation.y",

@@ -12,8 +12,8 @@ Included scripts (canonical)
 - `launch-engraver-studio-app.sh` — Launch Engraver Studio app.
 - `launch-memchat-app.sh` — Launch MemChat app.
 - `memchat-oneclick.sh` — One‑click MemChat starter for dev.
+- `baseline-patchbay-web` — Seeds Teatro prompts and launches the web mirror (Vite) of Baseline‑PatchBay.
 
 Conventions
 - Keep the UX/config minimal; all environment and secrets managed via Keychain or defaults.
 - If a launcher must be deprecated, print a clear message and exit unless forced.
-

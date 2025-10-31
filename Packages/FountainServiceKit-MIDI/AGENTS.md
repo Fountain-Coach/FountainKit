@@ -9,9 +9,12 @@ What
   - `GET /endpoints` — list visible CoreMIDI destinations (name only).
   - `POST /endpoints` (stub) — create managed endpoints.
   - `POST /ump/send { target.displayName, words[] }` — send UMP to a destination.
- - Fallback (non‑OpenAPI; dev aid):
-   - `GET /ump/tail` — recent UMP events with optional decoded payloads `{events:[{ts,words[],vendorJSON?,peJSON?}]}`.
-   - `POST /ump/flush` — clear recorder buffer.
+- Fallback (non‑OpenAPI; dev aid):
+  - `GET /ump/tail` — recent UMP events with optional decoded payloads `{events:[{ts,words[],vendorJSON?,peJSON?}]}`.
+  - `POST /ump/flush` — clear recorder buffer.
+ - Headless registry (pluggable; no tight coupling):
+   - Internals allow registering any number of headless instruments at runtime; the server registers a built‑in `Headless Canvas` via `MIDIServiceRuntime.registerHeadlessCanvas()`.
+   - To route UMP to a headless instrument, post to `/ump/send` with `target.displayName = "Headless Canvas"` (or the registered name).
 
 How
 - Build/run: `swift run --package-path Packages/FountainApps midi-service-server`.

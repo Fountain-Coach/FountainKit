@@ -38,7 +38,7 @@ struct Main {
         let server = NIOHTTPServer(kernel: transport.asKernel())
 
         // Ensure listener to record incoming UMP from all sources
-        Task { await MIDIServiceRuntime.shared.ensureListener() }
+        Task { await MIDIServiceRuntime.shared.ensureListener(); await MIDIServiceRuntime.shared.registerHeadlessCanvas() }
 
         Task {
             do {

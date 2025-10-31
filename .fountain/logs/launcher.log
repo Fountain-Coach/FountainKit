@@ -3,9 +3,9 @@
 [0/1] Planning build
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'local-agent-manager' complete! (13.73s)
+Build of product 'local-agent-manager' complete! (13.70s)
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'local-agent-manager' complete! (0.49s)
+Build of product 'local-agent-manager' complete! (0.48s)
 failed to become healthy after 30s; attempting fallback mock-localagent
-mock-localagent started pid 34898
+mock-localagent started pid 40485

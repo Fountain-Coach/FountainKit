@@ -96,6 +96,7 @@ Commands:
   up              Start core services (dev-up)
   down            Stop core services (dev-down)
   status          Show status of core services and tool-server
+  baseline        Launch the Baseline‑PatchBay UI (grid‑only, instrument‑first)
   logs [what]     Stream logs: 'compose' or 'tool-server'
   open <target>   Open common endpoints in browser
   open schema <target>  Open OpenAPI document (/openapi.yaml) for a target
@@ -123,6 +124,7 @@ Shortcuts:
 Examples:
   fk up
   fk status
+  fk baseline
   fk api http://127.0.0.1:8012/_status
   fk toolserver run exiftool -- -ver
   fk ts-api imagemagick -- magick -version
@@ -136,6 +138,10 @@ case "${1:-help}" in
   up) shift; up "$@" ;;
   down) shift; down "$@" ;;
   status) shift; status "$@" ;;
+  baseline)
+    shift
+    echo "[fk] Launching Baseline‑PatchBay UI…"
+    LAUNCHER_SIGNATURE="$LAUNCHER_SIGNATURE" "$ROOT/Scripts/apps/baseline-patchbay" "$@" ;;
   logs)
     shift
     case "${1:-compose}" in

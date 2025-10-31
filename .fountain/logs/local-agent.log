@@ -1,7 +1,7 @@
 [0/1] Planning build
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'AgentService' complete! (0.42s)
+Build of product 'AgentService' complete! (0.41s)
 Swift/ErrorType.swift:254: Fatal error: Error raised at top level: bind(descriptor:ptr:bytes:): Address already in use) (errno: 48)
 a
 se.swift

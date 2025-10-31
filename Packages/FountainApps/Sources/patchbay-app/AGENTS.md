@@ -8,7 +8,9 @@ Getting started is simple: start the service, then the app. By default, our dev 
 
 ### Quick start
 
-Start everything with logs and readiness checks by running `bash Scripts/dev-up --check`. This brings up the core services, including PatchBay on `PATCHBAY_PORT` (defaults to 7090). Then launch the app with `swift run --package-path Packages/FountainApps patchbay-app`. Prefer to run the service manually? Use `swift run --package-path Packages/FountainApps patchbay-service-server` (it falls back to an ephemeral port if 7090 is busy and prints the bound port). For CI smoke, `PATCHBAY_ONESHOT=1` binds and exits.
+For most local UI work, start the Baseline app (Baseline‑PatchBay): `Scripts/dev/dev-up --check` auto‑launches it, or `Scripts/apps/baseline-patchbay` runs it directly. The Baseline UI is the grid‑only instrument surface used for robot testing and viewport calibration.
+
+If you want the full PatchBay Studio app instead, start core services (`bash Scripts/dev-up --check`) and then run `swift run --package-path Packages/FountainApps patchbay-app`. Prefer to run the service manually? Use `swift run --package-path Packages/FountainApps patchbay-service-server` (it falls back to an ephemeral port if 7090 is busy and prints the bound port). For CI smoke, `PATCHBAY_ONESHOT=1` binds and exits.
 
 ### Using the canvas
 

@@ -16,3 +16,6 @@ Conventions
 - No `.env` in repo; secrets come from Keychain. Always set `LAUNCHER_SIGNATURE` (default provided).
 - Logs under `.fountain/logs/*.log`; PIDs under `.fountain/pids/*.pid` at repo root.
 - Defensive shell (`set -euo pipefail`) and deterministic behaviour across re‑runs.
+
+Baseline default
+- Dev‑up launches the Baseline‑PatchBay UI by default (product `baseline-patchbay`). Any change to this baseline app must be paired with a matching MRTS Teatro prompt. On boot, the baseline prints both prompts (creation + MRTS). Persist the MRTS via `baseline-robot-seed`; run the invariants with `Scripts/ci/baseline-robot.sh`.

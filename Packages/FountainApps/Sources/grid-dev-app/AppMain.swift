@@ -51,6 +51,17 @@ final class GridVM: ObservableObject {
 
 struct GridDevView: View {
     @StateObject private var vm = GridVM()
+    @State private var resetOpacity: Double = 0.18
+    @State private var resetMinOpacity: Double = 0.18
+    @State private var resetFadeSeconds: Double = 3.0
+    @State private var resetFadeWork: DispatchWorkItem? = nil
+    private func bumpResetAndScheduleFade() {
+        withAnimation(.easeOut(duration: 0.12)) { resetOpacity = 1.0 }
+        resetFadeWork?.cancel()
+        let w = DispatchWorkItem { withAnimation(.linear(duration: resetFadeSeconds)) { resetOpacity = resetMinOpacity } }
+        resetFadeWork = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + resetFadeSeconds, execute: w)
+    }
     var body: some View {
         let content = ZStack(alignment: .topLeading) {
             MetalCanvasView(
@@ -97,11 +108,15 @@ struct GridDevView: View {
                         NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
                             "type": "ui.pan", "x": 0.0, "y": 0.0
                         ])
+                        bumpResetAndScheduleFade()
                     } label: {
                         Text("Reset Grid").font(.system(size: 11, weight: .medium)).padding(.horizontal, 8).padding(.vertical, 5)
                     }
                     .buttonStyle(.borderedProminent)
+                    .onHover { hovering in if hovering { withAnimation(.easeOut(duration: 0.12)) { resetOpacity = 1.0 } } else { bumpResetAndScheduleFade() } }
                 }
+                .opacity(resetOpacity)
+                .onReceive(NotificationCenter.default.publisher(for: .MetalCanvasMIDIActivity)) { _ in bumpResetAndScheduleFade() }
                 .padding(.leading, 6)
                 .padding(.top, 6)
             }
@@ -120,8 +135,7 @@ extension GridDevApp {
           - Grid anchoring: viewport‑anchored. Leftmost vertical line renders at view.x = 0 across all translations/zoom. Topmost horizontal line at view.y = 0.
           - Minor spacing: 24 pt; Major every 5 minors (120 pt). Minor #ECEEF3, Major #D1D6E0. Crisp 1 px.
           - Axes: Doc‑anchored origin lines (x=0/y=0) in faint red (#BF3434) for orientation.
-          - Overlay top‑left: “Zoom 1.00x  Origin (0, 0)” (SF Mono 11, capsule #EEF2F7, text #6B7280). Non‑interactive.
-        - MIDI 2.0 Monitor pinned top‑right (non‑interactive).
+        - MIDI 2.0 Monitor pinned top‑right (non‑interactive); fades out after inactivity; wakes on MIDI activity.
         - Cursor Instrument (always on): crosshair + ring + tiny “0” rendered at the pointer; label offset so it never occludes the zero.
           - Grid coordinates: g: col,row where
             • doc = (view/zoom) − translation

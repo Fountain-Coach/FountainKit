@@ -10,6 +10,7 @@ struct Midi2MonitorOverlay: View {
     @State private var lastEvent: Date? = nil
     @State private var count: Int = 0
     @State private var events: [Event] = []
+    @State private var fadeWork: DispatchWorkItem? = nil
 
     struct Event: Identifiable {
         let id = UUID().uuidString
@@ -59,13 +60,15 @@ struct Midi2MonitorOverlay: View {
         }
     }
 
-    private func startFade() {
-        withAnimation(.linear(duration: fadeSeconds).repeatForever(autoreverses: false)) {
-            targetOpacity = minOpacity
-        }
-    }
+    private func startFade() { withAnimation(.linear(duration: fadeSeconds)) { targetOpacity = minOpacity } }
     private func stopFade() {
         withAnimation(.easeOut(duration: 0.12)) { targetOpacity = 1.0 }
+    }
+    private func scheduleFade() {
+        fadeWork?.cancel()
+        let w = DispatchWorkItem { startFade() }
+        fadeWork = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + fadeSeconds, execute: w)
     }
 
     var body: some View {
@@ -96,10 +99,14 @@ struct Midi2MonitorOverlay: View {
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .opacity(targetOpacity)
         .onAppear { if !isHot { startFade() } }
-        .onChange(of: isHot) { _, hot in hot ? stopFade() : startFade() }
+        .onChange(of: isHot) { _, hot in
+            if hot { stopFade() } else { scheduleFade() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .MetalCanvasMIDIActivity)) { noti in
             lastEvent = Date(); count += 1
             if let info = noti.userInfo { push(formatEvent(info)) }
+            // Wake on activity and schedule fade after idle
+            stopFade(); scheduleFade()
         }
         .overlay(InstrumentBinder(onSet: { name, value in
             switch name {

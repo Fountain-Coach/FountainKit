@@ -625,8 +625,7 @@ final class MetalCanvasNSView: MTKView {
     // Cursor overlay layers and tracking
     private var cursorRoot: CALayer?
     private var crossLayer: CAShapeLayer?
-    private var zeroLayer: CATextLayer?
-    private var labelLayer: CATextLayer?
+    // No text/circle layers; only crosshair is drawn at the cursor
     private var cursorArea: NSTrackingArea?
     private func viewToDoc(_ p: CGPoint) -> CGPoint {
         guard let r = coordinator?.renderer else { return .zero }
@@ -667,44 +666,20 @@ final class MetalCanvasNSView: MTKView {
             container.addSublayer(cross)
             crossLayer = cross
 
-            let zero = CATextLayer()
-            zero.string = "0"
-            zero.fontSize = 9
-            zero.alignmentMode = .center
-            zero.foregroundColor = NSColor.secondaryLabelColor.cgColor
-            zero.contentsScale = NSScreen.main?.backingScaleFactor ?? 2.0
-            container.addSublayer(zero)
-            zeroLayer = zero
-
-            let label = CATextLayer()
-            label.fontSize = 11
-            label.alignmentMode = .left
-            label.foregroundColor = NSColor.labelColor.cgColor
-            label.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.6).cgColor
-            label.cornerRadius = 6
-            label.contentsScale = NSScreen.main?.backingScaleFactor ?? 2.0
-            root.addSublayer(label)
-            labelLayer = label
+            // No circle/label layers
         }
     }
     private func updateCursorGraphics(viewPoint p: CGPoint) {
         ensureCursorLayers()
-        guard let r = coordinator?.renderer, let container = cursorRoot, let cross = crossLayer, let zero = zeroLayer, let label = labelLayer else { return }
+        guard let r = coordinator?.renderer, let container = cursorRoot, let cross = crossLayer else { return }
         container.position = p
-        // Crosshair + ring
+        // Crosshair only
         let path = CGMutablePath()
         let L: CGFloat = 6
-        path.move(to: CGPoint(x: p.x - L, y: p.y)); path.addLine(to: CGPoint(x: p.x + L, y: p.y))
-        path.move(to: CGPoint(x: p.x, y: p.y - L)); path.addLine(to: CGPoint(x: p.x, y: p.y + L))
-        path.addEllipse(in: CGRect(x: p.x - 9, y: p.y - 9, width: 18, height: 18))
-        // Convert to local container path
         let local = CGMutablePath()
         local.move(to: CGPoint(x: -L, y: 0)); local.addLine(to: CGPoint(x: L, y: 0))
         local.move(to: CGPoint(x: 0, y: -L)); local.addLine(to: CGPoint(x: 0, y: L))
-        local.addEllipse(in: CGRect(x: -9, y: -9, width: 18, height: 18))
         cross.path = local
-        zero.string = "0"
-        zero.frame = CGRect(x: -3.5, y: -4.0, width: 7, height: 8)
         // Grid coordinates relative to viewport-anchored grid
         let z = max(0.0001, r.currentZoom)
         let leftDoc = (0.0 / z) - r.currentTranslation.x
@@ -714,11 +689,13 @@ final class MetalCanvasNSView: MTKView {
         let step = max(1.0, r.currentGridMinor)
         let gx = Int(round((doc.x - leftDoc) / step))
         let gy = Int(round((doc.y - topDoc) / step))
-        let text = "g: \(gx),\(gy)  v: \(Int(p.x)),\(Int(p.y))"
-        let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)]
-        let size = (text as NSString).size(withAttributes: attrs)
-        label.string = text
-        label.frame = CGRect(x: p.x + 12, y: p.y + 12, width: size.width + 10, height: size.height + 6)
+        // Forward to MIDI monitor for display
+        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+            "type":"ui.cursor.move",
+            "view.x": Int(p.x), "view.y": Int(p.y),
+            "doc.x": Int(doc.x.rounded()), "doc.y": Int(doc.y.rounded()),
+            "grid.x": gx, "grid.y": gy
+        ])
     }
     override func mouseDown(with event: NSEvent) {
         guard let c = coordinator else { return }
@@ -784,8 +761,7 @@ final class MetalCanvasNSView: MTKView {
         resetCursorRects()
     }
     override func mouseExited(with event: NSEvent) {
-        // Hide label when leaving
-        labelLayer?.isHidden = true
+        // nothing
     }
     // Trackpad pan (scroll)
     override func scrollWheel(with event: NSEvent) {

@@ -48,6 +48,14 @@ struct GridDevMidiMonitorOverlay: View {
         case "ui.zoom":
             let z = info?["zoom"] as? Double ?? .nan
             return Event(text: String(format: "UI zoom %.2fx", z), color: .gray)
+        case "ui.cursor.move":
+            let gx = info?["grid.x"] as? Int ?? 0
+            let gy = info?["grid.y"] as? Int ?? 0
+            let vx = info?["view.x"] as? Int ?? 0
+            let vy = info?["view.y"] as? Int ?? 0
+            let dx = info?["doc.x"] as? Int ?? 0
+            let dy = info?["doc.y"] as? Int ?? 0
+            return Event(text: String(format: "cursor g:%d,%d  v:%d,%d  d:%d,%d", gx, gy, vx, vy, dx, dy), color: .primary)
         case "ui.pan", "ui.pan.debug":
             let x = info?["x"] as? Double ?? .nan
             let y = info?["y"] as? Double ?? .nan
@@ -89,4 +97,3 @@ struct GridDevMidiMonitorOverlay: View {
         }
     }
 }
-

@@ -89,6 +89,24 @@ struct GridDevView: View {
                     .padding(8)
                     .allowsHitTesting(false)
             }
+            // Reset grid button (top-left below zoom badge)
+            .overlay(alignment: .topLeading) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Spacer().frame(height: 32)
+                    Button {
+                        NotificationCenter.default.post(
+                            name: Notification.Name("MetalCanvasRendererCommand"),
+                            object: nil,
+                            userInfo: ["op": "set", "zoom": 1.0, "tx": 0.0, "ty": 0.0]
+                        )
+                    } label: {
+                        Text("Reset Grid").font(.system(size: 11, weight: .medium)).padding(.horizontal, 8).padding(.vertical, 5)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding(.leading, 6)
+                .padding(.top, 6)
+            }
         .frame(minWidth: 800, minHeight: 600)
     }
 }

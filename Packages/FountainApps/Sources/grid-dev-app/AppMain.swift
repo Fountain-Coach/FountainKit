@@ -72,14 +72,6 @@ struct GridDevView: View {
                 )
             )
             .ignoresSafeArea()
-
-            Text(String(format: "Zoom %.2fx  Origin (%.0f, %.0f)", Double(vm.zoom), vm.translation.x, vm.translation.y))
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(.thinMaterial, in: Capsule())
-                .padding(8)
-                .allowsHitTesting(false)
         }
         // Overlays
         content
@@ -89,16 +81,22 @@ struct GridDevView: View {
                     .padding(8)
                     .allowsHitTesting(false)
             }
-            // Reset grid button (top-left below zoom badge)
+            // Reset grid button (top-left)
             .overlay(alignment: .topLeading) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Spacer().frame(height: 32)
                     Button {
                         NotificationCenter.default.post(
                             name: Notification.Name("MetalCanvasRendererCommand"),
                             object: nil,
                             userInfo: ["op": "set", "zoom": 1.0, "tx": 0.0, "ty": 0.0]
                         )
+                        // Emit MIDI activity so the monitor reflects the reset immediately
+                        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                            "type": "ui.zoom", "zoom": 1.0
+                        ])
+                        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                            "type": "ui.pan", "x": 0.0, "y": 0.0
+                        ])
                     } label: {
                         Text("Reset Grid").font(.system(size: 11, weight: .medium)).padding(.horizontal, 8).padding(.vertical, 5)
                     }

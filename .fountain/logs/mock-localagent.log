@@ -1,13 +1,13 @@
 [0/3] Write swift-version--58304C5D6DBC2206.txt
 [0/1] Planning build
 Building for debugging...
-[0/3] Write swift-version--58304C5D6DBC2206.txt
-[2/14] Compiling RealModule Real.swift
-[3/15] Compiling RealModule Float16+Real.swift
-[4/15] Compiling RealModule Float80+Real.swift
-[5/15] Compiling RealModule RealFunctions.swift
-[6/15] Compiling RealModule RelaxedArithmetic.swift
-[7/15] Compiling RealModule AlgebraicField.swift
+[0/4] Write swift-version--58304C5D6DBC2206.txt
+[1/4] Write Objects.LinkFileList
+[2/4] Linking mock-localagent-server
+[3/4] Applying mock-localagent-server
+Build of product 'mock-localagent-server' complete! (16.55s)
+[mock-localagent] Failed to start: bind(descriptor:ptr:bytes:): Address already in use) (errno: 48)
+cField.swift
 [8/15] Compiling RealModule ApproximateEquality.swift
 [9/15] Emitting module RealModule
 [10/15] Compiling RealModule ElementaryFunctions.swift

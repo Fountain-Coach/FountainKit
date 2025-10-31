@@ -71,7 +71,6 @@ struct GridDevSeed {
           - Grid anchoring: viewport‑anchored. Leftmost vertical line renders at view.x = 0 across all translations/zoom. Topmost horizontal line at view.y = 0.
           - Minor spacing: 24 pt; Major every 5 minors (120 pt). Minor #ECEEF3, Major #D1D6E0. Crisp 1 px.
           - Axes: Doc‑anchored origin lines (x=0/y=0) in faint red (#BF3434) for orientation.
-          - Overlay top‑left: “Zoom 1.00x  Origin (0, 0)” (SF Mono 11, capsule #EEF2F7, text #6B7280).
           - No nodes, edges, ports, selection.
         - MIDI 2.0 Identity (instrument): { manufacturer: Fountain, product: GridDev, displayName: "Grid Dev", instanceId: "grid-dev-1" }
         - Property Exchange (PE): floats/ints
@@ -95,7 +94,7 @@ struct GridDevSeed {
           - Left contact point pinned: first vertical grid line renders at x=0.0±0.5 px at all transforms.
           - Major spacing in pixels = grid.minor × majorEvery × zoom.
         - Defaults at boot: zoom=1.0, translation=(0,0), grid.minor=24, grid.majorEvery=5.
-        - Optional overlay on by default: “MIDI 2.0 Monitor” pinned to the top‑right (non‑interactive), showing recent vendor JSON/PE events.
+        - Optional overlay on by default: “MIDI 2.0 Monitor” pinned to the top‑right (non‑interactive), showing recent vendor JSON/PE events including ui.zoom/ui.pan.
 
         Persistence — FountainStore (Corpus: grid-dev)
         - Create corpus id: grid-dev (metadata: {app: grid-dev, kind: teatro+instruments}).

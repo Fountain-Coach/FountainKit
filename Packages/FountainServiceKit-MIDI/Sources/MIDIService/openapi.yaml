@@ -98,6 +98,67 @@ paths:
       responses:
         '202': { description: Accepted }
 
+  /ump/events:
+    get:
+      operationId: tailUMPEvents
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 2048, default: 256 }
+      responses:
+        '200':
+          description: Recent UMP events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items: { $ref: '#/components/schemas/UMPEvent' }
+    post:
+      operationId: flushUMPEvents
+      responses:
+        '204': { description: Flushed }
+
+  /headless/instruments:
+    get:
+      operationId: listHeadlessInstruments
+      responses:
+        '200':
+          description: Registered headless instruments
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/HeadlessInstrument' }
+    post:
+      operationId: createHeadlessInstrument
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [displayName]
+              properties:
+                displayName: { type: string }
+                kind: { type: string, default: canvas }
+      responses:
+        '201': { description: Created }
+
+  /headless/instruments/{displayName}:
+    parameters:
+      - in: path
+        name: displayName
+        required: true
+        schema: { type: string }
+    delete:
+      operationId: deleteHeadlessInstrument
+      responses:
+        '204': { description: Deleted }
+
 components:
   schemas:
     TransportMode:
@@ -121,3 +182,17 @@ components:
         hasOutput: { type: boolean }
         transport: { $ref: '#/components/schemas/TransportMode' }
 
+    UMPEvent:
+      type: object
+      properties:
+        ts: { type: number }
+        words: { type: array, items: { type: integer, format: uint32 } }
+        vendorJSON: { type: string }
+        peJSON: { type: string }
+
+    HeadlessInstrument:
+      type: object
+      required: [displayName]
+      properties:
+        displayName: { type: string }
+        kind: { type: string, default: canvas }

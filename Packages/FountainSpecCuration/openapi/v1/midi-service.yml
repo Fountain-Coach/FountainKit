@@ -15,6 +15,7 @@ tags:
   - name: Endpoints
   - name: Devices
   - name: UMP
+  - name: Headless
 paths:
   /health:
     get:
@@ -149,6 +150,72 @@ paths:
         '202':
           description: Accepted for delivery
 
+  /ump/events:
+    get:
+      tags: [UMP]
+      operationId: tailUMPEvents
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 2048, default: 256 }
+      responses:
+        '200':
+          description: Recent UMP events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items: { $ref: '#/components/schemas/UMPEvent' }
+    post:
+      tags: [UMP]
+      operationId: flushUMPEvents
+      responses:
+        '204': { description: Flushed }
+
+  /headless/instruments:
+    get:
+      tags: [Headless]
+      operationId: listHeadlessInstruments
+      responses:
+        '200':
+          description: Registered headless instruments
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/HeadlessInstrument' }
+    post:
+      tags: [Headless]
+      operationId: createHeadlessInstrument
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [displayName]
+              properties:
+                displayName: { type: string }
+                kind: { type: string, default: canvas }
+      responses:
+        '201': { description: Created }
+
+  /headless/instruments/{displayName}:
+    parameters:
+      - in: path
+        name: displayName
+        required: true
+        schema: { type: string }
+    delete:
+      tags: [Headless]
+      operationId: deleteHeadlessInstrument
+      responses:
+        '204': { description: Deleted }
+
 components:
   schemas:
     Health:
@@ -180,5 +247,19 @@ components:
         hasOutput: { type: boolean }
         transport: { $ref: '#/components/schemas/TransportMode' }
 
-  securitySchemes: {}
+    UMPEvent:
+      type: object
+      properties:
+        ts: { type: number }
+        words: { type: array, items: { type: integer, format: uint32 } }
+        vendorJSON: { type: string }
+        peJSON: { type: string }
 
+    HeadlessInstrument:
+      type: object
+      required: [displayName]
+      properties:
+        displayName: { type: string }
+        kind: { type: string, default: canvas }
+
+  securitySchemes: {}

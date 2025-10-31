@@ -61,6 +61,41 @@ struct MIDIServiceHandlers: APIProtocol {
             return .accepted // keep accepted to avoid breaking clients; log in server
         }
     }
+
+    // MARK: - Recorder (UMP events)
+    func tailUMPEvents(_ input: Operations.tailUMPEvents.Input) async throws -> Operations.tailUMPEvents.Output {
+        let limit: Int = input.query.limit ?? 256
+        let items = await MIDIServiceRuntime.shared.tail(limit: limit)
+        let payload = Operations.tailUMPEvents.Output.Ok.Body.jsonPayload(
+            events: items.map { e in .init(ts: e.ts, words: e.words.map { Int($0) }, vendorJSON: e.vendorJSON, peJSON: e.peJSON) }
+        )
+        return .ok(.init(body: .json(payload)))
+    }
+
+    func flushUMPEvents(_ input: Operations.flushUMPEvents.Input) async throws -> Operations.flushUMPEvents.Output {
+        await MIDIServiceRuntime.shared.flush()
+        return .noContent
+    }
+
+    // MARK: - Headless instruments
+    func listHeadlessInstruments(_ input: Operations.listHeadlessInstruments.Input) async throws -> Operations.listHeadlessInstruments.Output {
+        let names = await MIDIServiceRuntime.shared.listHeadless()
+        let arr = names.map { Components.Schemas.HeadlessInstrument(displayName: $0, kind: nil) }
+        return .ok(.init(body: .json(arr)))
+    }
+
+    func createHeadlessInstrument(_ input: Operations.createHeadlessInstrument.Input) async throws -> Operations.createHeadlessInstrument.Output {
+        switch input.body {
+        case .json(let j):
+            await MIDIServiceRuntime.shared.registerHeadless(displayName: j.displayName)
+        }
+        return .created
+    }
+
+    func deleteHeadlessInstrument(_ input: Operations.deleteHeadlessInstrument.Input) async throws -> Operations.deleteHeadlessInstrument.Output {
+        await MIDIServiceRuntime.shared.unregisterHeadless(displayName: input.path.displayName)
+        return .noContent
+    }
 }
 
 public enum MIDIServiceServer {

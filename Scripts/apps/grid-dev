@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage(){ cat <<USAGE
+Usage: $(basename "$0") [--store <dir>] [--no-build]
+
+Seeds the grid-dev Teatro prompt into FountainStore and launches the grid-only dev app.
+
+Options:
+  --store <dir>  Override FOUNTAINSTORE_DIR (default: .fountain/store under repo)
+  --no-build     Skip swift build steps; just run.
+USAGE
+}
+
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")"/../.. && pwd)
+STORE_DIR=""
+BUILD=1
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --store) STORE_DIR=$2; shift 2;;
+    --no-build) BUILD=0; shift;;
+    -h|--help) usage; exit 0;;
+    *) echo "unknown arg: $1"; usage; exit 1;;
+  esac
+done
+
+if [[ -z "$STORE_DIR" ]]; then
+  STORE_DIR="$ROOT_DIR/.fountain/store"
+fi
+
+export FOUNTAIN_SKIP_LAUNCHER_SIG=1
+export FOUNTAINSTORE_DIR="$STORE_DIR"
+export CORPUS_ID=grid-dev
+
+echo "[grid-dev] seeding prompt into corpus '$CORPUS_ID' at $FOUNTAINSTORE_DIR"
+if (( BUILD )); then
+  swift build --package-path "$ROOT_DIR/Packages/FountainApps" -c debug --product grid-dev-seed >/dev/null
+fi
+swift run --package-path "$ROOT_DIR/Packages/FountainApps" -c debug grid-dev-seed || true
+
+echo "[grid-dev] launching app (grid-only UI)"
+if (( BUILD )); then
+  swift build --package-path "$ROOT_DIR/Packages/FountainApps" -c debug --product grid-dev-app >/dev/null
+fi
+swift run --package-path "$ROOT_DIR/Packages/FountainApps" -c debug grid-dev-app
+

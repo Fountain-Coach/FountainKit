@@ -45,7 +45,7 @@ struct GridDevMidiMonitorOverlay: View {
             let name = info?["name"] as? String ?? "?"
             let val = info?["value"] as? Double ?? .nan
             return Event(text: String(format: "PE set %@ = %.3f", name, val), color: .orange)
-        case "ui.zoom":
+        case "ui.zoom", "ui.zoom.debug":
             let z = info?["zoom"] as? Double ?? .nan
             return Event(text: String(format: "UI zoom %.2fx", z), color: .gray)
         case "ui.cursor.move":

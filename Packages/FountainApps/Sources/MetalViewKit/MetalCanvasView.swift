@@ -355,12 +355,26 @@ final class MetalCanvasRenderer: NSObject, MTKViewDelegate {
                 case "zoomAround":
                     self.zoomAround(anchorView: CGPoint(x: ax, y: ay), magnification: mag)
                 case "set":
+                    let prevZ = self.canvas.zoom
+                    let prevTX = self.canvas.translation.x
+                    let prevTY = self.canvas.translation.y
                     if let z = z { self.canvas.zoom = CGFloat(z) }
                     if let tx = tx { self.canvas.translation.x = CGFloat(tx) }
                     if let ty = ty { self.canvas.translation.y = CGFloat(ty) }
                     NotificationCenter.default.post(name: Notification.Name("MetalCanvasTransformChanged"), object: nil, userInfo: [
                         "zoom": self.canvas.zoom, "tx": self.canvas.translation.x, "ty": self.canvas.translation.y, "op": "set"
                     ])
+                    // Publish MIDI activity so monitors can reflect programmatic set/reset
+                    if abs(self.canvas.zoom - prevZ) > 1e-6 {
+                        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                            "type":"ui.zoom.debug", "zoom": Double(self.canvas.zoom)
+                        ])
+                    }
+                    if abs(self.canvas.translation.x - prevTX) > 1e-6 || abs(self.canvas.translation.y - prevTY) > 1e-6 {
+                        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                            "type":"ui.pan.debug", "x": Double(self.canvas.translation.x), "y": Double(self.canvas.translation.y)
+                        ])
+                    }
                 default:
                     break
                 }

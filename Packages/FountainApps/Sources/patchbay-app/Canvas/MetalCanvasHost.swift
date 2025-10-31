@@ -83,14 +83,7 @@ struct MetalCanvasHost: View {
             StageInstrumentsBinder()
             // Per-Replay MIDI 2.0 instruments: expose PE for play/fps/frame
             ReplayInstrumentsBinder()
-            // Selection + interaction now handled inside MetalCanvasView (MTKView subclass)
-            // HUD: zoom and origin
-            Text(String(format: "Zoom %.2fx  Origin (%.0f, %.0f)", Double(vm.zoom), Double(vm.translation.x), Double(vm.translation.y)))
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .padding(6)
-                .background(.ultraThinMaterial)
-                .cornerRadius(6)
-                .padding(8)
+            // Selection + interaction handled inside MetalCanvasView (no zoom HUD; use MIDI monitor)
             // MIDI 2.0 Monitor overlay (top-right, fades when idle; jumps to full on hover)
             Midi2MonitorOverlay(isHot: MidiMonitorHitArea.hotBinding)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)

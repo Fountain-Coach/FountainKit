@@ -45,10 +45,10 @@ struct Midi2MonitorOverlay: View {
             let name = info?["name"] as? String ?? "?"
             let val = info?["value"] as? Double ?? .nan
             return Event(text: String(format: "PE set %@ = %.3f", name, val), color: .orange)
-        case "ui.zoom":
+        case "ui.zoom", "ui.zoom.debug":
             let z = info?["zoom"] as? Double ?? .nan
             return Event(text: String(format: "UI zoom %.2fx", z), color: .gray)
-        case "ui.pan":
+        case "ui.pan", "ui.pan.debug":
             let x = info?["x"] as? Double ?? .nan
             let y = info?["y"] as? Double ?? .nan
             return Event(text: String(format: "UI pan x=%.0f y=%.0f", x, y), color: .gray)

@@ -43,3 +43,4 @@ Roadmap
 - Add TS OpenAPI client generation from curated specs.
 - Add minimal PE SET encoder in TS (or server‑side helpers in `midi-service`).
 - Optional Python mirror (FastAPI) alongside this app if needed for docs hosting.
+ - Web MRTS runner is available: `npm run mrts:run` (reads `store-dump` facts, sends UMP to PatchBay Canvas via midi-service).

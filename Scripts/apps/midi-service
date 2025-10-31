@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PORT=${MIDI_SERVICE_PORT:-${PORT:-7180}}
+echo "[midi-service] Starting on :$PORT"
+swift run --package-path Packages/FountainApps midi-service-server
+

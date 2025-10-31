@@ -13,6 +13,7 @@ Included scripts (canonical)
 - `launch-memchat-app.sh` — Launch MemChat app.
 - `memchat-oneclick.sh` — One‑click MemChat starter for dev.
 - `baseline-patchbay-web` — Seeds Teatro prompts and launches the web mirror (Vite) of Baseline‑PatchBay.
+- `midi-service` — Launch the MIDI 2.0 HTTP bridge (`/ump/send`) for web MRTS.
 
 Conventions
 - Keep the UX/config minimal; all environment and secrets managed via Keychain or defaults.

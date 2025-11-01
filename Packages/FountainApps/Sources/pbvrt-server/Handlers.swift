@@ -184,10 +184,25 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         let dir = core.baselineDir(bId)
         let candidateURL = dir.appendingPathComponent("candidate.png")
         try? png.write(to: candidateURL)
+        // Compute featureprint distance if baseline.png exists
+        var fdist: Double?
+        let baselineURL = dir.appendingPathComponent("baseline.png")
+        if let base = try? Data(contentsOf: baselineURL) {
+            if let cand = try? Data(contentsOf: candidateURL) {
+                fdist = try? PBVRTEngine.featureprintDistance(baseline: base, candidate: cand)
+            }
+        }
+        let metrics = Components.Schemas.DriftReport.metricsPayload(
+            pixel_l1: nil,
+            ssim: nil,
+            featureprint_distance: fdist.map { Float($0) },
+            clip_cosine: nil,
+            prompt_cosine: nil
+        )
         let report = Components.Schemas.DriftReport(
             baselineId: bId,
-            metrics: .init(pixel_l1: 0, ssim: 1, featureprint_distance: nil, clip_cosine: nil, prompt_cosine: nil),
-            pass: true,
+            metrics: metrics,
+            pass: (fdist ?? 0) < (Double(ProcessInfo.processInfo.environment["PBVRT_FEATUREPRINT_MAX"] ?? "0.03") ?? 0.03),
             artifacts: .init(candidatePng: candidateURL.path, deltaPng: nil),
             timestamps: .init(baseline: nil, run: Date())
         )
@@ -196,8 +211,22 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
 
     // POST /probes/embedding/compare (stub)
     func compareEmbeddingAdhoc(_ input: Operations.compareEmbeddingAdhoc.Input) async throws -> Operations.compareEmbeddingAdhoc.Output {
-        // Not implemented; return 200 with zero distance
-        let out = Components.Schemas.EmbeddingResult(metricName: .featureprint_distance, value: 0, backend: .featurePrint, model: "featurePrint", durationMs: 0)
+        guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
+        var base: Data?
+        var cand: Data?
+        let t0 = Date()
+        for try await part in form {
+            switch part {
+            case .baselinePng(let w): base = try await collectBody(w.payload.body)
+            case .candidatePng(let w): cand = try await collectBody(w.payload.body)
+            case .backend: break
+            case .undocumented: break
+            }
+        }
+        guard let b = base, let c = cand else { return .undocumented(statusCode: 400, .init()) }
+        let dist = try PBVRTEngine.featureprintDistance(baseline: b, candidate: c)
+        let ms = Date().timeIntervalSince(t0) * 1000
+        let out = Components.Schemas.EmbeddingResult(metricName: .featureprint_distance, value: Float(dist), backend: .featurePrint, model: "Vision.FeaturePrint", durationMs: Float(ms))
         return .ok(.init(body: .json(out)))
     }
     // Helpers

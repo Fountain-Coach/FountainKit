@@ -61,7 +61,7 @@ struct FountainEditorSeed {
       • text.content (string), cursor.index (int), cursor.select.start/end (int)
       • page.size ("A4"), page.margins.top/left/right/bottom (mm), font.name ("Courier Prime"), font.size.pt (12), line.height.em (1.10)
       • wrap.column (int; read‑only), parse.auto (0/1; default 1), parse.snapshot (write‑only; triggers notify)
-      • awareness.corpusId (string; active corpus)
+      • awareness.corpusId (string; active corpus; mirrors Corpus Instrument `corpus.id`)
       • suggestions.count (int; R/O), suggestions.active.id (string?), overlays.show.{drifts,patterns,reflections,history,arcs} (0/1)
       • memory.counts.{drifts,patterns,reflections,history,arcs} (ints; R/O)
       • roles.enabled (0/1), roles.available[] (strings; R/O), roles.active (string)
@@ -71,6 +71,10 @@ struct FountainEditorSeed {
       • awareness.setCorpus { corpusId }, awareness.refresh { kinds?:[drifts,patterns,reflections,history,arcs] }
       • memory.inject.{drifts|patterns|reflections|history|arcs} { items:[{ id, text, anchors?, meta? }] }, memory.promote { slot, id, policy, cursor? }
       • role.suggest { role, id, text, policy, cursor? }
+      • editor.submit { text, cursor? } — forward normalized content to Corpus Instrument baseline.add under the active corpus/page context.
+    - Flow Ports (typed wiring):
+      • outputs: text.parsed.out (kind:text), text.content.out (kind:text)
+      • routing: if a Flow graph is present and connected from an Editor output to a compatible input/Submit transform, editor.submit forwards via Flow; otherwise it falls back to Corpus baseline.add directly.
     - Monitor/CI Events:
       • "text.parsed" { nodes, lines, chars, types{…}, wrapColumn, page{…} }
       • "suggestion.queued" { id, source:"agent"|"role:<name>"|"memory:<slot>", policy, len }
@@ -112,16 +116,23 @@ struct FountainEditorSeed {
                     "awareness.corpusId","suggestions.count","suggestions.active.id",
                     "overlays.show.drifts","overlays.show.patterns","overlays.show.reflections","overlays.show.history","overlays.show.arcs",
                     "memory.counts.drifts","memory.counts.patterns","memory.counts.reflections","memory.counts.history","memory.counts.arcs",
-                    "roles.enabled","roles.available","roles.active"
-                ],
-                "vendorJSON": [
-                    "text.set","text.insert","text.replace","text.clear",
-                    "agent.delta","agent.suggest","suggestion.apply",
-                    "awareness.setCorpus","awareness.refresh",
-                    "memory.inject.drifts","memory.inject.patterns","memory.inject.reflections","memory.inject.history","memory.inject.arcs","memory.promote",
-                    "role.suggest"
-                ]
+                "roles.enabled","roles.available","roles.active"
             ],
+            "vendorJSON": [
+                "text.set","text.insert","text.replace","text.clear",
+                "agent.delta","agent.suggest","suggestion.apply",
+                "awareness.setCorpus","awareness.refresh",
+                "memory.inject.drifts","memory.inject.patterns","memory.inject.reflections","memory.inject.history","memory.inject.arcs","memory.promote",
+                "role.suggest",
+                "editor.submit"
+            ],
+            "ports": [
+                "outputs": [
+                    ["id": "text.parsed.out", "kind": "text"],
+                    ["id": "text.content.out", "kind": "text"]
+                ]
+            ]
+        ],
             "robot": [
                 "tests": ["FountainEditorPEAndParseTests","FountainEditorVendorOpsTests"],
                 "invariants": [
@@ -136,4 +147,3 @@ struct FountainEditorSeed {
         return String(data: data, encoding: .utf8)!
     }()
 }
-

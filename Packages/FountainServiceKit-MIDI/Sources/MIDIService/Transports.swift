@@ -130,6 +130,7 @@ final class UmpRecorder {
 }
 
 // MARK: - Headless instruments (co-located for simplicity)
+@MainActor
 protocol HeadlessInstrument {
     var displayName: String { get }
     func handleVendor(topic: String, data: [String: Any]) -> String?
@@ -182,6 +183,7 @@ final class CanvasHeadlessInstrument: HeadlessInstrument {
 }
 
 // MARK: - Fountain Editor (A4 Typewriter) headless instrument
+@MainActor
 final class FountainEditorHeadlessInstrument: HeadlessInstrument {
     let displayName: String
     // Editor state
@@ -196,6 +198,7 @@ final class FountainEditorHeadlessInstrument: HeadlessInstrument {
     private var fontName: String = "Courier Prime"
     private var fontSizePT: Int = 12
     private var lineHeightEM: Double = 1.10
+    private var parseAuto: Bool = true
     // Memory + roles + suggestions
     private var corpusId: String = ""
     private var overlays: [String: Bool] = ["drifts": false, "patterns": false, "reflections": false, "history": false, "arcs": false]
@@ -238,11 +241,14 @@ final class FountainEditorHeadlessInstrument: HeadlessInstrument {
             let policy = (data["policy"] as? String) ?? "append"
             let c = data["cursor"] as? Int
             suggestions[id] = (text: t, policy: policy, cursor: c)
+            // Emit monitor that a suggestion was queued from agent
+            SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"suggestion.queued\",\"id\":\"\(id)\",\"source\":\"agent\",\"policy\":\"\(policy)\",\"len\":\(t.count)}")
             return snapshot()
         case "suggestion.apply":
             guard let id = data["id"] as? String, let s = suggestions[id] else { return snapshot() }
             applySuggestion(id: id, suggestion: s)
             suggestions.removeValue(forKey: id)
+            SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"suggestion.applied\",\"id\":\"\(id)\"}")
             return snapshot()
         case "awareness.setCorpus":
             corpusId = (data["corpusId"] as? String) ?? corpusId
@@ -252,7 +258,7 @@ final class FountainEditorHeadlessInstrument: HeadlessInstrument {
             return snapshot(awarenessSynced: true)
         case let s where s.hasPrefix("memory.inject."):
             let kind = String(s.split(separator: ".").last ?? "")
-            if var arr = data["items"] as? [[String: Any]] {
+            if let arr = data["items"] as? [[String: Any]] {
                 memoryCounts[kind] = arr.count
             } else {
                 memoryCounts[kind] = 0
@@ -266,6 +272,7 @@ final class FountainEditorHeadlessInstrument: HeadlessInstrument {
             let c = data["cursor"] as? Int
             let text = (data["text"] as? String) ?? ""
             suggestions[id] = (text: text, policy: policy, cursor: c)
+            SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"suggestion.queued\",\"id\":\"\(id)\",\"source\":\"memory:\(slot)\",\"policy\":\"\(policy)\",\"len\":\(text.count)}")
             rolesActive = nil
             return snapshot()
         case "role.suggest":
@@ -274,6 +281,31 @@ final class FountainEditorHeadlessInstrument: HeadlessInstrument {
             let c = data["cursor"] as? Int
             rolesActive = role
             suggestions[id] = (text: text, policy: policy, cursor: c)
+            SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"suggestion.queued\",\"id\":\"\(id)\",\"source\":\"role:\(role)\",\"policy\":\"\(policy)\",\"len\":\(text.count)}")
+            return snapshot()
+        case "editor.submit":
+            // Prefer routing through Flow instrument when present; fallback to Corpus.
+            let submittedText = (data["text"] as? String) ?? content
+            let normalized: String = {
+                var s = submittedText
+                s = s.replacingOccurrences(of: "\t", with: "    ")
+                if !s.hasSuffix("\n") { s.append("\n") }
+                return s
+            }()
+            if let flow = HeadlessRegistry.shared.resolve("Flow") as? FlowHeadlessInstrument {
+                let from: [String: Any] = ["node": "Fountain Editor", "port": "text.content.out"]
+                let payload: [String: Any] = ["kind": "text", "text": normalized]
+                _ = flow.handleVendor(topic: "flow.forward.test", data: ["from": from, "payload": payload])
+            } else if let corpusInst = HeadlessRegistry.shared.resolve("Corpus Instrument") as? CorpusHeadlessInstrument {
+                let payload: [String: Any] = [
+                    "text": normalized,
+                    "pageId": "store://prompt/fountain-editor",
+                    "baselineId": "b-\(Int(Date().timeIntervalSince1970))",
+                    "corpusId": corpusId
+                ]
+                _ = corpusInst.handleVendor(topic: "corpus.baseline.add", data: payload)
+            }
+            SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"editor.submitted\",\"corpusId\":\"\(corpusId)\"}")
             return snapshot()
         default:
             return nil
@@ -281,6 +313,7 @@ final class FountainEditorHeadlessInstrument: HeadlessInstrument {
     }
 
     func handlePESet(properties: [String : Double]) -> String? {
+        var parseRequested = false
         for (k,v) in properties {
             switch k {
             case "cursor.index": cursor = max(0, min(Int(v.rounded()), utf16Count(content)))
@@ -290,15 +323,18 @@ final class FountainEditorHeadlessInstrument: HeadlessInstrument {
             case "page.margins.bottom": marginBottomMM = v
             case "font.size.pt": fontSizePT = Int(v.rounded())
             case "line.height.em": lineHeightEM = v
+            case "parse.auto": parseAuto = v >= 0.5
+            case "roles.enabled": rolesEnabled = v >= 0.5
             case "overlays.show.drifts": overlays["drifts"] = v >= 0.5
             case "overlays.show.patterns": overlays["patterns"] = v >= 0.5
             case "overlays.show.reflections": overlays["reflections"] = v >= 0.5
             case "overlays.show.history": overlays["history"] = v >= 0.5
             case "overlays.show.arcs": overlays["arcs"] = v >= 0.5
+            case "parse.snapshot": parseRequested = v >= 0.5
             default: break
             }
         }
-        return snapshot()
+        return snapshot(textParsed: parseRequested)
     }
 
     // MARK: - Helpers
@@ -345,7 +381,7 @@ final class FountainEditorHeadlessInstrument: HeadlessInstrument {
         return max(40, min(120, columns))
     }
     private func lineCount(_ s: String) -> Int { s.isEmpty ? 0 : s.split(separator: "\n", omittingEmptySubsequences: false).count }
-    @MainActor private func snapshot(memoryUpdated: Bool = false, awarenessSynced: Bool = false) -> String? {
+    @MainActor private func snapshot(memoryUpdated: Bool = false, awarenessSynced: Bool = false, textParsed: Bool = false) -> String? {
         let lines = lineCount(content)
         let chars = utf16Count(content)
         let wrapCol = wrapColumnEstimate()
@@ -353,15 +389,27 @@ final class FountainEditorHeadlessInstrument: HeadlessInstrument {
         func add(_ name: String, _ value: Any) { props.append(["name": name, "value": value]) }
         add("text.content", content)
         add("cursor.index", cursor)
-        add("page.size", 0) // R/O label not numeric; skip for numeric PE — included in monitor only
+        add("page.size", pageSize)
         add("page.margins.top", marginTopMM)
         add("page.margins.left", marginLeftMM)
         add("page.margins.right", marginRightMM)
         add("page.margins.bottom", marginBottomMM)
+        add("font.name", fontName)
         add("font.size.pt", fontSizePT)
         add("line.height.em", lineHeightEM)
+        add("parse.auto", parseAuto ? 1 : 0)
+        add("awareness.corpusId", corpusId)
         add("wrap.column", wrapCol)
         add("suggestions.count", suggestions.count)
+        add("suggestions.active.id", "")
+        add("roles.enabled", rolesEnabled ? 1 : 0)
+        add("roles.available", rolesAvailable)
+        add("roles.active", rolesActive ?? "")
+        add("overlays.show.drifts", overlays["drifts"] == true ? 1 : 0)
+        add("overlays.show.patterns", overlays["patterns"] == true ? 1 : 0)
+        add("overlays.show.reflections", overlays["reflections"] == true ? 1 : 0)
+        add("overlays.show.history", overlays["history"] == true ? 1 : 0)
+        add("overlays.show.arcs", overlays["arcs"] == true ? 1 : 0)
         add("memory.counts.drifts", memoryCounts["drifts"] ?? 0)
         add("memory.counts.patterns", memoryCounts["patterns"] ?? 0)
         add("memory.counts.reflections", memoryCounts["reflections"] ?? 0)
@@ -381,8 +429,271 @@ final class FountainEditorHeadlessInstrument: HeadlessInstrument {
             // Also post monitor events: suggestion/memory/awareness events implicit via counts
             if memoryUpdated { SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"memory.slots.updated\"}") }
             if awarenessSynced { SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"awareness.synced\",\"corpusId\":\"\(corpusId)\"}") }
+            // Post a text.parsed monitor event (used by MRTS to assert counts)
+            let meta = "\\\"lines\\\":\(lines),\\\"chars\\\":\(chars),\\\"wrapColumn\\\":\(wrapCol),\\\"page\\\":{\\\"size\\\":\\\"\(pageSize)\\\",\\\"margins\\\":{\\\"top\\\":\(marginTopMM),\\\"left\\\":\(marginLeftMM),\\\"right\\\":\(marginRightMM),\\\"bottom\\\":\(marginBottomMM)}}"
+            SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"text.parsed\",\(meta)}")
             return s
         }
+        return nil
+    }
+}
+
+// MARK: - Corpus Instrument headless
+@MainActor
+final class CorpusHeadlessInstrument: HeadlessInstrument {
+    let displayName: String
+    // Active context/state
+    private var corpusId: String = "baseline-patchbay"
+    private var pageId: String = ""
+    private var baselineLatestId: String = ""
+    private var driftLatestId: String = ""
+    private var patternsLatestId: String = ""
+    private var reflectionLatestId: String = ""
+    private var lastOp: String = ""
+    private var lastTs: String = ""
+    private var baselinesTotal: Int = 0
+    private var analysesTotal: Int = 0
+
+    init(displayName: String = "Corpus Instrument") { self.displayName = displayName }
+
+    func handleVendor(topic: String, data: [String : Any]) -> String? {
+        let nowISO: String = {
+            let f = ISO8601DateFormatter(); return f.string(from: Date())
+        }()
+        switch topic {
+        case "editor.submit":
+            // Treat as baseline.add with normalisation handled by caller/editor.
+            let text = (data["text"] as? String) ?? ""
+            let pid = (data["pageId"] as? String) ?? pageId
+            let bid = (data["baselineId"] as? String) ?? "b-\(Int(Date().timeIntervalSince1970))"
+            pageId = pid
+            baselineLatestId = bid
+            lastOp = "baseline.add"; lastTs = nowISO
+            baselinesTotal += 1
+            let lines = text.isEmpty ? 0 : text.split(separator: "\n", omittingEmptySubsequences: false).count
+            SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"corpus.baseline.added\",\"corpusId\":\"\(corpusId)\",\"baselineId\":\"\(bid)\",\"lines\":\(lines),\"chars\":\(text.utf16.count)}")
+            return snapshot()
+        case "corpus.baseline.add":
+            let text = (data["text"] as? String) ?? ""
+            if let cid = data["corpusId"] as? String { corpusId = cid }
+            if let pid = data["pageId"] as? String { pageId = pid }
+            let bid = (data["baselineId"] as? String) ?? "b-\(Int(Date().timeIntervalSince1970))"
+            baselineLatestId = bid
+            lastOp = "baseline.add"; lastTs = nowISO
+            baselinesTotal += 1
+            let lines = text.isEmpty ? 0 : text.split(separator: "\n", omittingEmptySubsequences: false).count
+            SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"corpus.baseline.added\",\"corpusId\":\"\(corpusId)\",\"baselineId\":\"\(bid)\",\"lines\":\(lines),\"chars\":\(text.utf16.count)}")
+            return snapshot()
+        case "corpus.drift.compute":
+            driftLatestId = "d-\(Int(Date().timeIntervalSince1970))"
+            lastOp = "drift.compute"; lastTs = nowISO
+            analysesTotal += 1
+            SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"corpus.drift.computed\",\"added\":1,\"changed\":0,\"removed\":0}")
+            return snapshot()
+        case "corpus.patterns.compute":
+            patternsLatestId = "p-\(Int(Date().timeIntervalSince1970))"
+            lastOp = "patterns.compute"; lastTs = nowISO
+            analysesTotal += 1
+            SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"corpus.patterns.computed\",\"count\":3}")
+            return snapshot()
+        case "corpus.reflection.compute":
+            reflectionLatestId = "r-\(Int(Date().timeIntervalSince1970))"
+            lastOp = "reflection.compute"; lastTs = nowISO
+            analysesTotal += 1
+            SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"corpus.reflection.computed\",\"claims\":5}")
+            return snapshot()
+        case "corpus.analysis.index":
+            analysesTotal += 1
+            lastOp = "analysis.index"; lastTs = nowISO
+            SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"corpus.analysis.indexed\",\"pageId\":\"\(pageId)\"}")
+            return snapshot()
+        case "corpus.page.upsert":
+            if let pid = data["pageId"] as? String { pageId = pid }
+            lastOp = "page.upsert"; lastTs = nowISO
+            return snapshot()
+        default:
+            return nil
+        }
+    }
+
+    func handlePESet(properties: [String : Double]) -> String? {
+        // Accept corpus.id/page.id set via PE (string -> Double not directly supported by decoder; use vendor where needed)
+        return snapshot()
+    }
+
+    private func snapshot() -> String? {
+        var props: [[String: Any]] = []
+        func add(_ name: String, _ value: Any) { props.append(["name": name, "value": value]) }
+        add("corpus.id", corpusId)
+        add("page.id", pageId)
+        add("baseline.latest.id", baselineLatestId)
+        add("drift.latest.id", driftLatestId)
+        add("patterns.latest.id", patternsLatestId)
+        add("reflection.latest.id", reflectionLatestId)
+        add("last.op", lastOp)
+        add("last.ts", lastTs)
+        add("baselines.total", baselinesTotal)
+        add("analyses.total", analysesTotal)
+        let obj: [String: Any] = ["properties": props]
+        if let data = try? JSONSerialization.data(withJSONObject: obj), let s = String(data: data, encoding: .utf8) { return s }
+        return nil
+    }
+}
+
+// MARK: - Flow Instrument (typed graph + routing)
+@MainActor
+final class FlowHeadlessInstrument: HeadlessInstrument {
+    struct Port: Hashable { let id: String; let dir: String; let kind: String }
+    struct Node { var id: String; var displayName: String; var product: String; var ports: [Port] }
+    struct Edge { var id: String; var fromNode: String; var fromPort: String; var toNode: String; var toPort: String; var transformId: String? }
+
+    let displayName: String
+    private var nodes: [String: Node] = [:]
+    private var edges: [Edge] = []
+    private var routingEnabled: Bool = true
+    private var selectedNodeId: String? = nil
+    private var selectedEdgeId: String? = nil
+
+    init(displayName: String = "Flow") { self.displayName = displayName }
+
+    func handleVendor(topic: String, data: [String : Any]) -> String? {
+        switch topic {
+        case "flow.node.add":
+            guard let nodeId = data["nodeId"] as? String,
+                  let displayName = data["displayName"] as? String,
+                  let product = data["product"] as? String else { return snapshot() }
+            var node = Node(id: nodeId, displayName: displayName, product: product, ports: [])
+            // Auto ports for known products
+            switch product.lowercased() {
+            case "fountaineditor":
+                node.ports.append(contentsOf:[Port(id: "text.parsed.out", dir: "out", kind: "text"), Port(id: "text.content.out", dir: "out", kind: "text")])
+            case "corpusinstrument":
+                node.ports.append(contentsOf:[
+                    Port(id: "editor.submit.in", dir: "in", kind: "text"),
+                    Port(id: "baseline.add.in", dir: "in", kind: "baseline"),
+                    Port(id: "drift.compute.in", dir: "in", kind: "baseline"),
+                    Port(id: "patterns.compute.in", dir: "in", kind: "drift"),
+                    Port(id: "reflection.compute.in", dir: "in", kind: "patterns"),
+                    Port(id: "baseline.added.out", dir: "out", kind: "baseline"),
+                    Port(id: "drift.computed.out", dir: "out", kind: "drift"),
+                    Port(id: "patterns.computed.out", dir: "out", kind: "patterns"),
+                    Port(id: "reflection.computed.out", dir: "out", kind: "reflection")
+                ])
+            case "submit":
+                node.ports.append(contentsOf:[Port(id: "in", dir: "in", kind: "text"), Port(id: "out", dir: "out", kind: "baseline")])
+            case "computedrift":
+                node.ports.append(contentsOf:[Port(id: "in", dir: "in", kind: "baseline"), Port(id: "out", dir: "out", kind: "drift")])
+            case "computepatterns":
+                node.ports.append(contentsOf:[Port(id: "in", dir: "in", kind: "drift"), Port(id: "out", dir: "out", kind: "patterns")])
+            case "computereflection":
+                node.ports.append(contentsOf:[Port(id: "in", dir: "in", kind: "patterns"), Port(id: "out", dir: "out", kind: "reflection")])
+            default: break
+            }
+            nodes[nodeId] = node
+            return snapshot()
+        case "flow.node.remove":
+            if let nodeId = data["nodeId"] as? String { nodes.removeValue(forKey: nodeId); edges.removeAll { $0.fromNode == nodeId || $0.toNode == nodeId } }
+            return snapshot()
+        case "flow.port.define":
+            guard let nodeId = data["nodeId"] as? String, var node = nodes[nodeId],
+                  let portId = data["portId"] as? String, let dir = data["dir"] as? String, let kind = data["kind"] as? String else { return snapshot() }
+            node.ports.append(Port(id: portId, dir: dir, kind: kind)); nodes[nodeId] = node
+            return snapshot()
+        case "flow.edge.create":
+            guard let from = data["from"] as? [String: Any], let to = data["to"] as? [String: Any],
+                  let fn = from["node"] as? String, let fp = from["port"] as? String,
+                  let tn = to["node"] as? String, let tp = to["port"] as? String else { return snapshot() }
+            let id = data["edgeId"] as? String ?? "e-\(edges.count+1)"
+            let edge = Edge(id: id, fromNode: fn, fromPort: fp, toNode: tn, toPort: tp, transformId: data["transformId"] as? String)
+            if isCompatible(edge: edge) {
+                edges.append(edge)
+                SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"flow.edge.created\",\"id\":\"\(id)\"}")
+            }
+            return snapshot()
+        case "flow.edge.delete":
+            if let id = data["edgeId"] as? String { edges.removeAll { $0.id == id }; SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"flow.edge.deleted\",\"id\":\"\(id)\"}") }
+            return snapshot()
+        case "flow.forward.test":
+            guard routingEnabled else { return snapshot() }
+            guard let from = data["from"] as? [String: Any], var fn = from["node"] as? String, let fp = from["port"] as? String else { return snapshot() }
+            let payload = data["payload"] as? [String: Any] ?? [:]
+            // Accept either node.id or displayName
+            if !nodes.keys.contains(fn) {
+                if let match = nodes.values.first(where: { $0.displayName == fn }) { fn = match.id }
+            }
+            let outEdges = edges.filter { $0.fromNode == fn && $0.fromPort == fp }
+            var forwarded = 0
+            for e in outEdges { forwarded += route(edge: e, payload: payload) }
+            SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"flow.forwarded\",\"count\":\(forwarded)}")
+            return snapshot()
+        default:
+            return nil
+        }
+    }
+
+    func handlePESet(properties: [String : Double]) -> String? {
+        for (k,v) in properties { if k == "routing.enabled" { routingEnabled = v >= 0.5 } }
+        return snapshot()
+    }
+
+    private func isCompatible(edge: Edge) -> Bool {
+        guard let out = nodes[edge.fromNode]?.ports.first(where: { $0.id == edge.fromPort && $0.dir == "out" }),
+              let inn = nodes[edge.toNode]?.ports.first(where: { $0.id == edge.toPort && $0.dir == "in" }) else { return false }
+        if out.kind == inn.kind { return true }
+        // Coercions via transform nodes - allow text→baseline via Submit
+        if let t = edge.transformId, let prod = nodes[t]?.product.lowercased() {
+            if prod == "submit" && out.kind == "text" && inn.kind == "baseline" { return true }
+        }
+        return false
+    }
+
+    private func route(edge: Edge, payload: [String: Any]) -> Int {
+        // If transform is a Submit, convert text→baseline by invoking Corpus
+        if let t = edge.transformId, let prod = nodes[t]?.product.lowercased(), prod == "submit" {
+            if let corpus = HeadlessRegistry.shared.resolve("Corpus Instrument") as? CorpusHeadlessInstrument {
+                let text = (payload["text"] as? String) ?? ""
+                let body: [String: Any] = ["text": text]
+                _ = corpus.handleVendor(topic: "corpus.baseline.add", data: body)
+                return 1
+            }
+            return 0
+        }
+        // Direct port-to-port: for now, only handle baseline.add.in on Corpus
+        if let target = nodes[edge.toNode], target.product.lowercased() == "corpusinstrument" {
+            if let corpus = HeadlessRegistry.shared.resolve("Corpus Instrument") as? CorpusHeadlessInstrument {
+                if edge.toPort == "baseline.add.in" {
+                    let text = (payload["text"] as? String) ?? ""
+                    _ = corpus.handleVendor(topic: "corpus.baseline.add", data: ["text": text])
+                    return 1
+                }
+            }
+        }
+        return 0
+    }
+
+    private func snapshot() -> String? {
+        var props: [[String: Any]] = []
+        func add(_ name: String, _ value: Any) { props.append(["name": name, "value": value]) }
+        let nodeArr: [[String: Any]] = nodes.values.sorted { $0.id < $1.id }.map { n in
+            ["id": n.id, "displayName": n.displayName, "product": n.product,
+             "ports": n.ports.map { ["id": $0.id, "dir": $0.dir, "kind": $0.kind] }]
+        }
+        let edgeArr: [[String: Any]] = edges.map { e in
+            var obj: [String: Any] = [
+                "id": e.id,
+                "from": ["node": e.fromNode, "port": e.fromPort],
+                "to": ["node": e.toNode, "port": e.toPort]
+            ]
+            if let t = e.transformId { obj["transformId"] = t }
+            return obj
+        }
+        add("flow.nodes", nodeArr)
+        add("flow.edges", edgeArr)
+        add("selected.nodeId", selectedNodeId ?? "")
+        add("selected.edgeId", selectedEdgeId ?? "")
+        add("routing.enabled", routingEnabled ? 1 : 0)
+        let obj: [String: Any] = ["properties": props]
+        if let data = try? JSONSerialization.data(withJSONObject: obj), let s = String(data: data, encoding: .utf8) { return s }
         return nil
     }
 }
@@ -417,16 +728,16 @@ final class SimpleMIDISender {
 
     static func send(words: [UInt32], toDisplayName name: String?) async throws {
         // If a headless instrument is registered under the target name, interpret UMP locally
-        if let name, let inst = await HeadlessRegistry.shared.resolve(name) as? HeadlessInstrument {
+        if let name, let inst = HeadlessRegistry.shared.resolve(name) {
             if let vj = Self.decodeVendorJSON(words) {
                 if let body = try? JSONSerialization.jsonObject(with: Data(vj.utf8)) as? [String: Any],
                    let topic = body["topic"] as? String, let data = body["data"] as? [String: Any] {
-                    if let snap = inst.handleVendor(topic: topic, data: data) { await recorder.recordSnapshot(peJSON: snap) }
+                    if let snap = inst.handleVendor(topic: topic, data: data) { recorder.recordSnapshot(peJSON: snap) }
                 }
                 return
             }
             if let pj = Self.decodePESetJSON(words) {
-                if let snap = inst.handlePESet(properties: pj) { await recorder.recordSnapshot(peJSON: snap) }
+                if let snap = inst.handlePESet(properties: pj) { recorder.recordSnapshot(peJSON: snap) }
                 return
             }
         }
@@ -460,7 +771,7 @@ final class SimpleMIDISender {
     private static func ensureCoreMIDITransport(key: String, destinationName: String?) throws -> CoreMIDITransport {
         if let t = transports[key] { return t }
         let t = CoreMIDITransport(name: "midi-service", destinationName: destinationName, enableVirtualEndpoints: false)
-        t.onReceiveUMP = { words in Task { await recorder.record(words: words) } }
+        t.onReceiveUMP = { words in Task { @MainActor in recorder.record(words: words) } }
         try t.open()
         transports[key] = t
         return t
@@ -540,7 +851,7 @@ final class SimpleMIDISender {
         if let t = alsaTransport { return t }
         let t = ALSATransport(useLoopback: true)
         try? t.open()
-        t.onReceiveUMP = { words in Task { await recorder.record(words: words) } }
+        t.onReceiveUMP = { words in Task { @MainActor in recorder.record(words: words) } }
         alsaTransport = t
         return t
     }
@@ -550,7 +861,7 @@ final class SimpleMIDISender {
         if let t = rtp { return t }
         let t = RTPMidiSession(localName: "midi-service", mtu: 1500, enableDiscovery: false, enableCINegotiation: false)
         try? t.open()
-        t.onReceiveUMP = { words in Task { await recorder.record(words: words) } }
+        t.onReceiveUMP = { words in Task { @MainActor in recorder.record(words: words) } }
         rtp = t
         return t
     }
@@ -560,7 +871,7 @@ final class SimpleMIDISender {
         if let t = loopback { return t }
         let t = LoopbackTransport()
         try? t.open()
-        t.onReceiveUMP = { words in Task { await recorder.record(words: words) } }
+        t.onReceiveUMP = { words in Task { @MainActor in recorder.record(words: words) } }
         loopback = t
         return t
     }
@@ -574,11 +885,28 @@ public actor MIDIServiceRuntime {
     public func registerHeadlessCanvas(displayName: String = "Headless Canvas") async {
         await HeadlessRegistry.shared.register(CanvasHeadlessInstrument(displayName: displayName))
     }
+    public func registerHeadlessEditor(displayName: String = "Fountain Editor") async {
+        await HeadlessRegistry.shared.register(FountainEditorHeadlessInstrument(displayName: displayName))
+    }
+    public func registerHeadlessCorpus(displayName: String = "Corpus Instrument") async {
+        await HeadlessRegistry.shared.register(CorpusHeadlessInstrument(displayName: displayName))
+    }
+    public func registerHeadlessFlow(displayName: String = "Flow") async {
+        await HeadlessRegistry.shared.register(FlowHeadlessInstrument(displayName: displayName))
+    }
     public func enableUMPLog(at dirPath: String) async { await MainActor.run { SimpleMIDISender.recorder.enableFileLog(dirPath: dirPath) } }
     public func listHeadless() async -> [String] { await HeadlessRegistry.shared.list() }
     public func registerHeadless(displayName: String, kind: String? = nil) async {
-        // For now, only canvas
-        await HeadlessRegistry.shared.register(CanvasHeadlessInstrument(displayName: displayName))
+        switch (kind?.lowercased()) {
+        case "editor":
+            await HeadlessRegistry.shared.register(FountainEditorHeadlessInstrument(displayName: displayName))
+        case "corpus":
+            await HeadlessRegistry.shared.register(CorpusHeadlessInstrument(displayName: displayName))
+        case "canvas", nil:
+            fallthrough
+        default:
+            await HeadlessRegistry.shared.register(CanvasHeadlessInstrument(displayName: displayName))
+        }
     }
     public func unregisterHeadless(displayName: String) async { await HeadlessRegistry.shared.unregister(displayName) }
 }

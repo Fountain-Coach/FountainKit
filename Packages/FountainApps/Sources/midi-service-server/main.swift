@@ -63,8 +63,11 @@ struct Main {
             await MIDIServiceRuntime.shared.ensureListener()
             await MIDIServiceRuntime.shared.registerHeadlessCanvas()
             // Register Fountain Editor headless instrument for web/app MRTS
-            await HeadlessRegistry.shared.register(FountainEditorHeadlessInstrument(displayName: "Headless Canvas"))
-            await HeadlessRegistry.shared.register(FountainEditorHeadlessInstrument(displayName: "Fountain Editor"))
+            await MIDIServiceRuntime.shared.registerHeadlessEditor()
+            // Register Corpus Instrument headless
+            await MIDIServiceRuntime.shared.registerHeadlessCorpus()
+            // Register Flow instrument headless
+            await MIDIServiceRuntime.shared.registerHeadlessFlow()
         }
 
         Task {

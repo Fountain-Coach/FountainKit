@@ -78,6 +78,8 @@ let package = Package(
         .executable(name: "grid-dev-seed", targets: ["grid-dev-seed"])
         ,
         .executable(name: "baseline-robot-seed", targets: ["baseline-robot-seed"])
+        ,
+        .executable(name: "flow-instrument-seed", targets: ["flow-instrument-seed"])
     ],
     dependencies: [
         .package(path: "../FountainCore"),
@@ -128,6 +130,14 @@ let package = Package(
             ],
             path: "Sources/MetalViewKit",
             exclude: ["AGENTS.md"]
+        ),
+        .executableTarget(
+            name: "flow-instrument-seed",
+            dependencies: [
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/flow-instrument-seed"
         ),
         .executableTarget(
             name: "patchbay-app",
@@ -401,6 +411,7 @@ let package = Package(
                 "MetalViewKit",
                 .product(name: "LauncherSignature", package: "FountainCore"),
                 .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "Teatro", package: "TeatroFull"),
                 .product(name: "TeatroRenderAPI", package: "TeatroFull")
             ],
             path: "Sources/grid-dev-app",
@@ -414,6 +425,14 @@ let package = Package(
                 .product(name: "LauncherSignature", package: "FountainCore")
             ],
             path: "Sources/grid-dev-seed"
+        ),
+        .executableTarget(
+            name: "flow-instrument-seed",
+            dependencies: [
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/flow-instrument-seed"
         ),
         .executableTarget(
             name: "fountain-editor-seed",
@@ -430,6 +449,14 @@ let package = Package(
                 .product(name: "LauncherSignature", package: "FountainCore")
             ],
             path: "Sources/baseline-robot-seed"
+        ),
+        .executableTarget(
+            name: "corpus-instrument-seed",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ],
+            path: "Sources/corpus-instrument-seed"
         ),
         .executableTarget(
             name: "img-rmse",

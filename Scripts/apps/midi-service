@@ -2,6 +2,7 @@
 set -euo pipefail
 
 PORT=${MIDI_SERVICE_PORT:-${PORT:-7180}}
-echo "[midi-service] Starting on :$PORT"
+# Prefer loopback backend by default to avoid CoreMIDI flakiness/crashes on some setups.
+export MIDI_SERVICE_BACKEND=${MIDI_SERVICE_BACKEND:-loopback}
+echo "[midi-service] Starting on :$PORT (backend=$MIDI_SERVICE_BACKEND)"
 swift run --package-path Packages/FountainApps midi-service-server
-

@@ -1,6 +1,7 @@
 import Foundation
 import FountainStoreClient
 import LauncherSignature
+import CryptoKit
 
 @main
 struct BaselineEditorSeed {
@@ -24,9 +25,45 @@ struct BaselineEditorSeed {
         let mrtsPage = Page(corpusId: corpusId, pageId: mrtsId, url: "store://prompt/fountain-editor-mrts", host: "store", title: "Fountain Editor — A4 Typewriter (MRTS)")
         _ = try? await store.addPage(mrtsPage)
         _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(mrtsId):teatro", pageId: mrtsId, kind: "teatro.prompt", text: mrtsPrompt))
-        _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(mrtsId):facts", pageId: mrtsId, kind: "facts", text: factsJSON))
+
+        // PB‑VRT Prompt metadata (facts) for Creation and MRTS
+        let creationHashHex = sha256Hex(of: creationPrompt)
+        let mrtsHashHex = sha256Hex(of: mrtsPrompt)
+        let creationFacts = buildPbvrtFacts(id: "fountain-editor",
+                                            modality: "visual",
+                                            tags: ["UI","editor","A4","typewriter"],
+                                            embeddingModel: "text-embedding-3-small",
+                                            hashHex: creationHashHex,
+                                            robotTests: nil)
+        let mrtsFacts = buildPbvrtFacts(id: "fountain-editor-mrts",
+                                        modality: "visual",
+                                        tags: ["UI","editor","A4","typewriter","MRTS"],
+                                        embeddingModel: "text-embedding-3-small",
+                                        hashHex: mrtsHashHex,
+                                        robotTests: ["FountainEditorPEAndParseTests","FountainEditorVendorOpsTests"])
+        if let creationFacts = creationFacts {
+            _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(creationId):facts", pageId: creationId, kind: "facts", text: creationFacts))
+        }
+        if let mrtsFacts = mrtsFacts {
+            _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(mrtsId):facts", pageId: mrtsId, kind: "facts", text: mrtsFacts))
+        }
 
         print("Seeded baseline editor prompts → corpus=\(corpusId) pages=[\(creationId), \(mrtsId)]")
+    }
+
+    static func sha256Hex(of text: String) -> String {
+        let digest = SHA256.hash(data: Data(text.utf8))
+        return digest.compactMap { String(format: "%02x", $0) }.joined()
+    }
+
+    static func buildPbvrtFacts(id: String, modality: String, tags: [String], embeddingModel: String?, hashHex: String, robotTests: [String]?) -> String? {
+        struct PBVRT: Codable { let id: String; let tags: [String]; let modality: String; let embedding_model: String?; let hash: String }
+        struct Robot: Codable { let tests: [String] }
+        struct Facts: Codable { let pbvrt: PBVRT; let robot: Robot? }
+        let pbvrt = PBVRT(id: id, tags: tags, modality: modality, embedding_model: embeddingModel, hash: "sha256:\(hashHex)")
+        let facts = Facts(pbvrt: pbvrt, robot: robotTests.map { Robot(tests: $0) })
+        let enc = JSONEncoder(); enc.outputFormatting = [.sortedKeys]
+        return String(data: (try? enc.encode(facts)) ?? Data(), encoding: .utf8)
     }
 
     static func resolveStore() -> FountainStoreClient {

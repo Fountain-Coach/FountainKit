@@ -49,11 +49,25 @@ final class PBVRTCore: @unchecked Sendable {
 
     func writeBaseline(baselineId: String, promptId: String, viewport: Components.Schemas.Viewport, rendererVersion: String?, midiSequence: Components.Schemas.MIDISequence?, probes: [String: Any]?) async throws -> String {
         try await ensurePage(baselinePageId(baselineId), title: "PBVRT Baseline \(baselineId)")
-        let artifacts: [String: String] = [
-            "baselinePng": baselineDir(baselineId).appendingPathComponent("baseline.png").path,
-            "embeddingJson": baselineDir(baselineId).appendingPathComponent("embedding.json").path,
-            "midiUmp": baselineDir(baselineId).appendingPathComponent("sequence.ump").path
+        let dir = baselineDir(baselineId)
+        var artifacts: [String: String] = [
+            "baselinePng": dir.appendingPathComponent("baseline.png").path,
+            "embeddingJson": dir.appendingPathComponent("embedding.json").path
         ]
+        if let seq = midiSequence {
+            let seqURL = dir.appendingPathComponent("sequence.json")
+            let seqObj: [String: Any] = [
+                "sequenceID": seq.sequenceID,
+                "packets": seq.packets.map { ["word0": $0.word0, "word1": $0.word1 as Any, "word2": $0.word2 as Any, "word3": $0.word3 as Any] },
+                "channel": seq.channel as Any,
+                "deviceName": seq.deviceName as Any,
+                "hash": seq.hash as Any
+            ].compactMapValues { $0 }
+            if let data = try? JSONSerialization.data(withJSONObject: seqObj, options: [.sortedKeys, .prettyPrinted]) {
+                try? data.write(to: seqURL)
+                artifacts["midiUmp"] = seqURL.path
+            }
+        }
         // Minimal metadata segment
         let meta: [String: Any?] = [
             "baselineId": baselineId,

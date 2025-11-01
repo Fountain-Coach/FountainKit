@@ -784,9 +784,14 @@ let package = Package(
             dependencies: [
                 .product(name: "FountainRuntime", package: "FountainCore"),
                 .product(name: "FountainStoreClient", package: "FountainCore"),
-                .product(name: "LauncherSignature", package: "FountainCore")
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
             ],
-            path: "Sources/pbvrt-server"
+            path: "Sources/pbvrt-server",
+            plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
         ),
         // removed: add-instruments-seed target
         .executableTarget(

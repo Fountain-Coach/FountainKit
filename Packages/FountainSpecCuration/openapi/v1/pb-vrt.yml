@@ -17,6 +17,8 @@ tags:
   - name: Baselines
   - name: Compare
   - name: Probes
+  - name: Vision
+  - name: Audio
 
 paths:
   /prompts:
@@ -181,6 +183,306 @@ paths:
               schema:
                 $ref: '#/components/schemas/EmbeddingResult'
 
+  # Vision probes
+  /probes/saliency/compare:
+    post:
+      tags: [Probes, Vision]
+      operationId: compareSaliencyWeighted
+      summary: Compare two images using a saliency-weighted metric and return saliency maps and weighted scores.
+      x-fountain.visibility: public
+      x-fountain.reason: vision saliency weighting for robust UI drift checks
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [baselinePng, candidatePng]
+              properties:
+                baselinePng: { type: string, format: binary }
+                candidatePng: { type: string, format: binary }
+      responses:
+        '200':
+          description: Saliency-weighted comparison result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SaliencyCompareResult' }
+
+  /probes/align:
+    post:
+      tags: [Probes, Vision]
+      operationId: alignImages
+      summary: Estimate alignment transform (translation/scale/rotation/homography) and return post-alignment drift.
+      x-fountain.visibility: public
+      x-fountain.reason: registration-aware drift measurement
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [baselinePng, candidatePng]
+              properties:
+                baselinePng: { type: string, format: binary }
+                candidatePng: { type: string, format: binary }
+      responses:
+        '200':
+          description: Alignment result and drift
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AlignResult' }
+
+  /probes/ocr/recognize:
+    post:
+      tags: [Probes, Vision]
+      operationId: ocrRecognize
+      summary: Recognize text lines and boxes for layout invariants.
+      x-fountain.visibility: public
+      x-fountain.reason: wrap.column and line count checks for A4 typewriter
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [imagePng]
+              properties:
+                imagePng: { type: string, format: binary }
+      responses:
+        '200':
+          description: OCR result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OCRResult' }
+
+  /probes/contours:
+    post:
+      tags: [Probes, Vision]
+      operationId: detectContours
+      summary: Detect contours and report grid/stave spacing statistics.
+      x-fountain.visibility: public
+      x-fountain.reason: spacing invariants for grids/staves
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [imagePng]
+              properties:
+                imagePng: { type: string, format: binary }
+      responses:
+        '200':
+          description: Contours and spacing summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContoursResult' }
+
+  /probes/barcodes:
+    post:
+      tags: [Probes, Vision]
+      operationId: detectBarcodes
+      summary: Decode barcodes/QR codes for run linkage.
+      x-fountain.visibility: public
+      x-fountain.reason: link snapshots to runs deterministically
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [imagePng]
+              properties:
+                imagePng: { type: string, format: binary }
+      responses:
+        '200':
+          description: Decoded barcode payloads
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BarcodesResult' }
+
+  # Audio probes
+  /probes/audio/embedding/compare:
+    post:
+      tags: [Probes, Audio]
+      operationId: compareAudioEmbedding
+      summary: Compare two audio files using an embedding backend (cosine distance).
+      x-fountain.visibility: public
+      x-fountain.reason: semantic audio similarity for CI
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [baselineWav, candidateWav]
+              properties:
+                baselineWav: { type: string, format: binary }
+                candidateWav: { type: string, format: binary }
+                backend:
+                  type: string
+                  enum: [yamnet, coreml]
+                  default: yamnet
+      responses:
+        '200':
+          description: Audio embedding comparison
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AudioEmbeddingResult' }
+
+  /probes/audio/spectrogram/compare:
+    post:
+      tags: [Probes, Audio]
+      operationId: compareSpectrogram
+      summary: Compare Mel/STFT spectrograms (L2, log‑spectral distance, SSIM).
+      x-fountain.visibility: public
+      x-fountain.reason: robust audio drift metrics in frequency domain
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [baselineWav, candidateWav]
+              properties:
+                baselineWav: { type: string, format: binary }
+                candidateWav: { type: string, format: binary }
+      responses:
+        '200':
+          description: Spectrogram comparison result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SpectrogramCompareResult' }
+
+  /probes/audio/onsets:
+    post:
+      tags: [Probes, Audio]
+      operationId: detectOnsets
+      summary: Detect onsets and estimate tempo.
+      x-fountain.visibility: public
+      x-fountain.reason: timing invariants (latency/tempo)
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [wav]
+              properties:
+                wav: { type: string, format: binary }
+      responses:
+        '200':
+          description: Onsets and tempo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OnsetsResult' }
+
+  /probes/audio/pitch:
+    post:
+      tags: [Probes, Audio]
+      operationId: analyzePitch
+      summary: Estimate f0 contour and pitch statistics.
+      x-fountain.visibility: public
+      x-fountain.reason: pitch/intonation invariants vs MIDI
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [wav]
+              properties:
+                wav: { type: string, format: binary }
+      responses:
+        '200':
+          description: Pitch analysis
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PitchResult' }
+
+  /probes/audio/loudness:
+    post:
+      tags: [Probes, Audio]
+      operationId: analyzeLoudness
+      summary: Compute RMS envelope and loudness statistics.
+      x-fountain.visibility: public
+      x-fountain.reason: dynamics invariants
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [wav]
+              properties:
+                wav: { type: string, format: binary }
+      responses:
+        '200':
+          description: Loudness analysis
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoudnessResult' }
+
+  /probes/audio/alignment:
+    post:
+      tags: [Probes, Audio]
+      operationId: analyzeAlignment
+      summary: Estimate offset/drift between baseline and candidate audio.
+      x-fountain.visibility: public
+      x-fountain.reason: MIDI↔audio sync validation
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [baselineWav, candidateWav]
+              properties:
+                baselineWav: { type: string, format: binary }
+                candidateWav: { type: string, format: binary }
+      responses:
+        '200':
+          description: Alignment analysis
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AlignmentResult' }
+
+  /probes/audio/transcribe:
+    post:
+      tags: [Probes, Audio]
+      operationId: transcribeAudio
+      summary: Transcribe speech audio (best‑effort).
+      x-fountain.visibility: public
+      x-fountain.reason: optional speech alignment checks
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [wav]
+              properties:
+                wav: { type: string, format: binary }
+                language: { type: string, default: en-US }
+      responses:
+        '200':
+          description: Transcript
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TranscriptResult' }
+
 components:
   schemas:
     Prompt:
@@ -321,5 +623,143 @@ components:
             baseline: { type: string, format: date-time }
             run: { type: string, format: date-time }
 
-  securitySchemes: {}
+    # Vision components
+    SaliencyCompareResult:
+      type: object
+      properties:
+        weighted_l1: { type: number, format: float }
+        weighted_ssim: { type: number, format: float }
+        artifacts:
+          type: object
+          properties:
+            baselineSaliency: { type: string }
+            candidateSaliency: { type: string }
+            weightedDelta: { type: string }
 
+    Transform2D:
+      type: object
+      properties:
+        dx: { type: number, format: float }
+        dy: { type: number, format: float }
+        scale: { type: number, format: float }
+        rotationDeg: { type: number, format: float }
+        homography:
+          type: array
+          items: { type: number, format: float }
+          minItems: 9
+          maxItems: 9
+
+    AlignResult:
+      type: object
+      properties:
+        transform: { $ref: '#/components/schemas/Transform2D' }
+        postAlignDriftPx: { type: number, format: float }
+        artifacts:
+          type: object
+          properties:
+            alignedCandidatePng: { type: string }
+
+    OCRLine:
+      type: object
+      properties:
+        text: { type: string }
+        bbox:
+          type: object
+          properties: { x: {type:number}, y: {type:number}, w: {type:number}, h: {type:number} }
+
+    OCRResult:
+      type: object
+      properties:
+        lineCount: { type: integer }
+        wrapColumnMedian: { type: number, format: float }
+        lines:
+          type: array
+          items: { $ref: '#/components/schemas/OCRLine' }
+
+    ContoursResult:
+      type: object
+      properties:
+        spacingMeanPx: { type: number, format: float }
+        spacingStdPx: { type: number, format: float }
+        count: { type: integer }
+        artifacts:
+          type: object
+          properties:
+            contoursImage: { type: string }
+
+    BarcodesResult:
+      type: object
+      properties:
+        payloads:
+          type: array
+          items: { type: string }
+        types:
+          type: array
+          items: { type: string }
+
+    # Audio components
+    AudioEmbeddingResult:
+      type: object
+      required: [metricName, value, backend, model, durationMs]
+      properties:
+        metricName:
+          type: string
+          enum: [audio_embedding_cosine]
+        value: { type: number, format: float }
+        backend:
+          type: string
+          enum: [yamnet, coreml]
+        model: { type: string }
+        durationMs: { type: number, format: float }
+
+    SpectrogramCompareResult:
+      type: object
+      properties:
+        l2: { type: number, format: float }
+        lsd_db: { type: number, format: float }
+        ssim: { type: number, format: float }
+        artifacts:
+          type: object
+          properties:
+            baselineSpecPng: { type: string }
+            candidateSpecPng: { type: string }
+            deltaSpecPng: { type: string }
+
+    OnsetsResult:
+      type: object
+      properties:
+        onsetsSec:
+          type: array
+          items: { type: number, format: float }
+        tempoBpm: { type: number, format: float }
+
+    PitchResult:
+      type: object
+      properties:
+        f0Hz:
+          type: array
+          items: { type: number, format: float }
+        centsErrorMean: { type: number, format: float }
+
+    LoudnessResult:
+      type: object
+      properties:
+        rms:
+          type: array
+          items: { type: number, format: float }
+        meanDb: { type: number, format: float }
+        maxDb: { type: number, format: float }
+
+    AlignmentResult:
+      type: object
+      properties:
+        offsetMs: { type: number, format: float }
+        driftMs: { type: number, format: float }
+
+    TranscriptResult:
+      type: object
+      properties:
+        transcript: { type: string }
+        language: { type: string }
+
+  securitySchemes: {}

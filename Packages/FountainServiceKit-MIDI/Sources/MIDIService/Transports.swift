@@ -587,6 +587,14 @@ final class FlowHeadlessInstrument: HeadlessInstrument {
                 node.ports.append(contentsOf:[Port(id: "in", dir: "in", kind: "drift"), Port(id: "out", dir: "out", kind: "patterns")])
             case "computereflection":
                 node.ports.append(contentsOf:[Port(id: "in", dir: "in", kind: "patterns"), Port(id: "out", dir: "out", kind: "reflection")])
+            case "llmadapter":
+                node.ports.append(contentsOf:[
+                    Port(id: "prompt.in", dir: "in", kind: "text"),
+                    Port(id: "messages.in", dir: "in", kind: "json"),
+                    Port(id: "tool.result.in", dir: "in", kind: "json"),
+                    Port(id: "answer.out", dir: "out", kind: "text"),
+                    Port(id: "function.call.out", dir: "out", kind: "json")
+                ])
             default: break
             }
             nodes[nodeId] = node
@@ -692,6 +700,132 @@ final class FlowHeadlessInstrument: HeadlessInstrument {
         add("selected.nodeId", selectedNodeId ?? "")
         add("selected.edgeId", selectedEdgeId ?? "")
         add("routing.enabled", routingEnabled ? 1 : 0)
+        let obj: [String: Any] = ["properties": props]
+        if let data = try? JSONSerialization.data(withJSONObject: obj), let s = String(data: data, encoding: .utf8) { return s }
+        return nil
+    }
+}
+
+// MARK: - LLM Adapter headless (OpenAI-compatible via llm-gateway or mock)
+@MainActor
+final class LLMAdapterHeadlessInstrument: HeadlessInstrument {
+    let displayName: String
+    private var provider: String = "openai"
+    private var model: String = "gpt-4o-mini"
+    private var temperature: Double = 0.2
+    private var gatewayURL: String = ProcessInfo.processInfo.environment["LLM_GATEWAY_URL"] ?? ""
+    private var streamingEnabled: Bool = false
+    private var lastAnswer: String = ""
+    private var lastFunctionName: String = ""
+    private var tokensTotal: Int = 0
+    private var lastTs: String = ""
+
+    init(displayName: String = "LLM Adapter") { self.displayName = displayName }
+
+    func handleVendor(topic: String, data: [String : Any]) -> String? {
+        switch topic {
+        case "llm.set":
+            if let p = data["provider"] as? String { provider = p }
+            if let m = data["model"] as? String { model = m }
+            if let t = data["temperature"] as? Double { temperature = t }
+            if let u = data["gatewayUrl"] as? String { gatewayURL = u }
+            if let s = data["streaming"] as? Bool { streamingEnabled = s }
+            return snapshot()
+        case "llm.chat":
+            SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"llm.chat.started\",\"provider\":\"\(provider)\",\"model\":\"\(model)\"}")
+            let useRemote = !gatewayURL.isEmpty || ProcessInfo.processInfo.environment["LLM_GATEWAY_URL"] != nil
+            if useRemote, let resp = remoteChat(data: data) {
+                applyResponse(resp)
+            } else {
+                applyResponse(mockChat(data: data))
+            }
+            SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"llm.chat.completed\",\"provider\":\"\(provider)\",\"model\":\"\(model)\",\"answer.chars\":\(lastAnswer.utf16.count)}")
+            return snapshot()
+        default:
+            return nil
+        }
+    }
+
+    func handlePESet(properties: [String : Double]) -> String? {
+        for (k,v) in properties {
+            switch k {
+            case "llm.temperature": temperature = v
+            case "streaming.enabled": streamingEnabled = v >= 0.5
+            default: break
+            }
+        }
+        return snapshot()
+    }
+
+    private func applyResponse(_ r: (answer: String, function: String?, tokens: Int)) {
+        lastAnswer = r.answer
+        tokensTotal += max(0, r.tokens)
+        if let fn = r.function, !fn.isEmpty {
+            lastFunctionName = fn
+            SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"llm.function_call\",\"name\":\"\(fn)\"}")
+        } else {
+            lastFunctionName = ""
+        }
+        let f = ISO8601DateFormatter(); lastTs = f.string(from: Date())
+    }
+
+    private func mockChat(data: [String: Any]) -> (answer: String, function: String?, tokens: Int) {
+        // Simple mock: if user content starts with "CALL:name", emit function_call; else echo with prefix
+        var user: String = ""
+        if let msgs = data["messages"] as? [[String: Any]] {
+            if let last = msgs.last, let role = last["role"] as? String, role == "user", let content = last["content"] as? String { user = content }
+        }
+        if user.hasPrefix("CALL:") {
+            let name = user.dropFirst("CALL:".count).split(separator: "(").first.map(String.init) ?? "tool"
+            return (answer: "", function: name, tokens: 8)
+        }
+        return (answer: "ECHO: \(user)", function: nil, tokens: max(1, user.split(separator: " ").count))
+    }
+
+    private func remoteChat(data: [String: Any]) -> (answer: String, function: String?, tokens: Int)? {
+        // Minimal synchronous call to llm-gateway /chat; non-streaming only
+        let base = gatewayURL.isEmpty ? (ProcessInfo.processInfo.environment["LLM_GATEWAY_URL"] ?? "") : gatewayURL
+        guard !base.isEmpty, let url = URL(string: base + "/chat") else { return nil }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let key = ProcessInfo.processInfo.environment["LLM_GATEWAY_API_KEY"], !key.isEmpty { req.addValue(key, forHTTPHeaderField: "X-API-Key") }
+        var body: [String: Any] = [
+            "model": model,
+            "messages": (data["messages"] as? [[String: Any]]) ?? [["role": "user", "content": "Hello"]]
+        ]
+        if let f = data["functions"] as? [[String: Any]] { body["functions"] = f }
+        if let fc = data["function_call"] { body["function_call"] = fc }
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        let sem = DispatchSemaphore(value: 0)
+        var out: (String, String?, Int)? = nil
+        URLSession.shared.dataTask(with: req) { data, _, _ in
+            defer { sem.signal() }
+            guard let data else { return }
+            if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                let ans = (obj["answer"] as? String) ?? ""
+                let usage = (obj["usage"] as? [String: Any])
+                let tokens = (usage?["total_tokens"] as? Int) ?? 0
+                let fn = (obj["function_call"] as? [String: Any])?["name"] as? String
+                out = (ans, fn, tokens)
+            }
+        }.resume()
+        _ = sem.wait(timeout: .now() + 10)
+        return out
+    }
+
+    private func snapshot() -> String? {
+        var props: [[String: Any]] = []
+        func add(_ name: String, _ value: Any) { props.append(["name": name, "value": value]) }
+        add("llm.provider", provider)
+        add("llm.model", model)
+        add("llm.temperature", temperature)
+        add("gateway.url", gatewayURL)
+        add("streaming.enabled", streamingEnabled ? 1 : 0)
+        add("last.answer", lastAnswer)
+        add("last.function.name", lastFunctionName)
+        add("tokens.total", tokensTotal)
+        add("last.ts", lastTs)
         let obj: [String: Any] = ["properties": props]
         if let data = try? JSONSerialization.data(withJSONObject: obj), let s = String(data: data, encoding: .utf8) { return s }
         return nil
@@ -893,6 +1027,9 @@ public actor MIDIServiceRuntime {
     }
     public func registerHeadlessFlow(displayName: String = "Flow") async {
         await HeadlessRegistry.shared.register(FlowHeadlessInstrument(displayName: displayName))
+    }
+    public func registerHeadlessLLM(displayName: String = "LLM Adapter") async {
+        await HeadlessRegistry.shared.register(LLMAdapterHeadlessInstrument(displayName: displayName))
     }
     public func enableUMPLog(at dirPath: String) async { await MainActor.run { SimpleMIDISender.recorder.enableFileLog(dirPath: dirPath) } }
     public func listHeadless() async -> [String] { await HeadlessRegistry.shared.list() }

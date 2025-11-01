@@ -79,7 +79,8 @@ let package = Package(
         ,
         .executable(name: "baseline-robot-seed", targets: ["baseline-robot-seed"])
         ,
-        .executable(name: "flow-instrument-seed", targets: ["flow-instrument-seed"])
+        .executable(name: "flow-instrument-seed", targets: ["flow-instrument-seed"]),
+        .executable(name: "llm-adapter-seed", targets: ["llm-adapter-seed"])
     ],
     dependencies: [
         .package(path: "../FountainCore"),
@@ -138,6 +139,14 @@ let package = Package(
                 .product(name: "FountainStoreClient", package: "FountainCore")
             ],
             path: "Sources/flow-instrument-seed"
+        ),
+        .executableTarget(
+            name: "llm-adapter-seed",
+            dependencies: [
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/llm-adapter-seed"
         ),
         .executableTarget(
             name: "patchbay-app",
@@ -425,6 +434,14 @@ let package = Package(
                 .product(name: "LauncherSignature", package: "FountainCore")
             ],
             path: "Sources/grid-dev-seed"
+        ),
+        .executableTarget(
+            name: "llm-adapter-seed",
+            dependencies: [
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/llm-adapter-seed"
         ),
         .executableTarget(
             name: "flow-instrument-seed",

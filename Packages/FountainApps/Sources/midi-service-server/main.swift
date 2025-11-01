@@ -68,6 +68,8 @@ struct Main {
             await MIDIServiceRuntime.shared.registerHeadlessCorpus()
             // Register Flow instrument headless
             await MIDIServiceRuntime.shared.registerHeadlessFlow()
+            // Register LLM Adapter headless
+            await MIDIServiceRuntime.shared.registerHeadlessLLM()
         }
 
         Task {

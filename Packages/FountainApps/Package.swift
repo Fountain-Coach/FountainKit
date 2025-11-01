@@ -445,6 +445,14 @@ let package = Package(
             path: "Sources/grid-dev-seed"
         ),
         .executableTarget(
+            name: "patchbay-graph-seed",
+            dependencies: [
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/patchbay-graph-seed"
+        ),
+        .executableTarget(
             name: "llm-adapter-seed",
             dependencies: [
                 .product(name: "LauncherSignature", package: "FountainCore"),

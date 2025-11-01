@@ -26,6 +26,7 @@ let package = Package(
         .executable(name: "bootstrap-server", targets: ["bootstrap-server"]),
         .executable(name: "publishing-frontend", targets: ["publishing-frontend"]),
         .executable(name: "tutor-dashboard", targets: ["tutor-dashboard"]),
+        .executable(name: "pbvrt-server", targets: ["pbvrt-server"]),
         // removed: add-instruments-seed (context menu removed from baseline)
         .executable(name: "store-dump", targets: ["store-dump"]),
         .executable(name: "FountainLauncherUI", targets: ["FountainLauncherUI"]),
@@ -134,6 +135,14 @@ let package = Package(
             ],
             path: "Sources/MetalViewKit",
             exclude: ["AGENTS.md"]
+        ),
+        .executableTarget(
+            name: "pbvrt-server",
+            dependencies: [
+                .product(name: "FountainRuntime", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/pbvrt-server"
         ),
         .executableTarget(
             name: "flow-instrument-seed",
@@ -769,6 +778,15 @@ let package = Package(
                 .product(name: "SwiftCursesKit", package: "swiftcurseskit")
             ],
             exclude: ["README.md"]
+        ),
+        .executableTarget(
+            name: "pbvrt-server",
+            dependencies: [
+                .product(name: "FountainRuntime", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ],
+            path: "Sources/pbvrt-server"
         ),
         // removed: add-instruments-seed target
         .executableTarget(

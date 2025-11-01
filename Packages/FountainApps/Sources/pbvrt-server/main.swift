@@ -2,6 +2,7 @@ import Foundation
 import FountainRuntime
 import FountainStoreClient
 import LauncherSignature
+import OpenAPIRuntime
 
 let env = ProcessInfo.processInfo.environment
 if env["FOUNTAIN_SKIP_LAUNCHER_SIG"] != "1" { verifyLauncherSignature() }
@@ -22,26 +23,24 @@ func resolveStore() -> FountainStoreClient {
 }
 
 let store = resolveStore()
-
-let kernel = HTTPKernel { req in
-    // Base prefix from spec servers.url
-    let base = "/pb-vrt"
-    if req.path == base + "/openapi.yaml" || req.path == "/openapi.yaml" {
-        let url = URL(fileURLWithPath: "Packages/FountainSpecCuration/openapi/v1/pb-vrt.yml")
-        if let data = try? Data(contentsOf: url) {
+let transport = NIOOpenAPIServerTransport(fallback: HTTPKernel { req in
+    if req.path == "/pb-vrt/openapi.yaml" || req.path == "/openapi.yaml" {
+        if let data = try? Data(contentsOf: URL(fileURLWithPath: "Packages/FountainSpecCuration/openapi/v1/pb-vrt.yml")) {
             return HTTPResponse(status: 200, headers: ["Content-Type": "application/yaml"], body: data)
         }
-        return HTTPResponse(status: 404)
     }
-    if req.path == base + "/health" || req.path == "/health" {
-        let data = Data("{\"status\":\"ok\"}".utf8)
-        return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: data)
-    }
-    // Future: implement /prompts, /baselines, /compare, /probes routes.
-    return HTTPResponse(status: 501)
-}
+    return HTTPResponse(status: 404)
+})
 
-let server = NIOHTTPServer(kernel: kernel)
+// Register generated handlers (implemented in Handlers.swift)
+let corpusId = env["PBVRT_CORPUS_ID"] ?? env["DEFAULT_CORPUS_ID"] ?? "pb-vrt"
+let artifactsRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+    .appendingPathComponent(".fountain/artifacts/pb-vrt", isDirectory: true)
+try? FileManager.default.createDirectory(at: artifactsRoot, withIntermediateDirectories: true)
+let handlers = PBVRTHandlers(store: store, corpusId: corpusId, artifactsRoot: artifactsRoot)
+try? handlers.registerHandlers(on: transport, serverURL: URL(string: "/pb-vrt")!)
+
+let server = NIOHTTPServer(kernel: transport.asKernel())
 Task {
     do {
         let port = Int(env["PBVRT_PORT"] ?? env["PORT"] ?? "8010") ?? 8010
@@ -53,4 +52,3 @@ Task {
 }
 import Dispatch
 dispatchMain()
-

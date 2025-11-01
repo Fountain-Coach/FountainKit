@@ -4,10 +4,13 @@ A small TypeScript web app (Vite + React) that mirrors the Baseline‑PatchBay t
 
 What
 - Layout: three vertical panes, 6‑pt gutters; minimum pane widths 160 px; left/right fractions adjustable via gutters.
-- Center canvas: crisp grid with minor/major lines and doc axes (x=0/y=0).
-- Interactions: Ctrl+wheel zoom (anchor‑stable), wheel/drag pan, reset; left/center/right DnD events logged.
+- Left: Fountain Editor (A4 typewriter mirror). Typing sends `text.set {text,cursor}` to “Fountain Editor”. Buttons for `text.clear`, `agent.suggest` + `suggestion.apply`. Metrics (lines/chars/wrapColumn) reflect latest `text.parsed` monitor event.
+- Center: canvas grid with minor/major lines and doc axes (x=0/y=0).
+- Right: list scaffold (DnD symmetric with left).
+- Interactions: Ctrl+wheel zoom (anchor‑stable), wheel/drag pan, reset; left/center/right DnD events logged (`ui.dnd.begin`/`ui.dnd.drop`).
+- Layout monitor: dragging gutters logs `ui.layout.changed {left.frac,right.frac}` and, when Sync PE is enabled, sets `layout.left.frac`/`layout.right.frac`.
 - REST wiring to PatchBay: read `GET /canvas`, apply `POST /canvas/zoom` and `POST /canvas/pan` when in REST mode.
-- MIDI 2.0 drive mode (default): send vendor JSON (`ui.panBy`, `ui.zoomAround`, `canvas.reset`) to the “PatchBay Canvas” instrument via `midi-service`.
+- MIDI 2.0 drive mode (default): send vendor JSON (`ui.panBy`, `ui.zoomAround`, `canvas.reset`, `text.*`, `agent.*`, `suggestion.apply`) via `midi-service`.
 
 Why
 - Portable publishing frontend for docs/demos without requiring the macOS app runtime. Mirrors the same OpenAPI contract and MRTS over MIDI 2.0 to reduce drift.
@@ -31,7 +34,7 @@ Routes used
 Where
 - App shell: `Public/baseline-patchbay-web/index.html`.
 - Entry: `Public/baseline-patchbay-web/src/main.tsx`.
-- UI: `Public/baseline-patchbay-web/src/ui/App.tsx`, `Public/baseline-patchbay-web/src/ui/Grid.ts`.
+- UI: `Public/baseline-patchbay-web/src/ui/App.tsx`, `Public/baseline-patchbay-web/src/ui/Grid.ts`, `Public/baseline-patchbay-web/src/editor/FountainEditor.tsx`.
 - REST client: `Public/baseline-patchbay-web/src/ws/patchbay.ts`.
 - Dev config: `Public/baseline-patchbay-web/vite.config.ts`.
 - Launcher: `Scripts/apps/baseline-patchbay-web`.

@@ -76,9 +76,20 @@ struct GraphOverlayMac: View {
     private func loadGraph() {
         Task { @MainActor in
             let store = resolveStore()
-            if let data = try? await store.getDoc(corpusId: "baseline-patchbay", collection: "segments", id: "scene:patchbay-test:graph"),
-               let s = String(data: data, encoding: .utf8),
-               let obj = try? JSONSerialization.jsonObject(with: Data(s.utf8)) as? [String: Any] {
+            // Try scene first, then fallback to prompt:patchbay-graph
+            let candidates = [
+                (corpus: "baseline-patchbay", id: "scene:patchbay-test:graph"),
+                (corpus: "baseline-patchbay", id: "prompt:patchbay-graph:graph")
+            ]
+            var loaded: [String: Any]? = nil
+            for c in candidates {
+                if let data = try? await store.getDoc(corpusId: c.corpus, collection: "segments", id: c.id),
+                   let s = String(data: data, encoding: .utf8),
+                   let obj = try? JSONSerialization.jsonObject(with: Data(s.utf8)) as? [String: Any] {
+                    loaded = obj; break
+                }
+            }
+            if let obj = loaded {
                 var outNodes: [Node] = []
                 if let arr = obj["nodes"] as? [[String: Any]] {
                     for it in arr {
@@ -104,6 +115,9 @@ struct GraphOverlayMac: View {
                 }
                 self.nodes = outNodes
                 self.edges = outEdges
+                NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+                    "type": "overlay.graph.loaded", "nodes": outNodes.count, "edges": outEdges.count
+                ])
             }
         }
     }

@@ -71,15 +71,16 @@ struct GridDevSeed {
 
     static func teatroPrompt() -> String {
         return """
-        Scene: GridDevApp — Three‑Pane Baseline (Canvas Center)
+        Scene: GridDevApp — Three‑Pane Baseline (Editor Left, Canvas Center)
         Text:
         - Window: macOS titlebar window, 1440×900 pt; content background #FAFBFD.
         - Layout: three vertical scroll panes with draggable borders (gutters 6 pt):
-          • Left Pane (scrollable): list scaffold. Default width ≈ 22% (min 160 pt).
-          • Center Pane: contains the “Grid” canvas instrument (fills center).
+          • Left Pane (scrollable): “Fountain Editor” (A4 typewriter) at top, then list scaffold. Default width ≈ 22% (min 160 pt).
+          • Center Pane: “Grid” canvas instrument (fills center).
           • Right Pane (scrollable): monitor/log scaffold. Default width ≈ 26% (min 160 pt).
           • Gutters draggable horizontally; widths clamp to ≥160 pt; proportions persist during resize.
         - Canvas (center): Baseline grid instrument with viewport‑anchored grid (left contact at view.x=0, top at view.y=0), minor=24 pt, majorEvery=5, axes at doc origin.
+        - Fountain Editor (left): A4 typewriter (Courier Prime 12pt, 1.10 line height, tabs→4 spaces, hard line breaks). Initial view shows an A4 empty page placed on a clean desktop. Typing sends `text.set {text,cursor}` and emits `text.parsed` with lines/chars/wrapColumn/page.
         - MIDI overlay: monitor/controls fade after inactivity; wake on MIDI activity.
         - Drag & Drop: items can be dragged between left/right panes; center accepts drops and logs events (no reflow).
         - Property Exchange (PE): layout.left.frac, layout.right.frac (0..1) adjust pane fractions and emit `ui.layout.changed`. Base PE: grid.minor, grid.majorEvery, zoom, translation.x, translation.y.

@@ -1,0 +1,40 @@
+name: Self-Heal Swift Build/Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-test:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up module cache
+        run: |
+          mkdir -p .fountain/clang-module-cache
+          echo "CLANG_MODULE_CACHE_PATH=$PWD/.fountain/clang-module-cache" >> $GITHUB_ENV
+
+      - name: Build workspace (root)
+        run: |
+          swift build -c debug
+
+      - name: Build baseline app
+        run: |
+          swift build --package-path Packages/FountainApps -c debug --product baseline-patchbay
+
+      - name: Run full tests (FountainApps)
+        run: |
+          swift test --package-path Packages/FountainApps -c debug
+
+      - name: Upload UMP logs (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ump-logs
+          path: .fountain/corpus/ump
+          if-no-files-found: ignore

@@ -13,7 +13,8 @@
     "mrts:pan": "npm run build:mrts && node ./scripts/mrts-pan.js",
     "mrts:zoom": "npm run build:mrts && node ./scripts/mrts-zoom.js",
     "mrts:run": "npm run build:mrts && node ./scripts/mrts-run.js",
-    "mrts:assert": "npm run build:mrts && node ./scripts/mrts-assert.js"
+    "mrts:assert": "npm run build:mrts && node ./scripts/mrts-assert.js",
+    "mrts:editor": "npm run build:mrts && node ./scripts/mrts-editor.js"
   },
   "dependencies": {
     "react": "18.3.1",

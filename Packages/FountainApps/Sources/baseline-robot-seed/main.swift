@@ -59,7 +59,8 @@ struct BaselineRobotSeed {
                 "ui.layout.changed emits on gutter/PE",
                 "ui.dnd.begin/ui.dnd.drop during DnD",
                 "leftGridContactPinnedAt0",
-                "majorSpacingPixels = minor*majorEvery*zoom"
+                "majorSpacingPixels = minor*majorEvery*zoom",
+                "editor.textParsedEmitted"
             ]
         ]
         if let data = try? JSONSerialization.data(withJSONObject: facts, options: [.prettyPrinted]), let json = String(data: data, encoding: .utf8) {
@@ -70,9 +71,9 @@ struct BaselineRobotSeed {
 
     static func teatroPrompt() -> String {
         return """
-        Scene: Baseline‑PatchBay — MRTS: Three‑Pane Layout + Grid Invariants
+        Scene: Baseline‑PatchBay — MRTS: Three‑Pane Layout + Grid + Editor
         Text:
-        - Objective: execute baseline robot tests against the three‑pane Baseline‑PatchBay (grid center) validating layout, DnD, and grid invariants.
+        - Objective: execute baseline robot tests against the three‑pane Baseline‑PatchBay (canvas+editor center) validating layout, DnD, grid invariants, and editor parsing.
         - Runner: `Scripts/ci/baseline-robot.sh` builds `baseline-patchbay` and runs a focused suite.
         - Steps:
           • Set `layout.left.frac=0.25`, `layout.right.frac=0.25` via PE; expect `ui.layout.changed`.
@@ -83,6 +84,7 @@ struct BaselineRobotSeed {
           • Drag an item Right→Left; assert counts (+1/−1) and `ui.dnd.begin/drop`.
           • Drop an item to Center; assert `ui.dnd.drop` with `target=center`.
           • Validate grid contact/spacing and anchor‑stable zoom drift ≤ 1 px.
+          • Editor: `text.clear`; then `text.set` with 5‑line sample; expect `text.parsed` with lines=5 and wrapColumn ∈ [58..62]; apply `agent.suggest` + `suggestion.apply`; expect updated `text.parsed`.
 
         Instruments (loopback in tests):
         - Canvas: { manufacturer: Fountain, product: GridDev, instanceId: grid-dev-1, displayName: "Grid Dev" }
@@ -91,7 +93,7 @@ struct BaselineRobotSeed {
         Numeric invariants:
         - Pane mins: left/right/center ≥ 160 pt; gutters 6 pt; fractions clamp [0.05, 0.9].
         - Grid: left contact pinned; minor px = grid.minor × zoom; major px = grid.minor × majorEvery × zoom.
-        - Monitor emits `ui.zoom(.debug)`/`ui.pan(.debug)`, `ui.layout.changed`, and `ui.dnd.begin/drop`.
+        - Monitor emits `ui.zoom(.debug)`/`ui.pan(.debug)`, `ui.layout.changed`, `ui.dnd.begin/drop`, and editor `text.parsed`.
 
         Ops/PE (reference):
         - Vendor JSON: `ui.panBy {dx.view, dy.view}`, `ui.zoomAround {anchor.view.x, anchor.view.y, magnification}`, `canvas.reset`.

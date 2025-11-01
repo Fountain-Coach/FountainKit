@@ -144,7 +144,18 @@ final class HeadlessRegistry {
     func register(_ inst: any HeadlessInstrument) { byName[inst.displayName] = inst }
     func unregister(_ name: String) { byName.removeValue(forKey: name) }
     func list() -> [String] { Array(byName.keys).sorted() }
-    func resolve(_ name: String?) -> (any HeadlessInstrument)? { guard let name else { return nil }; return byName[name] }
+    func resolve(_ name: String?) -> (any HeadlessInstrument)? {
+        guard let name else { return nil }
+        // Exact match first
+        if let inst = byName[name] { return inst }
+        // Case-insensitive match
+        if let inst = byName.first(where: { $0.key.caseInsensitiveCompare(name) == .orderedSame })?.value { return inst }
+        // Common synonyms for canvas
+        if name == "PatchBay Canvas" || name == "Canvas" || name == "Grid" {
+            if let inst = byName["Headless Canvas"] { return inst }
+        }
+        return nil
+    }
 }
 
 final class CanvasHeadlessInstrument: HeadlessInstrument {
@@ -351,6 +362,8 @@ final class FountainEditorHeadlessInstrument: HeadlessInstrument {
     init(displayName: String = "Fountain Editor") { self.displayName = displayName }
 
     func handleVendor(topic: String, data: [String : Any]) -> String? {
+        // Trace editor vendor handling for diagnostics
+        SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"debug.editor.handle\",\"topic\":\"\(topic)\"}")
         switch topic {
         case "text.set":
             let t = (data["text"] as? String) ?? ""
@@ -567,11 +580,22 @@ final class FountainEditorHeadlessInstrument: HeadlessInstrument {
         ]
         if let data = try? JSONSerialization.data(withJSONObject: obj), let s = String(data: data, encoding: .utf8) {
             // Also post monitor events: suggestion/memory/awareness events implicit via counts
-            if memoryUpdated { SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"memory.slots.updated\"}") }
-            if awarenessSynced { SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"awareness.synced\",\"corpusId\":\"\(corpusId)\"}") }
+            if memoryUpdated { SimpleMIDISender.recorder.recordSnapshot(vendorJSON: #"{"type":"memory.slots.updated"}"#) }
+            if awarenessSynced { SimpleMIDISender.recorder.recordSnapshot(vendorJSON: #"{"type":"awareness.synced","corpusId":"\#(corpusId)"}"#) }
             // Post a text.parsed monitor event (used by MRTS to assert counts)
-            let meta = "\\\"lines\\\":\(lines),\\\"chars\\\":\(chars),\\\"wrapColumn\\\":\(wrapCol),\\\"page\\\":{\\\"size\\\":\\\"\(pageSize)\\\",\\\"margins\\\":{\\\"top\\\":\(marginTopMM),\\\"left\\\":\(marginLeftMM),\\\"right\\\":\(marginRightMM),\\\"bottom\\\":\(marginBottomMM)}}"
-            SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"text.parsed\",\(meta)}")
+            let vendObj: [String: Any] = [
+                "type": "text.parsed",
+                "lines": lines,
+                "chars": chars,
+                "wrapColumn": wrapCol,
+                "page": [
+                    "size": pageSize,
+                    "margins": ["top": marginTopMM, "left": marginLeftMM, "right": marginRightMM, "bottom": marginBottomMM]
+                ]
+            ]
+            if let vdata = try? JSONSerialization.data(withJSONObject: vendObj), let vs = String(data: vdata, encoding: .utf8) {
+                SimpleMIDISender.recorder.recordSnapshot(vendorJSON: vs)
+            }
             return s
         }
         return nil
@@ -1033,19 +1057,30 @@ final class SimpleMIDISender {
     }
 
     static func send(words: [UInt32], toDisplayName name: String?) async throws {
+        // Always trace basic delivery
+        recorder.recordSnapshot(vendorJSON: "{\"type\":\"debug.ump.send\",\"target\":\"\(name ?? "")\",\"words\":\(words.count)}")
         // If a headless instrument is registered under the target name, interpret UMP locally
-        if let name, let inst = HeadlessRegistry.shared.resolve(name) {
+        if let targetName = name, let inst = HeadlessRegistry.shared.resolve(targetName) {
             if let vj = Self.decodeVendorJSON(words) {
+                // Debug trace for vendor delivery path
+                recorder.recordSnapshot(vendorJSON: "{\"type\":\"debug.vendor\",\"target\":\"\(targetName)\"}")
                 if let body = try? JSONSerialization.jsonObject(with: Data(vj.utf8)) as? [String: Any],
                    let topic = body["topic"] as? String, let data = body["data"] as? [String: Any] {
-                    if let snap = inst.handleVendor(topic: topic, data: data) { recorder.recordSnapshot(peJSON: snap) }
+                    let snap = inst.handleVendor(topic: topic, data: data)
+                    recorder.recordSnapshot(vendorJSON: "{\"type\":\"debug.handleVendor\",\"target\":\"\(targetName)\",\"topic\":\"\(topic)\",\"hasSnapshot\":\(snap != nil)}")
+                    if let snap { recorder.recordSnapshot(peJSON: snap) }
                 }
                 return
             }
             if let pj = Self.decodePESetJSON(words) {
-                if let snap = inst.handlePESet(properties: pj) { recorder.recordSnapshot(peJSON: snap) }
+                let snap = inst.handlePESet(properties: pj)
+                recorder.recordSnapshot(vendorJSON: "{\"type\":\"debug.handlePESet\",\"target\":\"\(targetName)\",\"hasSnapshot\":\(snap != nil)}")
+                if let snap { recorder.recordSnapshot(peJSON: snap) }
                 return
             }
+        } else if let targetName = name, Self.decodeVendorJSON(words) != nil || Self.decodePESetJSON(words) != nil {
+            // Target not resolved; trace and fall through to backend send to still capture raw UMP
+            recorder.recordSnapshot(vendorJSON: "{\"type\":\"debug.noheadless\",\"target\":\"\(targetName)\"}")
         }
         #if canImport(CoreMIDI)
         if backend == "coremidi" {

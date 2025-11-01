@@ -9,8 +9,12 @@ BUILD=1
 for a in "$@"; do [[ "$a" == "--no-build" ]] && BUILD=0; done
 
 export LAUNCHER_SIGNATURE=${LAUNCHER_SIGNATURE:-B86D7CEE-24C4-4C4C-A107-8D0542D1965B}
+# Bypass signature checks by default for local dev
+export FOUNTAIN_SKIP_LAUNCHER_SIG=${FOUNTAIN_SKIP_LAUNCHER_SIG:-1}
+# Ensure the mac app can find the FountainStore on disk regardless of its process cwd
+export FOUNTAINSTORE_DIR=${FOUNTAINSTORE_DIR:-$ROOT_DIR/.fountain/store}
+export APP_TITLE=${APP_TITLE:-Baseline‑PatchBay}
 if (( BUILD )); then
   swift build --package-path "$ROOT_DIR/Packages/FountainApps" -c debug --product baseline-patchbay >/dev/null
 fi
 swift run --package-path "$ROOT_DIR/Packages/FountainApps" -c debug baseline-patchbay
-

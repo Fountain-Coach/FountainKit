@@ -10,6 +10,9 @@ What
 Why
 - Provide a portable, deterministic frontend for publishing and demos without requiring the macOS app runtime.
 
+Prompt‑first rule
+- This web mirror follows the same Teatro prompt as the mac baseline. Always fetch the current Teatro prompt from FountainStore first; propose prompt edits; then implement; seed and print prompts on boot; keep facts in sync.
+
 How
 - Start PatchBay service (REST): `swift run --package-path Packages/FountainApps patchbay-service-server`.
 - Start MIDI service (UMP bridge): `Scripts/apps/midi-service`.

@@ -163,15 +163,7 @@ let package = Package(
             name: "patchbay-test-scene-seed",
             dependencies: [
                 .product(name: "FountainStoreClient", package: "FountainCore"),
-                .product(name: "LauncherSignature", package: "FountainCore")
-            ],
-            path: "Sources/patchbay-test-scene-seed"
-        ),
-        .executableTarget(
-            name: "patchbay-test-scene-seed",
-            dependencies: [
                 .product(name: "LauncherSignature", package: "FountainCore"),
-                .product(name: "FountainStoreClient", package: "FountainCore")
             ],
             path: "Sources/patchbay-test-scene-seed"
         ),
@@ -624,6 +616,11 @@ let package = Package(
                 .product(name: "LauncherSignature", package: "FountainCore")
             ],
             path: "Sources/memchat-save-plan"
+        ),
+        .executableTarget(
+            name: "midi-service-headless-tests",
+            dependencies: [],
+            path: "Sources/midi-service-headless-tests"
         ),
         .executableTarget(
             name: "memchat-save-reply",

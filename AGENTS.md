@@ -56,6 +56,11 @@ What
   - `facts` → structured JSON (instrument identities, PE fields, vendor ops, robot subset, invariants)
 - The prompt used on this run is printed during boot (no modal UI required).
 
+Rule of conduct (prompt‑first)
+- Always fetch the current Teatro prompt from FountainStore before proposing or implementing any change. Treat the corpus as the canonical memory.
+- Propose prompt edits (Creation and MRTS) first, review, then implement strictly according to the updated prompt. Seed and print the prompt on boot; keep facts synchronized.
+- Keep mac and web incarnations consistent with the same prompt, and record any platform constraints explicitly in the prompt (e.g., web: three scroll panes, no fixed bottom).
+
 Why
 - Provenance and determinism across builds; agents and humans can diff and reason about behavior.
 

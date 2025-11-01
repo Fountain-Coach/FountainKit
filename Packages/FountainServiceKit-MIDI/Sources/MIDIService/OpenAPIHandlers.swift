@@ -54,8 +54,45 @@ struct MIDIServiceHandlers: APIProtocol {
             words = j.words.map { UInt32($0) }
             displayName = j.target.displayName
         }
+        // stderr debug
+        let dbg = "[midi-service] sendUMP target=\(displayName ?? "") words=\(words.count)\n"
+        FileHandle.standardError.write(Data(dbg.utf8))
+        // Trace acceptance at API layer for diagnostics
+        await MainActor.run {
+            SimpleMIDISender.recorder.recordSnapshot(
+                vendorJSON: #"{"type":"debug.ump.accepted","target":"\#(displayName ?? "")","words":\#(words.count)}"#
+            )
+        }
+        // Decode probe: did vendor JSON decode?
+        var vendorSeen = false
+        await MainActor.run {
+            vendorSeen = (SimpleMIDISender.decodeVendorJSON(words) != nil)
+            SimpleMIDISender.recorder.recordSnapshot(
+                vendorJSON: #"{"type":"debug.vendor.seen","target":"\#(displayName ?? "")","seen":\#(vendorSeen)}"#
+            )
+        }
+        // Fast-path: if target is a registered headless instrument and payload is vendor JSON, handle directly
+        var handledDirect = false
+        await MainActor.run {
+            if let name = displayName, let inst = HeadlessRegistry.shared.resolve(name) {
+                if let vj = SimpleMIDISender.decodeVendorJSON(words),
+                   let body = try? JSONSerialization.jsonObject(with: Data(vj.utf8)) as? [String: Any],
+                   let topic = body["topic"] as? String, let data = body["data"] as? [String: Any] {
+                    let snap = inst.handleVendor(topic: topic, data: data)
+                    SimpleMIDISender.recorder.recordSnapshot(vendorJSON: #"{"type":"debug.api.headless","target":"\#(name)","topic":"\#(topic)","hasSnapshot":\#(snap != nil)}"#)
+                    if let snap { SimpleMIDISender.recorder.recordSnapshot(peJSON: snap) }
+                    handledDirect = true
+                }
+            }
+        }
+        if handledDirect { return .accepted }
         do {
             try await SimpleMIDISender.send(words: words, toDisplayName: displayName)
+            await MainActor.run {
+                SimpleMIDISender.recorder.recordSnapshot(
+                    vendorJSON: #"{"type":"debug.ump.sent","target":"\#(displayName ?? "")","words":\#(words.count)}"#
+                )
+            }
             return .accepted
         } catch {
             return .accepted // keep accepted to avoid breaking clients; log in server

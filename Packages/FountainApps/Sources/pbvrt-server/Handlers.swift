@@ -1,6 +1,9 @@
 import Foundation
 import OpenAPIRuntime
 import FountainStoreClient
+import Vision
+import AVFoundation
+import Accelerate
 
 // PB‑VRT core for persistence
 final class PBVRTCore: @unchecked Sendable {
@@ -228,6 +231,87 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         let ms = Date().timeIntervalSince(t0) * 1000
         let out = Components.Schemas.EmbeddingResult(metricName: .featureprint_distance, value: Float(dist), backend: .featurePrint, model: "Vision.FeaturePrint", durationMs: Float(ms))
         return .ok(.init(body: .json(out)))
+    }
+
+    // MARK: - Vision probes (stubs/minimal)
+    func compareSaliencyWeighted(_ input: Operations.compareSaliencyWeighted.Input) async throws -> Operations.compareSaliencyWeighted.Output {
+        // Minimal stub: return empty metrics; can be expanded to run VNSaliency
+        let res = Components.Schemas.SaliencyCompareResult(
+            weighted_l1: nil,
+            weighted_ssim: nil,
+            artifacts: .init(baselineSaliency: nil, candidateSaliency: nil, weightedDelta: nil)
+        )
+        return .ok(.init(body: .json(res)))
+    }
+
+    func alignImages(_ input: Operations.alignImages.Input) async throws -> Operations.alignImages.Output {
+        // Minimal stub: identity transform; post-align drift 0
+        let t = Components.Schemas.Transform2D(dx: 0, dy: 0, scale: 1, rotationDeg: 0, homography: nil)
+        let res = Components.Schemas.AlignResult(transform: t, postAlignDriftPx: 0, artifacts: .init(alignedCandidatePng: nil))
+        return .ok(.init(body: .json(res)))
+    }
+
+    func ocrRecognize(_ input: Operations.ocrRecognize.Input) async throws -> Operations.ocrRecognize.Output {
+        // Minimal OCR summary without running Vision OCR
+        let res = Components.Schemas.OCRResult(lineCount: 0, wrapColumnMedian: nil, lines: [])
+        return .ok(.init(body: .json(res)))
+    }
+
+    func detectContours(_ input: Operations.detectContours.Input) async throws -> Operations.detectContours.Output {
+        let res = Components.Schemas.ContoursResult(spacingMeanPx: nil, spacingStdPx: nil, count: 0, artifacts: .init(contoursImage: nil))
+        return .ok(.init(body: .json(res)))
+    }
+
+    func detectBarcodes(_ input: Operations.detectBarcodes.Input) async throws -> Operations.detectBarcodes.Output {
+        let res = Components.Schemas.BarcodesResult(payloads: [], types: [])
+        return .ok(.init(body: .json(res)))
+    }
+
+    // MARK: - Audio probes (stubs/minimal)
+    func compareAudioEmbedding(_ input: Operations.compareAudioEmbedding.Input) async throws -> Operations.compareAudioEmbedding.Output {
+        let out = Components.Schemas.AudioEmbeddingResult(metricName: .audio_embedding_cosine, value: 0, backend: .yamnet, model: "none", durationMs: 0)
+        return .ok(.init(body: .json(out)))
+    }
+
+    func compareSpectrogram(_ input: Operations.compareSpectrogram.Input) async throws -> Operations.compareSpectrogram.Output {
+        let res = Components.Schemas.SpectrogramCompareResult(l2: 0, lsd_db: nil, ssim: nil, artifacts: .init(baselineSpecPng: nil, candidateSpecPng: nil, deltaSpecPng: nil))
+        return .ok(.init(body: .json(res)))
+    }
+
+    func detectOnsets(_ input: Operations.detectOnsets.Input) async throws -> Operations.detectOnsets.Output {
+        let res = Components.Schemas.OnsetsResult(onsetsSec: [], tempoBpm: nil)
+        return .ok(.init(body: .json(res)))
+    }
+
+    func analyzePitch(_ input: Operations.analyzePitch.Input) async throws -> Operations.analyzePitch.Output {
+        let res = Components.Schemas.PitchResult(f0Hz: [], centsErrorMean: nil)
+        return .ok(.init(body: .json(res)))
+    }
+
+    func analyzeLoudness(_ input: Operations.analyzeLoudness.Input) async throws -> Operations.analyzeLoudness.Output {
+        let res = Components.Schemas.LoudnessResult(rms: [], meanDb: nil, maxDb: nil)
+        return .ok(.init(body: .json(res)))
+    }
+
+    func analyzeAlignment(_ input: Operations.analyzeAlignment.Input) async throws -> Operations.analyzeAlignment.Output {
+        let res = Components.Schemas.AlignmentResult(offsetMs: 0, driftMs: nil)
+        return .ok(.init(body: .json(res)))
+    }
+
+    func transcribeAudio(_ input: Operations.transcribeAudio.Input) async throws -> Operations.transcribeAudio.Output {
+        var lang = "en-US"
+        if case let .multipartForm(form) = input.body {
+            for try await part in form {
+                switch part {
+                case .language(let w):
+                    if let s = try? String(decoding: await collectBody(w.payload.body), as: UTF8.self) { lang = s.trimmingCharacters(in: .whitespacesAndNewlines) }
+                case .wav: break
+                case .undocumented: break
+                }
+            }
+        }
+        let res = Components.Schemas.TranscriptResult(transcript: "", language: lang)
+        return .ok(.init(body: .json(res)))
     }
     // Helpers
     private func collectBody(_ body: OpenAPIRuntime.HTTPBody) async throws -> Data {

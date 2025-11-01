@@ -42,6 +42,7 @@ For a repository‑wide index of OpenAPI coverage and adoption status, see [../O
 | AudioTalk Service | 0.1.0 | Contexter alias Benedikt Eickhoff | [v1/audiotalk.yml](v1/audiotalk.yml) |
 | Instrument Sketch Service (PatchBay) | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/patchbay.yml](v1/patchbay.yml) |
 | MIDI Service | 0.1.0 | Contexter alias Benedikt Eickhoff | [v1/midi-service.yml](v1/midi-service.yml) |
+| Prompt‑Bound VRT API | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/pb-vrt.yml](v1/pb-vrt.yml) |
 
 ## Coverage Status
 

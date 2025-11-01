@@ -1,0 +1,325 @@
+openapi: 3.1.0
+info:
+  title: Prompt‑Bound Visual Regression Testing API (PB‑VRT)
+  version: "1.0.0"
+  summary: API for prompt-first baselines, probe-backed comparisons, and drift reporting for MIDI 2.0–driven GUIs.
+  description: |
+    This API exposes prompt registration, baseline creation, and comparison
+    endpoints for PB‑VRT. Images are exchanged via multipart/form-data; MIDI 2.0
+    sequences are passed as UMP bytes (base64) or JSON events.
+
+servers:
+  - url: http://localhost:8010/pb-vrt
+    description: Local development
+
+tags:
+  - name: Prompts
+  - name: Baselines
+  - name: Compare
+  - name: Probes
+
+paths:
+  /prompts:
+    post:
+      tags: [Prompts]
+      operationId: registerPrompt
+      summary: Register a prompt (immutable) and return its canonical hash.
+      x-fountain.visibility: public
+      x-fountain.reason: persist canonical prompt text driving baselines
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Prompt'
+            examples:
+              login:
+                value:
+                  id: "layout-login-screen"
+                  text: "Render the login form with email, password, and a disabled submit button."
+                  tags: ["UI", "auth", "form"]
+                  modality: "visual"
+      responses:
+        '201':
+          description: Prompt registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromptRef'
+        '409':
+          description: Prompt already exists (id/hash conflict)
+
+  /prompts/{id}:
+    get:
+      tags: [Prompts]
+      operationId: getPrompt
+      summary: Fetch a prompt by id
+      x-fountain.visibility: public
+      x-fountain.reason: retrieve canonical prompt details
+      x-fountain.allow-as-tool: true
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Prompt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prompt'
+        '404':
+          description: Not found
+
+  /baselines:
+    post:
+      tags: [Baselines]
+      operationId: createBaseline
+      summary: Create a baseline from a prompt + MIDI sequence + viewport; returns baseline id and artifact URIs.
+      x-fountain.visibility: public
+      x-fountain.reason: create prompt-bound visual regression baseline
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BaselineInit'
+      responses:
+        '201':
+          description: Baseline created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BaselineRef'
+
+  /baselines/{id}:
+    get:
+      tags: [Baselines]
+      operationId: getBaseline
+      summary: Get baseline metadata (artifact links, probe versions, hashes)
+      x-fountain.visibility: public
+      x-fountain.reason: fetch baseline metadata and artifact locations
+      x-fountain.allow-as-tool: true
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Baseline metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Baseline'
+        '404':
+          description: Not found
+
+  /compare:
+    post:
+      tags: [Compare]
+      operationId: compareCandidate
+      summary: Compare a newly rendered candidate against a stored baseline (pixel, SSIM, embeddings, prompt drift).
+      x-fountain.visibility: public
+      x-fountain.reason: report drift metrics for candidate image vs baseline
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [baselineId, candidatePng]
+              properties:
+                baselineId:
+                  type: string
+                candidatePng:
+                  type: string
+                  format: binary
+                embeddingBackend:
+                  type: string
+                  enum: [featurePrint, coreML]
+                  default: featurePrint
+      responses:
+        '200':
+          description: Drift report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriftReport'
+
+  /probes/embedding/compare:
+    post:
+      tags: [Probes]
+      operationId: compareEmbeddingAdhoc
+      summary: Compare two images via EmbeddingProbe without a baseline (ad‑hoc).
+      x-fountain.visibility: public
+      x-fountain.reason: ad-hoc embedding distance for diagnostics
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [baselinePng, candidatePng]
+              properties:
+                baselinePng: { type: string, format: binary }
+                candidatePng: { type: string, format: binary }
+                backend:
+                  type: string
+                  enum: [featurePrint, coreML]
+                  default: featurePrint
+      responses:
+        '200':
+          description: Embedding comparison result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmbeddingResult'
+
+components:
+  schemas:
+    Prompt:
+      type: object
+      required: [id, text, modality]
+      properties:
+        id: { type: string }
+        text: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        modality:
+          type: string
+          enum: [visual]
+        embedding_model:
+          type: string
+          description: Optional text embedding model id (for prompt‑visual drift)
+        hash:
+          type: string
+          description: Canonical content hash (sha256:<hex>)
+    PromptRef:
+      type: object
+      required: [id, hash]
+      properties:
+        id: { type: string }
+        hash: { type: string }
+        uri: { type: string }
+    Viewport:
+      type: object
+      required: [width, height, scale]
+      properties:
+        width: { type: integer }
+        height: { type: integer }
+        scale: { type: number, format: float }
+    UMPPacket:
+      type: object
+      description: MIDI 2.0 Universal MIDI Packet (packed 32‑bit words as hex)
+      required: [word0]
+      properties:
+        word0: { type: string, pattern: '^[0-9A-Fa-f]{8}$' }
+        word1: { type: string, pattern: '^[0-9A-Fa-f]{8}$' }
+        word2: { type: string, pattern: '^[0-9A-Fa-f]{8}$' }
+        word3: { type: string, pattern: '^[0-9A-Fa-f]{8}$' }
+    MIDISequence:
+      type: object
+      required: [sequenceID, packets]
+      properties:
+        sequenceID: { type: string }
+        packets:
+          type: array
+          items: { $ref: '#/components/schemas/UMPPacket' }
+        channel: { type: integer, minimum: 1, maximum: 16 }
+        deviceName: { type: string }
+        hash:
+          type: string
+          description: Hash over packet bytes (sha256:<hex>)
+    BaselineInit:
+      type: object
+      required: [promptId, viewport, midiSequence]
+      properties:
+        promptId: { type: string }
+        viewport: { $ref: '#/components/schemas/Viewport' }
+        delayBeforeCapture:
+          type: number
+          format: float
+          default: 0.25
+        midiSequence: { $ref: '#/components/schemas/MIDISequence' }
+        rendererVersion: { type: string }
+        probes:
+          type: object
+          properties:
+            embeddingBackend:
+              type: string
+              enum: [featurePrint, coreML]
+              default: featurePrint
+    BaselineRef:
+      type: object
+      required: [baselineId, uri]
+      properties:
+        baselineId: { type: string }
+        uri: { type: string }
+    Baseline:
+      type: object
+      required: [baselineId, promptRef, viewport, rendererVersion, artifacts]
+      properties:
+        baselineId: { type: string }
+        promptRef: { $ref: '#/components/schemas/PromptRef' }
+        viewport: { $ref: '#/components/schemas/Viewport' }
+        rendererVersion: { type: string }
+        midiSequence: { $ref: '#/components/schemas/MIDISequence' }
+        probes:
+          type: object
+          properties:
+            embeddingBackend:
+              type: string
+              enum: [featurePrint, coreML]
+        artifacts:
+          type: object
+          properties:
+            baselinePng: { type: string }
+            embeddingJson: { type: string }
+            midiUmp: { type: string }
+    EmbeddingResult:
+      type: object
+      required: [metricName, value, backend, model, durationMs]
+      properties:
+        metricName:
+          type: string
+          enum: [featureprint_distance, clip_cosine]
+        value: { type: number, format: float }
+        backend:
+          type: string
+          enum: [featurePrint, coreML]
+        model: { type: string }
+        durationMs: { type: number, format: float }
+    DriftReport:
+      type: object
+      required: [baselineId, metrics, pass]
+      properties:
+        baselineId: { type: string }
+        metrics:
+          type: object
+          properties:
+            pixel_l1: { type: number, format: float }
+            ssim: { type: number, format: float }
+            featureprint_distance: { type: number, format: float }
+            clip_cosine: { type: number, format: float }
+            prompt_cosine: { type: number, format: float }
+        pass: { type: boolean }
+        artifacts:
+          type: object
+          properties:
+            candidatePng: { type: string }
+            deltaPng: { type: string }
+        timestamps:
+          type: object
+          properties:
+            baseline: { type: string, format: date-time }
+            run: { type: string, format: date-time }
+
+  securitySchemes: {}
+

@@ -56,10 +56,10 @@ struct PatchbayDocsSeed {
     - Tracking (temporal): VNTrackObjectRequest across frames to measure jitter.
     - Barcodes: VNDetectBarcodesRequest; decode run IDs.
 
-    Proposed routes: `/probes/saliency`, `/probes/align`, `/probes/ocr/recognize`, `/probes/contours`, `/probes/barcodes`.
+    Proposed routes: `/probes/saliency/compare`, `/probes/align`, `/probes/ocr/recognize`, `/probes/contours`, `/probes/barcodes`.
 
     ## Audio Probes
-    - Embedding distance: Core ML/YAMNet embeddings via SoundAnalysis or VNCoreMLRequest; cosine distance; artifacts: baseline-embed.json, candidate-embed.json.
+    - Embedding distance: Core ML embeddings (YAMNet or custom via CoreMLKit) → cosine distance; artifacts: baseline-embed.json, candidate-embed.json.
     - Spectrogram compare: Mel/STFT via Accelerate/vDSP; metrics: L2, log‑spectral distance (dB), SSIM‑over‑mel; artifacts: baseline-spec.png, candidate-spec.png, delta-spec.png.
     - Onsets/tempo: onset times + tempo; metrics: tempo drift, onset F1 vs reference.
     - Pitch/intonation: f0 contour → cents error vs MIDI; artifacts: f0.csv, overlay.png.
@@ -69,18 +69,44 @@ struct PatchbayDocsSeed {
 
     Proposed routes: `/probes/audio/embedding/compare`, `/probes/audio/spectrogram/compare`, `/probes/audio/onsets`, `/probes/audio/pitch`, `/probes/audio/loudness`, `/probes/audio/alignment`, `/probes/audio/transcribe`.
 
+    ## Core ML Integration (Audio)
+    - Library: CoreMLKit handles load/compile/predict for `.mlmodel`/`.mlmodelc` (see `Packages/FountainApps/Sources/CoreMLKit/*`).
+    - Models:
+      - YAMNet (embedding/classification): fetch via `coreml-fetch yam-net --out-dir Public/Models` then convert `YAMNet.tflite` → `YAMNet.mlmodel` with `Scripts/apps/coreml-convert.sh`.
+      - CREPE (pitch) / BasicPitch (poly): convert with the same script (notes in `coreml-fetch notes`).
+    - Server config:
+      - Env: `PBVRT_AUDIO_EMBED_MODEL` → path to `.mlmodel` (or compiled `.mlmodelc`).
+      - Backend selection per request: `/probes/audio/embedding/compare` `backend: yamnet|coreml`.
+      - Compute units: default `.all`; override via CoreMLKit when loading.
+    - Implementation sketch:
+      1) Load model (CoreMLKit.loadModel).
+      2) Build input arrays from WAV (mono/stereo) with `VisionAudioHelpers.audioSamplesToMultiArray`.
+      3) Run predict, extract embedding vector; compute cosine; return `AudioEmbeddingResult`.
+
+    ## Core ML Integration (Vision — optional)
+    - Current default: Apple Vision FeaturePrint for image embeddings.
+    - Optional: add a CLIP‑vision Core ML encoder and compute prompt→image or image→image similarity via VNCoreMLRequest.
+
+    ## Tests & Fixtures
+    - Keep fixtures tiny: short WAVs and small PNGs for perf and deterministic CI.
+    - Unit: identical‑file self‑consistency (distance ≈ 0), predictable synthetic shifts (time‑stretch, pitch shift, blur).
+    - Integration: end‑to‑end probe routes write artifacts and summaries; verify presence and numeric thresholds.
+    - Storage: artifacts under `.fountain/artifacts/pb-vrt/<id>/audio|vision/*`; summaries as `pbvrt.audio.*` / `pbvrt.vision.*` segments.
+
     ## Persistence
     - Corpus page: `pbvrt:baseline:<id>` → `pbvrt.baseline` (JSON) with artifact URIs.
     - Vision probe summaries: `pbvrt.vision.*` segments; Audio probe summaries: `pbvrt.audio.*` segments.
     - Files: `.fountain/artifacts/pb-vrt/<id>/*`.
 
     ## Integration
-    - /compare composes metrics: saliency‑weighted + post‑align drift, OCR invariants, audio spectral/embedding distances.
+    - `/compare` composes metrics: saliency‑weighted + post‑align drift, OCR invariants, audio spectral/embedding distances.
     - Tooling: all routes carry `x-fountain.allow-as-tool: true` and can be registered into ToolsFactory.
 
-    ## Next Steps
-    - Extend `v1/pb-vrt.yml` with the listed routes; implement in `pbvrt-server` and add focused tests with fixtures.
+    ## Phases & Acceptance
+    - Phase 1: Vision align + OCR; Audio embed + spectrogram.
+    - Phase 2: Onsets/tempo, pitch/intonation; barcode decoding.
+    - Phase 3: Loudness, alignment; optional ASR and CLIP vision.
+    - Pass criteria: thresholds documented next to routes; CI attaches artifacts on failure.
 
     """
 }
-

@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { getCanvas, panBy, zoomSet, resetTransform } from '../ws/patchbay'
 import { listEndpoints, sendVendorJSON, peSetProperties } from '../ws/midi'
 import { drawGrid } from './Grid'
+import FountainEditor from '../editor/FountainEditor'
+import GraphOverlay from './GraphOverlay'
 
 export default function App() {
   // Layout state (three panes)
@@ -35,12 +37,22 @@ export default function App() {
       const relX = e.clientX - rect.left
       if (dragState.current.which === 'left') {
         const newLeft = Math.max(MIN_PX, Math.min(containerW - MIN_PX * 2 - GUTTER * 2, relX))
-        setLeftFrac(newLeft / containerW)
+        const lf = newLeft / containerW
+        setLeftFrac(lf)
+        setLog(l => [`ui.layout.changed left.frac=${lf.toFixed(3)} right.frac=${rightFrac.toFixed(3)}`, ...l].slice(0, 6))
+        if (driveMode === 'midi') {
+          sendVendorJSON('ui.layout.changed', { 'left.frac': lf, 'right.frac': rightFrac }, target).catch(()=>{})
+          if (syncPE) { peSetProperties({ 'layout.left.frac': lf, 'layout.right.frac': rightFrac }, target).catch(()=>{}) }
+        }
       } else {
-        // right gutter position is leftW + GUTTER + centerW
-        const rightEdge = Math.max(MIN_PX, Math.min(containerW - MIN_PX, containerW - relX))
-        const newRight = Math.max(MIN_PX, Math.min(containerW - leftW - MIN_PX - GUTTER * 2, rightEdge))
-        setRightFrac(newRight / containerW)
+        const newRight = Math.max(MIN_PX, Math.min(containerW - leftW - MIN_PX - GUTTER * 2, containerW - GUTTER - relX))
+        const rf = newRight / containerW
+        setRightFrac(rf)
+        setLog(l => [`ui.layout.changed left.frac=${leftFrac.toFixed(3)} right.frac=${rf.toFixed(3)}`, ...l].slice(0, 6))
+        if (driveMode === 'midi') {
+          sendVendorJSON('ui.layout.changed', { 'left.frac': leftFrac, 'right.frac': rf }, target).catch(()=>{})
+          if (syncPE) { peSetProperties({ 'layout.left.frac': leftFrac, 'layout.right.frac': rf }, target).catch(()=>{}) }
+        }
       }
     }
     const onUp = () => { if (dragState.current) dragState.current.which = null }
@@ -52,7 +64,10 @@ export default function App() {
   // Pane items (DnD) — mirror baseline behaviors
   const [leftItems, setLeftItems] = useState<string[]>(Array.from({ length: 12 }, (_, i) => `Item #${i}`))
   const [rightItems, setRightItems] = useState<string[]>(Array.from({ length: 6 }, (_, i) => `Log #${i}`))
-  const onDragStart = (id: string) => (e: React.DragEvent) => { e.dataTransfer.setData('text/plain', id) }
+  const onDragStart = (id: string, from: 'left' | 'right') => (e: React.DragEvent) => {
+    e.dataTransfer.setData('text/plain', id)
+    setLog(l => [`ui.dnd.begin item=${id} source=${from}`, ...l].slice(0, 6))
+  }
   const onDragOver: React.DragEventHandler = (e) => { e.preventDefault() }
   const onDropList = (side: 'left' | 'right') => (e: React.DragEvent) => {
     e.preventDefault()
@@ -245,15 +260,16 @@ export default function App() {
       </header>
       <div ref={containerRef} style={{ height: '100%', display: 'grid', gridTemplateColumns: `${leftW}px ${GUTTER}px ${centerW}px ${GUTTER}px ${rightW}px` }}>
         {/* Left pane */}
-        <div onDragOver={onDragOver} onDrop={onDropList('left')} style={{ overflowY: 'auto', borderRight: '1px solid #E6EAF2', padding: 8 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Left Pane</div>
+        <div onDragOver={onDragOver} onDrop={onDropList('left')} style={{ overflowY: 'auto', borderRight: '1px solid #E6EAF2', padding: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <FountainEditor />
+          <div style={{ fontSize: 12, fontWeight: 600, marginTop: 6 }}>Left Pane</div>
           {leftItems.map(id => (
-            <div key={id} draggable onDragStart={onDragStart(id)} style={{ fontSize: 12, padding: '4px 6px', cursor: 'grab' }}>{id}</div>
+            <div key={id} draggable onDragStart={onDragStart(id, 'left')} style={{ fontSize: 12, padding: '4px 6px', cursor: 'grab' }}>{id}</div>
           ))}
         </div>
         {/* Left gutter */}
         <div onMouseDown={() => { if (dragState.current) dragState.current.which = 'left' }} style={{ cursor: 'col-resize', background: '#E6EAF2' }} />
-        {/* Center (canvas) */}
+        {/* Center (canvas only) */}
         <div onDragOver={onDragOver} onDrop={onDropCenter} style={{ position: 'relative' }}>
           {loading && <div style={{ position: 'absolute', top: 8, left: 8, opacity: 0.6 }}>Loading canvas…</div>}
           <canvas
@@ -265,6 +281,8 @@ export default function App() {
             onMouseMove={onMouseMove}
             style={{ width: '100%', height: '100%', display: 'block', cursor: 'grab' }}
           />
+          {/* Flow graph overlay (nodes + noodles) */}
+          <GraphOverlay scale={scale} tx={tx} ty={ty} />
           {/* Simple monitor */}
           <div style={{ position: 'absolute', right: 8, top: 8, background: 'rgba(255,255,255,0.9)', border: '1px solid #E6EAF2', borderRadius: 6, padding: '6px 8px', fontSize: 12, minWidth: 240 }}>
             <div style={{ fontWeight: 600, marginBottom: 4 }}>MIDI 2.0 Monitor</div>
@@ -280,7 +298,7 @@ export default function App() {
         <div onDragOver={onDragOver} onDrop={onDropList('right')} style={{ overflowY: 'auto', borderLeft: '1px solid #E6EAF2', padding: 8 }}>
           <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Right Pane</div>
           {rightItems.map(id => (
-            <div key={id} draggable onDragStart={onDragStart(id)} style={{ fontSize: 12, padding: '4px 6px', cursor: 'grab' }}>{id}</div>
+            <div key={id} draggable onDragStart={onDragStart(id, 'right')} style={{ fontSize: 12, padding: '4px 6px', cursor: 'grab' }}>{id}</div>
           ))}
         </div>
       </div>

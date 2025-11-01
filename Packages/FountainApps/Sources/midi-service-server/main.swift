@@ -2,6 +2,7 @@ import Foundation
 import FountainRuntime
 import MIDIService
 import MIDIService
+import FountainStoreClient
 
 @main
 struct Main {
@@ -16,6 +17,36 @@ struct Main {
                 if let data = try? Data(contentsOf: url) {
                     return HTTPResponse(status: 200, headers: ["Content-Type": "application/yaml"], body: data)
                 }
+            }
+            if req.path == "/flow/graph" && req.method.uppercased() == "GET" {
+                // Serve the Flow graph from FountainStore (default corpus baseline-patchbay)
+                let corpus = req.queryParameters["corpusId"] ?? "baseline-patchbay"
+                let store = resolveStore()
+                if let data = try? await store.getDoc(corpusId: corpus, collection: "segments", id: "prompt:flow-instrument:graph") {
+                    // Segment JSON object; return raw text field if present, otherwise return the object
+                    if let s = String(data: data, encoding: .utf8),
+                       let obj = try? JSONSerialization.jsonObject(with: Data(s.utf8)) as? [String: Any] {
+                        if let text = obj["text"] as? String {
+                            let body = Data(text.utf8)
+                            return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: body)
+                        } else {
+                            // Return the doc as-is
+                            return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: data)
+                        }
+                    }
+                }
+                return HTTPResponse(status: 404)
+            }
+            if req.path == "/flow/graph" && req.method.uppercased() == "POST" {
+                let corpus = req.queryParameters["corpusId"] ?? "baseline-patchbay"
+                let store = resolveStore()
+                // Persist under prompt:flow-instrument:graph as stringified JSON
+                if let bodyText = String(data: req.body, encoding: .utf8) {
+                    let seg = Segment(corpusId: corpus, segmentId: "prompt:flow-instrument:graph", pageId: "prompt:flow-instrument", kind: "graph.json", text: bodyText)
+                    _ = try? await store.addSegment(seg)
+                    return HTTPResponse(status: 204)
+                }
+                return HTTPResponse(status: 400)
             }
             if req.path == "/ump/tail" || req.path == "/ump/events" && req.method.uppercased() == "GET" {
                 let items = await MIDIServiceRuntime.shared.tail(limit: 256)
@@ -91,4 +122,21 @@ struct Main {
         }
         dispatchMain()
     }
+}
+
+// Minimal store resolver
+func resolveStore() -> FountainStoreClient {
+    let env = ProcessInfo.processInfo.environment
+    if let dir = env["FOUNTAINSTORE_DIR"], !dir.isEmpty {
+        let url: URL
+        if dir.hasPrefix("~") {
+            url = URL(fileURLWithPath: FileManager.default.homeDirectoryForCurrentUser.path + String(dir.dropFirst()), isDirectory: true)
+        } else { url = URL(fileURLWithPath: dir, isDirectory: true) }
+        if let disk = try? DiskFountainStoreClient(rootDirectory: url) { return FountainStoreClient(client: disk) }
+    }
+    let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+    if let disk = try? DiskFountainStoreClient(rootDirectory: cwd.appendingPathComponent(".fountain/store", isDirectory: true)) {
+        return FountainStoreClient(client: disk)
+    }
+    return FountainStoreClient(client: EmbeddedFountainStoreClient())
 }

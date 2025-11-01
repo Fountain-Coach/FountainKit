@@ -30,10 +30,10 @@ struct PatchbayTestSceneSeed {
 
         // Graph to exercise routing: Editor → Submit → Corpus; Editor → LLM
         let nodes: [[String: Any]] = [
-            ["id": "n-editor", "displayName": "Fountain Editor", "product": "FountainEditor"],
-            ["id": "n-submit", "displayName": "Submit", "product": "Submit"],
-            ["id": "n-corpus", "displayName": "Corpus Instrument", "product": "CorpusInstrument"],
-            ["id": "n-llm", "displayName": "LLM Adapter", "product": "LLMAdapter"],
+            ["id": "n-editor", "displayName": "Fountain Editor", "product": "FountainEditor", "x": 100, "y": 100],
+            ["id": "n-submit", "displayName": "Submit", "product": "Submit", "x": 380, "y": 120],
+            ["id": "n-corpus", "displayName": "Corpus Instrument", "product": "CorpusInstrument", "x": 640, "y": 100],
+            ["id": "n-llm", "displayName": "LLM Adapter", "product": "LLMAdapter", "x": 640, "y": 280],
         ]
         let edges: [[String: Any]] = [
             ["id": "e-editor-submit", "from": ["node": "n-editor", "port": "text.content.out"], "to": ["node": "n-corpus", "port": "baseline.add.in"], "transformId": "n-submit"],

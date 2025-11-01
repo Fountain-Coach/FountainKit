@@ -48,3 +48,7 @@ Web mirror (Baseline‑PatchBay)
 - Launcher: `Scripts/apps/baseline-patchbay-web` (seeds Teatro + MRTS prompts; starts Vite).
 - Env: `PATCHBAY_URL`, `MIDI_SERVICE_URL`.
 - Drive: set target to “PatchBay Canvas” (macOS) or “Headless Canvas” (Linux/headless) and keep “MIDI 2.0” mode with “Sync PE” on.
+
+PatchBay docs (PB‑VRT Vision + Audio)
+- Seed combined doc into FountainStore: `swift run --package-path Packages/FountainApps patchbay-docs-seed`.
+- Read back: `CORPUS_ID=patchbay SEGMENT_ID='docs:pb-vrt-vision-audio:doc' swift run --package-path Packages/FountainApps store-dump`.

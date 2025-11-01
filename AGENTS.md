@@ -320,6 +320,11 @@ GUI Code of Conduct — Self‑Healing Visual Tests (Default)
 - Typical sizes: We maintain golden baselines for 1440×900 and 1280×800 (portrait/landscape) for macOS. The agent adds more sizes as needed and keeps them updated.
 - No approvals from operators: The agent generates, reviews, and commits goldens; maintainers review the PR as usual.
 
+PB‑VRT Vision + Audio (Docs in Store)
+- Combined probe plan (Vision + Audio) is stored in FountainStore to keep UI/audio probes canonical for PatchBay.
+- Location: corpus `patchbay`, page `docs:pb-vrt-vision-audio`, segment `doc`.
+- Quick fetch: `CORPUS_ID=patchbay SEGMENT_ID='docs:pb-vrt-vision-audio:doc' swift run --package-path Packages/FountainApps store-dump`.
+
 Milestones (high level)
 1) M0 Stabilize/Trim: Full stack default; Control unified; curated specs.
 2) M1 Context Hub: right‑pane segmented (OpenAPI | Routes | Services | Persona | Memory).

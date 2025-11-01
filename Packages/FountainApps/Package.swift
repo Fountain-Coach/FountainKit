@@ -34,6 +34,7 @@ let package = Package(
         .executable(name: "mock-localagent-server", targets: ["mock-localagent-server"]),
         .executable(name: "audiotalk-server", targets: ["audiotalk-server"])
         ,
+        .executable(name: "pbvrt-embed-ci", targets: ["pbvrt-embed-ci"]),
         .executable(name: "engraver-studio-app", targets: ["engraver-studio-app"]),
         .executable(name: "gateway-console", targets: ["gateway-console"]),
         .executable(name: "gateway-console-app", targets: ["gateway-console-app"]),
@@ -85,6 +86,8 @@ let package = Package(
         .executable(name: "baseline-editor-seed", targets: ["baseline-editor-seed"]),
         .executable(name: "patchbay-graph-seed", targets: ["patchbay-graph-seed"]),
         .executable(name: "patchbay-test-scene-seed", targets: ["patchbay-test-scene-seed"])
+        ,
+        .executable(name: "patchbay-docs-seed", targets: ["patchbay-docs-seed"])
     ],
     dependencies: [
         .package(path: "../FountainCore"),
@@ -137,12 +140,25 @@ let package = Package(
             exclude: ["AGENTS.md"]
         ),
         .executableTarget(
+            name: "patchbay-docs-seed",
+            dependencies: [
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/patchbay-docs-seed"
+        ),
+        .executableTarget(
             name: "pbvrt-server",
             dependencies: [
                 .product(name: "FountainRuntime", package: "FountainCore"),
                 .product(name: "FountainStoreClient", package: "FountainCore")
             ],
             path: "Sources/pbvrt-server"
+        ),
+        .executableTarget(
+            name: "pbvrt-embed-ci",
+            dependencies: ["pbvrt-server"],
+            path: "Sources/pbvrt-embed-ci"
         ),
         .executableTarget(
             name: "flow-instrument-seed",
@@ -444,6 +460,11 @@ let package = Package(
                 .process("Baselines"),
                 .process("Fixtures")
             ]
+        ),
+        .testTarget(
+            name: "PBVRTServerTests",
+            dependencies: ["pbvrt-server"],
+            path: "Tests/PBVRTServerTests"
         ),
         .executableTarget(
             name: "patchbay-snapshots",
@@ -792,6 +813,19 @@ let package = Package(
                 .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
+        ),
+        .executableTarget(
+            name: "pbvrt-embed-ci",
+            dependencies: ["pbvrt-server"],
+            path: "Sources/pbvrt-embed-ci"
+        ),
+        .executableTarget(
+            name: "patchbay-docs-seed",
+            dependencies: [
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/patchbay-docs-seed"
         ),
         // removed: add-instruments-seed target
         .executableTarget(

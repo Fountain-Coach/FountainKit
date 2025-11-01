@@ -13,6 +13,10 @@ What/How
 Spec (OpenAPI‑first)
 `Packages/FountainApps/Sources/patchbay-service/openapi.yaml` mirrors the curated source of truth `Packages/FountainSpecCuration/openapi/v1/patchbay.yml`. Update the curated spec first, then build to regenerate server types via the generator plugin. Generator config: `Packages/FountainApps/Sources/patchbay-service/openapi-generator-config.yaml` (`generate: [types, server]`). The app client spec lives at `Packages/FountainApps/Sources/patchbay-app/openapi.yaml`.
 
+PB‑VRT Vision + Audio probes
+- Combined probe plan (Vision + Audio) lives in FountainStore docs: corpus `patchbay`, page `docs:pb-vrt-vision-audio`, segment `doc` (kind `text/markdown`).
+- Fetch locally: `CORPUS_ID=patchbay SEGMENT_ID='docs:pb-vrt-vision-audio:doc' swift run --package-path Packages/FountainApps store-dump`.
+
 Keep all instruments in one document—extend `InstrumentKind`, geometry, or `PropertySchema` rather than adding per‑instrument specs. Check enum drift via `Scripts/ci/check-patchbay-spec-sync.sh`.
 
 Routes (OpenAPI)

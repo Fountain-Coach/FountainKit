@@ -39,6 +39,12 @@ struct CorpusInstrumentSeed {
             _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(pageId):facts", pageId: pageId, kind: "facts", text: facts))
         }
 
+        // Add MRTS page for Corpus Instrument
+        let mrtsId = "prompt:corpus-instrument-mrts"
+        let mrtsPage = Page(corpusId: corpusId, pageId: mrtsId, url: "store://prompt/corpus-instrument-mrts", host: "store", title: "Corpus Instrument — MRTS")
+        _ = try? await store.addPage(mrtsPage)
+        _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(mrtsId):teatro", pageId: mrtsId, kind: "teatro.prompt", text: mrtsPrompt))
+
         print("Seeded Corpus Instrument prompt → corpus=\(corpusId) pageId=\(pageId)")
     }
 
@@ -142,4 +148,29 @@ struct CorpusInstrumentSeed {
         }
         return nil
     }
+
+    static let mrtsPrompt = """
+    Scene: Corpus Instrument — MRTS: Baseline + Analyses
+    Text:
+
+    - Objective: Drive corpus baseline and analysis ops and assert monitor events and PE counters.
+    - Steps (target = "Corpus Instrument"):
+      1) corpus.baseline.add { text: "INT. ROOM — DAY\nHello." }
+         • Expect monitor: corpus.baseline.added { baselineId, lines, chars }
+         • PE: baseline.latest.id updated; baselines.total += 1; last.op = "baseline.add"
+      2) corpus.drift.compute {}
+         • Expect monitor: corpus.drift.computed {...}
+         • PE: drift.latest.id updated; analyses.total += 1; last.op = "drift.compute"
+      3) corpus.patterns.compute {}
+         • Expect monitor: corpus.patterns.computed { count }
+         • PE: patterns.latest.id updated; analyses.total += 1; last.op = "patterns.compute"
+      4) corpus.reflection.compute {}
+         • Expect monitor: corpus.reflection.computed { claims }
+         • PE: reflection.latest.id updated; analyses.total += 1; last.op = "reflection.compute"
+      5) corpus.analysis.index { pageId: "store://prompt/example" }
+         • Expect monitor: corpus.analysis.indexed { pageId }
+         • PE: analyses.total += 1; last.op = "analysis.index"
+
+    - Invariants: baselines.total ≥ 1; analyses.total increases with each compute/index; latest ids non-empty after each step; monitors emitted per operation.
+    """
 }

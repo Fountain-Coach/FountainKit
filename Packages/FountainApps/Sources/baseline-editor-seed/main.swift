@@ -24,7 +24,7 @@ struct BaselineEditorSeed {
         let mrtsPage = Page(corpusId: corpusId, pageId: mrtsId, url: "store://prompt/fountain-editor-mrts", host: "store", title: "Fountain Editor — A4 Typewriter (MRTS)")
         _ = try? await store.addPage(mrtsPage)
         _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(mrtsId):teatro", pageId: mrtsId, kind: "teatro.prompt", text: mrtsPrompt))
-        if let facts = factsJSON { _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(mrtsId):facts", pageId: mrtsId, kind: "facts", text: facts)) }
+        _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(mrtsId):facts", pageId: mrtsId, kind: "facts", text: factsJSON))
 
         print("Seeded baseline editor prompts → corpus=\(corpusId) pages=[\(creationId), \(mrtsId)]")
     }
@@ -91,4 +91,3 @@ enum FountainEditorSeedStrings {
     {"robot":{"tests":["FountainEditorPEAndParseTests","FountainEditorVendorOpsTests"]}}
     """
 }
-

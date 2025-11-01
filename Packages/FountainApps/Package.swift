@@ -502,6 +502,14 @@ let package = Package(
             path: "Sources/corpus-instrument-seed"
         ),
         .executableTarget(
+            name: "baseline-editor-seed",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ],
+            path: "Sources/baseline-editor-seed"
+        ),
+        .executableTarget(
             name: "img-rmse",
             dependencies: [],
             path: "Sources/img-rmse"

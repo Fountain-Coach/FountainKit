@@ -162,6 +162,14 @@ let package = Package(
         .executableTarget(
             name: "patchbay-test-scene-seed",
             dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ],
+            path: "Sources/patchbay-test-scene-seed"
+        ),
+        .executableTarget(
+            name: "patchbay-test-scene-seed",
+            dependencies: [
                 .product(name: "LauncherSignature", package: "FountainCore"),
                 .product(name: "FountainStoreClient", package: "FountainCore")
             ],
@@ -509,6 +517,14 @@ let package = Package(
                 .product(name: "LauncherSignature", package: "FountainCore")
             ],
             path: "Sources/corpus-instrument-seed"
+        ),
+        .executableTarget(
+            name: "patchbay-test-scene-seed",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ],
+            path: "Sources/patchbay-test-scene-seed"
         ),
         .executableTarget(
             name: "baseline-editor-seed",

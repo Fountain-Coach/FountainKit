@@ -676,6 +676,34 @@ final class FlowHeadlessInstrument: HeadlessInstrument {
                 }
             }
         }
+        // LLM Adapter: prompt.in/messages.in
+        if let target = nodes[edge.toNode], target.product.lowercased() == "llmadapter" {
+            if let llm = HeadlessRegistry.shared.resolve("LLM Adapter") as? LLMAdapterHeadlessInstrument {
+                var driven = 0
+                if edge.toPort == "prompt.in" {
+                    let text = (payload["text"] as? String) ?? ""
+                    _ = llm.handleVendor(topic: "llm.chat", data: ["messages": [["role": "user", "content": text]]])
+                    driven += 1
+                } else if edge.toPort == "messages.in" {
+                    let msgs = (payload["messages"] as? [[String: Any]]) ?? []
+                    if !msgs.isEmpty { _ = llm.handleVendor(topic: "llm.chat", data: ["messages": msgs]); driven += 1 }
+                }
+                // After chat completes, propagate outputs one hop (answer/function)
+                if driven > 0 {
+                    let answer = llm.getLastAnswer()
+                    let fname = llm.getLastFunctionName()
+                    // Answer out
+                    let outEdges = edges.filter { $0.fromNode == edge.toNode && $0.fromPort == "answer.out" }
+                    for e in outEdges { _ = route(edge: e, payload: ["kind": "text", "text": answer]) }
+                    // Function call out
+                    if !fname.isEmpty {
+                        let fEdges = edges.filter { $0.fromNode == edge.toNode && $0.fromPort == "function.call.out" }
+                        for e in fEdges { _ = route(edge: e, payload: ["kind": "json", "function": ["name": fname]]) }
+                    }
+                }
+                return driven
+            }
+        }
         return 0
     }
 
@@ -830,6 +858,10 @@ final class LLMAdapterHeadlessInstrument: HeadlessInstrument {
         if let data = try? JSONSerialization.data(withJSONObject: obj), let s = String(data: data, encoding: .utf8) { return s }
         return nil
     }
+
+    // Expose limited state for Flow propagation
+    func getLastAnswer() -> String { lastAnswer }
+    func getLastFunctionName() -> String { lastFunctionName }
 }
 
 enum MIDISendError: Error { case unsupportedTransport, destinationNotFound }

@@ -38,7 +38,8 @@ struct FlowInstrumentSeed {
             _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(pageId):facts", pageId: pageId, kind: "facts", text: facts))
         }
 
-        print("Seeded Flow Instrument prompts → corpus=\(corpusId) pages=[\(pageId), \(mrtsId)]")
+        await seedDefaultGraph(store: store, corpusId: corpusId)
+        print("Seeded Flow Instrument prompts → corpus=\(corpusId) pages=[\(pageId), \(mrtsId)] + default graph")
     }
 
     static let creationPrompt = """
@@ -115,5 +116,23 @@ struct FlowInstrumentSeed {
         if let data = try? JSONSerialization.data(withJSONObject: facts, options: [.prettyPrinted, .sortedKeys]), let s = String(data: data, encoding: .utf8) { return s }
         return nil
     }
-}
 
+    // Seed a default graph template (Editor → Submit → Corpus, and Editor → LLMAdapter)
+    static func seedDefaultGraph(store: FountainStoreClient, corpusId: String) async {
+        let pageId = "prompt:flow-instrument"
+        let nodes: [[String: Any]] = [
+            ["id": "n-editor", "displayName": "Fountain Editor", "product": "FountainEditor"],
+            ["id": "n-corpus", "displayName": "Corpus Instrument", "product": "CorpusInstrument"],
+            ["id": "n-submit", "displayName": "Submit", "product": "Submit"],
+            ["id": "n-llm", "displayName": "LLM Adapter", "product": "LLMAdapter"],
+        ]
+        let edges: [[String: Any]] = [
+            ["id": "e-editor-submit-corpus", "from": ["node": "n-editor", "port": "text.content.out"], "to": ["node": "n-corpus", "port": "baseline.add.in"], "transformId": "n-submit"],
+            ["id": "e-editor-llm", "from": ["node": "n-editor", "port": "text.content.out"], "to": ["node": "n-llm", "port": "prompt.in"]]
+        ]
+        let graph: [String: Any] = ["nodes": nodes, "edges": edges]
+        if let data = try? JSONSerialization.data(withJSONObject: graph, options: [.prettyPrinted, .sortedKeys]), let text = String(data: data, encoding: .utf8) {
+            _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(pageId):graph", pageId: pageId, kind: "graph.json", text: text))
+        }
+    }
+}

@@ -59,6 +59,7 @@ final class GridVM: ObservableObject {
 
 struct GridDevView: View {
     @StateObject private var vm = GridVM()
+    @State private var editorText: String = ""
     @State private var resetOpacity: Double = 0.18
     @State private var resetMinOpacity: Double = 0.18
     @State private var resetFadeSeconds: Double = 3.0
@@ -82,9 +83,11 @@ struct GridDevView: View {
             let rightW = max(minPane, min(total - leftW - minPane - 12, rightFrac * total))
             let centerW = max(minPane, total - leftW - rightW - 12)
             HStack(spacing: 6) {
-                // Left scroll pane
+                // Left scroll pane: Fountain Editor + list
                 ScrollView(.vertical) {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        FountainEditorInstrument(text: $editorText)
+                        Divider()
                         Text("Left Pane").font(.system(size: 12, weight: .semibold))
                         ForEach(leftItems, id: \.self) { id in
                             Text(id)
@@ -110,7 +113,7 @@ struct GridDevView: View {
                             "type": "ui.layout.changed", "left.frac": Double(leftFrac), "right.frac": Double(rightFrac)
                         ])
                     })
-                // Center canvas
+                // Center pane: Canvas only
                 ZStack(alignment: .topLeading) {
                     MetalCanvasView(
                         zoom: vm.zoom,
@@ -154,6 +157,8 @@ struct GridDevView: View {
                             break
                         }
                     }).allowsHitTesting(false))
+                    // Flow graph overlay (host‑owned noodles)
+                    .overlay(GraphOverlayMac().allowsHitTesting(false))
                     // Monitor (top-right) + Reset (top-left)
                     GridDevMidiMonitorOverlay(isHot: .constant(true))
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
@@ -270,15 +275,16 @@ struct GridDevView: View {
 extension GridDevApp {
     @MainActor static func buildTeatroPrompt() -> String {
         return """
-        Scene: GridDevApp — Three‑Pane Baseline (Canvas Center)
+        Scene: GridDevApp — Three‑Pane Baseline (Editor Left, Canvas Center)
         Text:
         - Window: macOS titlebar window, 1440×900 pt; content background #FAFBFD.
         - Layout: three vertical scroll panes with draggable borders (gutters 6 pt):
-          • Left Pane (scrollable): list scaffold. Default width ≈ 22% (min 160 pt).
-          • Center Pane: contains the “Grid” canvas instrument (fills center).
+          • Left Pane (scrollable): “Fountain Editor” (A4 typewriter) at top, then list scaffold. Default width ≈ 22% (min 160 pt).
+          • Center Pane: “Grid” canvas instrument (fills center).
           • Right Pane (scrollable): monitor/log scaffold. Default width ≈ 26% (min 160 pt).
           • Gutters draggable horizontally; widths clamp to ≥160 pt; proportions persist during resize.
         - Canvas (center): Baseline grid instrument with viewport‑anchored grid (left contact at view.x=0, top at view.y=0), minor=24 pt, majorEvery=5, axes at doc origin.
+        - Fountain Editor (left): A4 typewriter (Courier Prime 12pt, 1.10 line height, tabs→4 spaces, hard line breaks). Initial view shows an A4 empty page placed on a clean desktop. Typing sends `text.set {text,cursor}` and emits `text.parsed` with lines/chars/wrapColumn/page.
         - MIDI overlay: monitor/controls fade after inactivity; wake on MIDI activity.
         - Layout control via MIDI‑CI PE: `layout.left.frac`, `layout.right.frac` (0..1) adjust pane fractions and emit `ui.layout.changed`.
         - Drag & Drop (panes): items can be dragged from Left → Right and back; drops emit `ui.dnd.begin` and `ui.dnd.drop` events. Center accepts drops (logged only).
@@ -289,9 +295,9 @@ extension GridDevApp {
 extension GridDevApp {
     static func buildMRTSPrompt() -> String {
         return """
-        Scene: Baseline‑PatchBay — Three‑Pane Layout (MRTS)
+        Scene: Baseline‑PatchBay — Three‑Pane Layout + Editor Left (MRTS)
         Text:
-        - Objective: verify three‑pane draggable layout plus baseline canvas invariants and pane drag‑and‑drop.
+        - Objective: verify three‑pane draggable layout plus baseline canvas invariants, pane drag‑and‑drop, and editor text parsing with left‑pane placement.
         - Steps:
           • PE SET `layout.left.frac=0.25` and `layout.right.frac=0.25`; expect `ui.layout.changed`.
           • Simulate window resize (+300 pt width) and assert panes ≥160 pt and center ≥160 pt.
@@ -301,12 +307,13 @@ extension GridDevApp {
           • Drag an item from Right → Left; assert counts (right−1, left+1) and `ui.dnd.*` events.
           • Drop an item onto Center; assert `ui.dnd.drop` with target=center.
           • Validate canvas grid contact/spacing and anchor‑stable zoom drift ≤ 1 px.
+          • Editor: send `text.clear`; then `text.set` with 5‑line sample; expect `text.parsed` with lines=5 and wrapColumn within [58..62]. Apply `agent.suggest` + `suggestion.apply` and expect updated `text.parsed`.
 
         Numeric invariants:
         - Pane minimum widths: left/right/center ≥ 160 pt; gutters 6 pt.
         - Fractions clamp [0.05, 0.9]; gutters never cross.
         - Grid contact left at view.x=0; spacing: minor px = grid.minor × zoom; major px = grid.minor × majorEvery × zoom.
-        - Monitor emits `ui.zoom(.debug)`/`ui.pan(.debug)`, `ui.layout.changed`, and `ui.dnd.begin/ui.dnd.drop` during DnD.
+        - Monitor emits `ui.zoom(.debug)`/`ui.pan(.debug)`, `ui.layout.changed`, and `ui.dnd.begin/ui.dnd.drop` during DnD; editor emits `text.parsed` on content changes.
         """
     }
 }

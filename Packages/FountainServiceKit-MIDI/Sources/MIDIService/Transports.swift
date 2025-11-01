@@ -148,10 +148,18 @@ final class HeadlessRegistry {
 }
 
 final class CanvasHeadlessInstrument: HeadlessInstrument {
+    struct Port: Hashable { let id: String; let dir: String; let kind: String }
+    struct Node { var id: String; var displayName: String; var product: String; var ports: [Port] }
+    struct Edge { var id: String; var fromNode: String; var fromPort: String; var toNode: String; var toPort: String; var transformId: String? }
+
     let displayName: String
     private var zoom: Double = 1.0
     private var tx: Double = 0.0
     private var ty: Double = 0.0
+    // Host-owned flow graph
+    private var nodes: [String: Node] = [:]
+    private var edges: [Edge] = []
+    private var routingEnabled: Bool = true
     init(displayName: String = "Headless Canvas") { self.displayName = displayName }
     func handleVendor(topic: String, data: [String : Any]) -> String? {
         switch topic {
@@ -167,15 +175,147 @@ final class CanvasHeadlessInstrument: HeadlessInstrument {
             tx = (ax / max(zNew, 1e-6)) - docX; ty = (ay / max(zNew, 1e-6)) - docY; zoom = zNew
             return snapshot()
         case "canvas.reset": zoom = 1.0; tx = 0.0; ty = 0.0; return snapshot()
+        case "flow.node.add":
+            guard let nodeId = data["nodeId"] as? String,
+                  let displayName = data["displayName"] as? String,
+                  let product = data["product"] as? String else { return snapshot() }
+            var node = Node(id: nodeId, displayName: displayName, product: product, ports: [])
+            switch product.lowercased() {
+            case "fountaineditor":
+                node.ports.append(contentsOf:[Port(id: "text.parsed.out", dir: "out", kind: "text"), Port(id: "text.content.out", dir: "out", kind: "text")])
+            case "corpusinstrument":
+                node.ports.append(contentsOf:[
+                    Port(id: "editor.submit.in", dir: "in", kind: "text"),
+                    Port(id: "baseline.add.in", dir: "in", kind: "baseline"),
+                    Port(id: "drift.compute.in", dir: "in", kind: "baseline"),
+                    Port(id: "patterns.compute.in", dir: "in", kind: "drift"),
+                    Port(id: "reflection.compute.in", dir: "in", kind: "patterns"),
+                    Port(id: "baseline.added.out", dir: "out", kind: "baseline"),
+                    Port(id: "drift.computed.out", dir: "out", kind: "drift"),
+                    Port(id: "patterns.computed.out", dir: "out", kind: "patterns"),
+                    Port(id: "reflection.computed.out", dir: "out", kind: "reflection")
+                ])
+            case "submit": node.ports.append(contentsOf:[Port(id: "in", dir: "in", kind: "text"), Port(id: "out", dir: "out", kind: "baseline")])
+            case "computedrift": node.ports.append(contentsOf:[Port(id: "in", dir: "in", kind: "baseline"), Port(id: "out", dir: "out", kind: "drift")])
+            case "computepatterns": node.ports.append(contentsOf:[Port(id: "in", dir: "in", kind: "drift"), Port(id: "out", dir: "out", kind: "patterns")])
+            case "computereflection": node.ports.append(contentsOf:[Port(id: "in", dir: "in", kind: "patterns"), Port(id: "out", dir: "out", kind: "reflection")])
+            case "llmadapter":
+                node.ports.append(contentsOf:[
+                    Port(id: "prompt.in", dir: "in", kind: "text"),
+                    Port(id: "messages.in", dir: "in", kind: "json"),
+                    Port(id: "tool.result.in", dir: "in", kind: "json"),
+                    Port(id: "answer.out", dir: "out", kind: "text"),
+                    Port(id: "function.call.out", dir: "out", kind: "json")
+                ])
+            default: break
+            }
+            nodes[nodeId] = node
+            return snapshot()
+        case "flow.node.remove":
+            if let nodeId = data["nodeId"] as? String { nodes.removeValue(forKey: nodeId); edges.removeAll { $0.fromNode == nodeId || $0.toNode == nodeId } }
+            return snapshot()
+        case "flow.port.define":
+            guard let nodeId = data["nodeId"] as? String, var node = nodes[nodeId], let portId = data["portId"] as? String, let dir = data["dir"] as? String, let kind = data["kind"] as? String else { return snapshot() }
+            node.ports.append(Port(id: portId, dir: dir, kind: kind)); nodes[nodeId] = node
+            return snapshot()
+        case "flow.edge.create":
+            guard let from = data["from"] as? [String: Any], let to = data["to"] as? [String: Any],
+                  let fn = from["node"] as? String, let fp = from["port"] as? String,
+                  let tn = to["node"] as? String, let tp = to["port"] as? String else { return snapshot() }
+            let id = data["edgeId"] as? String ?? "e-\(edges.count+1)"
+            let edge = Edge(id: id, fromNode: fn, fromPort: fp, toNode: tn, toPort: tp, transformId: data["transformId"] as? String)
+            if isCompatible(edge: edge) { edges.append(edge); SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"flow.edge.created\",\"id\":\"\(id)\"}") }
+            return snapshot()
+        case "flow.edge.delete":
+            if let id = data["edgeId"] as? String { edges.removeAll { $0.id == id }; SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"flow.edge.deleted\",\"id\":\"\(id)\"}") }
+            return snapshot()
+        case "flow.forward.test":
+            guard routingEnabled else { return snapshot() }
+            guard let from = data["from"] as? [String: Any], var fn = from["node"] as? String, let fp = from["port"] as? String else { return snapshot() }
+            let payload = data["payload"] as? [String: Any] ?? [:]
+            if !nodes.keys.contains(fn) { if let match = nodes.values.first(where: { $0.displayName == fn }) { fn = match.id } }
+            let outs = edges.filter { $0.fromNode == fn && $0.fromPort == fp }
+            var forwarded = 0
+            for e in outs { forwarded += route(edge: e, payload: payload) }
+            SimpleMIDISender.recorder.recordSnapshot(vendorJSON: "{\"type\":\"flow.forwarded\",\"count\":\(forwarded)}")
+            return snapshot()
         default: return nil
         }
     }
     func handlePESet(properties: [String : Double]) -> String? {
-        for (k,v) in properties { switch k { case "zoom": zoom = max(0.1, min(16.0, v)); case "translation.x": tx = v; case "translation.y": ty = v; default: break } }
+        for (k,v) in properties {
+            switch k {
+            case "zoom": zoom = max(0.1, min(16.0, v))
+            case "translation.x": tx = v
+            case "translation.y": ty = v
+            case "routing.enabled": routingEnabled = v >= 0.5
+            default: break
+            }
+        }
         return snapshot()
     }
+    private func isCompatible(edge: Edge) -> Bool {
+        guard let out = nodes[edge.fromNode]?.ports.first(where: { $0.id == edge.fromPort && $0.dir == "out" }), let inn = nodes[edge.toNode]?.ports.first(where: { $0.id == edge.toPort && $0.dir == "in" }) else { return false }
+        if out.kind == inn.kind { return true }
+        if let t = edge.transformId, let prod = nodes[t]?.product.lowercased() { if prod == "submit" && out.kind == "text" && inn.kind == "baseline" { return true } }
+        return false
+    }
+    private func route(edge: Edge, payload: [String: Any]) -> Int {
+        if let t = edge.transformId, let prod = nodes[t]?.product.lowercased(), prod == "submit" {
+            if let corpus = HeadlessRegistry.shared.resolve("Corpus Instrument") as? CorpusHeadlessInstrument {
+                let text = (payload["text"] as? String) ?? ""
+                _ = corpus.handleVendor(topic: "corpus.baseline.add", data: ["text": text])
+                return 1
+            }
+            return 0
+        }
+        if let target = nodes[edge.toNode], target.product.lowercased() == "corpusinstrument" {
+            if let corpus = HeadlessRegistry.shared.resolve("Corpus Instrument") as? CorpusHeadlessInstrument {
+                if edge.toPort == "baseline.add.in" {
+                    let text = (payload["text"] as? String) ?? ""
+                    _ = corpus.handleVendor(topic: "corpus.baseline.add", data: ["text": text])
+                    return 1
+                }
+            }
+        }
+        if let target = nodes[edge.toNode], target.product.lowercased() == "llmadapter" {
+            if let llm = HeadlessRegistry.shared.resolve("LLM Adapter") as? LLMAdapterHeadlessInstrument {
+                var driven = 0
+                if edge.toPort == "prompt.in" {
+                    let text = (payload["text"] as? String) ?? ""
+                    _ = llm.handleVendor(topic: "llm.chat", data: ["messages": [["role": "user", "content": text]]])
+                    driven += 1
+                } else if edge.toPort == "messages.in" {
+                    let msgs = (payload["messages"] as? [[String: Any]]) ?? []
+                    if !msgs.isEmpty { _ = llm.handleVendor(topic: "llm.chat", data: ["messages": msgs]); driven += 1 }
+                }
+                if driven > 0 {
+                    let answer = llm.getLastAnswer()
+                    let fname = llm.getLastFunctionName()
+                    let outEdges = edges.filter { $0.fromNode == edge.toNode && $0.fromPort == "answer.out" }
+                    for e in outEdges { _ = route(edge: e, payload: ["kind": "text", "text": answer]) }
+                    if !fname.isEmpty {
+                        let fEdges = edges.filter { $0.fromNode == edge.toNode && $0.fromPort == "function.call.out" }
+                        for e in fEdges { _ = route(edge: e, payload: ["kind": "json", "function": ["name": fname]]) }
+                    }
+                }
+                return driven
+            }
+        }
+        return 0
+    }
     private func snapshot() -> String? {
-        let props: [[String: Any]] = [["name": "zoom", "value": zoom],["name": "translation.x", "value": tx],["name": "translation.y", "value": ty]]
+        var props: [[String: Any]] = []
+        func add(_ name: String, _ value: Any) { props.append(["name": name, "value": value]) }
+        add("zoom", zoom)
+        add("translation.x", tx)
+        add("translation.y", ty)
+        // Include flow graph in PE
+        let nodeArr: [[String: Any]] = nodes.values.sorted { $0.id < $1.id }.map { n in ["id": n.id, "displayName": n.displayName, "product": n.product, "ports": n.ports.map { ["id": $0.id, "dir": $0.dir, "kind": $0.kind] }] }
+        let edgeArr: [[String: Any]] = edges.map { e in var obj: [String: Any] = ["id": e.id, "from": ["node": e.fromNode, "port": e.fromPort], "to": ["node": e.toNode, "port": e.toPort]]; if let t = e.transformId { obj["transformId"] = t }; return obj }
+        add("flow.nodes", nodeArr)
+        add("flow.edges", edgeArr)
+        add("routing.enabled", routingEnabled ? 1 : 0)
         let obj: [String: Any] = ["properties": props]
         if let data = try? JSONSerialization.data(withJSONObject: obj), let s = String(data: data, encoding: .utf8) { return s }
         return nil
@@ -292,10 +432,10 @@ final class FountainEditorHeadlessInstrument: HeadlessInstrument {
                 if !s.hasSuffix("\n") { s.append("\n") }
                 return s
             }()
-            if let flow = HeadlessRegistry.shared.resolve("Flow") as? FlowHeadlessInstrument {
+            if let canvasHost = HeadlessRegistry.shared.resolve("Headless Canvas") as? CanvasHeadlessInstrument {
                 let from: [String: Any] = ["node": "Fountain Editor", "port": "text.content.out"]
                 let payload: [String: Any] = ["kind": "text", "text": normalized]
-                _ = flow.handleVendor(topic: "flow.forward.test", data: ["from": from, "payload": payload])
+                _ = canvasHost.handleVendor(topic: "flow.forward.test", data: ["from": from, "payload": payload])
             } else if let corpusInst = HeadlessRegistry.shared.resolve("Corpus Instrument") as? CorpusHeadlessInstrument {
                 let payload: [String: Any] = [
                     "text": normalized,
@@ -1057,9 +1197,7 @@ public actor MIDIServiceRuntime {
     public func registerHeadlessCorpus(displayName: String = "Corpus Instrument") async {
         await HeadlessRegistry.shared.register(CorpusHeadlessInstrument(displayName: displayName))
     }
-    public func registerHeadlessFlow(displayName: String = "Flow") async {
-        await HeadlessRegistry.shared.register(FlowHeadlessInstrument(displayName: displayName))
-    }
+    // Flow is owned by the PatchBay host; no separate Flow instrument registration.
     public func registerHeadlessLLM(displayName: String = "LLM Adapter") async {
         await HeadlessRegistry.shared.register(LLMAdapterHeadlessInstrument(displayName: displayName))
     }

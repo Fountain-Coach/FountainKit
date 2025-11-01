@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const TARGET = process.env.TARGET_NAME || 'Flow'
+const TARGET = process.env.TARGET_NAME || 'Headless Canvas'
 const URL = process.env.MIDI_SERVICE_URL || 'http://127.0.0.1:7180'
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 const mrts = await import('../dist/midi2/mrts.js')
@@ -37,4 +37,3 @@ async function main() {
 }
 
 main().catch(e => { console.error('[flow-llm] failed', e); process.exit(1) })
-

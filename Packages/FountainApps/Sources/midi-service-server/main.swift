@@ -20,7 +20,7 @@ struct Main {
             }
             if req.path == "/flow/graph" && req.method.uppercased() == "GET" {
                 // Serve the Flow graph from FountainStore (default corpus baseline-patchbay)
-                let corpus = req.queryParameters["corpusId"] ?? "baseline-patchbay"
+                let corpus = "baseline-patchbay"
                 let store = resolveStore()
                 if let data = try? await store.getDoc(corpusId: corpus, collection: "segments", id: "prompt:flow-instrument:graph") {
                     // Segment JSON object; return raw text field if present, otherwise return the object
@@ -38,7 +38,7 @@ struct Main {
                 return HTTPResponse(status: 404)
             }
             if req.path == "/flow/graph" && req.method.uppercased() == "POST" {
-                let corpus = req.queryParameters["corpusId"] ?? "baseline-patchbay"
+                let corpus = "baseline-patchbay"
                 let store = resolveStore()
                 // Persist under prompt:flow-instrument:graph as stringified JSON
                 if let bodyText = String(data: req.body, encoding: .utf8) {
@@ -97,8 +97,7 @@ struct Main {
             await MIDIServiceRuntime.shared.registerHeadlessEditor()
             // Register Corpus Instrument headless
             await MIDIServiceRuntime.shared.registerHeadlessCorpus()
-            // Register Flow instrument headless
-            await MIDIServiceRuntime.shared.registerHeadlessFlow()
+            // Flow protocol is hosted by the canvas; no separate Flow instrument.
             // Register LLM Adapter headless
             await MIDIServiceRuntime.shared.registerHeadlessLLM()
         }

@@ -120,6 +120,42 @@ paths:
         '404':
           description: Not found
 
+  /baselines/{id}/capture:
+    post:
+      tags: [Baselines]
+      operationId: captureBaseline
+      summary: Upload baseline artifacts (PNG) and compute optional embedding.
+      x-fountain.visibility: public
+      x-fountain.reason: materialize baseline.png and embedding.json
+      x-fountain.allow-as-tool: true
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [baselinePng]
+              properties:
+                baselinePng: { type: string, format: binary }
+                embeddingBackend:
+                  type: string
+                  enum: [featurePrint, coreML]
+                  default: featurePrint
+            encoding:
+              baselinePng: { contentType: application/octet-stream }
+      responses:
+        '200':
+          description: Baseline updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Baseline'
+
   /compare:
     post:
       tags: [Compare]
@@ -406,6 +442,8 @@ paths:
               properties:
                 baselineId: { type: string }
                 wav: { type: string, format: binary }
+            encoding:
+              wav: { contentType: application/octet-stream }
       responses:
         '200':
           description: Onsets and tempo
@@ -431,6 +469,8 @@ paths:
               properties:
                 baselineId: { type: string }
                 wav: { type: string, format: binary }
+            encoding:
+              wav: { contentType: application/octet-stream }
       responses:
         '200':
           description: Pitch analysis
@@ -456,6 +496,8 @@ paths:
               properties:
                 baselineId: { type: string }
                 wav: { type: string, format: binary }
+            encoding:
+              wav: { contentType: application/octet-stream }
       responses:
         '200':
           description: Loudness analysis
@@ -482,6 +524,9 @@ paths:
                 baselineId: { type: string }
                 baselineWav: { type: string, format: binary }
                 candidateWav: { type: string, format: binary }
+            encoding:
+              baselineWav: { contentType: application/octet-stream }
+              candidateWav: { contentType: application/octet-stream }
       responses:
         '200':
           description: Alignment analysis

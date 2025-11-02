@@ -204,6 +204,55 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         return .ok(.init(body: .json(baseline)))
     }
 
+    // POST /baselines/{id}/capture — upload PNG and compute optional embedding
+    func captureBaseline(_ input: Operations.captureBaseline.Input) async throws -> Operations.captureBaseline.Output {
+        guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
+        let bId = input.path.id
+        var pngData: Data?; var backend: String = "featurePrint"
+        for try await part in form {
+            switch part {
+            case .baselinePng(let w): pngData = try await collectBody(w.payload.body)
+            case .embeddingBackend(let w): if let s = try? String(decoding: await collectBody(w.payload.body), as: UTF8.self) { backend = s.trimmingCharacters(in: .whitespacesAndNewlines) }
+            case .undocumented: break
+            }
+        }
+        guard let png = pngData else { return .undocumented(statusCode: 400, .init()) }
+        let dir = core.baselineDir(bId)
+        let baselineURL = dir.appendingPathComponent("baseline.png")
+        try? png.write(to: baselineURL)
+        // Prepare embedding JSON placeholder (vector computation may be added later)
+        let embeddingModel = (backend == "featurePrint") ? "Vision.FeaturePrint" : "coreML"
+        let embeddingVec: [Float] = []
+        let embURL = dir.appendingPathComponent("embedding.json")
+        let embObj: [String: Any] = [
+            "model": embeddingModel,
+            "vector": embeddingVec
+        ]
+        if let d = try? JSONSerialization.data(withJSONObject: embObj, options: [.sortedKeys]) { try? d.write(to: embURL) }
+        // Update baseline page with artifacts reference if not present
+        _ = await core.writeBaselineSummary(baselineId: bId, kind: "pbvrt.baseline", payload: [
+            "promptId": "",
+            "viewport": [:],
+            "rendererVersion": "",
+            "artifacts": [
+                "baselinePng": baselineURL.path,
+                "embeddingJson": embURL.path
+            ]
+        ])
+        // Return Baseline summary
+        let promptRef = Components.Schemas.PromptRef(id: "", hash: "sha256:unknown", uri: "store://pbvrt/prompt/")
+        let baseline = Components.Schemas.Baseline(
+            baselineId: bId,
+            promptRef: promptRef,
+            viewport: .init(width: 0, height: 0, scale: 1),
+            rendererVersion: "",
+            midiSequence: nil,
+            probes: .init(embeddingBackend: nil),
+            artifacts: .init(baselinePng: baselineURL.path, embeddingJson: embURL.path, midiUmp: nil)
+        )
+        return .ok(.init(body: .json(baseline)))
+    }
+
     // POST /compare (store candidate and return trivial metrics)
     func compareCandidate(_ input: Operations.compareCandidate.Input) async throws -> Operations.compareCandidate.Output {
         guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
@@ -599,6 +648,8 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
     }
 
     func detectOnsets(_ input: Operations.detectOnsets.Input) async throws -> Operations.detectOnsets.Output {
+        let __dbg = ProcessInfo.processInfo.environment["PBVRT_DEBUG"] == "1"
+        if __dbg { FileHandle.standardError.write(Data("[pbvrt] detectOnsets: begin\n".utf8)) }
         guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
         var wav: Data?; var baselineId: String?
         for try await part in form {
@@ -609,8 +660,10 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
             }
         }
         guard let d = wav, let (mono, sr) = try? Self.decodeWavToMono(data: d) else {
+            if __dbg { FileHandle.standardError.write(Data("[pbvrt] detectOnsets: bad wav decode\n".utf8)) }
             return .undocumented(statusCode: 400, .init())
         }
+        if __dbg { FileHandle.standardError.write(Data("[pbvrt] detectOnsets: samples=\(mono.count) sr=\(sr)\n".utf8)) }
         let hop = 512
         let win = 1024
         let (_, _, onsets) = Self.computeOnsets(samples: mono, sampleRate: sr, window: win, hop: hop)
@@ -622,10 +675,13 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
                 "tempoBpm": tempo as Any
             ].compactMapValues { $0 })
         }
+        if __dbg { FileHandle.standardError.write(Data("[pbvrt] detectOnsets: ok\n".utf8)) }
         return .ok(.init(body: .json(res)))
     }
 
     func analyzePitch(_ input: Operations.analyzePitch.Input) async throws -> Operations.analyzePitch.Output {
+        let __dbg = ProcessInfo.processInfo.environment["PBVRT_DEBUG"] == "1"
+        if __dbg { FileHandle.standardError.write(Data("[pbvrt] analyzePitch: begin\n".utf8)) }
         guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
         var wav: Data?; var baselineId: String?
         for try await part in form {
@@ -636,6 +692,7 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
             }
         }
         guard let d = wav, let (mono, sr) = try? Self.decodeWavToMono(data: d) else {
+            if __dbg { FileHandle.standardError.write(Data("[pbvrt] analyzePitch: bad wav decode\n".utf8)) }
             return .undocumented(statusCode: 400, .init())
         }
         let f0 = Self.autocorrPitchTrack(samples: mono, sampleRate: sr)
@@ -643,10 +700,13 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         if let bId = baselineId, !bId.isEmpty {
             await core.writeBaselineSummary(baselineId: bId, kind: "pbvrt.audio.pitch", payload: ["f0Hz": f0])
         }
+        if __dbg { FileHandle.standardError.write(Data("[pbvrt] analyzePitch: ok\n".utf8)) }
         return .ok(.init(body: .json(res)))
     }
 
     func analyzeLoudness(_ input: Operations.analyzeLoudness.Input) async throws -> Operations.analyzeLoudness.Output {
+        let __dbg = ProcessInfo.processInfo.environment["PBVRT_DEBUG"] == "1"
+        if __dbg { FileHandle.standardError.write(Data("[pbvrt] analyzeLoudness: begin\n".utf8)) }
         guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
         var wav: Data?; var baselineId: String?
         for try await part in form {
@@ -656,7 +716,8 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
             case .undocumented: break
             }
         }
-        guard let d = wav, let (mono, sr) = try? Self.decodeWavToMono(data: d) else {
+        guard let d = wav, let (mono, _) = try? Self.decodeWavToMono(data: d) else {
+            if __dbg { FileHandle.standardError.write(Data("[pbvrt] analyzeLoudness: bad wav decode\n".utf8)) }
             return .undocumented(statusCode: 400, .init())
         }
         let (rms, meanDb, maxDb) = Self.loudnessEnvelope(samples: mono)
@@ -668,10 +729,13 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
                 "maxDb": maxDb
             ])
         }
+        if __dbg { FileHandle.standardError.write(Data("[pbvrt] analyzeLoudness: ok\n".utf8)) }
         return .ok(.init(body: .json(res)))
     }
 
     func analyzeAlignment(_ input: Operations.analyzeAlignment.Input) async throws -> Operations.analyzeAlignment.Output {
+        let __dbg = ProcessInfo.processInfo.environment["PBVRT_DEBUG"] == "1"
+        if __dbg { FileHandle.standardError.write(Data("[pbvrt] analyzeAlignment: begin\n".utf8)) }
         guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
         var bw: Data?; var cw: Data?; var baselineId: String?
         for try await part in form {
@@ -685,6 +749,7 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         guard let bd = bw, let cd = cw,
               let (bmono, bsr) = try? Self.decodeWavToMono(data: bd),
               let (cmono, csr) = try? Self.decodeWavToMono(data: cd) else {
+            if __dbg { FileHandle.standardError.write(Data("[pbvrt] analyzeAlignment: bad wav decode\n".utf8)) }
             return .undocumented(statusCode: 400, .init())
         }
         let sr = min(bsr, csr)
@@ -696,6 +761,7 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
                 "offsetMs": offsetMs
             ])
         }
+        if __dbg { FileHandle.standardError.write(Data("[pbvrt] analyzeAlignment: ok\n".utf8)) }
         return .ok(.init(body: .json(res)))
     }
 

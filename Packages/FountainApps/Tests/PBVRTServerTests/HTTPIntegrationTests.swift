@@ -439,6 +439,46 @@ final class PBVRTHTTPIntegrationTests: XCTestCase {
             XCTFail("audio embedding baseline segment not found")
         }
     }
+
+    func testBaselineCaptureWritesBaselineArtifacts() async throws {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let (kernel, store) = await makeKernelAndStore(tmp: tmp)
+        // Create baseline via JSON
+        struct VP: Codable { let width: Int; let height: Int; let scale: Float }
+        struct UMPPacket: Codable { let word0: String }
+        struct MIDISequence: Codable { let sequenceID: String; let packets: [UMPPacket] }
+        struct BaselineInit: Codable { let promptId: String; let viewport: VP; let midiSequence: MIDISequence }
+        let initObj = BaselineInit(promptId: "p1", viewport: .init(width: 100, height: 100, scale: 1), midiSequence: .init(sequenceID: "s1", packets: [.init(word0: "00000000")]))
+        let initData = try JSONEncoder().encode(initObj)
+        var req = HTTPRequest(method: "POST", path: "/pb-vrt/baselines", headers: ["Content-Type": "application/json", "Content-Length": String(initData.count)], body: initData)
+        var resp = try await kernel.handle(req)
+        XCTAssertEqual(resp.status, 201)
+        struct BaselineRef: Decodable { let baselineId: String }
+        let ref = try decodeJSON(BaselineRef.self, data: resp.body)
+        XCTAssertNotNil(ref)
+        guard let baselineId = ref?.baselineId else { XCTFail("no baselineId"); return }
+        // Capture baseline PNG via multipart
+        let png = smallPNG(size: 16, whiteSquare: true)
+        let boundary = "XBOUNDARY-CAP"
+        let (body, ctype) = multipart([
+            (name: "baselinePng", filename: "b.png", contentType: "application/octet-stream", data: png)
+        ], boundary: boundary)
+        req = HTTPRequest(method: "POST", path: "/pb-vrt/baselines/\(baselineId)/capture", headers: ["Content-Type": ctype, "Content-Length": String(body.count)], body: body)
+        resp = try await kernel.handle(req)
+        XCTAssertEqual(resp.status, 200)
+        // Check store segment for artifacts and file existence
+        let segId = "pbvrt:baseline:\(baselineId):pbvrt.baseline"
+        if let inner = try await getSegmentInnerJSON(store: store, corpusId: "pbvrt-test", segId: segId) {
+            if let arts = inner["artifacts"] as? [String: Any], let path = arts["baselinePng"] as? String {
+                XCTAssertTrue(FileManager.default.fileExists(atPath: path), "baseline.png not found at \(path)")
+            } else {
+                XCTFail("no artifacts in baseline seg")
+            }
+        } else {
+            XCTFail("baseline segment missing after capture")
+        }
+    }
 }
 
 private extension UInt16 { var littleEndianData: Data { withUnsafeBytes(of: self.littleEndian, { Data($0) }) } }

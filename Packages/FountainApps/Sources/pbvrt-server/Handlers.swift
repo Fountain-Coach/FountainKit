@@ -5,6 +5,7 @@ import Vision
 import AVFoundation
 import CoreMLKit
 import Accelerate
+import CoreGraphics
 
 // PB‑VRT core for persistence
 final class PBVRTCore: @unchecked Sendable {
@@ -285,24 +286,28 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
             if let cand = try? Data(contentsOf: candidateURL) {
                 fdist = try? PBVRTEngine.featureprintDistance(baseline: base, candidate: cand)
                 if let bImg = CGImage.fromPNGData(base), let cImg = CGImage.fromPNGData(cand) {
-                    // Align candidate to baseline (coarse + refine) at 256²
+                    // Align candidate to baseline (coarse + refine) and refine scale/rotation at 256²
                     let (dxDown, dyDown, _) = Self.estimateTranslation(baseline: bImg, candidate: cImg, sample: 128, search: 16)
-                    let (dxRef, dyRef, _) = Self.refineTranslation(baseline: bImg, candidate: cImg, coarseDX: dxDown, coarseDY: dyDown, coarseSample: 128, refineSample: 256, window: 6)
+                    let (dxT, dyT, _) = Self.refineTranslation(baseline: bImg, candidate: cImg, coarseDX: dxDown, coarseDY: dyDown, coarseSample: 128, refineSample: 256, window: 6)
+                    let sr = Self.searchScaleRotationAlignment(baseline: bImg, candidate: cImg, sample: 256, centerDX: dxT, centerDY: dyT, scales: [0.98,1.0,1.02], rotationsDeg: [-2,-1,0,1,2], window: 4)
+                    let dxRef = sr.dx, dyRef = sr.dy
                     // Compute pixel L1 (mean absolute difference) on full-res overlap using dx,dy scaled from 256 sample
                     let scaleX = CGFloat(cImg.width) / 256.0
                     let scaleY = CGFloat(cImg.height) / 256.0
                     let dx = Int(round(CGFloat(dxRef) * scaleX))
                     let dy = Int(round(CGFloat(dyRef) * scaleY))
                     pixelL1 = Self.meanAbsoluteDifference(baseline: bImg, candidate: cImg, dx: dx, dy: dy)
-                    // SSIM on normalized 256² grayscale using saliency weights on aligned thumbnails
+                    // SSIM on normalized 256² grayscale; transform candidate by scale/rotation and translation
                     let sample = 256
-                    if let bRes = bImg.resized(width: sample, height: sample), let cRes = cImg.resized(width: sample, height: sample) {
+                    if let bRes = bImg.resized(width: sample, height: sample),
+                       let cTx = CGImage.transformAlign(image: cImg, targetSize: CGSize(width: sample, height: sample), dx: dxRef, dy: dyRef, scale: sr.scale, rotationDeg: sr.rotationDeg) {
+                        let cRes = cTx
                         let bGray = PBVRTHandlers.grayscaleFloat(image: bRes)
                         let cGray = PBVRTHandlers.grayscaleFloat(image: cRes)
                         // Saliency-weighted SSIM using gradient-based saliency
                         let bSal = PBVRTHandlers.saliencyMap(fromGrayscale: bGray, width: sample, height: sample)
                         let cSal = PBVRTHandlers.saliencyMap(fromGrayscale: cGray, width: sample, height: sample)
-                        ssim = PBVRTHandlers.alignedWeightedSSIM(b: bGray, c: cGray, bs: bSal, cs: cSal, width: sample, height: sample, dx: dxRef, dy: dyRef)
+                        ssim = PBVRTHandlers.weightedSSIM(a: bGray, b: cGray, weight: zip(bSal, cSal).map { 0.5 * ($0 + $1) }, count: sample*sample)
                         // Delta artifact (abs difference) at 256²
                         var delta = [Float](repeating: 0, count: sample*sample)
                         for i in 0..<(sample*sample) { delta[i] = abs(bGray[i] - cGray[i]) }
@@ -467,10 +472,18 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
               let base = CGImage.fromPNGData(b), let cand = CGImage.fromPNGData(c) else {
             return .undocumented(statusCode: 400, .init())
         }
-        // Coarse estimate
+        // Coarse estimate (translation)
         let (dxDown, dyDown, _) = Self.estimateTranslation(baseline: base, candidate: cand, sample: 128, search: 16)
-        // Refine around coarse estimate at higher resolution
-        let (dxRef, dyRef, bestScore) = Self.refineTranslation(baseline: base, candidate: cand, coarseDX: dxDown, coarseDY: dyDown, coarseSample: 128, refineSample: 256, window: 6)
+        // Refine translation at higher resolution
+        let (dxT, dyT, scoreT) = Self.refineTranslation(baseline: base, candidate: cand, coarseDX: dxDown, coarseDY: dyDown, coarseSample: 128, refineSample: 256, window: 6)
+        // Small search around identity for scale/rotation
+        let sr = Self.searchScaleRotationAlignment(baseline: base, candidate: cand, sample: 256, centerDX: dxT, centerDY: dyT, scales: [0.98, 1.0, 1.02], rotationsDeg: [-2, -1, 0, 1, 2], window: 4)
+        let improved = sr.score < scoreT * 0.97
+        let dxRef = improved ? sr.dx : dxT
+        let dyRef = improved ? sr.dy : dyT
+        let sRef: CGFloat = improved ? sr.scale : 1.0
+        let rRef: CGFloat = improved ? sr.rotationDeg : 0.0
+        let bestScore = improved ? sr.score : scoreT
         // Scale offsets to candidate pixel coordinates (from refine sample)
         let scaleX = CGFloat(cand.width) / 256.0
         let scaleY = CGFloat(cand.height) / 256.0
@@ -479,7 +492,7 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         // Write aligned candidate artifact
         let dir = core.adHocDir()
         let alignedURL = dir.appendingPathComponent("aligned.png")
-        if let aligned = CGImage.translate(image: cand, by: CGSize(width: Int(round(CGFloat(dx))), height: Int(round(CGFloat(dy))))) {
+        if let aligned = CGImage.transformAlign(image: cand, targetSize: CGSize(width: base.width, height: base.height), dx: Int(round(CGFloat(dx))), dy: Int(round(CGFloat(dy))), scale: sRef, rotationDeg: rRef) {
             try? aligned.writePNG(to: alignedURL)
         }
         // Compute simple post-align drift as mean absolute difference over overlap
@@ -487,7 +500,7 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         // Confidence from normalized SAD at refine sample scale
         let norm = max(1.0, Double(256 * 256))
         let confidence = max(0.0, 1.0 - Double(bestScore)/norm)
-        let t = Components.Schemas.Transform2D(dx: dx, dy: dy, scale: 1, rotationDeg: 0, homography: nil)
+        let t = Components.Schemas.Transform2D(dx: dx, dy: dy, scale: Float(sRef), rotationDeg: Float(rRef), homography: nil)
         let res = Components.Schemas.AlignResult(transform: t, postAlignDriftPx: Float(drift), confidence: Float(confidence), artifacts: .init(alignedCandidatePng: alignedURL.path))
         let payload: [String: Any] = [
             "dx": Double(dx),
@@ -805,6 +818,22 @@ extension CGImage {
         ctx.draw(image, in: CGRect(x: Int(offset.width), y: Int(offset.height), width: image.width, height: image.height))
         return ctx.makeImage()
     }
+    /// Draw into target-sized canvas with translate, then rotate+scale around canvas center.
+    static func transformAlign(image: CGImage, targetSize: CGSize, dx: Int, dy: Int, scale: CGFloat, rotationDeg: CGFloat) -> CGImage? {
+        let width = Int(targetSize.width), height = Int(targetSize.height)
+        guard let colorSpace = image.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        guard let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: image.bitsPerComponent, bytesPerRow: 0, space: colorSpace, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        ctx.translateBy(x: CGFloat(dx), y: CGFloat(dy))
+        ctx.translateBy(x: targetSize.width/2, y: targetSize.height/2)
+        let rad = rotationDeg * .pi / 180.0
+        ctx.rotate(by: rad)
+        ctx.scaleBy(x: scale, y: scale)
+        ctx.translateBy(x: -CGFloat(image.width)/2, y: -CGFloat(image.height)/2)
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        return ctx.makeImage()
+    }
     func writePNG(to url: URL) throws {
         let type = UTType.png.identifier as CFString
         guard let dest = CGImageDestinationCreateWithURL(url as CFURL, type, 1, nil) else { return }
@@ -842,6 +871,24 @@ extension PBVRTHandlers {
             }
         }
         return (best.0, best.1, bestScore)
+    }
+
+    /// Search small set of scales/rotations and refine translation around a center to minimize SAD at given sample.
+    static func searchScaleRotationAlignment(baseline: CGImage, candidate: CGImage, sample: Int, centerDX: Int, centerDY: Int, scales: [CGFloat], rotationsDeg: [CGFloat], window: Int) -> (dx: Int, dy: Int, scale: CGFloat, rotationDeg: CGFloat, score: Float) {
+        guard let bSmall = baseline.resized(width: sample, height: sample) else { return (centerDX, centerDY, 1.0, 0.0, .greatestFiniteMagnitude) }
+        var bestScore: Float = .greatestFiniteMagnitude
+        var bestDX = centerDX
+        var bestDY = centerDY
+        var bestS: CGFloat = 1.0
+        var bestR: CGFloat = 0.0
+        for s in scales {
+            for r in rotationsDeg {
+                guard let cTx = CGImage.transformAlign(image: candidate, targetSize: CGSize(width: sample, height: sample), dx: 0, dy: 0, scale: s, rotationDeg: r) else { continue }
+                let (dx, dy, sc) = estimateTranslationAround(baseline: bSmall, candidate: cTx, sample: sample, centerDX: centerDX, centerDY: centerDY, window: window)
+                if sc < bestScore { bestScore = sc; bestDX = dx; bestDY = dy; bestS = s; bestR = r }
+            }
+        }
+        return (bestDX, bestDY, bestS, bestR, bestScore)
     }
     static func refineTranslation(baseline: CGImage, candidate: CGImage, coarseDX: Int, coarseDY: Int, coarseSample: Int, refineSample: Int, window: Int) -> (dx: Int, dy: Int, score: Float) {
         // Scale coarse offset into refine sample space

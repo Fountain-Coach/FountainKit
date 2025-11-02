@@ -136,7 +136,6 @@ final class PBVRTHTTPIntegrationTests: XCTestCase {
     }
 
     func testSaliencyCompareBaselineWritesBaselineSegment() async throws {
-        throw XCTSkip("Kernel multipart integration WIP; skipping HTTP integration baseline write test")
         let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
         let (kernel, store) = await makeKernelAndStore(tmp: tmp)
@@ -144,19 +143,21 @@ final class PBVRTHTTPIntegrationTests: XCTestCase {
         let boundary = "B-SAL-BASE"
         let (body, ctype) = multipart([
             (name: "baselineId", filename: nil, contentType: "text/plain", data: Data(baselineId.utf8)),
-            (name: "baselinePng", filename: "b.png", contentType: "application/octet-stream", data: smallPNG(whiteSquare: true)),
-            (name: "candidatePng", filename: "c.png", contentType: "application/octet-stream", data: smallPNG(whiteSquare: true))
+            (name: "baselinePng", filename: "b.png", contentType: "application/octet-stream", data: smallPNG(size: 64, whiteSquare: true)),
+            (name: "candidatePng", filename: "c.png", contentType: "application/octet-stream", data: smallPNG(size: 64, whiteSquare: true))
         ], boundary: boundary)
         let req = HTTPRequest(method: "POST", path: "/pb-vrt/probes/saliency/compare", headers: ["Content-Type": ctype, "Content-Length": String(body.count)], body: body)
         let resp = try await kernel.handle(req)
-        XCTAssertEqual(resp.status, 200)
+        if resp.status != 200 {
+            let err = String(data: resp.body, encoding: .utf8) ?? ""
+            XCTFail("status=\(resp.status) body=\(err)")
+        }
         let pageId = "pbvrt:baseline:\(baselineId)"
         let qr = try await store.query(corpusId: "pbvrt-test", collection: "segments", query: Query(filters: ["kind": "pbvrt.vision.saliency", "pageId": pageId]))
         XCTAssertGreaterThanOrEqual(qr.total, 1)
     }
 
     func testCompareCandidateWritesBaselineSegment() async throws {
-        throw XCTSkip("Kernel multipart integration WIP; skipping /compare baseline write test")
         let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
         let (kernel, store) = await makeKernelAndStore(tmp: tmp)
@@ -175,16 +176,51 @@ final class PBVRTHTTPIntegrationTests: XCTestCase {
         // call /compare
         let boundary = "BOUND3"
         let (body, ctype) = multipart([
-            (name: "baselineId", filename: nil, contentType: nil, data: Data(baselineId.utf8)),
-            (name: "candidatePng", filename: "cand.png", contentType: "image/png", data: smallPNG())
+            (name: "baselineId", filename: nil, contentType: "text/plain", data: Data(baselineId.utf8)),
+            (name: "candidatePng", filename: "cand.png", contentType: "application/octet-stream", data: smallPNG())
         ], boundary: boundary)
         let req = HTTPRequest(method: "POST", path: "/pb-vrt/compare", headers: ["Content-Type": ctype, "Content-Length": String(body.count)], body: body)
         let resp = try await kernel.handle(req)
-        XCTAssertEqual(resp.status, 200)
+        if resp.status != 200 {
+            let err = String(data: resp.body, encoding: .utf8) ?? ""
+            XCTFail("status=\(resp.status) body=\(err)")
+        }
         // verify pbvrt.compare segment exists
         let segId = "\(pageId):pbvrt.compare"
         let got = try await store.getDoc(corpusId: corpus, collection: "segments", id: segId)
         XCTAssertNotNil(got)
+    }
+
+    func testAlignImagesDriftLowAndTransformReported() async throws {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let (kernel, _) = await makeKernelAndStore(tmp: tmp)
+        // Build 256×256 baseline with white square
+        let baseData = smallPNG(size: 256, whiteSquare: true)
+        // Shift candidate by (dx,dy) = (6, -4)
+        guard let cs = CGColorSpace(name: CGColorSpace.sRGB) else { return XCTFail("no cs") }
+        guard let baseCG = CGImage.fromPNGData(baseData) else { return XCTFail("no base cg") }
+        guard let candCG = CGImage.translate(image: baseCG, by: CGSize(width: 6, height: -4)) else { return XCTFail("translate failed") }
+        let candURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".png")
+        try candCG.writePNG(to: candURL)
+        let candData = try Data(contentsOf: candURL)
+        let boundary = "ALIGNB"
+        let (body, ctype) = multipart([
+            (name: "baselinePng", filename: "b.png", contentType: "application/octet-stream", data: baseData),
+            (name: "candidatePng", filename: "c.png", contentType: "application/octet-stream", data: candData)
+        ], boundary: boundary)
+        let req = HTTPRequest(method: "POST", path: "/pb-vrt/probes/align", headers: ["Content-Type": ctype, "Content-Length": String(body.count)], body: body)
+        let resp = try await kernel.handle(req)
+        if resp.status != 200 {
+            let err = String(data: resp.body, encoding: .utf8) ?? ""
+            XCTFail("status=\(resp.status) body=\(err)")
+        }
+        struct AlignRes: Decodable { struct T: Decodable { let dx: Float?; let dy: Float? }; let transform: T?; let postAlignDriftPx: Float? }
+        if let a = try? JSONDecoder().decode(AlignRes.self, from: resp.body) {
+            if let dx = a.transform?.dx { XCTAssertLessThan(abs(dx - 6), 2) }
+            XCTAssertNotNil(a.transform?.dy)
+            if let drift = a.postAlignDriftPx { XCTAssertLessThanOrEqual(drift, 20.0) }
+        }
     }
 }
 

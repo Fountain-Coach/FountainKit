@@ -145,6 +145,8 @@ paths:
                   type: string
                   enum: [featurePrint, coreML]
                   default: featurePrint
+            encoding:
+              candidatePng: { contentType: application/octet-stream }
       responses:
         '200':
           description: Drift report

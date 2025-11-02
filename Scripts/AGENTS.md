@@ -52,3 +52,8 @@ Web mirror (Baseline‑PatchBay)
 PatchBay docs (PB‑VRT Vision + Audio)
 - Seed combined doc into FountainStore: `swift run --package-path Packages/FountainApps patchbay-docs-seed`.
 - Read back: `CORPUS_ID=patchbay SEGMENT_ID='docs:pb-vrt-vision-audio:doc' swift run --package-path Packages/FountainApps store-dump`.
+
+PB‑VRT tests (Vision + Audio)
+- Run server kernel tests headless: `bash Scripts/ci/pbvrt-tests.sh`.
+- Scope to a single test: `ROBOT_ONLY=1 swift test --package-path Packages/FountainApps -c debug --filter PBVRTHTTPIntegrationTests.testCompareCandidateWritesBaselineSegment`.
+- Build server only: `swift build --package-path Packages/FountainApps -c debug --target pbvrt-server`.

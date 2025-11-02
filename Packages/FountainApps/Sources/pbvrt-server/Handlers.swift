@@ -230,6 +230,7 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         var pixelL1: Double?
         var ssim: Double?
         var deltaPath: String?
+        var deltaFullPath: String?
         let baselineURL = dir.appendingPathComponent("baseline.png")
         if let base = try? Data(contentsOf: baselineURL) {
             if let cand = try? Data(contentsOf: candidateURL) {
@@ -249,7 +250,11 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
                     if let bRes = bImg.resized(width: sample, height: sample), let cRes = cImg.resized(width: sample, height: sample) {
                         let bGray = PBVRTHandlers.grayscaleFloat(image: bRes)
                         let cGray = PBVRTHandlers.grayscaleFloat(image: cRes)
-                        let w = [Float](repeating: 1, count: sample*sample)
+                        // Saliency-weighted SSIM using gradient-based saliency
+                        let bSal = PBVRTHandlers.saliencyMap(fromGrayscale: bGray, width: sample, height: sample)
+                        let cSal = PBVRTHandlers.saliencyMap(fromGrayscale: cGray, width: sample, height: sample)
+                        var w = [Float](repeating: 0, count: sample*sample)
+                        for i in 0..<(sample*sample) { w[i] = 0.5 * (bSal[i] + cSal[i]) }
                         ssim = PBVRTHandlers.weightedSSIM(a: bGray, b: cGray, weight: w, count: sample*sample)
                         // Delta artifact (abs difference) at 256²
                         var delta = [Float](repeating: 0, count: sample*sample)
@@ -258,6 +263,19 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
                         PBVRTHandlers.writeGrayscalePNG(matrix: .init(rows: sample, cols: sample, data: delta), to: dURL)
                         deltaPath = dURL.path
                     }
+                    // Full-res delta artifact
+                    let bGrayFull = PBVRTHandlers.grayscaleFloat(image: bImg)
+                    let cGrayFull = PBVRTHandlers.grayscaleFloat(image: cImg)
+                    var full = [Float](repeating: 0, count: bImg.width * bImg.height)
+                    for y in 0..<bImg.height {
+                        for x in 0..<bImg.width {
+                            let idx = y * bImg.width + x
+                            full[idx] = abs(bGrayFull[idx] - cGrayFull[idx])
+                        }
+                    }
+                    let dfURL = dir.appendingPathComponent("delta_full.png")
+                    PBVRTHandlers.writeGrayscalePNG(matrix: .init(rows: bImg.height, cols: bImg.width, data: full), to: dfURL)
+                    deltaFullPath = dfURL.path
                 }
             }
         }
@@ -272,7 +290,7 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
             baselineId: bId,
             metrics: metrics,
             pass: (fdist ?? 0) < (Double(ProcessInfo.processInfo.environment["PBVRT_FEATUREPRINT_MAX"] ?? "0.03") ?? 0.03),
-            artifacts: .init(candidatePng: candidateURL.path, deltaPng: deltaPath),
+            artifacts: .init(candidatePng: candidateURL.path, deltaPng: deltaPath, deltaFullPng: deltaFullPath),
             timestamps: .init(baseline: nil, run: Date())
         )
         // Persist compare summary under the baseline page
@@ -289,7 +307,8 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
                 ],
                 "artifacts": [
                     "candidatePng": candidateURL.path,
-                    "deltaPng": deltaPath as Any
+                    "deltaPng": deltaPath as Any,
+                    "deltaFullPng": deltaFullPath as Any
                 ],
                 "runAt": ISO8601DateFormatter().string(from: Date())
             ]

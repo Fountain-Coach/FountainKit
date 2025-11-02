@@ -584,6 +584,7 @@ components:
           properties:
             candidatePng: { type: string }
             deltaPng: { type: string }
+            deltaFullPng: { type: string }
         timestamps:
           type: object
           properties:

@@ -355,9 +355,11 @@ final class PBVRTHTTPIntegrationTests: XCTestCase {
         let got = try await store.getDoc(corpusId: corpus, collection: "segments", id: segId)
         XCTAssertNotNil(got)
         // Candidate artifact exists
-        struct Drift: Decodable { struct Art: Decodable { let candidatePng: String? }; let artifacts: Art? }
-        if let d = decodeJSON(Drift.self, data: resp.body), let path = d.artifacts?.candidatePng {
-            assertFilesExist([path])
+        struct Drift: Decodable { struct Art: Decodable { let candidatePng: String?; let deltaPng: String?; let deltaFullPng: String? }; let metrics: M?; let artifacts: Art?; struct M: Decodable { let featureprint_distance: Float?; let pixel_l1: Float?; let ssim: Float? } }
+        if let d = decodeJSON(Drift.self, data: resp.body) {
+            if let a = d.artifacts { assertFilesExist([a.candidatePng, a.deltaPng, a.deltaFullPng]) }
+            // Basic sanity: ssim in [0,1]
+            if let s = d.metrics?.ssim { XCTAssertGreaterThanOrEqual(s, 0); XCTAssertLessThanOrEqual(s, 1) }
         }
         // Candidate artifact path exists in store segment
         if let got, let obj = try? JSONSerialization.jsonObject(with: got) as? [String: Any], let text = obj["text"] as? String,

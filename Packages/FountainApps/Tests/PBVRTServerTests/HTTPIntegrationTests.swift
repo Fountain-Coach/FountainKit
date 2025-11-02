@@ -208,6 +208,88 @@ final class PBVRTHTTPIntegrationTests: XCTestCase {
         }
     }
 
+    func testOnsetsBaselineWritesBaselineSegment() async throws {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let (kernel, store) = await makeKernelAndStore(tmp: tmp)
+        let wav = sineWav()
+        let baselineId = UUID().uuidString
+        let boundary = "XBOUNDARY-ONSETS-B"
+        let (body, ctype) = multipart([
+            (name: "baselineId", filename: nil, contentType: "text/plain", data: Data(baselineId.utf8)),
+            (name: "wav", filename: "x.wav", contentType: "application/octet-stream", data: wav)
+        ], boundary: boundary)
+        let req = HTTPRequest(method: "POST", path: "/pb-vrt/probes/audio/onsets", headers: ["Content-Type": ctype, "Content-Length": String(body.count)], body: body)
+        let resp = try await kernel.handle(req)
+        if resp.status != 200 { XCTFail("status=\(resp.status)") }
+        let segId = "pbvrt:baseline:\(baselineId):pbvrt.audio.onsets"
+        let inner = try await getSegmentInnerJSON(store: store, corpusId: "pbvrt-test", segId: segId)
+        XCTAssertNotNil(inner)
+        XCTAssertNotNil(inner?["onsetsSec"]) // presence check
+    }
+
+    func testPitchBaselineWritesBaselineSegment() async throws {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let (kernel, store) = await makeKernelAndStore(tmp: tmp)
+        let wav = sineWav()
+        let baselineId = UUID().uuidString
+        let boundary = "XBOUNDARY-PITCH-B"
+        let (body, ctype) = multipart([
+            (name: "baselineId", filename: nil, contentType: "text/plain", data: Data(baselineId.utf8)),
+            (name: "wav", filename: "x.wav", contentType: "application/octet-stream", data: wav)
+        ], boundary: boundary)
+        let req = HTTPRequest(method: "POST", path: "/pb-vrt/probes/audio/pitch", headers: ["Content-Type": ctype, "Content-Length": String(body.count)], body: body)
+        let resp = try await kernel.handle(req)
+        if resp.status != 200 { XCTFail("status=\(resp.status)") }
+        let segId = "pbvrt:baseline:\(baselineId):pbvrt.audio.pitch"
+        let inner = try await getSegmentInnerJSON(store: store, corpusId: "pbvrt-test", segId: segId)
+        XCTAssertNotNil(inner)
+        XCTAssertNotNil(inner?["f0Hz"]) // presence check
+    }
+
+    func testLoudnessBaselineWritesBaselineSegment() async throws {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let (kernel, store) = await makeKernelAndStore(tmp: tmp)
+        let wav = sineWav()
+        let baselineId = UUID().uuidString
+        let boundary = "XBOUNDARY-LOUD-B"
+        let (body, ctype) = multipart([
+            (name: "baselineId", filename: nil, contentType: "text/plain", data: Data(baselineId.utf8)),
+            (name: "wav", filename: "x.wav", contentType: "application/octet-stream", data: wav)
+        ], boundary: boundary)
+        let req = HTTPRequest(method: "POST", path: "/pb-vrt/probes/audio/loudness", headers: ["Content-Type": ctype, "Content-Length": String(body.count)], body: body)
+        let resp = try await kernel.handle(req)
+        if resp.status != 200 { XCTFail("status=\(resp.status)") }
+        let segId = "pbvrt:baseline:\(baselineId):pbvrt.audio.loudness"
+        let inner = try await getSegmentInnerJSON(store: store, corpusId: "pbvrt-test", segId: segId)
+        XCTAssertNotNil(inner)
+        XCTAssertNotNil(inner?["rms"]) // presence check
+        XCTAssertNotNil(inner?["meanDb"]) // presence check
+    }
+
+    func testAudioAlignmentBaselineWritesBaselineSegment() async throws {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let (kernel, store) = await makeKernelAndStore(tmp: tmp)
+        let wav = sineWav()
+        let baselineId = UUID().uuidString
+        let boundary = "XBOUNDARY-ALGN-B"
+        let (body, ctype) = multipart([
+            (name: "baselineId", filename: nil, contentType: "text/plain", data: Data(baselineId.utf8)),
+            (name: "baselineWav", filename: "b.wav", contentType: "application/octet-stream", data: wav),
+            (name: "candidateWav", filename: "c.wav", contentType: "application/octet-stream", data: wav)
+        ], boundary: boundary)
+        let req = HTTPRequest(method: "POST", path: "/pb-vrt/probes/audio/alignment", headers: ["Content-Type": ctype, "Content-Length": String(body.count)], body: body)
+        let resp = try await kernel.handle(req)
+        if resp.status != 200 { XCTFail("status=\(resp.status)") }
+        let segId = "pbvrt:baseline:\(baselineId):pbvrt.audio.alignment"
+        let inner = try await getSegmentInnerJSON(store: store, corpusId: "pbvrt-test", segId: segId)
+        XCTAssertNotNil(inner)
+        XCTAssertNotNil(inner?["offsetMs"]) // presence check
+    }
+
     func testSaliencyCompareBaselineWritesBaselineSegment() async throws {
         let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)

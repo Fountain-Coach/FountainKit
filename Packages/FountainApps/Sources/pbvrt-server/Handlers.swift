@@ -57,6 +57,22 @@ final class PBVRTCore: @unchecked Sendable {
         return dir
     }
 
+    /// Writes an ad-hoc summary segment into FountainStore for visibility when no baselineId is present.
+    /// Returns the page id used for the write.
+    @discardableResult
+    func writeAdHocSummary(kind: String, payload: [String: Any]) async -> String {
+        let pageId = "pbvrt:adhoc:" + UUID().uuidString
+        do {
+            try await ensurePage(pageId, title: "PBVRT AdHoc — \(kind)")
+            if let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]), let s = String(data: data, encoding: .utf8) {
+                _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(pageId):\(kind)", pageId: pageId, kind: kind, text: s))
+            }
+        } catch {
+            // best-effort only
+        }
+        return pageId
+    }
+
     func writeBaseline(baselineId: String, promptId: String, viewport: Components.Schemas.Viewport, rendererVersion: String?, midiSequence: Components.Schemas.MIDISequence?, probes: [String: Any]?) async throws -> String {
         try await ensurePage(baselinePageId(baselineId), title: "PBVRT Baseline \(baselineId)")
         let dir = baselineDir(baselineId)
@@ -216,6 +232,27 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
             artifacts: .init(candidatePng: candidateURL.path, deltaPng: nil),
             timestamps: .init(baseline: nil, run: Date())
         )
+        // Persist compare summary under the baseline page
+        await core.ensureCorpus()
+        let pageId = core.baselinePageId(bId)
+        do {
+            try await core.ensurePage(pageId, title: "PBVRT Baseline \(bId)")
+            let payload: [String: Any] = [
+                "baselineId": bId,
+                "metrics": [
+                    "featureprint_distance": fdist as Any
+                ],
+                "artifacts": [
+                    "candidatePng": candidateURL.path
+                ],
+                "runAt": ISO8601DateFormatter().string(from: Date())
+            ]
+            if let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]), let s = String(data: data, encoding: .utf8) {
+                _ = try? await core.store.addSegment(.init(corpusId: core.corpusId, segmentId: "\(pageId):pbvrt.compare", pageId: pageId, kind: "pbvrt.compare", text: s))
+            }
+        } catch {
+            // best-effort persistence
+        }
         return .ok(.init(body: .json(report)))
     }
 
@@ -285,6 +322,15 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         for i in 0..<(sample*sample) { wd[i] = Float(abs(Double(bGray[i]) - Double(cGray[i])) * 0.5 * Double(bSal[i] + cSal[i])); maxv = max(maxv, wd[i]) }
         PBVRTHandlers.writeGrayscalePNG(matrix: .init(rows: sample, cols: sample, data: wd.map { $0 / maxv }), to: wDeltaURL)
         let res = Components.Schemas.SaliencyCompareResult(weighted_l1: Float(wL1), weighted_ssim: nil, artifacts: .init(baselineSaliency: bSalURL.path, candidateSaliency: cSalURL.path, weightedDelta: wDeltaURL.path))
+        // Persist ad-hoc summary for observability
+        await core.writeAdHocSummary(kind: "pbvrt.vision.saliency", payload: [
+            "weighted_l1": wL1,
+            "artifacts": [
+                "baselineSaliency": bSalURL.path,
+                "candidateSaliency": cSalURL.path,
+                "weightedDelta": wDeltaURL.path
+            ]
+        ])
         return .ok(.init(body: .json(res)))
     }
 
@@ -319,6 +365,12 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         let drift = Self.meanAbsoluteDifference(baseline: base, candidate: cand, dx: Int(round(CGFloat(dx))), dy: Int(round(CGFloat(dy))))
         let t = Components.Schemas.Transform2D(dx: dx, dy: dy, scale: 1, rotationDeg: 0, homography: nil)
         let res = Components.Schemas.AlignResult(transform: t, postAlignDriftPx: Float(drift), artifacts: .init(alignedCandidatePng: alignedURL.path))
+        await core.writeAdHocSummary(kind: "pbvrt.vision.align", payload: [
+            "dx": Double(dx),
+            "dy": Double(dy),
+            "postAlignDriftPx": drift,
+            "artifacts": ["alignedCandidatePng": alignedURL.path]
+        ])
         return .ok(.init(body: .json(res)))
     }
 
@@ -333,6 +385,10 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         }
         guard let d = imgData, let cg = CGImage.fromPNGData(d) else { return .undocumented(statusCode: 400, .init()) }
         let res = try Self.recognizeText(cgImage: cg)
+        await core.writeAdHocSummary(kind: "pbvrt.vision.ocr", payload: [
+            "lineCount": res.lineCount as Any,
+            "wrapColumnMedian": res.wrapColumnMedian as Any
+        ].compactMapValues { $0 })
         return .ok(.init(body: .json(res)))
     }
 
@@ -348,6 +404,12 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         guard let d = imgData, let cg = CGImage.fromPNGData(d) else { return .undocumented(statusCode: 400, .init()) }
         let (stats, overlayURL) = try PBVRTHandlers.contoursStatsAndOverlay(cgImage: cg)
         let res = Components.Schemas.ContoursResult(spacingMeanPx: Float(stats.mean), spacingStdPx: Float(stats.std), count: stats.count, artifacts: .init(contoursImage: overlayURL?.path))
+        await core.writeAdHocSummary(kind: "pbvrt.vision.contours", payload: [
+            "spacingMeanPx": stats.mean,
+            "spacingStdPx": stats.std,
+            "count": stats.count,
+            "artifacts": ["contoursImage": overlayURL?.path as Any]
+        ])
         return .ok(.init(body: .json(res)))
     }
 
@@ -363,6 +425,10 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         guard let d = imgData, let cg = CGImage.fromPNGData(d) else { return .undocumented(statusCode: 400, .init()) }
         let (payloads, types) = try PBVRTHandlers.decodeBarcodes(cgImage: cg)
         let res = Components.Schemas.BarcodesResult(payloads: payloads, types: types)
+        await core.writeAdHocSummary(kind: "pbvrt.vision.barcodes", payload: [
+            "payloads": payloads,
+            "types": types
+        ])
         return .ok(.init(body: .json(res)))
     }
 
@@ -388,6 +454,12 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         let cos = Self.cosineDistance(a: bvec, b: cvec)
         let ms = Date().timeIntervalSince(t0) * 1000
         let res = Components.Schemas.AudioEmbeddingResult(metricName: .audio_embedding_cosine, value: Float(cos), backend: .init(rawValue: usedBackend) ?? .yamnet, model: modelName, durationMs: Float(ms))
+        await core.writeAdHocSummary(kind: "pbvrt.audio.embedding", payload: [
+            "backend": usedBackend,
+            "model": modelName,
+            "value": cos,
+            "durationMs": ms
+        ])
         return .ok(.init(body: .json(res)))
     }
 
@@ -422,6 +494,15 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         Self.writeGrayscalePNG(matrix: cSpec, to: cPNG)
         Self.writeGrayscalePNGDelta(a: bSpec, b: cSpec, to: dPNG)
         let res = Components.Schemas.SpectrogramCompareResult(l2: Float(l2), lsd_db: Float(lsd), ssim: nil, artifacts: .init(baselineSpecPng: bPNG.path, candidateSpecPng: cPNG.path, deltaSpecPng: dPNG.path))
+        await core.writeAdHocSummary(kind: "pbvrt.audio.spectrogram", payload: [
+            "l2": l2,
+            "lsd_db": lsd,
+            "artifacts": [
+                "baselineSpecPng": bPNG.path,
+                "candidateSpecPng": cPNG.path,
+                "deltaSpecPng": dPNG.path
+            ]
+        ])
         return .ok(.init(body: .json(res)))
     }
 

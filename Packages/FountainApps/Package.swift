@@ -139,6 +139,12 @@ let package = Package(
             path: "Sources/MetalViewKit",
             exclude: ["AGENTS.md"]
         ),
+        .target(
+            name: "CoreMLKit",
+            dependencies: [],
+            path: "Sources/CoreMLKit",
+            exclude: ["AGENTS.md"]
+        ),
         .executableTarget(
             name: "patchbay-docs-seed",
             dependencies: [
@@ -151,9 +157,16 @@ let package = Package(
             name: "pbvrt-server",
             dependencies: [
                 .product(name: "FountainRuntime", package: "FountainCore"),
-                .product(name: "FountainStoreClient", package: "FountainCore")
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                "CoreMLKit"
             ],
-            path: "Sources/pbvrt-server"
+            path: "Sources/pbvrt-server",
+            plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
         ),
         .executableTarget(
             name: "pbvrt-embed-ci",
@@ -463,7 +476,11 @@ let package = Package(
         ),
         .testTarget(
             name: "PBVRTServerTests",
-            dependencies: ["pbvrt-server"],
+            dependencies: [
+                "pbvrt-server",
+                .product(name: "FountainRuntime", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
             path: "Tests/PBVRTServerTests"
         ),
         .executableTarget(

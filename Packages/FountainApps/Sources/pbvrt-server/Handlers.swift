@@ -256,10 +256,13 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
             return .undocumented(statusCode: 400, .init())
         }
         let sample = 256
-        let bGray = PBVRTHandlers.grayscaleFloat(image: bImg.resized(width: sample, height: sample) ?? bImg)
-        let cGray = PBVRTHandlers.grayscaleFloat(image: cImg.resized(width: sample, height: sample) ?? cImg)
-        let bSal = PBVRTHandlers.saliencyMap(fromGrayscale: bGray, width: sample, height: sample)
-        let cSal = PBVRTHandlers.saliencyMap(fromGrayscale: cGray, width: sample, height: sample)
+        let bRes = bImg.resized(width: sample, height: sample) ?? bImg
+        let cRes = cImg.resized(width: sample, height: sample) ?? cImg
+        let bGray = PBVRTHandlers.grayscaleFloat(image: bRes)
+        let cGray = PBVRTHandlers.grayscaleFloat(image: cRes)
+        // Prefer Vision saliency if available; fallback to gradient saliency
+        let bSal = (try? PBVRTHandlers.visionSaliencyMap(cgImage: bRes)) ?? PBVRTHandlers.saliencyMap(fromGrayscale: bGray, width: sample, height: sample)
+        let cSal = (try? PBVRTHandlers.visionSaliencyMap(cgImage: cRes)) ?? PBVRTHandlers.saliencyMap(fromGrayscale: cGray, width: sample, height: sample)
         // Combine saliency (average) and compute weighted L1
         var num: Double = 0, den: Double = 0
         for i in 0..<(sample*sample) {
@@ -334,12 +337,32 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
     }
 
     func detectContours(_ input: Operations.detectContours.Input) async throws -> Operations.detectContours.Output {
-        let res = Components.Schemas.ContoursResult(spacingMeanPx: nil, spacingStdPx: nil, count: 0, artifacts: .init(contoursImage: nil))
+        guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
+        var imgData: Data?
+        for try await part in form {
+            switch part {
+            case .imagePng(let w): imgData = try await collectBody(w.payload.body)
+            case .undocumented: break
+            }
+        }
+        guard let d = imgData, let cg = CGImage.fromPNGData(d) else { return .undocumented(statusCode: 400, .init()) }
+        let (stats, overlayURL) = try PBVRTHandlers.contoursStatsAndOverlay(cgImage: cg)
+        let res = Components.Schemas.ContoursResult(spacingMeanPx: Float(stats.mean), spacingStdPx: Float(stats.std), count: stats.count, artifacts: .init(contoursImage: overlayURL?.path))
         return .ok(.init(body: .json(res)))
     }
 
     func detectBarcodes(_ input: Operations.detectBarcodes.Input) async throws -> Operations.detectBarcodes.Output {
-        let res = Components.Schemas.BarcodesResult(payloads: [], types: [])
+        guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
+        var imgData: Data?
+        for try await part in form {
+            switch part {
+            case .imagePng(let w): imgData = try await collectBody(w.payload.body)
+            case .undocumented: break
+            }
+        }
+        guard let d = imgData, let cg = CGImage.fromPNGData(d) else { return .undocumented(statusCode: 400, .init()) }
+        let (payloads, types) = try PBVRTHandlers.decodeBarcodes(cgImage: cg)
+        let res = Components.Schemas.BarcodesResult(payloads: payloads, types: types)
         return .ok(.init(body: .json(res)))
     }
 
@@ -521,6 +544,101 @@ extension PBVRTHandlers {
         if maxv <= 1e-6 { maxv = 1 }
         for i in 0..<(width*height) { out[i] = out[i] / maxv }
         return out
+    }
+    static func visionSaliencyMap(cgImage: CGImage) throws -> [Float] {
+        let request = VNGenerateAttentionBasedSaliencyImageRequest()
+        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        try handler.perform([request])
+        guard let result = request.results?.first as? VNSaliencyImageObservation else {
+            throw NSError(domain: "pbvrt", code: -2)
+        }
+        let heat: CVPixelBuffer = result.pixelBuffer
+        // Convert CVPixelBuffer grayscale (0..1) to [Float]
+        CVPixelBufferLockBaseAddress(heat, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(heat, .readOnly) }
+        let w = CVPixelBufferGetWidth(heat)
+        let h = CVPixelBufferGetHeight(heat)
+        var out = [Float](repeating: 0, count: w*h)
+        if let base = CVPixelBufferGetBaseAddress(heat) {
+            let bytesPerRow = CVPixelBufferGetBytesPerRow(heat)
+            for y in 0..<h {
+                let row = base.advanced(by: y * bytesPerRow).assumingMemoryBound(to: UInt8.self)
+                for x in 0..<w { out[y*w + x] = Float(row[x]) / 255.0 }
+            }
+        }
+        return out
+    }
+
+    struct ContourStats { let mean: Double; let std: Double; let count: Int }
+    static func contoursStatsAndOverlay(cgImage: CGImage) throws -> (ContourStats, URL?) {
+        let req = VNDetectContoursRequest()
+        req.detectsDarkOnLight = true
+        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        try handler.perform([req])
+        guard let obs = req.results?.first as? VNContoursObservation else {
+            return (ContourStats(mean: 0, std: 0, count: 0), nil)
+        }
+        // Compute vertical spacing between contour centroids
+        var ys: [Double] = []
+        for i in 0..<obs.contourCount {
+            if let c = try? obs.contour(at: i) {
+                let pts = c.normalizedPoints
+                if pts.isEmpty { continue }
+                let avgY = pts.map { Double($0.y) }.reduce(0, +) / Double(pts.count)
+                ys.append(avgY)
+            }
+        }
+        ys.sort()
+        var spacings: [Double] = []
+        for i in 1..<ys.count { spacings.append((ys[i] - ys[i-1]) * Double(cgImage.height)) }
+        let count = ys.count
+        let mean = spacings.isEmpty ? 0 : spacings.reduce(0, +) / Double(spacings.count)
+        let varSum = spacings.reduce(0) { $0 + pow($1 - mean, 2) }
+        let std = spacings.isEmpty ? 0 : sqrt(varSum / Double(spacings.count))
+        // Render overlay
+        let cs = cgImage.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!
+        let ctx = CGContext(data: nil, width: cgImage.width, height: cgImage.height, bitsPerComponent: 8, bytesPerRow: 0, space: cs, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height))
+        ctx.setStrokeColor(CGColor(red: 1, green: 0, blue: 0, alpha: 1))
+        ctx.setLineWidth(1)
+        for i in 0..<obs.contourCount {
+            if let c = try? obs.contour(at: i) {
+                let pts = c.normalizedPoints
+                if pts.count < 2 { continue }
+                ctx.beginPath()
+                for (idx, p) in pts.enumerated() {
+                    let x = CGFloat(p.x) * CGFloat(cgImage.width)
+                    let y = CGFloat(1 - p.y) * CGFloat(cgImage.height)
+                    if idx == 0 { ctx.move(to: CGPoint(x: x, y: y)) } else { ctx.addLine(to: CGPoint(x: x, y: y)) }
+                }
+                ctx.strokePath()
+            }
+        }
+        let overlay = ctx.makeImage()
+        var urlOut: URL? = nil
+        if let overlay {
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let out = dir.appendingPathComponent("contours.png")
+            try? overlay.writePNG(to: out)
+            urlOut = out
+        }
+        return (ContourStats(mean: mean, std: std, count: count), urlOut)
+    }
+
+    static func decodeBarcodes(cgImage: CGImage) throws -> ([String], [String]) {
+        let req = VNDetectBarcodesRequest()
+        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        try handler.perform([req])
+        var payloads: [String] = []
+        var types: [String] = []
+        if let results = req.results as? [VNBarcodeObservation] {
+            for r in results {
+                if let s = r.payloadStringValue { payloads.append(s) }
+                types.append(r.symbology.rawValue)
+            }
+        }
+        return (payloads, types)
     }
     static func sad(b: [Float], c: [Float], width: Int, height: Int, dx: Int, dy: Int) -> Float {
         var sum: Float = 0

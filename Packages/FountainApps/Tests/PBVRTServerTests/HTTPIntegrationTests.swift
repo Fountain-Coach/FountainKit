@@ -213,6 +213,16 @@ final class PBVRTHTTPIntegrationTests: XCTestCase {
                 XCTAssertTrue(FileManager.default.fileExists(atPath: p))
             }
         }
+        // Confirm store segment artifacts exist
+        let segId = "\(pageId):pbvrt.vision.saliency"
+        if let data = try await store.getDoc(corpusId: "pbvrt-test", collection: "segments", id: segId) {
+            if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let text = obj["text"] as? String,
+               let inner = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any], let arts = inner["artifacts"] as? [String: Any] {
+                for k in ["baselineSaliency","candidateSaliency","weightedDelta"] {
+                    if let p = arts[k] as? String { XCTAssertTrue(FileManager.default.fileExists(atPath: p)) }
+                }
+            }
+        } else { XCTFail("saliency baseline segment not found") }
     }
 
     func testCompareCandidateWritesBaselineSegment() async throws {
@@ -252,6 +262,11 @@ final class PBVRTHTTPIntegrationTests: XCTestCase {
         if let d = try? JSONDecoder().decode(Drift.self, from: resp.body), let path = d.artifacts?.candidatePng {
             XCTAssertTrue(FileManager.default.fileExists(atPath: path))
         }
+        // Candidate artifact path exists in store segment
+        if let got, let obj = try? JSONSerialization.jsonObject(with: got) as? [String: Any], let text = obj["text"] as? String,
+           let inner = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any], let arts = inner["artifacts"] as? [String: Any], let p = arts["candidatePng"] as? String {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: p))
+        }
     }
 
     func testAlignImagesDriftLowAndTransformReported() async throws {
@@ -282,7 +297,7 @@ final class PBVRTHTTPIntegrationTests: XCTestCase {
             if let dx = a.transform?.dx { XCTAssertLessThan(abs(dx - 6), 2) }
             XCTAssertNotNil(a.transform?.dy)
             if let drift = a.postAlignDriftPx { XCTAssertLessThanOrEqual(drift, 10.0) }
-            if let conf = a.confidence { XCTAssertGreaterThanOrEqual(conf, 0.5) }
+            if let conf = a.confidence { XCTAssertGreaterThanOrEqual(conf, 0.8) }
             if let p = a.artifacts?.alignedCandidatePng { XCTAssertTrue(FileManager.default.fileExists(atPath: p)) }
         }
     }

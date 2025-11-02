@@ -5,10 +5,10 @@ enum PBVRTEmbeddingBackend: String {
     case featurePrint
 }
 
-enum PBVRTEngineError: Error { case observationFailed }
+public enum PBVRTEngineError: Error { case observationFailed }
 
-enum PBVRTEngine {
-    static func featureprintDistance(baseline: Data, candidate: Data) throws -> Double {
+public enum PBVRTEngine {
+    public static func featureprintDistance(baseline: Data, candidate: Data) throws -> Double {
         let baseObs = try observation(for: baseline)
         let candObs = try observation(for: candidate)
         var dist: Float = 0
@@ -26,4 +26,3 @@ enum PBVRTEngine {
         return obs
     }
 }
-

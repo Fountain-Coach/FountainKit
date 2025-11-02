@@ -1,4 +1,5 @@
 import Foundation
+import pbvrt_server
 @main
 struct PBVRTEmbedCI {
     static func main() throws {
@@ -11,4 +12,3 @@ struct PBVRTEmbedCI {
         if dist > 0.001 { fatalError("distance too high: \(dist)") }
     }
 }
-

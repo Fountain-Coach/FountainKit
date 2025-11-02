@@ -401,6 +401,49 @@ final class PBVRTHTTPIntegrationTests: XCTestCase {
         }
     }
 
+    func testAlignDetectsRotationScale() async throws {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let (kernel, _) = await makeKernelAndStore(tmp: tmp)
+        // Build 256×256 baseline with white square
+        let baseData = smallPNG(size: 256, whiteSquare: true)
+        guard let baseCG = CGImage.fromPNGData(baseData) else { return XCTFail("no base cg") }
+        // Create candidate rotated by +2 degrees and scaled by 1.02
+        let candidateSize = CGSize(width: 256, height: 256)
+        func rotateScale(_ image: CGImage, degrees: CGFloat, scale: CGFloat) -> CGImage? {
+            guard let cs = image.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+            guard let ctx = CGContext(data: nil, width: Int(candidateSize.width), height: Int(candidateSize.height), bitsPerComponent: image.bitsPerComponent, bytesPerRow: 0, space: cs, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+            ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
+            ctx.fill(CGRect(origin: .zero, size: candidateSize))
+            ctx.translateBy(x: candidateSize.width/2, y: candidateSize.height/2)
+            ctx.rotate(by: degrees * .pi / 180.0)
+            ctx.scaleBy(x: scale, y: scale)
+            ctx.translateBy(x: -CGFloat(image.width)/2, y: -CGFloat(image.height)/2)
+            ctx.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+            return ctx.makeImage()
+        }
+        guard let candCG = rotateScale(baseCG, degrees: 2.0, scale: 1.02) else { return XCTFail("rotateScale failed") }
+        let candURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".png")
+        try candCG.writePNG(to: candURL)
+        let candData = try Data(contentsOf: candURL)
+        let boundary = "ALIGNR"
+        let (body, ctype) = multipart([
+            (name: "baselinePng", filename: "b.png", contentType: "application/octet-stream", data: baseData),
+            (name: "candidatePng", filename: "c.png", contentType: "application/octet-stream", data: candData)
+        ], boundary: boundary)
+        let req = HTTPRequest(method: "POST", path: "/pb-vrt/probes/align", headers: ["Content-Type": ctype, "Content-Length": String(body.count)], body: body)
+        let resp = try await kernel.handle(req)
+        if resp.status != 200 {
+            let err = String(data: resp.body, encoding: .utf8) ?? ""
+            XCTFail("status=\(resp.status) body=\(err)")
+        }
+        struct AlignRes2: Decodable { struct T: Decodable { let scale: Float?; let rotationDeg: Float? }; let transform: T? }
+        if let a = decodeJSON(AlignRes2.self, data: resp.body) {
+            if let rot = a.transform?.rotationDeg { XCTAssertLessThan(abs(rot - 2.0), 5.0) }
+            if let sc = a.transform?.scale { XCTAssertLessThan(abs(sc - 1.02), 0.05) }
+        }
+    }
+
     func testAudioEmbeddingCompareBaselineWritesBaselineSegment() async throws {
         let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)

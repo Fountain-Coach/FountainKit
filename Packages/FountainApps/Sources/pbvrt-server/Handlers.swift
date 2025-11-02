@@ -57,6 +57,21 @@ final class PBVRTCore: @unchecked Sendable {
         return dir
     }
 
+    @discardableResult
+    func writeBaselineSummary(baselineId: String, kind: String, payload: [String: Any]) async -> String {
+        let pageId = baselinePageId(baselineId)
+        await ensureCorpus()
+        do {
+            try await ensurePage(pageId, title: "PBVRT Baseline \(baselineId)")
+            if let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]), let s = String(data: data, encoding: .utf8) {
+                _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(pageId):\(kind)", pageId: pageId, kind: kind, text: s))
+            }
+        } catch {
+            // best-effort
+        }
+        return pageId
+    }
+
     /// Writes an ad-hoc summary segment into FountainStore for visibility when no baselineId is present.
     /// Returns the page id used for the write.
     @discardableResult
@@ -280,9 +295,10 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
     // MARK: - Vision probes (stubs/minimal)
     func compareSaliencyWeighted(_ input: Operations.compareSaliencyWeighted.Input) async throws -> Operations.compareSaliencyWeighted.Output {
         guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
-        var baseData: Data?; var candData: Data?
+        var baseData: Data?; var candData: Data?; var baselineId: String?
         for try await part in form {
             switch part {
+            case .baselineId(let w): if let s = try? String(decoding: await collectBody(w.payload.body), as: UTF8.self) { baselineId = s.trimmingCharacters(in: .whitespacesAndNewlines) }
             case .baselinePng(let w): baseData = try await collectBody(w.payload.body)
             case .candidatePng(let w): candData = try await collectBody(w.payload.body)
             case .undocumented: break
@@ -321,16 +337,19 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         var maxv: Float = 1
         for i in 0..<(sample*sample) { wd[i] = Float(abs(Double(bGray[i]) - Double(cGray[i])) * 0.5 * Double(bSal[i] + cSal[i])); maxv = max(maxv, wd[i]) }
         PBVRTHandlers.writeGrayscalePNG(matrix: .init(rows: sample, cols: sample, data: wd.map { $0 / maxv }), to: wDeltaURL)
-        let res = Components.Schemas.SaliencyCompareResult(weighted_l1: Float(wL1), weighted_ssim: nil, artifacts: .init(baselineSaliency: bSalURL.path, candidateSaliency: cSalURL.path, weightedDelta: wDeltaURL.path))
-        // Persist ad-hoc summary for observability
-        await core.writeAdHocSummary(kind: "pbvrt.vision.saliency", payload: [
+        let wSSIM = PBVRTHandlers.weightedSSIM(a: bGray, b: cGray, weight: zip(bSal, cSal).map { 0.5 * ($0 + $1) }, count: sample*sample)
+        let res = Components.Schemas.SaliencyCompareResult(weighted_l1: Float(wL1), weighted_ssim: Float(wSSIM), artifacts: .init(baselineSaliency: bSalURL.path, candidateSaliency: cSalURL.path, weightedDelta: wDeltaURL.path))
+        let payload: [String: Any] = [
             "weighted_l1": wL1,
+            "weighted_ssim": wSSIM,
             "artifacts": [
                 "baselineSaliency": bSalURL.path,
                 "candidateSaliency": cSalURL.path,
                 "weightedDelta": wDeltaURL.path
             ]
-        ])
+        ]
+        if let bId = baselineId, !bId.isEmpty { await core.writeBaselineSummary(baselineId: bId, kind: "pbvrt.vision.saliency", payload: payload) }
+        else { await core.writeAdHocSummary(kind: "pbvrt.vision.saliency", payload: payload) }
         return .ok(.init(body: .json(res)))
     }
 
@@ -338,8 +357,10 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
         var baseData: Data?
         var candData: Data?
+        var baselineId: String?
         for try await part in form {
             switch part {
+            case .baselineId(let w): if let s = try? String(decoding: await collectBody(w.payload.body), as: UTF8.self) { baselineId = s.trimmingCharacters(in: .whitespacesAndNewlines) }
             case .baselinePng(let w): baseData = try await collectBody(w.payload.body)
             case .candidatePng(let w): candData = try await collectBody(w.payload.body)
             case .undocumented: break
@@ -365,38 +386,44 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         let drift = Self.meanAbsoluteDifference(baseline: base, candidate: cand, dx: Int(round(CGFloat(dx))), dy: Int(round(CGFloat(dy))))
         let t = Components.Schemas.Transform2D(dx: dx, dy: dy, scale: 1, rotationDeg: 0, homography: nil)
         let res = Components.Schemas.AlignResult(transform: t, postAlignDriftPx: Float(drift), artifacts: .init(alignedCandidatePng: alignedURL.path))
-        await core.writeAdHocSummary(kind: "pbvrt.vision.align", payload: [
+        let payload: [String: Any] = [
             "dx": Double(dx),
             "dy": Double(dy),
             "postAlignDriftPx": drift,
             "artifacts": ["alignedCandidatePng": alignedURL.path]
-        ])
+        ]
+        if let bId = baselineId, !bId.isEmpty { await core.writeBaselineSummary(baselineId: bId, kind: "pbvrt.vision.align", payload: payload) }
+        else { await core.writeAdHocSummary(kind: "pbvrt.vision.align", payload: payload) }
         return .ok(.init(body: .json(res)))
     }
 
     func ocrRecognize(_ input: Operations.ocrRecognize.Input) async throws -> Operations.ocrRecognize.Output {
         guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
-        var imgData: Data?
+        var imgData: Data?; var baselineId: String?
         for try await part in form {
             switch part {
+            case .baselineId(let w): if let s = try? String(decoding: await collectBody(w.payload.body), as: UTF8.self) { baselineId = s.trimmingCharacters(in: .whitespacesAndNewlines) }
             case .imagePng(let w): imgData = try await collectBody(w.payload.body)
             case .undocumented: break
             }
         }
         guard let d = imgData, let cg = CGImage.fromPNGData(d) else { return .undocumented(statusCode: 400, .init()) }
         let res = try Self.recognizeText(cgImage: cg)
-        await core.writeAdHocSummary(kind: "pbvrt.vision.ocr", payload: [
+        let payload: [String: Any] = [
             "lineCount": res.lineCount as Any,
             "wrapColumnMedian": res.wrapColumnMedian as Any
-        ].compactMapValues { $0 })
+        ].compactMapValues { $0 }
+        if let bId = baselineId, !bId.isEmpty { await core.writeBaselineSummary(baselineId: bId, kind: "pbvrt.vision.ocr", payload: payload) }
+        else { await core.writeAdHocSummary(kind: "pbvrt.vision.ocr", payload: payload) }
         return .ok(.init(body: .json(res)))
     }
 
     func detectContours(_ input: Operations.detectContours.Input) async throws -> Operations.detectContours.Output {
         guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
-        var imgData: Data?
+        var imgData: Data?; var baselineId: String?
         for try await part in form {
             switch part {
+            case .baselineId(let w): if let s = try? String(decoding: await collectBody(w.payload.body), as: UTF8.self) { baselineId = s.trimmingCharacters(in: .whitespacesAndNewlines) }
             case .imagePng(let w): imgData = try await collectBody(w.payload.body)
             case .undocumented: break
             }
@@ -404,20 +431,23 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         guard let d = imgData, let cg = CGImage.fromPNGData(d) else { return .undocumented(statusCode: 400, .init()) }
         let (stats, overlayURL) = try PBVRTHandlers.contoursStatsAndOverlay(cgImage: cg)
         let res = Components.Schemas.ContoursResult(spacingMeanPx: Float(stats.mean), spacingStdPx: Float(stats.std), count: stats.count, artifacts: .init(contoursImage: overlayURL?.path))
-        await core.writeAdHocSummary(kind: "pbvrt.vision.contours", payload: [
+        let payload: [String: Any] = [
             "spacingMeanPx": stats.mean,
             "spacingStdPx": stats.std,
             "count": stats.count,
             "artifacts": ["contoursImage": overlayURL?.path as Any]
-        ])
+        ]
+        if let bId = baselineId, !bId.isEmpty { await core.writeBaselineSummary(baselineId: bId, kind: "pbvrt.vision.contours", payload: payload) }
+        else { await core.writeAdHocSummary(kind: "pbvrt.vision.contours", payload: payload) }
         return .ok(.init(body: .json(res)))
     }
 
     func detectBarcodes(_ input: Operations.detectBarcodes.Input) async throws -> Operations.detectBarcodes.Output {
         guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
-        var imgData: Data?
+        var imgData: Data?; var baselineId: String?
         for try await part in form {
             switch part {
+            case .baselineId(let w): if let s = try? String(decoding: await collectBody(w.payload.body), as: UTF8.self) { baselineId = s.trimmingCharacters(in: .whitespacesAndNewlines) }
             case .imagePng(let w): imgData = try await collectBody(w.payload.body)
             case .undocumented: break
             }
@@ -425,19 +455,19 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         guard let d = imgData, let cg = CGImage.fromPNGData(d) else { return .undocumented(statusCode: 400, .init()) }
         let (payloads, types) = try PBVRTHandlers.decodeBarcodes(cgImage: cg)
         let res = Components.Schemas.BarcodesResult(payloads: payloads, types: types)
-        await core.writeAdHocSummary(kind: "pbvrt.vision.barcodes", payload: [
-            "payloads": payloads,
-            "types": types
-        ])
+        let payload: [String: Any] = ["payloads": payloads, "types": types]
+        if let bId = baselineId, !bId.isEmpty { await core.writeBaselineSummary(baselineId: bId, kind: "pbvrt.vision.barcodes", payload: payload) }
+        else { await core.writeAdHocSummary(kind: "pbvrt.vision.barcodes", payload: payload) }
         return .ok(.init(body: .json(res)))
     }
 
     // MARK: - Audio probes (stubs/minimal)
     func compareAudioEmbedding(_ input: Operations.compareAudioEmbedding.Input) async throws -> Operations.compareAudioEmbedding.Output {
         guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
-        var bw: Data?; var cw: Data?; var backend: String = "yamnet"
+        var bw: Data?; var cw: Data?; var backend: String = "yamnet"; var baselineId: String?
         for try await part in form {
             switch part {
+            case .baselineId(let w): if let s = try? String(decoding: await collectBody(w.payload.body), as: UTF8.self) { baselineId = s.trimmingCharacters(in: .whitespacesAndNewlines) }
             case .baselineWav(let w): bw = try await collectBody(w.payload.body)
             case .candidateWav(let w): cw = try await collectBody(w.payload.body)
             case .backend(let w):
@@ -454,20 +484,23 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         let cos = Self.cosineDistance(a: bvec, b: cvec)
         let ms = Date().timeIntervalSince(t0) * 1000
         let res = Components.Schemas.AudioEmbeddingResult(metricName: .audio_embedding_cosine, value: Float(cos), backend: .init(rawValue: usedBackend) ?? .yamnet, model: modelName, durationMs: Float(ms))
-        await core.writeAdHocSummary(kind: "pbvrt.audio.embedding", payload: [
+        let payload: [String: Any] = [
             "backend": usedBackend,
             "model": modelName,
             "value": cos,
             "durationMs": ms
-        ])
+        ]
+        if let bId = baselineId, !bId.isEmpty { await core.writeBaselineSummary(baselineId: bId, kind: "pbvrt.audio.embedding", payload: payload) }
+        else { await core.writeAdHocSummary(kind: "pbvrt.audio.embedding", payload: payload) }
         return .ok(.init(body: .json(res)))
     }
 
     func compareSpectrogram(_ input: Operations.compareSpectrogram.Input) async throws -> Operations.compareSpectrogram.Output {
         guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
-        var bw: Data?; var cw: Data?
+        var bw: Data?; var cw: Data?; var baselineId: String?
         for try await part in form {
             switch part {
+            case .baselineId(let w): if let s = try? String(decoding: await collectBody(w.payload.body), as: UTF8.self) { baselineId = s.trimmingCharacters(in: .whitespacesAndNewlines) }
             case .baselineWav(let w): bw = try await collectBody(w.payload.body)
             case .candidateWav(let w): cw = try await collectBody(w.payload.body)
             case .undocumented: break
@@ -494,7 +527,7 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         Self.writeGrayscalePNG(matrix: cSpec, to: cPNG)
         Self.writeGrayscalePNGDelta(a: bSpec, b: cSpec, to: dPNG)
         let res = Components.Schemas.SpectrogramCompareResult(l2: Float(l2), lsd_db: Float(lsd), ssim: nil, artifacts: .init(baselineSpecPng: bPNG.path, candidateSpecPng: cPNG.path, deltaSpecPng: dPNG.path))
-        await core.writeAdHocSummary(kind: "pbvrt.audio.spectrogram", payload: [
+        let payload: [String: Any] = [
             "l2": l2,
             "lsd_db": lsd,
             "artifacts": [
@@ -502,7 +535,9 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
                 "candidateSpecPng": cPNG.path,
                 "deltaSpecPng": dPNG.path
             ]
-        ])
+        ]
+        if let bId = baselineId, !bId.isEmpty { await core.writeBaselineSummary(baselineId: bId, kind: "pbvrt.audio.spectrogram", payload: payload) }
+        else { await core.writeAdHocSummary(kind: "pbvrt.audio.spectrogram", payload: payload) }
         return .ok(.init(body: .json(res)))
     }
 
@@ -648,6 +683,43 @@ extension PBVRTHandlers {
             }
         }
         return out
+    }
+
+    /// Weighted SSIM over the entire image using provided weights in 0..1.
+    /// Uses the standard SSIM constants with L=1 (images normalized to 0..1).
+    static func weightedSSIM(a: [Float], b: [Float], weight: [Float], count: Int) -> Double {
+        let n = min(count, min(a.count, min(b.count, weight.count)))
+        if n == 0 { return 1.0 }
+        var sumW: Double = 0
+        var sumAx: Double = 0, sumBx: Double = 0
+        for i in 0..<n {
+            let w = Double(weight[i])
+            sumW += w
+            sumAx += w * Double(a[i])
+            sumBx += w * Double(b[i])
+        }
+        if sumW <= 0 { return 1.0 }
+        let muA = sumAx / sumW
+        let muB = sumBx / sumW
+        var varA: Double = 0, varB: Double = 0, covAB: Double = 0
+        for i in 0..<n {
+            let w = Double(weight[i])
+            let da = Double(a[i]) - muA
+            let db = Double(b[i]) - muB
+            varA += w * da * da
+            varB += w * db * db
+            covAB += w * da * db
+        }
+        varA /= sumW
+        varB /= sumW
+        covAB /= sumW
+        let L: Double = 1.0
+        let C1 = pow(0.01 * L, 2)
+        let C2 = pow(0.03 * L, 2)
+        let num = (2 * muA * muB + C1) * (2 * covAB + C2)
+        let den = (muA * muA + muB * muB + C1) * (varA + varB + C2)
+        if den == 0 { return 1.0 }
+        return max(0.0, min(1.0, num / den))
     }
 
     struct ContourStats { let mean: Double; let std: Double; let count: Int }

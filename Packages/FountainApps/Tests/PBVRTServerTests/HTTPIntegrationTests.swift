@@ -114,6 +114,25 @@ final class PBVRTHTTPIntegrationTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(qr.total, 1)
     }
 
+    func testSaliencyCompareBaselineWritesBaselineSegment() async throws {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let (kernel, store) = await makeKernelAndStore(tmp: tmp)
+        let baselineId = UUID().uuidString
+        let boundary = "B-SAL-BASE"
+        let (body, ctype) = multipart([
+            (name: "baselineId", filename: nil, contentType: nil, data: Data(baselineId.utf8)),
+            (name: "baselinePng", filename: "b.png", contentType: "image/png", data: smallPNG(whiteSquare: true)),
+            (name: "candidatePng", filename: "c.png", contentType: "image/png", data: smallPNG(whiteSquare: true))
+        ], boundary: boundary)
+        let req = HTTPRequest(method: "POST", path: "/pb-vrt/probes/saliency/compare", headers: ["Content-Type": ctype], body: body)
+        let resp = try await kernel.handle(req)
+        XCTAssertEqual(resp.status, 200)
+        let pageId = "pbvrt:baseline:\(baselineId)"
+        let qr = try await store.query(corpusId: "pbvrt-test", collection: "segments", query: Query(filters: ["kind": "pbvrt.vision.saliency", "pageId": pageId]))
+        XCTAssertGreaterThanOrEqual(qr.total, 1)
+    }
+
     func testCompareCandidateWritesBaselineSegment() async throws {
         let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)

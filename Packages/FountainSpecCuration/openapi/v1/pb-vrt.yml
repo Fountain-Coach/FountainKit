@@ -200,6 +200,7 @@ paths:
               type: object
               required: [baselinePng, candidatePng]
               properties:
+                baselineId: { type: string, description: Optional baseline to persist probe summary }
                 baselinePng: { type: string, format: binary }
                 candidatePng: { type: string, format: binary }
       responses:
@@ -225,6 +226,7 @@ paths:
               type: object
               required: [baselinePng, candidatePng]
               properties:
+                baselineId: { type: string }
                 baselinePng: { type: string, format: binary }
                 candidatePng: { type: string, format: binary }
       responses:
@@ -250,6 +252,7 @@ paths:
               type: object
               required: [imagePng]
               properties:
+                baselineId: { type: string }
                 imagePng: { type: string, format: binary }
       responses:
         '200':
@@ -274,6 +277,7 @@ paths:
               type: object
               required: [imagePng]
               properties:
+                baselineId: { type: string }
                 imagePng: { type: string, format: binary }
       responses:
         '200':
@@ -298,6 +302,7 @@ paths:
               type: object
               required: [imagePng]
               properties:
+                baselineId: { type: string }
                 imagePng: { type: string, format: binary }
       responses:
         '200':
@@ -323,6 +328,7 @@ paths:
               type: object
               required: [baselineWav, candidateWav]
               properties:
+                baselineId: { type: string }
                 baselineWav: { type: string, format: binary }
                 candidateWav: { type: string, format: binary }
                 backend:
@@ -352,6 +358,7 @@ paths:
               type: object
               required: [baselineWav, candidateWav]
               properties:
+                baselineId: { type: string }
                 baselineWav: { type: string, format: binary }
                 candidateWav: { type: string, format: binary }
       responses:

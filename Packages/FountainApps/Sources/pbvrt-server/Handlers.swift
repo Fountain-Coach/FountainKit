@@ -373,7 +373,7 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         // Coarse estimate
         let (dxDown, dyDown, _) = Self.estimateTranslation(baseline: base, candidate: cand, sample: 128, search: 16)
         // Refine around coarse estimate at higher resolution
-        let (dxRef, dyRef) = Self.refineTranslation(baseline: base, candidate: cand, coarseDX: dxDown, coarseDY: dyDown, coarseSample: 128, refineSample: 256, window: 6)
+        let (dxRef, dyRef, bestScore) = Self.refineTranslation(baseline: base, candidate: cand, coarseDX: dxDown, coarseDY: dyDown, coarseSample: 128, refineSample: 256, window: 6)
         // Scale offsets to candidate pixel coordinates (from refine sample)
         let scaleX = CGFloat(cand.width) / 256.0
         let scaleY = CGFloat(cand.height) / 256.0
@@ -387,12 +387,16 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         }
         // Compute simple post-align drift as mean absolute difference over overlap
         let drift = Self.meanAbsoluteDifference(baseline: base, candidate: cand, dx: Int(round(CGFloat(dx))), dy: Int(round(CGFloat(dy))))
+        // Confidence from normalized SAD at refine sample scale
+        let norm = max(1.0, Double(256 * 256))
+        let confidence = max(0.0, 1.0 - Double(bestScore)/norm)
         let t = Components.Schemas.Transform2D(dx: dx, dy: dy, scale: 1, rotationDeg: 0, homography: nil)
-        let res = Components.Schemas.AlignResult(transform: t, postAlignDriftPx: Float(drift), artifacts: .init(alignedCandidatePng: alignedURL.path))
+        let res = Components.Schemas.AlignResult(transform: t, postAlignDriftPx: Float(drift), confidence: Float(confidence), artifacts: .init(alignedCandidatePng: alignedURL.path))
         let payload: [String: Any] = [
             "dx": Double(dx),
             "dy": Double(dy),
             "postAlignDriftPx": drift,
+            "confidence": confidence,
             "artifacts": ["alignedCandidatePng": alignedURL.path]
         ]
         if let bId = baselineId, !bId.isEmpty { await core.writeBaselineSummary(baselineId: bId, kind: "pbvrt.vision.align", payload: payload) }
@@ -700,13 +704,13 @@ extension PBVRTHandlers {
         }
         return (best.0, best.1, bestScore)
     }
-    static func refineTranslation(baseline: CGImage, candidate: CGImage, coarseDX: Int, coarseDY: Int, coarseSample: Int, refineSample: Int, window: Int) -> (dx: Int, dy: Int) {
+    static func refineTranslation(baseline: CGImage, candidate: CGImage, coarseDX: Int, coarseDY: Int, coarseSample: Int, refineSample: Int, window: Int) -> (dx: Int, dy: Int, score: Float) {
         // Scale coarse offset into refine sample space
         let sx = Double(refineSample) / Double(coarseSample)
         let rx = Int(round(Double(coarseDX) * sx))
         let ry = Int(round(Double(coarseDY) * sx))
-        let (dx, dy, _) = estimateTranslationAround(baseline: baseline, candidate: candidate, sample: refineSample, centerDX: rx, centerDY: ry, window: window)
-        return (dx, dy)
+        let (dx, dy, sc) = estimateTranslationAround(baseline: baseline, candidate: candidate, sample: refineSample, centerDX: rx, centerDY: ry, window: window)
+        return (dx, dy, sc)
     }
     static func grayscaleFloat(image: CGImage) -> [Float] {
         let w = image.width, h = image.height

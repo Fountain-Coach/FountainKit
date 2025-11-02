@@ -616,6 +616,7 @@ components:
       properties:
         transform: { $ref: '#/components/schemas/Transform2D' }
         postAlignDriftPx: { type: number, format: float }
+        confidence: { type: number, format: float }
         artifacts:
           type: object
           properties:

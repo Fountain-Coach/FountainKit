@@ -242,8 +242,46 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
 
     // MARK: - Vision probes (stubs/minimal)
     func compareSaliencyWeighted(_ input: Operations.compareSaliencyWeighted.Input) async throws -> Operations.compareSaliencyWeighted.Output {
-        // Placeholder: return 200 with no metrics yet; artifacts omitted
-        let res = Components.Schemas.SaliencyCompareResult(weighted_l1: nil, weighted_ssim: nil, artifacts: .init(baselineSaliency: nil, candidateSaliency: nil, weightedDelta: nil))
+        guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
+        var baseData: Data?; var candData: Data?
+        for try await part in form {
+            switch part {
+            case .baselinePng(let w): baseData = try await collectBody(w.payload.body)
+            case .candidatePng(let w): candData = try await collectBody(w.payload.body)
+            case .undocumented: break
+            }
+        }
+        guard let bd = baseData, let cd = candData,
+              let bImg = CGImage.fromPNGData(bd), let cImg = CGImage.fromPNGData(cd) else {
+            return .undocumented(statusCode: 400, .init())
+        }
+        let sample = 256
+        let bGray = PBVRTHandlers.grayscaleFloat(image: bImg.resized(width: sample, height: sample) ?? bImg)
+        let cGray = PBVRTHandlers.grayscaleFloat(image: cImg.resized(width: sample, height: sample) ?? cImg)
+        let bSal = PBVRTHandlers.saliencyMap(fromGrayscale: bGray, width: sample, height: sample)
+        let cSal = PBVRTHandlers.saliencyMap(fromGrayscale: cGray, width: sample, height: sample)
+        // Combine saliency (average) and compute weighted L1
+        var num: Double = 0, den: Double = 0
+        for i in 0..<(sample*sample) {
+            let s = 0.5 * Double(bSal[i] + cSal[i])
+            let d = abs(Double(bGray[i]) - Double(cGray[i]))
+            num += d * s
+            den += s
+        }
+        let wL1 = den > 0 ? num / den : 0
+        // Artifacts
+        let dir = core.adHocDir()
+        let bSalURL = dir.appendingPathComponent("baseline-saliency.png")
+        let cSalURL = dir.appendingPathComponent("candidate-saliency.png")
+        let wDeltaURL = dir.appendingPathComponent("weighted-delta.png")
+        PBVRTHandlers.writeGrayscalePNG(matrix: .init(rows: sample, cols: sample, data: bSal), to: bSalURL)
+        PBVRTHandlers.writeGrayscalePNG(matrix: .init(rows: sample, cols: sample, data: cSal), to: cSalURL)
+        // Weighted delta visualization
+        var wd = [Float](repeating: 0, count: sample*sample)
+        var maxv: Float = 1
+        for i in 0..<(sample*sample) { wd[i] = Float(abs(Double(bGray[i]) - Double(cGray[i])) * 0.5 * Double(bSal[i] + cSal[i])); maxv = max(maxv, wd[i]) }
+        PBVRTHandlers.writeGrayscalePNG(matrix: .init(rows: sample, cols: sample, data: wd.map { $0 / maxv }), to: wDeltaURL)
+        let res = Components.Schemas.SaliencyCompareResult(weighted_l1: Float(wL1), weighted_ssim: nil, artifacts: .init(baselineSaliency: bSalURL.path, candidateSaliency: cSalURL.path, weightedDelta: wDeltaURL.path))
         return .ok(.init(body: .json(res)))
     }
 
@@ -457,6 +495,32 @@ extension PBVRTHandlers {
         guard let ctx = CGContext(data: &data, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w, space: cs, bitmapInfo: 0) else { return [] }
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
         return data.map { Float($0) / 255.0 }
+    }
+    // Simple saliency map from gradient magnitude (Sobel-like) over grayscale input
+    static func saliencyMap(fromGrayscale g: [Float], width: Int, height: Int) -> [Float] {
+        if g.isEmpty { return [] }
+        var out = [Float](repeating: 0, count: width*height)
+        let kx: [[Float]] = [[-1,0,1],[-2,0,2],[-1,0,1]]
+        let ky: [[Float]] = [[-1,-2,-1],[0,0,0],[1,2,1]]
+        for y in 1..<(height-1) {
+            for x in 1..<(width-1) {
+                var gx: Float = 0, gy: Float = 0
+                for j in -1...1 {
+                    for i in -1...1 {
+                        let v = g[(y+j)*width + (x+i)]
+                        gx += v * kx[j+1][i+1]
+                        gy += v * ky[j+1][i+1]
+                    }
+                }
+                let mag = sqrt(gx*gx + gy*gy)
+                out[y*width + x] = mag
+            }
+        }
+        // Normalize to 0..1
+        var maxv: Float = out.max() ?? 1
+        if maxv <= 1e-6 { maxv = 1 }
+        for i in 0..<(width*height) { out[i] = out[i] / maxv }
+        return out
     }
     static func sad(b: [Float], c: [Float], width: Int, height: Int, dx: Int, dy: Int) -> Float {
         var sum: Float = 0

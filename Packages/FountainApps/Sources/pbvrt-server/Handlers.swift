@@ -294,7 +294,7 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
                     let dx = Int(round(CGFloat(dxRef) * scaleX))
                     let dy = Int(round(CGFloat(dyRef) * scaleY))
                     pixelL1 = Self.meanAbsoluteDifference(baseline: bImg, candidate: cImg, dx: dx, dy: dy)
-                    // SSIM on normalized 256² grayscale using uniform weights
+                    // SSIM on normalized 256² grayscale using saliency weights on aligned thumbnails
                     let sample = 256
                     if let bRes = bImg.resized(width: sample, height: sample), let cRes = cImg.resized(width: sample, height: sample) {
                         let bGray = PBVRTHandlers.grayscaleFloat(image: bRes)
@@ -302,9 +302,7 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
                         // Saliency-weighted SSIM using gradient-based saliency
                         let bSal = PBVRTHandlers.saliencyMap(fromGrayscale: bGray, width: sample, height: sample)
                         let cSal = PBVRTHandlers.saliencyMap(fromGrayscale: cGray, width: sample, height: sample)
-                        var w = [Float](repeating: 0, count: sample*sample)
-                        for i in 0..<(sample*sample) { w[i] = 0.5 * (bSal[i] + cSal[i]) }
-                        ssim = PBVRTHandlers.weightedSSIM(a: bGray, b: cGray, weight: w, count: sample*sample)
+                        ssim = PBVRTHandlers.alignedWeightedSSIM(b: bGray, c: cGray, bs: bSal, cs: cSal, width: sample, height: sample, dx: dxRef, dy: dyRef)
                         // Delta artifact (abs difference) at 256²
                         var delta = [Float](repeating: 0, count: sample*sample)
                         for i in 0..<(sample*sample) { delta[i] = abs(bGray[i] - cGray[i]) }
@@ -959,6 +957,35 @@ extension PBVRTHandlers {
         let den = (muA * muA + muB * muB + C1) * (varA + varB + C2)
         if den == 0 { return 1.0 }
         return max(0.0, min(1.0, num / den))
+    }
+
+    /// Compute saliency-weighted SSIM on the overlap region after applying (dx,dy) to candidate in a WxH grid.
+    static func alignedWeightedSSIM(b: [Float], c: [Float], bs: [Float], cs: [Float], width: Int, height: Int, dx: Int, dy: Int) -> Double {
+        if b.isEmpty || c.isEmpty || bs.isEmpty || cs.isEmpty { return 1.0 }
+        let bxStart = max(0, -dx)
+        let byStart = max(0, -dy)
+        let bxEnd = min(width, width - dx)
+        let byEnd = min(height, height - dy)
+        if bxEnd <= bxStart || byEnd <= byStart { return weightedSSIM(a: b, b: c, weight: zip(bs, cs).map { 0.5 * ($0 + $1) }, count: min(b.count, c.count)) }
+        let rows = byEnd - byStart
+        let cols = bxEnd - bxStart
+        var a: [Float] = []; a.reserveCapacity(rows*cols)
+        var d: [Float] = []; d.reserveCapacity(rows*cols)
+        var w: [Float] = []; w.reserveCapacity(rows*cols)
+        for y in 0..<rows {
+            let yb = byStart + y
+            let yc = yb + dy
+            for x in 0..<cols {
+                let xb = bxStart + x
+                let xc = xb + dx
+                let ib = yb * width + xb
+                let ic = yc * width + xc
+                a.append(b[ib])
+                d.append(c[ic])
+                w.append(0.5 * (bs[ib] + cs[ic]))
+            }
+        }
+        return weightedSSIM(a: a, b: d, weight: w, count: a.count)
     }
 
     struct ContourStats { let mean: Double; let std: Double; let count: Int }

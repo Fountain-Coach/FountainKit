@@ -173,6 +173,9 @@ paths:
                 baselineId: { type: string }
                 baselinePng: { type: string, format: binary }
                 candidatePng: { type: string, format: binary }
+            encoding:
+              baselinePng: { contentType: application/octet-stream }
+              candidatePng: { contentType: application/octet-stream }
       responses:
         '200':
           description: Saliency-weighted comparison result
@@ -196,6 +199,9 @@ paths:
                 baselineId: { type: string }
                 baselinePng: { type: string, format: binary }
                 candidatePng: { type: string, format: binary }
+            encoding:
+              baselinePng: { contentType: application/octet-stream }
+              candidatePng: { contentType: application/octet-stream }
       responses:
         '200':
           description: Alignment result and drift
@@ -218,6 +224,8 @@ paths:
               properties:
                 baselineId: { type: string }
                 imagePng: { type: string, format: binary }
+            encoding:
+              imagePng: { contentType: application/octet-stream }
       responses:
         '200':
           description: OCR result
@@ -240,6 +248,8 @@ paths:
               properties:
                 baselineId: { type: string }
                 imagePng: { type: string, format: binary }
+            encoding:
+              imagePng: { contentType: application/octet-stream }
       responses:
         '200':
           description: Contours and spacing summary
@@ -262,6 +272,8 @@ paths:
               properties:
                 baselineId: { type: string }
                 imagePng: { type: string, format: binary }
+            encoding:
+              imagePng: { contentType: application/octet-stream }
       responses:
         '200':
           description: Decoded barcode payloads
@@ -289,6 +301,9 @@ paths:
                   type: string
                   enum: [yamnet, coreml]
                   default: yamnet
+            encoding:
+              baselineWav: { contentType: application/octet-stream }
+              candidateWav: { contentType: application/octet-stream }
       responses:
         '200':
           description: Audio embedding comparison
@@ -312,6 +327,9 @@ paths:
                 baselineId: { type: string }
                 baselineWav: { type: string, format: binary }
                 candidateWav: { type: string, format: binary }
+            encoding:
+              baselineWav: { contentType: application/octet-stream }
+              candidateWav: { contentType: application/octet-stream }
       responses:
         '200':
           description: Spectrogram comparison result

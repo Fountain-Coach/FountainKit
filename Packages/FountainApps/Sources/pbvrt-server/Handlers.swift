@@ -313,9 +313,9 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         let cRes = cImg.resized(width: sample, height: sample) ?? cImg
         let bGray = PBVRTHandlers.grayscaleFloat(image: bRes)
         let cGray = PBVRTHandlers.grayscaleFloat(image: cRes)
-        // Prefer Vision saliency if available; fallback to gradient saliency
-        let bSal = (try? PBVRTHandlers.visionSaliencyMap(cgImage: bRes)) ?? PBVRTHandlers.saliencyMap(fromGrayscale: bGray, width: sample, height: sample)
-        let cSal = (try? PBVRTHandlers.visionSaliencyMap(cgImage: cRes)) ?? PBVRTHandlers.saliencyMap(fromGrayscale: cGray, width: sample, height: sample)
+        // Use gradient-based saliency (deterministic for tests)
+        let bSal = PBVRTHandlers.saliencyMap(fromGrayscale: bGray, width: sample, height: sample)
+        let cSal = PBVRTHandlers.saliencyMap(fromGrayscale: cGray, width: sample, height: sample)
         // Combine saliency (average) and compute weighted L1
         var num: Double = 0, den: Double = 0
         for i in 0..<(sample*sample) {
@@ -756,8 +756,21 @@ extension PBVRTHandlers {
         let w = CVPixelBufferGetWidth(heat)
         let h = CVPixelBufferGetHeight(heat)
         var out = [Float](repeating: 0, count: w*h)
-        if let base = CVPixelBufferGetBaseAddress(heat) {
-            let bytesPerRow = CVPixelBufferGetBytesPerRow(heat)
+        guard let base = CVPixelBufferGetBaseAddress(heat) else { return out }
+        let fmt = CVPixelBufferGetPixelFormatType(heat)
+        let bytesPerRow = CVPixelBufferGetBytesPerRow(heat)
+        if fmt == kCVPixelFormatType_OneComponent8 {
+            for y in 0..<h {
+                let row = base.advanced(by: y * bytesPerRow).assumingMemoryBound(to: UInt8.self)
+                for x in 0..<w { out[y*w + x] = Float(row[x]) / 255.0 }
+            }
+        } else if fmt == kCVPixelFormatType_OneComponent32Float {
+            for y in 0..<h {
+                let row = base.advanced(by: y * bytesPerRow).assumingMemoryBound(to: Float32.self)
+                for x in 0..<w { let v = row[x]; out[y*w + x] = max(0, min(1, v)) }
+            }
+        } else {
+            // Fallback: treat as 8-bit stride
             for y in 0..<h {
                 let row = base.advanced(by: y * bytesPerRow).assumingMemoryBound(to: UInt8.self)
                 for x in 0..<w { out[y*w + x] = Float(row[x]) / 255.0 }

@@ -80,7 +80,8 @@ public final class NIOOpenAPIServerTransport: ServerTransport, @unchecked Sendab
                         }()
                         return HTTPResponse(status: Int(httpResp.status.code), headers: headers, body: data)
                     } catch {
-                        return HTTPResponse(status: 500, headers: ["Content-Type": "text/plain"], body: Data("internal error".utf8))
+                        let msg = "internal error: \(error)"
+                        return HTTPResponse(status: 500, headers: ["Content-Type": "text/plain", "X-Debug-Error": String(describing: error)], body: Data(msg.utf8))
                     }
                 }
             }

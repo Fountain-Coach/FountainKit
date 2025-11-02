@@ -97,11 +97,16 @@ final class PBVRTHTTPIntegrationTests: XCTestCase {
             XCTFail("status=\(resp.status) body=\(err)")
         }
         // Parse JSON and assert plausible thresholds
-        struct Sal: Decodable { let weighted_l1: Float? }
+        struct Sal: Decodable { struct Art: Decodable { let baselineSaliency: String?; let candidateSaliency: String?; let weightedDelta: String? }; let weighted_l1: Float?; let artifacts: Art? }
         if let s = try? JSONDecoder().decode(Sal.self, from: resp.body) {
             XCTAssertNotNil(s.weighted_l1)
             // Two identical black images → near zero
             if let v = s.weighted_l1 { XCTAssertLessThanOrEqual(v, 0.05) }
+            if let art = s.artifacts {
+                for p in [art.baselineSaliency, art.candidateSaliency, art.weightedDelta].compactMap({$0}) {
+                    XCTAssertTrue(FileManager.default.fileExists(atPath: p))
+                }
+            }
         }
         // confirm store wrote ad-hoc saliency summary
         let qr = try await store.query(corpusId: "pbvrt-test", collection: "segments", query: Query(filters: ["kind": "pbvrt.vision.saliency"]))
@@ -126,10 +131,15 @@ final class PBVRTHTTPIntegrationTests: XCTestCase {
             XCTFail("status=\(resp.status) body=\(err)")
         }
         // Parse JSON and assert thresholds
-        struct SpecRes: Decodable { let l2: Float?; let lsd_db: Float? }
+        struct SpecRes: Decodable { struct Art: Decodable { let baselineSpecPng: String?; let candidateSpecPng: String?; let deltaSpecPng: String? }; let l2: Float?; let lsd_db: Float?; let artifacts: Art? }
         if let s = try? JSONDecoder().decode(SpecRes.self, from: resp.body) {
             if let v = s.l2 { XCTAssertLessThanOrEqual(v, 1e-3) }
             if let d = s.lsd_db { XCTAssertLessThanOrEqual(d, 0.5) }
+            if let art = s.artifacts {
+                for p in [art.baselineSpecPng, art.candidateSpecPng, art.deltaSpecPng].compactMap({$0}) {
+                    XCTAssertTrue(FileManager.default.fileExists(atPath: p))
+                }
+            }
         }
         let qr = try await store.query(corpusId: "pbvrt-test", collection: "segments", query: Query(filters: ["kind": "pbvrt.audio.spectrogram"]))
         XCTAssertGreaterThanOrEqual(qr.total, 1)
@@ -155,6 +165,13 @@ final class PBVRTHTTPIntegrationTests: XCTestCase {
         let pageId = "pbvrt:baseline:\(baselineId)"
         let qr = try await store.query(corpusId: "pbvrt-test", collection: "segments", query: Query(filters: ["kind": "pbvrt.vision.saliency", "pageId": pageId]))
         XCTAssertGreaterThanOrEqual(qr.total, 1)
+        // Confirm response artifacts exist
+        struct SalB: Decodable { struct Art: Decodable { let baselineSaliency: String?; let candidateSaliency: String?; let weightedDelta: String? }; let artifacts: Art? }
+        if let s = try? JSONDecoder().decode(SalB.self, from: resp.body), let art = s.artifacts {
+            for p in [art.baselineSaliency, art.candidateSaliency, art.weightedDelta].compactMap({$0}) {
+                XCTAssertTrue(FileManager.default.fileExists(atPath: p))
+            }
+        }
     }
 
     func testCompareCandidateWritesBaselineSegment() async throws {
@@ -189,6 +206,11 @@ final class PBVRTHTTPIntegrationTests: XCTestCase {
         let segId = "\(pageId):pbvrt.compare"
         let got = try await store.getDoc(corpusId: corpus, collection: "segments", id: segId)
         XCTAssertNotNil(got)
+        // Candidate artifact exists
+        struct Drift: Decodable { struct Art: Decodable { let candidatePng: String? }; let artifacts: Art? }
+        if let d = try? JSONDecoder().decode(Drift.self, from: resp.body), let path = d.artifacts?.candidatePng {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: path))
+        }
     }
 
     func testAlignImagesDriftLowAndTransformReported() async throws {
@@ -198,7 +220,6 @@ final class PBVRTHTTPIntegrationTests: XCTestCase {
         // Build 256×256 baseline with white square
         let baseData = smallPNG(size: 256, whiteSquare: true)
         // Shift candidate by (dx,dy) = (6, -4)
-        guard let cs = CGColorSpace(name: CGColorSpace.sRGB) else { return XCTFail("no cs") }
         guard let baseCG = CGImage.fromPNGData(baseData) else { return XCTFail("no base cg") }
         guard let candCG = CGImage.translate(image: baseCG, by: CGSize(width: 6, height: -4)) else { return XCTFail("translate failed") }
         let candURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".png")
@@ -215,11 +236,12 @@ final class PBVRTHTTPIntegrationTests: XCTestCase {
             let err = String(data: resp.body, encoding: .utf8) ?? ""
             XCTFail("status=\(resp.status) body=\(err)")
         }
-        struct AlignRes: Decodable { struct T: Decodable { let dx: Float?; let dy: Float? }; let transform: T?; let postAlignDriftPx: Float? }
+        struct AlignRes: Decodable { struct Art: Decodable { let alignedCandidatePng: String? }; struct T: Decodable { let dx: Float?; let dy: Float? }; let transform: T?; let postAlignDriftPx: Float?; let artifacts: Art? }
         if let a = try? JSONDecoder().decode(AlignRes.self, from: resp.body) {
             if let dx = a.transform?.dx { XCTAssertLessThan(abs(dx - 6), 2) }
             XCTAssertNotNil(a.transform?.dy)
-            if let drift = a.postAlignDriftPx { XCTAssertLessThanOrEqual(drift, 20.0) }
+            if let drift = a.postAlignDriftPx { XCTAssertLessThanOrEqual(drift, 10.0) }
+            if let p = a.artifacts?.alignedCandidatePng { XCTAssertTrue(FileManager.default.fileExists(atPath: p)) }
         }
     }
 }

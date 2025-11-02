@@ -370,12 +370,15 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
               let base = CGImage.fromPNGData(b), let cand = CGImage.fromPNGData(c) else {
             return .undocumented(statusCode: 400, .init())
         }
+        // Coarse estimate
         let (dxDown, dyDown, _) = Self.estimateTranslation(baseline: base, candidate: cand, sample: 128, search: 16)
-        // Scale offsets to candidate pixel coordinates
-        let scaleX = CGFloat(cand.width) / 128.0
-        let scaleY = CGFloat(cand.height) / 128.0
-        let dx = Float(CGFloat(dxDown) * scaleX)
-        let dy = Float(CGFloat(dyDown) * scaleY)
+        // Refine around coarse estimate at higher resolution
+        let (dxRef, dyRef) = Self.refineTranslation(baseline: base, candidate: cand, coarseDX: dxDown, coarseDY: dyDown, coarseSample: 128, refineSample: 256, window: 6)
+        // Scale offsets to candidate pixel coordinates (from refine sample)
+        let scaleX = CGFloat(cand.width) / 256.0
+        let scaleY = CGFloat(cand.height) / 256.0
+        let dx = Float(CGFloat(dxRef) * scaleX)
+        let dy = Float(CGFloat(dyRef) * scaleY)
         // Write aligned candidate artifact
         let dir = core.adHocDir()
         let alignedURL = dir.appendingPathComponent("aligned.png")
@@ -542,22 +545,78 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
     }
 
     func detectOnsets(_ input: Operations.detectOnsets.Input) async throws -> Operations.detectOnsets.Output {
-        let res = Components.Schemas.OnsetsResult(onsetsSec: [], tempoBpm: nil)
+        guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
+        var wav: Data?
+        for try await part in form {
+            switch part {
+            case .wav(let w): wav = try await collectBody(w.payload.body)
+            case .undocumented: break
+            }
+        }
+        guard let d = wav, let (mono, sr) = try? Self.decodeWavToMono(data: d) else {
+            return .undocumented(statusCode: 400, .init())
+        }
+        let hop = 512
+        let win = 1024
+        let (novelty, _, onsets) = Self.computeOnsets(samples: mono, sampleRate: sr, window: win, hop: hop)
+        let tempo = Self.estimateTempo(onsets: onsets)
+        let res = Components.Schemas.OnsetsResult(onsetsSec: onsets.map { Float($0) }, tempoBpm: tempo.map { Float($0) })
         return .ok(.init(body: .json(res)))
     }
 
     func analyzePitch(_ input: Operations.analyzePitch.Input) async throws -> Operations.analyzePitch.Output {
-        let res = Components.Schemas.PitchResult(f0Hz: [], centsErrorMean: nil)
+        guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
+        var wav: Data?
+        for try await part in form {
+            switch part {
+            case .wav(let w): wav = try await collectBody(w.payload.body)
+            case .undocumented: break
+            }
+        }
+        guard let d = wav, let (mono, sr) = try? Self.decodeWavToMono(data: d) else {
+            return .undocumented(statusCode: 400, .init())
+        }
+        let f0 = Self.autocorrPitchTrack(samples: mono, sampleRate: sr)
+        let res = Components.Schemas.PitchResult(f0Hz: f0.map { Float($0) }, centsErrorMean: nil)
         return .ok(.init(body: .json(res)))
     }
 
     func analyzeLoudness(_ input: Operations.analyzeLoudness.Input) async throws -> Operations.analyzeLoudness.Output {
-        let res = Components.Schemas.LoudnessResult(rms: [], meanDb: nil, maxDb: nil)
+        guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
+        var wav: Data?
+        for try await part in form {
+            switch part {
+            case .wav(let w): wav = try await collectBody(w.payload.body)
+            case .undocumented: break
+            }
+        }
+        guard let d = wav, let (mono, sr) = try? Self.decodeWavToMono(data: d) else {
+            return .undocumented(statusCode: 400, .init())
+        }
+        let (rms, meanDb, maxDb) = Self.loudnessEnvelope(samples: mono)
+        let res = Components.Schemas.LoudnessResult(rms: rms.map { Float($0) }, meanDb: Float(meanDb), maxDb: Float(maxDb))
         return .ok(.init(body: .json(res)))
     }
 
     func analyzeAlignment(_ input: Operations.analyzeAlignment.Input) async throws -> Operations.analyzeAlignment.Output {
-        let res = Components.Schemas.AlignmentResult(offsetMs: 0, driftMs: nil)
+        guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
+        var bw: Data?; var cw: Data?
+        for try await part in form {
+            switch part {
+            case .baselineWav(let w): bw = try await collectBody(w.payload.body)
+            case .candidateWav(let w): cw = try await collectBody(w.payload.body)
+            case .undocumented: break
+            }
+        }
+        guard let bd = bw, let cd = cw,
+              let (bmono, bsr) = try? Self.decodeWavToMono(data: bd),
+              let (cmono, csr) = try? Self.decodeWavToMono(data: cd) else {
+            return .undocumented(statusCode: 400, .init())
+        }
+        let sr = min(bsr, csr)
+        let (offsetSamples, _) = Self.crossCorrelationOffset(a: bmono, b: cmono, sampleRate: sr)
+        let offsetMs = (Double(offsetSamples) / sr) * 1000.0
+        let res = Components.Schemas.AlignmentResult(offsetMs: Float(offsetMs), driftMs: nil)
         return .ok(.init(body: .json(res)))
     }
 
@@ -626,6 +685,28 @@ extension PBVRTHandlers {
             }
         }
         return (best.0, best.1, bestScore)
+    }
+    static func estimateTranslationAround(baseline: CGImage, candidate: CGImage, sample: Int, centerDX: Int, centerDY: Int, window: Int) -> (dx: Int, dy: Int, score: Float) {
+        guard let bSmall = baseline.resized(width: sample, height: sample), let cSmall = candidate.resized(width: sample, height: sample) else { return (centerDX,centerDY,0) }
+        let b = grayscaleFloat(image: bSmall)
+        let c = grayscaleFloat(image: cSmall)
+        var bestScore: Float = .greatestFiniteMagnitude
+        var best = (centerDX, centerDY)
+        for dy in (centerDY - window)...(centerDY + window) {
+            for dx in (centerDX - window)...(centerDX + window) {
+                let s = sad(b: b, c: c, width: sample, height: sample, dx: dx, dy: dy)
+                if s < bestScore { bestScore = s; best = (dx, dy) }
+            }
+        }
+        return (best.0, best.1, bestScore)
+    }
+    static func refineTranslation(baseline: CGImage, candidate: CGImage, coarseDX: Int, coarseDY: Int, coarseSample: Int, refineSample: Int, window: Int) -> (dx: Int, dy: Int) {
+        // Scale coarse offset into refine sample space
+        let sx = Double(refineSample) / Double(coarseSample)
+        let rx = Int(round(Double(coarseDX) * sx))
+        let ry = Int(round(Double(coarseDY) * sx))
+        let (dx, dy, _) = estimateTranslationAround(baseline: baseline, candidate: candidate, sample: refineSample, centerDX: rx, centerDY: ry, window: window)
+        return (dx, dy)
     }
     static func grayscaleFloat(image: CGImage) -> [Float] {
         let w = image.width, h = image.height
@@ -969,6 +1050,104 @@ extension PBVRTHandlers {
         var data = [Float](repeating: 0, count: rows*cols)
         for j in 0..<cols { for i in 0..<rows { data[i*cols + j] = abs(a.data[i*a.cols + j] - b.data[i*b.cols + j]) } }
         writeGrayscalePNG(matrix: .init(rows: rows, cols: cols, data: data), to: url)
+    }
+
+    // MARK: - Audio DSP helpers
+    static func rmsFrames(samples: [Float], window: Int, hop: Int) -> [Double] {
+        if samples.isEmpty || window <= 0 || hop <= 0 { return [] }
+        let n = samples.count
+        let frames = max(0, (n - window) / hop + 1)
+        var out = [Double](repeating: 0, count: frames)
+        for f in 0..<frames {
+            let start = f * hop
+            var sum: Double = 0
+            for i in 0..<window { let v = Double(samples[start + i]); sum += v*v }
+            out[f] = sqrt(sum / Double(window))
+        }
+        return out
+    }
+    static func computeOnsets(samples: [Float], sampleRate: Double, window: Int, hop: Int) -> (novelty: [Double], times: [Double], onsets: [Double]) {
+        let rms = rmsFrames(samples: samples, window: window, hop: hop)
+        if rms.isEmpty { return ([], [], []) }
+        var novelty = [Double](repeating: 0, count: rms.count)
+        novelty[0] = 0
+        for i in 1..<rms.count { novelty[i] = max(0, rms[i] - rms[i-1]) }
+        // Simple threshold: median + small factor
+        let med = median(novelty)
+        let thresh = med + 0.05
+        var peaks: [Int] = []
+        for i in 1..<(novelty.count-1) {
+            if novelty[i] > thresh && novelty[i] > novelty[i-1] && novelty[i] >= novelty[i+1] { peaks.append(i) }
+        }
+        let times = (0..<novelty.count).map { Double($0 * hop) / sampleRate }
+        let onsets = peaks.map { Double($0 * hop) / sampleRate }
+        return (novelty, times, onsets)
+    }
+    static func estimateTempo(onsets: [Double]) -> Double? {
+        if onsets.count < 2 { return nil }
+        var ioi: [Double] = []
+        for i in 1..<onsets.count { ioi.append(onsets[i] - onsets[i-1]) }
+        let med = median(ioi)
+        if med <= 0 { return nil }
+        return 60.0 / med
+    }
+    static func median(_ x: [Double]) -> Double {
+        if x.isEmpty { return 0 }
+        let s = x.sorted(); let n = s.count
+        if n % 2 == 1 { return s[n/2] }
+        return 0.5 * (s[n/2-1] + s[n/2])
+    }
+    static func autocorrPitchTrack(samples: [Float], sampleRate: Double, window: Int = 1024, hop: Int = 512, fmin: Double = 80.0, fmax: Double = 800.0) -> [Double] {
+        if samples.isEmpty { return [] }
+        let n = samples.count
+        let frames = max(0, (n - window) / hop + 1)
+        var f0 = [Double](repeating: 0, count: frames)
+        let minLag = max(1, Int(sampleRate / fmax))
+        let maxLag = max(minLag+1, Int(sampleRate / fmin))
+        for f in 0..<frames {
+            let start = f * hop
+            // windowed frame (Hann)
+            var w = [Double](repeating: 0, count: window)
+            for i in 0..<window {
+                let hann = 0.5 - 0.5 * cos(2.0 * Double.pi * Double(i) / Double(window))
+                w[i] = Double(samples[start + i]) * hann
+            }
+            // autocorr over lag range
+            var bestLag = minLag
+            var bestVal = -Double.infinity
+            for lag in minLag..<min(maxLag, window) {
+                var sum: Double = 0
+                for i in 0..<(window - lag) { sum += w[i] * w[i+lag] }
+                if sum > bestVal { bestVal = sum; bestLag = lag }
+            }
+            f0[f] = sampleRate / Double(bestLag)
+        }
+        return f0
+    }
+    static func loudnessEnvelope(samples: [Float], window: Int = 1024, hop: Int = 512) -> ([Double], Double, Double) {
+        let rms = rmsFrames(samples: samples, window: window, hop: hop)
+        let db = rms.map { 20.0 * log10(max(1e-6, $0)) }
+        let mean = db.isEmpty ? 0 : db.reduce(0, +) / Double(db.count)
+        let maxv = db.max() ?? 0
+        return (db, mean, maxv)
+    }
+    static func crossCorrelationOffset(a: [Float], b: [Float], sampleRate: Double, maxLagSec: Double = 0.25) -> (lagSamples: Int, value: Double) {
+        // limit search to ±maxLag
+        let maxLag = Int(maxLagSec * sampleRate)
+        let n = min(a.count, b.count)
+        var bestLag = 0
+        var bestVal = -Double.infinity
+        // Centered cross-corr: for lag L, compare a[i] with b[i+L]
+        for lag in -maxLag...maxLag {
+            var sum: Double = 0
+            let startA = max(0, -lag)
+            let startB = max(0, lag)
+            let count = min(n - startA, n - startB)
+            if count <= 0 { continue }
+            for i in 0..<count { sum += Double(a[startA + i]) * Double(b[startB + i]) }
+            if sum > bestVal { bestVal = sum; bestLag = lag }
+        }
+        return (bestLag, bestVal)
     }
 }
 

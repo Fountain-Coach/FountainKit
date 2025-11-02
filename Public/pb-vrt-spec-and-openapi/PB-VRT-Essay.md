@@ -1,5 +1,11 @@
 # PB‑VRT — The Quiet Frame
 
+## Technical Definition
+
+PB‑VRT (Prompt‑Bound Visual Regression Testing) is a prompt‑first baseline and drift‑checking system for visual and audio surfaces. It captures an agreed reference (“baseline”) described by a short prompt, then aligns and compares new renderings and recordings against that baseline, reporting only meaningful, human‑relevant differences and saving clear evidence. It is used to keep screens and sounds true to intent by checking pixel/layout drift, text and spacing changes, and timing, pitch, loudness, and sync in audio.
+
+Read this if you ship interactive visuals or sound and need a reproducible, perceptual check that what users see and hear still matches what you meant. Skip it if conventional unit tests are sufficient and perceptual drift does not matter for your work.
+
 ## A Quiet Promise
 
 Sometimes the room is still enough to hear paper breathe. We spread a single page on the table and read it aloud, not for the rules hidden in it, but for the promise it makes: this is the surface we are building, this is what matters, this is how it should feel. Then we press the page between glass and light, the way you might press a leaf into a book to keep a season from slipping away. That pressed moment becomes our frame. PB‑VRT stands beside it, unhurried, keeping watch.

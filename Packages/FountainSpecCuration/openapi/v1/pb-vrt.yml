@@ -404,6 +404,7 @@ paths:
               type: object
               required: [wav]
               properties:
+                baselineId: { type: string }
                 wav: { type: string, format: binary }
       responses:
         '200':
@@ -428,6 +429,7 @@ paths:
               type: object
               required: [wav]
               properties:
+                baselineId: { type: string }
                 wav: { type: string, format: binary }
       responses:
         '200':
@@ -452,6 +454,7 @@ paths:
               type: object
               required: [wav]
               properties:
+                baselineId: { type: string }
                 wav: { type: string, format: binary }
       responses:
         '200':
@@ -476,6 +479,7 @@ paths:
               type: object
               required: [baselineWav, candidateWav]
               properties:
+                baselineId: { type: string }
                 baselineWav: { type: string, format: binary }
                 candidateWav: { type: string, format: binary }
       responses:

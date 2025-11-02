@@ -225,17 +225,45 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         let dir = core.baselineDir(bId)
         let candidateURL = dir.appendingPathComponent("candidate.png")
         try? png.write(to: candidateURL)
-        // Compute featureprint distance if baseline.png exists
+        // Compute metrics if baseline.png exists
         var fdist: Double?
+        var pixelL1: Double?
+        var ssim: Double?
+        var deltaPath: String?
         let baselineURL = dir.appendingPathComponent("baseline.png")
         if let base = try? Data(contentsOf: baselineURL) {
             if let cand = try? Data(contentsOf: candidateURL) {
                 fdist = try? PBVRTEngine.featureprintDistance(baseline: base, candidate: cand)
+                if let bImg = CGImage.fromPNGData(base), let cImg = CGImage.fromPNGData(cand) {
+                    // Align candidate to baseline (coarse + refine) at 256²
+                    let (dxDown, dyDown, _) = Self.estimateTranslation(baseline: bImg, candidate: cImg, sample: 128, search: 16)
+                    let (dxRef, dyRef, _) = Self.refineTranslation(baseline: bImg, candidate: cImg, coarseDX: dxDown, coarseDY: dyDown, coarseSample: 128, refineSample: 256, window: 6)
+                    // Compute pixel L1 (mean absolute difference) on full-res overlap using dx,dy scaled from 256 sample
+                    let scaleX = CGFloat(cImg.width) / 256.0
+                    let scaleY = CGFloat(cImg.height) / 256.0
+                    let dx = Int(round(CGFloat(dxRef) * scaleX))
+                    let dy = Int(round(CGFloat(dyRef) * scaleY))
+                    pixelL1 = Self.meanAbsoluteDifference(baseline: bImg, candidate: cImg, dx: dx, dy: dy)
+                    // SSIM on normalized 256² grayscale using uniform weights
+                    let sample = 256
+                    if let bRes = bImg.resized(width: sample, height: sample), let cRes = cImg.resized(width: sample, height: sample) {
+                        let bGray = PBVRTHandlers.grayscaleFloat(image: bRes)
+                        let cGray = PBVRTHandlers.grayscaleFloat(image: cRes)
+                        let w = [Float](repeating: 1, count: sample*sample)
+                        ssim = PBVRTHandlers.weightedSSIM(a: bGray, b: cGray, weight: w, count: sample*sample)
+                        // Delta artifact (abs difference) at 256²
+                        var delta = [Float](repeating: 0, count: sample*sample)
+                        for i in 0..<(sample*sample) { delta[i] = abs(bGray[i] - cGray[i]) }
+                        let dURL = dir.appendingPathComponent("delta.png")
+                        PBVRTHandlers.writeGrayscalePNG(matrix: .init(rows: sample, cols: sample, data: delta), to: dURL)
+                        deltaPath = dURL.path
+                    }
+                }
             }
         }
         let metrics = Components.Schemas.DriftReport.metricsPayload(
-            pixel_l1: nil,
-            ssim: nil,
+            pixel_l1: pixelL1.map { Float($0) },
+            ssim: ssim.map { Float($0) },
             featureprint_distance: fdist.map { Float($0) },
             clip_cosine: nil,
             prompt_cosine: nil
@@ -244,7 +272,7 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
             baselineId: bId,
             metrics: metrics,
             pass: (fdist ?? 0) < (Double(ProcessInfo.processInfo.environment["PBVRT_FEATUREPRINT_MAX"] ?? "0.03") ?? 0.03),
-            artifacts: .init(candidatePng: candidateURL.path, deltaPng: nil),
+            artifacts: .init(candidatePng: candidateURL.path, deltaPng: deltaPath),
             timestamps: .init(baseline: nil, run: Date())
         )
         // Persist compare summary under the baseline page
@@ -255,10 +283,13 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
             let payload: [String: Any] = [
                 "baselineId": bId,
                 "metrics": [
-                    "featureprint_distance": fdist as Any
+                    "featureprint_distance": fdist as Any,
+                    "pixel_l1": pixelL1 as Any,
+                    "ssim": ssim as Any
                 ],
                 "artifacts": [
-                    "candidatePng": candidateURL.path
+                    "candidatePng": candidateURL.path,
+                    "deltaPng": deltaPath as Any
                 ],
                 "runAt": ISO8601DateFormatter().string(from: Date())
             ]
@@ -550,9 +581,10 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
 
     func detectOnsets(_ input: Operations.detectOnsets.Input) async throws -> Operations.detectOnsets.Output {
         guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
-        var wav: Data?
+        var wav: Data?; var baselineId: String?
         for try await part in form {
             switch part {
+            case .baselineId(let w): if let s = try? String(decoding: await collectBody(w.payload.body), as: UTF8.self) { baselineId = s.trimmingCharacters(in: .whitespacesAndNewlines) }
             case .wav(let w): wav = try await collectBody(w.payload.body)
             case .undocumented: break
             }
@@ -562,17 +594,24 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         }
         let hop = 512
         let win = 1024
-        let (novelty, _, onsets) = Self.computeOnsets(samples: mono, sampleRate: sr, window: win, hop: hop)
+        let (_, _, onsets) = Self.computeOnsets(samples: mono, sampleRate: sr, window: win, hop: hop)
         let tempo = Self.estimateTempo(onsets: onsets)
         let res = Components.Schemas.OnsetsResult(onsetsSec: onsets.map { Float($0) }, tempoBpm: tempo.map { Float($0) })
+        if let bId = baselineId, !bId.isEmpty {
+            await core.writeBaselineSummary(baselineId: bId, kind: "pbvrt.audio.onsets", payload: [
+                "onsetsSec": onsets,
+                "tempoBpm": tempo as Any
+            ].compactMapValues { $0 })
+        }
         return .ok(.init(body: .json(res)))
     }
 
     func analyzePitch(_ input: Operations.analyzePitch.Input) async throws -> Operations.analyzePitch.Output {
         guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
-        var wav: Data?
+        var wav: Data?; var baselineId: String?
         for try await part in form {
             switch part {
+            case .baselineId(let w): if let s = try? String(decoding: await collectBody(w.payload.body), as: UTF8.self) { baselineId = s.trimmingCharacters(in: .whitespacesAndNewlines) }
             case .wav(let w): wav = try await collectBody(w.payload.body)
             case .undocumented: break
             }
@@ -582,14 +621,18 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         }
         let f0 = Self.autocorrPitchTrack(samples: mono, sampleRate: sr)
         let res = Components.Schemas.PitchResult(f0Hz: f0.map { Float($0) }, centsErrorMean: nil)
+        if let bId = baselineId, !bId.isEmpty {
+            await core.writeBaselineSummary(baselineId: bId, kind: "pbvrt.audio.pitch", payload: ["f0Hz": f0])
+        }
         return .ok(.init(body: .json(res)))
     }
 
     func analyzeLoudness(_ input: Operations.analyzeLoudness.Input) async throws -> Operations.analyzeLoudness.Output {
         guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
-        var wav: Data?
+        var wav: Data?; var baselineId: String?
         for try await part in form {
             switch part {
+            case .baselineId(let w): if let s = try? String(decoding: await collectBody(w.payload.body), as: UTF8.self) { baselineId = s.trimmingCharacters(in: .whitespacesAndNewlines) }
             case .wav(let w): wav = try await collectBody(w.payload.body)
             case .undocumented: break
             }
@@ -599,14 +642,22 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         }
         let (rms, meanDb, maxDb) = Self.loudnessEnvelope(samples: mono)
         let res = Components.Schemas.LoudnessResult(rms: rms.map { Float($0) }, meanDb: Float(meanDb), maxDb: Float(maxDb))
+        if let bId = baselineId, !bId.isEmpty {
+            await core.writeBaselineSummary(baselineId: bId, kind: "pbvrt.audio.loudness", payload: [
+                "rms": rms,
+                "meanDb": meanDb,
+                "maxDb": maxDb
+            ])
+        }
         return .ok(.init(body: .json(res)))
     }
 
     func analyzeAlignment(_ input: Operations.analyzeAlignment.Input) async throws -> Operations.analyzeAlignment.Output {
         guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
-        var bw: Data?; var cw: Data?
+        var bw: Data?; var cw: Data?; var baselineId: String?
         for try await part in form {
             switch part {
+            case .baselineId(let w): if let s = try? String(decoding: await collectBody(w.payload.body), as: UTF8.self) { baselineId = s.trimmingCharacters(in: .whitespacesAndNewlines) }
             case .baselineWav(let w): bw = try await collectBody(w.payload.body)
             case .candidateWav(let w): cw = try await collectBody(w.payload.body)
             case .undocumented: break
@@ -621,6 +672,11 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         let (offsetSamples, _) = Self.crossCorrelationOffset(a: bmono, b: cmono, sampleRate: sr)
         let offsetMs = (Double(offsetSamples) / sr) * 1000.0
         let res = Components.Schemas.AlignmentResult(offsetMs: Float(offsetMs), driftMs: nil)
+        if let bId = baselineId, !bId.isEmpty {
+            await core.writeBaselineSummary(baselineId: bId, kind: "pbvrt.audio.alignment", payload: [
+                "offsetMs": offsetMs
+            ])
+        }
         return .ok(.init(body: .json(res)))
     }
 

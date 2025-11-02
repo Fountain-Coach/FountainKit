@@ -145,6 +145,47 @@ final class PBVRTHTTPIntegrationTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(qr.total, 1)
     }
 
+    func testSpectrogramCompareBaselineWritesBaselineSegment() async throws {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let (kernel, store) = await makeKernelAndStore(tmp: tmp)
+        let b = sineWav()
+        let c = sineWav()
+        let baselineId = UUID().uuidString
+        let boundary = "XBOUNDARY-SPEC-B"
+        let (body, ctype) = multipart([
+            (name: "baselineId", filename: nil, contentType: "text/plain", data: Data(baselineId.utf8)),
+            (name: "baselineWav", filename: "b.wav", contentType: "application/octet-stream", data: b),
+            (name: "candidateWav", filename: "c.wav", contentType: "application/octet-stream", data: c)
+        ], boundary: boundary)
+        let req = HTTPRequest(method: "POST", path: "/pb-vrt/probes/audio/spectrogram/compare", headers: ["Content-Type": ctype, "Content-Length": String(body.count)], body: body)
+        let resp = try await kernel.handle(req)
+        if resp.status != 200 {
+            let err = String(data: resp.body, encoding: .utf8) ?? ""
+            XCTFail("status=\(resp.status) body=\(err)")
+        }
+        // Response artifacts exist
+        struct SpecRes: Decodable { struct Art: Decodable { let baselineSpecPng: String?; let candidateSpecPng: String?; let deltaSpecPng: String? }; let artifacts: Art? }
+        if let s = try? JSONDecoder().decode(SpecRes.self, from: resp.body), let art = s.artifacts {
+            for p in [art.baselineSpecPng, art.candidateSpecPng, art.deltaSpecPng].compactMap({$0}) {
+                XCTAssertTrue(FileManager.default.fileExists(atPath: p))
+            }
+        }
+        // Store segment exists with artifacts that exist on disk
+        let pageId = "pbvrt:baseline:\(baselineId)"
+        let segId = "\(pageId):pbvrt.audio.spectrogram"
+        if let data = try await store.getDoc(corpusId: "pbvrt-test", collection: "segments", id: segId) {
+            if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let text = obj["text"] as? String,
+               let inner = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any], let arts = inner["artifacts"] as? [String: Any] {
+                for k in ["baselineSpecPng","candidateSpecPng","deltaSpecPng"] {
+                    if let p = arts[k] as? String { XCTAssertTrue(FileManager.default.fileExists(atPath: p)) }
+                }
+            }
+        } else {
+            XCTFail("baseline spectrogram segment not found")
+        }
+    }
+
     func testSaliencyCompareBaselineWritesBaselineSegment() async throws {
         let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
@@ -236,11 +277,12 @@ final class PBVRTHTTPIntegrationTests: XCTestCase {
             let err = String(data: resp.body, encoding: .utf8) ?? ""
             XCTFail("status=\(resp.status) body=\(err)")
         }
-        struct AlignRes: Decodable { struct Art: Decodable { let alignedCandidatePng: String? }; struct T: Decodable { let dx: Float?; let dy: Float? }; let transform: T?; let postAlignDriftPx: Float?; let artifacts: Art? }
+        struct AlignRes: Decodable { struct Art: Decodable { let alignedCandidatePng: String? }; struct T: Decodable { let dx: Float?; let dy: Float? }; let transform: T?; let postAlignDriftPx: Float?; let confidence: Float?; let artifacts: Art? }
         if let a = try? JSONDecoder().decode(AlignRes.self, from: resp.body) {
             if let dx = a.transform?.dx { XCTAssertLessThan(abs(dx - 6), 2) }
             XCTAssertNotNil(a.transform?.dy)
             if let drift = a.postAlignDriftPx { XCTAssertLessThanOrEqual(drift, 10.0) }
+            if let conf = a.confidence { XCTAssertGreaterThanOrEqual(conf, 0.5) }
             if let p = a.artifacts?.alignedCandidatePng { XCTAssertTrue(FileManager.default.fileExists(atPath: p)) }
         }
     }

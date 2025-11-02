@@ -6,6 +6,32 @@ import Foundation
 import UniformTypeIdentifiers
 
 final class PBVRTHTTPIntegrationTests: XCTestCase {
+    // Thresholds
+    private let SALIENCY_WL1_MAX: Float = 0.05
+    private let SPEC_L2_MAX: Float = 1e-3
+    private let SPEC_LSD_MAX: Float = 0.5
+    private let ALIGN_DX_TOL: Float = 2.0
+    private let ALIGN_DRIFT_MAX: Float = 5.0
+    private let ALIGN_CONF_MIN: Float = 0.9
+
+    // Helpers
+    private func decodeJSON<T: Decodable>(_ type: T.Type, data: Data) -> T? {
+        return try? JSONDecoder().decode(type, from: data)
+    }
+    private func getSegmentInnerJSON(store: FountainStoreClient, corpusId: String, segId: String) async throws -> [String: Any]? {
+        if let data = try await store.getDoc(corpusId: corpusId, collection: "segments", id: segId) {
+            if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let text = obj["text"] as? String,
+               let inner = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any] {
+                return inner
+            }
+        }
+        return nil
+    }
+    private func assertFilesExist(_ paths: [String?], file: StaticString = #filePath, line: UInt = #line) {
+        for p in paths.compactMap({$0}) {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: p), "missing file: \(p)", file: file, line: line)
+        }
+    }
     func makeKernelAndStore(tmp: URL, corpus: String = "pbvrt-test") async -> (HTTPKernel, FountainStoreClient) {
         let store = try! DiskFountainStoreClient(rootDirectory: tmp)
         let fc = FountainStoreClient(client: store)
@@ -98,14 +124,12 @@ final class PBVRTHTTPIntegrationTests: XCTestCase {
         }
         // Parse JSON and assert plausible thresholds
         struct Sal: Decodable { struct Art: Decodable { let baselineSaliency: String?; let candidateSaliency: String?; let weightedDelta: String? }; let weighted_l1: Float?; let artifacts: Art? }
-        if let s = try? JSONDecoder().decode(Sal.self, from: resp.body) {
+        if let s = decodeJSON(Sal.self, data: resp.body) {
             XCTAssertNotNil(s.weighted_l1)
             // Two identical black images → near zero
-            if let v = s.weighted_l1 { XCTAssertLessThanOrEqual(v, 0.05) }
+            if let v = s.weighted_l1 { XCTAssertLessThanOrEqual(v, SALIENCY_WL1_MAX) }
             if let art = s.artifacts {
-                for p in [art.baselineSaliency, art.candidateSaliency, art.weightedDelta].compactMap({$0}) {
-                    XCTAssertTrue(FileManager.default.fileExists(atPath: p))
-                }
+                assertFilesExist([art.baselineSaliency, art.candidateSaliency, art.weightedDelta])
             }
         }
         // confirm store wrote ad-hoc saliency summary
@@ -132,13 +156,11 @@ final class PBVRTHTTPIntegrationTests: XCTestCase {
         }
         // Parse JSON and assert thresholds
         struct SpecRes: Decodable { struct Art: Decodable { let baselineSpecPng: String?; let candidateSpecPng: String?; let deltaSpecPng: String? }; let l2: Float?; let lsd_db: Float?; let artifacts: Art? }
-        if let s = try? JSONDecoder().decode(SpecRes.self, from: resp.body) {
-            if let v = s.l2 { XCTAssertLessThanOrEqual(v, 1e-3) }
-            if let d = s.lsd_db { XCTAssertLessThanOrEqual(d, 0.5) }
+        if let s = decodeJSON(SpecRes.self, data: resp.body) {
+            if let v = s.l2 { XCTAssertLessThanOrEqual(v, SPEC_L2_MAX) }
+            if let d = s.lsd_db { XCTAssertLessThanOrEqual(d, SPEC_LSD_MAX) }
             if let art = s.artifacts {
-                for p in [art.baselineSpecPng, art.candidateSpecPng, art.deltaSpecPng].compactMap({$0}) {
-                    XCTAssertTrue(FileManager.default.fileExists(atPath: p))
-                }
+                assertFilesExist([art.baselineSpecPng, art.candidateSpecPng, art.deltaSpecPng])
             }
         }
         let qr = try await store.query(corpusId: "pbvrt-test", collection: "segments", query: Query(filters: ["kind": "pbvrt.audio.spectrogram"]))
@@ -208,20 +230,13 @@ final class PBVRTHTTPIntegrationTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(qr.total, 1)
         // Confirm response artifacts exist
         struct SalB: Decodable { struct Art: Decodable { let baselineSaliency: String?; let candidateSaliency: String?; let weightedDelta: String? }; let artifacts: Art? }
-        if let s = try? JSONDecoder().decode(SalB.self, from: resp.body), let art = s.artifacts {
-            for p in [art.baselineSaliency, art.candidateSaliency, art.weightedDelta].compactMap({$0}) {
-                XCTAssertTrue(FileManager.default.fileExists(atPath: p))
-            }
+        if let s = decodeJSON(SalB.self, data: resp.body), let art = s.artifacts {
+            assertFilesExist([art.baselineSaliency, art.candidateSaliency, art.weightedDelta])
         }
         // Confirm store segment artifacts exist
         let segId = "\(pageId):pbvrt.vision.saliency"
-        if let data = try await store.getDoc(corpusId: "pbvrt-test", collection: "segments", id: segId) {
-            if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let text = obj["text"] as? String,
-               let inner = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any], let arts = inner["artifacts"] as? [String: Any] {
-                for k in ["baselineSaliency","candidateSaliency","weightedDelta"] {
-                    if let p = arts[k] as? String { XCTAssertTrue(FileManager.default.fileExists(atPath: p)) }
-                }
-            }
+        if let inner = try await getSegmentInnerJSON(store: store, corpusId: "pbvrt-test", segId: segId), let arts = inner["artifacts"] as? [String: Any] {
+            assertFilesExist([arts["baselineSaliency"] as? String, arts["candidateSaliency"] as? String, arts["weightedDelta"] as? String])
         } else { XCTFail("saliency baseline segment not found") }
     }
 
@@ -259,13 +274,13 @@ final class PBVRTHTTPIntegrationTests: XCTestCase {
         XCTAssertNotNil(got)
         // Candidate artifact exists
         struct Drift: Decodable { struct Art: Decodable { let candidatePng: String? }; let artifacts: Art? }
-        if let d = try? JSONDecoder().decode(Drift.self, from: resp.body), let path = d.artifacts?.candidatePng {
-            XCTAssertTrue(FileManager.default.fileExists(atPath: path))
+        if let d = decodeJSON(Drift.self, data: resp.body), let path = d.artifacts?.candidatePng {
+            assertFilesExist([path])
         }
         // Candidate artifact path exists in store segment
         if let got, let obj = try? JSONSerialization.jsonObject(with: got) as? [String: Any], let text = obj["text"] as? String,
            let inner = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any], let arts = inner["artifacts"] as? [String: Any], let p = arts["candidatePng"] as? String {
-            XCTAssertTrue(FileManager.default.fileExists(atPath: p))
+            assertFilesExist([p])
         }
     }
 
@@ -293,11 +308,11 @@ final class PBVRTHTTPIntegrationTests: XCTestCase {
             XCTFail("status=\(resp.status) body=\(err)")
         }
         struct AlignRes: Decodable { struct Art: Decodable { let alignedCandidatePng: String? }; struct T: Decodable { let dx: Float?; let dy: Float? }; let transform: T?; let postAlignDriftPx: Float?; let confidence: Float?; let artifacts: Art? }
-        if let a = try? JSONDecoder().decode(AlignRes.self, from: resp.body) {
-            if let dx = a.transform?.dx { XCTAssertLessThan(abs(dx - 6), 2) }
+        if let a = decodeJSON(AlignRes.self, data: resp.body) {
+            if let dx = a.transform?.dx { XCTAssertLessThan(abs(dx - 6), ALIGN_DX_TOL) }
             XCTAssertNotNil(a.transform?.dy)
-            if let drift = a.postAlignDriftPx { XCTAssertLessThanOrEqual(drift, 5.0) }
-            if let conf = a.confidence { XCTAssertGreaterThanOrEqual(conf, 0.9) }
+            if let drift = a.postAlignDriftPx { XCTAssertLessThanOrEqual(drift, ALIGN_DRIFT_MAX) }
+            if let conf = a.confidence { XCTAssertGreaterThanOrEqual(conf, ALIGN_CONF_MIN) }
             if let p = a.artifacts?.alignedCandidatePng { XCTAssertTrue(FileManager.default.fileExists(atPath: p)) }
         }
     }

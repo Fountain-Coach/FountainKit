@@ -190,6 +190,11 @@ jobs:
             runner: macos-15
             command: swift test --package-path "Packages/FountainApps" --filter GatewayServerTests
             cache-path: Packages/FountainApps/.build
+          - id: fountainapps-pbvrt-tests
+            title: swift test (FountainApps/PBVRTServerTests)
+            runner: macos-15
+            command: ROBOT_ONLY=1 swift test --package-path "Packages/FountainApps" --filter PBVRTServerTests
+            cache-path: Packages/FountainApps/.build
           - id: fountainapps-sembrowser-build
             title: swift build (FountainApps-SemanticBrowser)
             runner: macos-15

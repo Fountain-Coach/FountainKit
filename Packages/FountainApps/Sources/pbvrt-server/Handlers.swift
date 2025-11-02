@@ -3,6 +3,7 @@ import OpenAPIRuntime
 import FountainStoreClient
 import Vision
 import AVFoundation
+import CoreMLKit
 import Accelerate
 
 // PB‑VRT core for persistence
@@ -306,8 +307,27 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
 
     // MARK: - Audio probes (stubs/minimal)
     func compareAudioEmbedding(_ input: Operations.compareAudioEmbedding.Input) async throws -> Operations.compareAudioEmbedding.Output {
-        let out = Components.Schemas.AudioEmbeddingResult(metricName: .audio_embedding_cosine, value: 0, backend: .yamnet, model: "none", durationMs: 0)
-        return .ok(.init(body: .json(out)))
+        guard case let .multipartForm(form) = input.body else { return .undocumented(statusCode: 400, .init()) }
+        var bw: Data?; var cw: Data?; var backend: String = "yamnet"
+        for try await part in form {
+            switch part {
+            case .baselineWav(let w): bw = try await collectBody(w.payload.body)
+            case .candidateWav(let w): cw = try await collectBody(w.payload.body)
+            case .backend(let w):
+                if let s = try? String(decoding: await collectBody(w.payload.body), as: UTF8.self) { backend = s.trimmingCharacters(in: .whitespacesAndNewlines) }
+            case .undocumented: break
+            }
+        }
+        guard let bd = bw, let cd = cw, let (bmono, bsr) = try? Self.decodeWavToMono(data: bd), let (cmono, csr) = try? Self.decodeWavToMono(data: cd) else {
+            return .undocumented(statusCode: 400, .init())
+        }
+        let t0 = Date()
+        // Attempt Core ML embedding; fallback to spectrogram flatten
+        let (bvec, cvec, modelName, usedBackend) = Self.computeAudioEmbeddingPair(b: bmono, c: cmono, srB: bsr, srC: csr, preferredBackend: backend)
+        let cos = Self.cosineDistance(a: bvec, b: cvec)
+        let ms = Date().timeIntervalSince(t0) * 1000
+        let res = Components.Schemas.AudioEmbeddingResult(metricName: .audio_embedding_cosine, value: Float(cos), backend: .init(rawValue: usedBackend) ?? .yamnet, model: modelName, durationMs: Float(ms))
+        return .ok(.init(body: .json(res)))
     }
 
     func compareSpectrogram(_ input: Operations.compareSpectrogram.Input) async throws -> Operations.compareSpectrogram.Output {
@@ -467,6 +487,72 @@ extension PBVRTHandlers {
 
 // MARK: - Utilities (Audio)
 extension PBVRTHandlers {
+    static func cosineDistance(a: [Float], b: [Float]) -> Double {
+        let n = min(a.count, b.count)
+        if n == 0 { return 1.0 }
+        var dot: Double = 0, na: Double = 0, nb: Double = 0
+        for i in 0..<n {
+            let x = Double(a[i]), y = Double(b[i])
+            dot += x*y; na += x*x; nb += y*y
+        }
+        let denom = (sqrt(na) * sqrt(nb))
+        if denom == 0 { return 1.0 }
+        let cosSim = dot / denom
+        return max(0.0, min(2.0, 1.0 - cosSim))
+    }
+
+    static func computeAudioEmbeddingPair(b: [Float], c: [Float], srB: Double, srC: Double, preferredBackend: String) -> ([Float],[Float], String, String) {
+        // Try Core ML if model path configured
+        if let path = ProcessInfo.processInfo.environment["PBVRT_AUDIO_EMBED_MODEL"], !path.isEmpty,
+           let loaded = try? CoreMLInterop.loadModel(at: path) {
+            let summary = ModelInfo.summarize(loaded.model)
+            let input = summary.inputs.first
+            let outName = summary.outputs.first?.name
+            func prep(_ x: [Float], sr: Double) -> [Float] {
+                let need = input?.shape.reduce(1, *) ?? x.count
+                return resize1D(x, to: need)
+            }
+            let bin = prep(b, sr: srB)
+            let cin = prep(c, sr: srC)
+            var inputName = input?.name ?? "input"
+            // MultiArray input assumed; shape 1D
+            if let arrB = try? CoreMLInterop.makeMultiArray(bin, shape: [bin.count]),
+               let arrC = try? CoreMLInterop.makeMultiArray(cin, shape: [cin.count]) {
+                if let name = input?.name { inputName = name }
+                let outB = (try? CoreMLInterop.predict(model: loaded.model, inputs: [inputName: arrB])) ?? [:]
+                let outC = (try? CoreMLInterop.predict(model: loaded.model, inputs: [inputName: arrC])) ?? [:]
+                if let on = outName, let vb = outB[on], let vc = outC[on] {
+                    return (CoreMLInterop.toArray(vb), CoreMLInterop.toArray(vc), loaded.url.lastPathComponent, "coreml")
+                }
+                if let vb = outB.values.first, let vc = outC.values.first {
+                    return (CoreMLInterop.toArray(vb), CoreMLInterop.toArray(vc), loaded.url.lastPathComponent, "coreml")
+                }
+            }
+        }
+        // Fallback: flatten coarse spectrogram as embedding
+        let sr = min(srB, srC)
+        let (bs, _) = spectrogram(samples: b, sampleRate: sr)
+        let (cs, _) = spectrogram(samples: c, sampleRate: sr)
+        let rows = min(bs.rows, cs.rows), cols = min(bs.cols, cs.cols)
+        var bv: [Float] = []; bv.reserveCapacity(rows*cols)
+        var cv: [Float] = []; cv.reserveCapacity(rows*cols)
+        for j in 0..<cols { for i in 0..<rows { bv.append(bs.data[i*bs.cols + j]); cv.append(cs.data[i*cs.cols + j]) } }
+        return (bv, cv, "coarse-spectrogram", "yamnet")
+    }
+    static func resize1D(_ x: [Float], to m: Int) -> [Float] {
+        if x.count == m { return x }
+        if x.isEmpty { return [Float](repeating: 0, count: m) }
+        var out = [Float](repeating: 0, count: m)
+        let scale = Double(x.count - 1) / Double(max(1, m - 1))
+        for i in 0..<m {
+            let pos = Double(i) * scale
+            let i0 = Int(pos)
+            let frac = Float(pos - Double(i0))
+            let i1 = min(i0 + 1, x.count - 1)
+            out[i] = x[i0] * (1 - frac) + x[i1] * frac
+        }
+        return out
+    }
     static func decodeWavToMono(data: Data) throws -> ([Float], Double) {
         let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".wav")
         try data.write(to: tmp)

@@ -806,7 +806,8 @@ let package = Package(
                 .product(name: "FountainRuntime", package: "FountainCore"),
                 .product(name: "FountainStoreClient", package: "FountainCore"),
                 .product(name: "LauncherSignature", package: "FountainCore"),
-                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                "CoreMLKit"
             ],
             path: "Sources/pbvrt-server",
             plugins: [

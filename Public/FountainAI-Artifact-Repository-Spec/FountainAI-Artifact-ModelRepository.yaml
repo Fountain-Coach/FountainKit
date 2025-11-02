@@ -1,0 +1,125 @@
+openapi: 3.1.0
+info:
+  title: FountainAI Artifact & Model Repository API
+  version: "1.0.0"
+  description: >
+    This API provides unified endpoints for managing model metadata, artifact uploads/downloads,
+    and S3 backup synchronization, with FountainStore as the persistence layer.
+servers:
+  - url: https://artifact.fountain.coach/v1
+    description: Production endpoint
+  - url: http://localhost:8000/v1
+    description: Local development
+paths:
+  /artifacts:
+    post:
+      summary: Create artifact and get pre-signed upload URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                digest: { type: string }
+                sizeBytes: { type: integer }
+                contentType: { type: string }
+                license: { type: string }
+      responses:
+        '201':
+          description: Upload URL issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uploadUrl: { type: string }
+                  expiresAt: { type: string, format: date-time }
+  /artifacts/{digest}:
+    get:
+      summary: Get artifact metadata + pre-signed download URL
+      parameters:
+        - in: path
+          name: digest
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Metadata + download URL
+  /models:
+    post:
+      summary: Register new model version
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelRecord'
+      responses:
+        '201':
+          description: Model registered
+    get:
+      summary: List models
+      responses:
+        '200':
+          description: Model list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ModelRecord'
+  /models/{modelId}:
+    get:
+      summary: Get model metadata
+      parameters:
+        - in: path
+          name: modelId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Model metadata
+  /backups/s3/sync:
+    post:
+      summary: Sync artifacts and FountainStore corpus to external S3
+      description: >
+        Starts a backup job that mirrors artifacts and FountainStore corpus snapshots to an external S3-compatible target.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                targetEndpoint: { type: string }
+                accessKey: { type: string }
+                secretKey: { type: string }
+                bucket: { type: string }
+                prefix: { type: string }
+      responses:
+        '202':
+          description: Backup started
+components:
+  schemas:
+    ModelRecord:
+      type: object
+      required: [name, version, artifacts, license]
+      properties:
+        modelId: { type: string }
+        name: { type: string }
+        version: { type: string }
+        license: { type: string }
+        artifacts:
+          type: array
+          items: { type: string }
+        metadata:
+          type: object
+          additionalProperties: true
+        provenance:
+          type: object
+          properties:
+            createdAt: { type: string, format: date-time }
+            createdBy: { type: string }
+            sourceRepo: { type: string }
+            commitSha: { type: string }

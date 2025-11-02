@@ -169,11 +169,6 @@ let package = Package(
             ]
         ),
         .executableTarget(
-            name: "pbvrt-embed-ci",
-            dependencies: ["pbvrt-server"],
-            path: "Sources/pbvrt-embed-ci"
-        ),
-        .executableTarget(
             name: "flow-instrument-seed",
             dependencies: [
                 .product(name: "LauncherSignature", package: "FountainCore"),
@@ -235,18 +230,14 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "PatchBayAppUITests",
+            name: "PBVRTServerTests",
             dependencies: [
-                "patchbay-app",
-                .product(name: "MIDI2CI", package: "midi2")
+                "pbvrt-server",
+                .product(name: "FountainRuntime", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
             ],
-            path: "Tests/PatchBayAppUITests",
-            resources: [
-                .process("Baselines"),
-                .process("Fixtures")
-            ]
-        )
-        ,
+            path: "Tests/PBVRTServerTests"
+        ),
         .executableTarget(
             name: "replay-export",
             dependencies: ["MetalViewKit"],

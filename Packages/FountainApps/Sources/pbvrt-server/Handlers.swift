@@ -291,12 +291,13 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
                     let (dxT, dyT, _) = Self.refineTranslation(baseline: bImg, candidate: cImg, coarseDX: dxDown, coarseDY: dyDown, coarseSample: 128, refineSample: 256, window: 6)
                     let sr = Self.searchScaleRotationAlignment(baseline: bImg, candidate: cImg, sample: 256, centerDX: dxT, centerDY: dyT, scales: [0.98,1.0,1.02], rotationsDeg: [-2,-1,0,1,2], window: 4)
                     let dxRef = sr.dx, dyRef = sr.dy
-                    // Compute pixel L1 (mean absolute difference) on full-res overlap using dx,dy scaled from 256 sample
+                    // Compute pixel L1 on full-res after applying refined transform (translation + optional scale/rotation)
                     let scaleX = CGFloat(cImg.width) / 256.0
                     let scaleY = CGFloat(cImg.height) / 256.0
                     let dx = Int(round(CGFloat(dxRef) * scaleX))
                     let dy = Int(round(CGFloat(dyRef) * scaleY))
-                    pixelL1 = Self.meanAbsoluteDifference(baseline: bImg, candidate: cImg, dx: dx, dy: dy)
+                    let cAligned = CGImage.transformAlign(image: cImg, targetSize: CGSize(width: bImg.width, height: bImg.height), dx: dx, dy: dy, scale: sr.scale, rotationDeg: sr.rotationDeg) ?? cImg
+                    pixelL1 = Self.meanAbsoluteDifferenceSameSize(a: bImg, b: cAligned)
                     // SSIM on normalized 256² grayscale; transform candidate by scale/rotation and translation
                     let sample = 256
                     if let bRes = bImg.resized(width: sample, height: sample),
@@ -315,9 +316,9 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
                         PBVRTHandlers.writeGrayscalePNG(matrix: .init(rows: sample, cols: sample, data: delta), to: dURL)
                         deltaPath = dURL.path
                     }
-                    // Full-res delta artifact
+                    // Full-res delta artifact (after alignment)
                     let bGrayFull = PBVRTHandlers.grayscaleFloat(image: bImg)
-                    let cGrayFull = PBVRTHandlers.grayscaleFloat(image: cImg)
+                    let cGrayFull = PBVRTHandlers.grayscaleFloat(image: cAligned)
                     var full = [Float](repeating: 0, count: bImg.width * bImg.height)
                     for y in 0..<bImg.height {
                         for x in 0..<bImg.width {
@@ -1130,6 +1131,16 @@ extension PBVRTHandlers {
         let b = grayscaleFloat(image: bSmall)
         let c = grayscaleFloat(image: cSmall)
         return Double(sad(b: b, c: c, width: sample, height: sample, dx: Int(round(Double(dx) * 128.0 / Double(candidate.width))), dy: Int(round(Double(dy) * 128.0 / Double(candidate.height)))))
+    }
+    static func meanAbsoluteDifferenceSameSize(a: CGImage, b: CGImage) -> Double {
+        guard a.width == b.width, a.height == b.height else { return .infinity }
+        let aa = grayscaleFloat(image: a)
+        let bb = grayscaleFloat(image: b)
+        let n = min(aa.count, bb.count)
+        if n == 0 { return 0 }
+        var sum: Double = 0
+        for i in 0..<n { sum += Double(abs(aa[i] - bb[i])) }
+        return sum / Double(n)
     }
 }
 

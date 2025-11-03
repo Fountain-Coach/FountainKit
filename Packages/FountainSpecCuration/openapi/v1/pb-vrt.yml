@@ -743,7 +743,7 @@ components:
         text: { type: string }
         bbox:
           type: object
-          properties: { x: {type:number}, y: {type:number}, w: {type:number}, h: {type:number} }
+          properties: { x: {type:number, format: float}, y: {type:number, format: float}, w: {type:number, format: float}, h: {type:number, format: float} }
 
     OCRResult:
       type: object

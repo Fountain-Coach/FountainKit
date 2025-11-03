@@ -69,3 +69,4 @@ PB‑VRT local runners
 - Start server and stamp port: `bash Scripts/apps/pbvrt-up` (writes `.fountain/pb-vrt-port` and logs under `.fountain/logs/`).
 - Compare candidate to baseline with thresholds: `bash Scripts/apps/pbvrt-compare-run --baseline-id $(cat baseline.id) --candidate candidate.png`.
 - Generate audio WAVs (Csound or Python fallback): `bash Scripts/apps/pbvrt-audio-generate --out baseline.wav --freq 440`.
+- Seed the PB‑VRT test rig prompt (Teatro): `FOUNTAIN_SKIP_LAUNCHER_SIG=1 swift run --package-path Packages/FountainApps pbvrt-rig-seed` (corpus via `CORPUS_ID`, default `patchbay`).

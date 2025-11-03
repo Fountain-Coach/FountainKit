@@ -221,14 +221,34 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         let dir = core.baselineDir(bId)
         let baselineURL = dir.appendingPathComponent("baseline.png")
         try? png.write(to: baselineURL)
-        // Prepare embedding JSON placeholder (vector computation may be added later)
-        let embeddingModel = (backend == "featurePrint") ? "Vision.FeaturePrint" : "coreML"
-        let embeddingVec: [Float] = []
+        // Compute a baseline embedding. If Vision FeaturePrint raw vector is not accessible,
+        // persist a deterministic grayscale thumbnail embedding as a fallback.
         let embURL = dir.appendingPathComponent("embedding.json")
-        let embObj: [String: Any] = [
-            "model": embeddingModel,
-            "vector": embeddingVec
-        ]
+        var embObj: [String: Any] = [:]
+        if let img = CGImage.fromPNGData(png) {
+            let sample = 32
+            if let thumb = img.resized(width: sample, height: sample) {
+                let vec = PBVRTHandlers.grayscaleFloat(image: thumb)
+                // Normalize to [0,1]
+                let minV = vec.min() ?? 0, maxV = vec.max() ?? 1
+                let denom = max(1e-9, maxV - minV)
+                let norm = vec.map { ($0 - minV) / Float(denom) }
+                let mean = norm.reduce(0,+) / Float(norm.count)
+                let std = sqrt(max(0, norm.reduce(0) { $0 + ($1 - mean)*($1 - mean) } / Float(norm.count)))
+                embObj = [
+                    "model": (backend == "featurePrint") ? "grayscale32x32" : "coreml:grayscale32x32",
+                    "dims": [sample, sample],
+                    "length": norm.count,
+                    "mean": mean,
+                    "std": std,
+                    "vector": norm
+                ]
+            }
+        }
+        if embObj.isEmpty {
+            // Final fallback: empty vector with declared model for schema stability
+            embObj = ["model": (backend == "featurePrint") ? "grayscale32x32" : "coreml:grayscale32x32", "vector": []]
+        }
         if let d = try? JSONSerialization.data(withJSONObject: embObj, options: [.sortedKeys]) { try? d.write(to: embURL) }
         // Update baseline page with artifacts reference if not present
         _ = await core.writeBaselineSummary(baselineId: bId, kind: "pbvrt.baseline", payload: [

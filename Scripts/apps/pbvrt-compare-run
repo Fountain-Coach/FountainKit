@@ -69,12 +69,21 @@ R=$(curl -sS -X POST "$SERVER/compare" \
   -F baselineId="$BASELINE_ID" \
   -F candidatePng=@"$CAND")
 
-FP=$(printf "%s" "$R" | awk -F '[: ,]+' '/featureprint_distance/ {for(i=1;i<=NF;i++) if($i=="featureprint_distance") {print $(i+1); exit}}')
-L1=$(printf "%s" "$R" | awk -F '[: ,]+' '/pixel_l1/ {for(i=1;i<=NF;i++) if($i=="pixel_l1") {print $(i+1); exit}}')
-SS=$(printf "%s" "$R" | awk -F '[: ,]+' '/"ssim"/ {for(i=1;i<=NF;i++) if($i==""ssim""") {print $(i+1); exit}}')
-ART_CAND=$(printf "%s" "$R" | awk -F '"' '/candidatePng/ {print $4; exit}')
-ART_DPNG=$(printf "%s" "$R" | awk -F '"' '/deltaPng/ {print $4; exit}')
-ART_DFULL=$(printf "%s" "$R" | awk -F '"' '/deltaFullPng/ {print $4; exit}')
+if command -v jq >/dev/null 2>&1; then
+  FP=$(printf '%s' "$R" | jq -r '.metrics.featureprint_distance // empty')
+  L1=$(printf '%s' "$R" | jq -r '.metrics.pixel_l1 // empty')
+  SS=$(printf '%s' "$R" | jq -r '.metrics.ssim // empty')
+  ART_CAND=$(printf '%s' "$R" | jq -r '.artifacts.candidatePng // empty')
+  ART_DPNG=$(printf '%s' "$R" | jq -r '.artifacts.deltaPng // empty')
+  ART_DFULL=$(printf '%s' "$R" | jq -r '.artifacts.deltaFullPng // empty')
+else
+  FP=$(printf "%s" "$R" | awk -F '[: ,]+' '/featureprint_distance/ {for(i=1;i<=NF;i++) if($i=="featureprint_distance") {print $(i+1); exit}}')
+  L1=$(printf "%s" "$R" | awk -F '[: ,]+' '/pixel_l1/ {for(i=1;i<=NF;i++) if($i=="pixel_l1") {print $(i+1); exit}}')
+  SS=$(printf "%s" "$R" | awk -F '[: ,]+' '/"ssim"/ {for(i=1;i<=NF;i++) if($i==""ssim""") {print $(i+1); exit}}')
+  ART_CAND=$(printf "%s" "$R" | awk -F '"' '/candidatePng/ {print $4; exit}')
+  ART_DPNG=$(printf "%s" "$R" | awk -F '"' '/deltaPng/ {print $4; exit}')
+  ART_DFULL=$(printf "%s" "$R" | awk -F '"' '/deltaFullPng/ {print $4; exit}')
+fi
 
 pass_img=1
 awk -v v="$FP" -v m="$FPMAX" 'BEGIN{exit !(v<=m)}' || pass_img=0
@@ -103,19 +112,36 @@ fi
 if [[ -n "$BPNG" && -f "$BPNG" ]]; then
   echo "Probe: align (translation/scale/rotation)" >&2
   ALIGN=$(curl -sS -X POST "$SERVER/probes/align" -F baselineId="$BASELINE_ID" -F baselinePng=@"$BPNG" -F candidatePng=@"$CAND")
-  DRIFT=$(printf "%s" "$ALIGN" | awk -F '[: ,]+' '/postAlignDriftPx/ {for(i=1;i<=NF;i++) if($i=="postAlignDriftPx") {print $(i+1); exit}}')
-  CONF=$(printf "%s" "$ALIGN" | awk -F '[: ,]+' '/confidence/ {for(i=1;i<=NF;i++) if($i=="confidence") {print $(i+1); exit}}')
+  if command -v jq >/dev/null 2>&1; then
+    DRIFT=$(printf '%s' "$ALIGN" | jq -r '.postAlignDriftPx // empty')
+    CONF=$(printf '%s' "$ALIGN" | jq -r '.confidence // empty')
+    ART_ALIGN=$(printf '%s' "$ALIGN" | jq -r '.artifacts.alignedCandidatePng // empty')
+  else
+    DRIFT=$(printf "%s" "$ALIGN" | awk -F '[: ,]+' '/postAlignDriftPx/ {for(i=1;i<=NF;i++) if($i=="postAlignDriftPx") {print $(i+1); exit}}')
+    CONF=$(printf "%s" "$ALIGN" | awk -F '[: ,]+' '/confidence/ {for(i=1;i<=NF;i++) if($i=="confidence") {print $(i+1); exit}}')
+    ART_ALIGN=$(printf "%s" "$ALIGN" | awk -F '"' '/alignedCandidatePng/ {print $4; exit}')
+  fi
   awk -v v="$DRIFT" -v m="$DRIFTMAX" 'BEGIN{exit !(v<=m)}' || pass_align=0
   awk -v v="$CONF" -v m="$CONFMIN" 'BEGIN{exit !(v>=m)}' || pass_align=0
   printf "postAlignDriftPx=%.3f (max %.3f)\n" "$DRIFT" "$DRIFTMAX"
   printf "align_confidence=%.3f (min %.3f)\n" "$CONF" "$CONFMIN"
-  ART_ALIGN=$(printf "%s" "$ALIGN" | awk -F '"' '/alignedCandidatePng/ {print $4; exit}')
   [[ -n "$ART_ALIGN" ]] && echo "artifacts.align:\n  alignedCandidatePng: $ART_ALIGN"
 
   echo "Probe: saliency (weighted)" >&2
   SAL=$(curl -sS -X POST "$SERVER/probes/saliency/compare" -F baselineId="$BASELINE_ID" -F baselinePng=@"$BPNG" -F candidatePng=@"$CAND")
-  WL1=$(printf "%s" "$SAL" | awk -F '[: ,]+' '/weighted_l1/ {for(i=1;i<=NF;i++) if($i=="weighted_l1") {print $(i+1); exit}}')
-  WSS=$(printf "%s" "$SAL" | awk -F '[: ,]+' '/weighted_ssim/ {for(i=1;i<=NF;i++) if($i=="weighted_ssim") {print $(i+1); exit}}')
+  if command -v jq >/dev/null 2>&1; then
+    WL1=$(printf '%s' "$SAL" | jq -r '.weighted_l1 // empty')
+    WSS=$(printf '%s' "$SAL" | jq -r '.weighted_ssim // empty')
+    ART_SAL_B=$(printf '%s' "$SAL" | jq -r '.artifacts.baselineSaliency // empty')
+    ART_SAL_C=$(printf '%s' "$SAL" | jq -r '.artifacts.candidateSaliency // empty')
+    ART_SAL_W=$(printf '%s' "$SAL" | jq -r '.artifacts.weightedDelta // empty')
+  else
+    WL1=$(printf "%s" "$SAL" | awk -F '[: ,]+' '/weighted_l1/ {for(i=1;i<=NF;i++) if($i=="weighted_l1") {print $(i+1); exit}}')
+    WSS=$(printf "%s" "$SAL" | awk -F '[: ,]+' '/weighted_ssim/ {for(i=1;i<=NF;i++) if($i=="weighted_ssim") {print $(i+1); exit}}')
+    ART_SAL_B=$(printf "%s" "$SAL" | awk -F '"' '/baselineSaliency/ {print $4; exit}')
+    ART_SAL_C=$(printf "%s" "$SAL" | awk -F '"' '/candidateSaliency/ {print $4; exit}')
+    ART_SAL_W=$(printf "%s" "$SAL" | awk -F '"' '/weightedDelta/ {print $4; exit}')
+  fi
   awk -v v="$WL1" -v m="$WL1MAX" 'BEGIN{exit !(v<=m)}' || pass_sal=0
   awk -v v="$WSS" -v m="$WSSIMMIN" 'BEGIN{exit !(v>=m)}' || pass_sal=0
   printf "weighted_l1=%.6f (max %.6f)\n" "$WL1" "$WL1MAX"
@@ -136,7 +162,11 @@ if [[ -n "$BWAV" && -n "$CWAV" ]]; then
   echo "Compare: audio spectrogram" >&2
   A=$(curl -sS -X POST "$SERVER/probes/audio/spectrogram/compare" \
     -F baselineId="$BASELINE_ID" -F baselineWav=@"$BWAV" -F candidateWav=@"$CWAV")
-  LSD=$(printf "%s" "$A" | awk -F '[: ,]+' '/lsd_db/ {for(i=1;i<=NF;i++) if($i=="lsd_db") {print $(i+1); exit}}')
+  if command -v jq >/dev/null 2>&1; then
+    LSD=$(printf '%s' "$A" | jq -r '.lsd_db // empty')
+  else
+    LSD=$(printf "%s" "$A" | awk -F '[: ,]+' '/lsd_db/ {for(i=1;i<=NF;i++) if($i=="lsd_db") {print $(i+1); exit}}')
+  fi
   awk -v v="$LSD" -v m="$LSDMAX" 'BEGIN{exit !(v<=m)}' || pass_audio=0
   printf "lsd_db=%.3f (max %.3f)\n" "$LSD" "$LSDMAX"
 fi

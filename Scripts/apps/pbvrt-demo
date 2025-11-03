@@ -115,17 +115,26 @@ if [[ $OPEN -eq 1 ]]; then
   done
 fi
 
-if command -v osascript >/dev/null 2>&1; then osascript -e 'beep 2' >/dev/null 2>&1 || true; fi
+if command -v osascript >/dev/null 2>&1; then osascript -e 'beep 1' >/dev/null 2>&1 || true; fi
 
 if [[ $PLAY -eq 1 ]]; then
-  if command -v afplay >/dev/null 2>&1; then
+  # Prefer native tone player (AVAudioEngine), fall back to afplay
+  if swift run --package-path Packages/FountainApps pbvrt-tone --freq "$FREQA" --dur 1.0 --freq2 "$FREQB" --dur2 1.0 >/dev/null 2>&1; then
+    echo "Played tones via pbvrt-tone (A=$FREQA, B=$FREQB)."
+  elif command -v afplay >/dev/null 2>&1; then
     echo "Playing baseline (A=$FREQA Hz) then candidate (B=$FREQB Hz)…"
     afplay "$WORK/baseline.wav" || true
     sleep 0.15
     afplay "$WORK/candidate.wav" || true
   else
-    echo "afplay not found; skipping audio playback" >&2
+    echo "No audio player found; skipping playback" >&2
   fi
 fi
+
+# 7) Compose an animated explainer GIF and seed teatro.clip
+python3 Scripts/apps/pbvrt-animate --baseline-id "$BASELINE_ID" \
+  --baseline-wav "$WORK/baseline.wav" --candidate-wav "$WORK/candidate.wav" \
+  --out "$WORK/demo.gif" ${OPEN:+--open} || true
+FOUNTAIN_SKIP_LAUNCHER_SIG=1 CORPUS_ID=pb-vrt swift run --package-path Packages/FountainApps pbvrt-clip-seed --baseline-id "$BASELINE_ID" >/dev/null 2>&1 || true
 
 echo "Tip: open \"$ARTDIR\" to SEE the deltas; run \"afplay $WORK/baseline.wav\" and \"afplay $WORK/candidate.wav\" to HEAR the difference." >&2

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, os, glob, time
+import argparse, os, glob, time, json, subprocess
 from PIL import Image, ImageDraw, ImageFont
 
 def latest(globpat):
@@ -52,6 +52,9 @@ def main():
     ap.add_argument('--out', default=None)
     ap.add_argument('--width', type=int, default=800)
     ap.add_argument('--open', action='store_true')
+    ap.add_argument('--baseline-wav', default=None)
+    ap.add_argument('--candidate-wav', default=None)
+    ap.add_argument('--server', default=None)
     args = ap.parse_args()
 
     root = os.getcwd()
@@ -67,6 +70,38 @@ def main():
     sal_c = load(latest(os.path.join(adh, '*', 'candidate-saliency.png')))
     sal_w = load(latest(os.path.join(adh, '*', 'weighted-delta.png')))
 
+    # Optionally request spectrograms via server
+    spec_pair = None
+    spec_delta = None
+    if args.baseline_wav and args.candidate_wav:
+        base = args.server
+        if not base:
+            portfile = os.path.join(root, '.fountain', 'pb-vrt-port')
+            if os.path.exists(portfile):
+                port = open(portfile).read().strip()
+                base = f'http://127.0.0.1:{port}/pb-vrt'
+        if base:
+            try:
+                cmd = [
+                    'curl','-sS','-X','POST', f'{base}/probes/audio/spectrogram/compare',
+                    '-F', f'baselineWav=@{args.baseline_wav};type=application/octet-stream',
+                    '-F', f'candidateWav=@{args.candidate_wav};type=application/octet-stream'
+                ]
+                out = subprocess.check_output(cmd)
+                j = json.loads(out.decode('utf-8'))
+                bspec = j.get('artifacts',{}).get('baselineSpecPng')
+                cspec = j.get('artifacts',{}).get('candidateSpecPng')
+                dspec = j.get('artifacts',{}).get('deltaSpecPng')
+                sb = load(bspec) if bspec else None
+                sc = load(cspec) if cspec else None
+                sd = load(dspec) if dspec else None
+                if sb and sc:
+                    spec_pair = stack_h(sb, sc)
+                if sd:
+                    spec_delta = sd
+            except Exception:
+                pass
+
     # Prepare frames
     frames = []
     labels = []
@@ -77,6 +112,10 @@ def main():
     if sal_b and sal_c:
         frames.append(stack_h(sal_b, sal_c)); labels.append('Scene: Saliency (Baseline | Candidate)')
     if sal_w: frames.append(sal_w); labels.append('Scene: Saliency-weighted Delta')
+    if spec_pair is not None:
+        frames.append(spec_pair); labels.append('Scene: Spectrogram (Baseline | Candidate)')
+    if spec_delta is not None:
+        frames.append(spec_delta); labels.append('Scene: Spectrogram Delta')
 
     if not frames:
         raise SystemExit('No frames found; run compare first.')

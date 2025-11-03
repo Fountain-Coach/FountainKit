@@ -151,7 +151,7 @@ echo "BaselineId: $BASELINE_ID" >&2
 
 echo "Capturing baseline image" >&2
 curl -sS -X POST "$SERVER/baselines/$BASELINE_ID/capture" \
-  -F baselinePng=@"$PNG" >/dev/null
+  -F baselinePng=@"$PNG;type=application/octet-stream" >/dev/null
 
 echo "$BASELINE_ID"
 if [[ -n "$OUTFILE" ]]; then

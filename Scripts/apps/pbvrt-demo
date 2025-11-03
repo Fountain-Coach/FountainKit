@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage(){ cat <<USAGE >&2
+PB‑VRT Demo — see and hear it
+
+Generates a simple synthetic baseline/candidate image pair and a tone pair,
+seeds a baseline, runs compares, and tells you where to open and play files.
+
+Usage:
+  $(basename "$0") [--open] [--play] [--freqA 440] [--freqB 443] [--text "PB‑VRT DEMO"]
+
+Flags:
+  --open    Open key image artifacts in Preview (macOS)
+  --play    Play baseline and candidate WAV via afplay (macOS)
+  --freqA   Baseline tone frequency (Hz, default 440)
+  --freqB   Candidate tone frequency (Hz, default 443)
+  --text    Label text for the demo card
+USAGE
+}
+
+OPEN=0
+PLAY=0
+FREQA=440
+FREQB=443
+LABEL="PB‑VRT DEMO"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --open) OPEN=1; shift;;
+    --play) PLAY=1; shift;;
+    --freqA) FREQA="$2"; shift 2;;
+    --freqB) FREQB="$2"; shift 2;;
+    --text) LABEL="$2"; shift 2;;
+    -h|--help) usage; exit 0;;
+    *) echo "Unknown arg: $1" >&2; usage; exit 2;;
+  esac
+done
+
+# 1) Start/ensure server (reuse if already ready)
+if [[ -f .fountain/pb-vrt-port ]]; then
+  PORT=$(cat .fountain/pb-vrt-port | tr -d '\n')
+  BASE="http://127.0.0.1:${PORT}/pb-vrt"
+  if ! curl -fsS "$BASE/openapi.yaml" >/dev/null 2>&1; then
+    bash Scripts/apps/pbvrt-up --timeout 45 >/dev/null 2>&1 || true
+  fi
+else
+  bash Scripts/apps/pbvrt-up --timeout 45 >/dev/null 2>&1 || true
+fi
+if [[ -f .fountain/pb-vrt-port ]]; then PORT=$(cat .fountain/pb-vrt-port | tr -d '\n'); else PORT=8010; fi
+BASE="http://127.0.0.1:${PORT}/pb-vrt"
+echo "Server: $BASE" >&2
+
+# 2) Working dir
+STAMP=$(date +%Y%m%d-%H%M%S)
+WORK=".fountain/demos/pb-vrt/$STAMP"
+mkdir -p "$WORK"
+
+# 3) Generate baseline.png and candidate.png via Python (Pillow)
+python3 - <<PY
+from PIL import Image, ImageDraw, ImageFont
+W,H = 800, 500
+def card(dx=0, dy=0, rot=0.0):
+    im = Image.new('RGB', (W,H), 'white')
+    d = ImageDraw.Draw(im)
+    # frame
+    d.rectangle([40,40, W-40, H-40], outline=(0,0,0), width=3)
+    # panel (shifted for candidate)
+    x0,y0,x1,y1 = 140+dx, 120+dy, W-140+dx, H-200+dy
+    panel = Image.new('RGB', (x1-x0, y1-y0), (230,230,240))
+    panel = panel.rotate(rot, expand=1, fillcolor=(255,255,255))
+    px, py = x0, y0
+    im.paste(panel, (px, py))
+    # label
+    try:
+        f = ImageFont.truetype("Helvetica.ttc", 26)
+    except Exception:
+        f = ImageFont.load_default()
+    d.text((W//2-120, 60), """${LABEL}""", fill=(0,0,0), font=f)
+    # grid lines to make drift visible
+    for x in range(60, W-60, 40): d.line([(x,80),(x,H-60)], fill=(220,220,220), width=1)
+    for y in range(100, H-60, 40): d.line([(60,y),(W-60,y)], fill=(220,220,220), width=1)
+    return im
+card(0,0,0.0).save("$WORK/baseline.png")
+card(10,-6,0.8).save("$WORK/candidate.png")
+print("baseline: $WORK/baseline.png")
+print("candidate: $WORK/candidate.png")
+PY
+
+# 4) Seed baseline
+BASELINE_ID=$(bash Scripts/apps/pbvrt-baseline-seed --png "$WORK/baseline.png" --prompt-id pbvrt-demo-lab --server "$BASE" --out "$WORK/baseline.id" 2>/dev/null || true)
+if [[ -z "$BASELINE_ID" && -f "$WORK/baseline.id" ]]; then BASELINE_ID=$(cat "$WORK/baseline.id" | tr -d '\n'); fi
+if [[ -z "$BASELINE_ID" ]]; then echo "Failed to seed baseline" >&2; exit 1; fi
+echo "BaselineId: $BASELINE_ID" >&2
+
+# 5) Compare images
+bash Scripts/apps/pbvrt-compare-run --baseline-id "$BASELINE_ID" --candidate "$WORK/candidate.png" --baseline-png "$WORK/baseline.png"
+
+ARTDIR=".fountain/artifacts/pb-vrt/$BASELINE_ID"
+echo "Artifacts (images): $ARTDIR" >&2
+
+# 6) Generate and compare audio
+bash Scripts/apps/pbvrt-audio-generate --out "$WORK/baseline.wav" --freq "$FREQA" --dur 1.2 --amp 0.25 --sr 48000 1>&2
+bash Scripts/apps/pbvrt-audio-generate --out "$WORK/candidate.wav" --freq "$FREQB" --dur 1.2 --amp 0.25 --sr 48000 1>&2
+bash Scripts/apps/pbvrt-compare-run --baseline-id "$BASELINE_ID" --candidate "$WORK/candidate.png" \
+  --baseline-wav "$WORK/baseline.wav" --candidate-wav "$WORK/candidate.wav"
+
+echo "Artifacts (audio): $ARTDIR" >&2
+echo "Demo workspace: $WORK" >&2
+
+if [[ $OPEN -eq 1 ]]; then
+  # Open the most useful visuals
+  for f in "$ARTDIR/"{delta.png,delta_full.png,aligned_candidate.png,baseline.png,candidate.png}; do
+    [[ -f "$f" ]] && open "$f" || true
+  done
+fi
+
+if [[ $PLAY -eq 1 ]]; then
+  if command -v afplay >/dev/null 2>&1; then
+    echo "Playing baseline (A=$FREQA Hz) then candidate (B=$FREQB Hz)…" >&2
+    afplay "$WORK/baseline.wav" || true
+    sleep 0.15
+    afplay "$WORK/candidate.wav" || true
+  else
+    echo "afplay not found; skipping audio playback" >&2
+  fi
+fi
+
+echo "Tip: open \"$ARTDIR\" to SEE the deltas; run \"afplay $WORK/baseline.wav\" and \"afplay $WORK/candidate.wav\" to HEAR the difference." >&2

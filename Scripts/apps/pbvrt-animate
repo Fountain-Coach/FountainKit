@@ -52,6 +52,7 @@ def main():
     ap.add_argument('--out', default=None)
     ap.add_argument('--width', type=int, default=800)
     ap.add_argument('--open', action='store_true')
+    ap.add_argument('--frames-dir', default=None)
     ap.add_argument('--baseline-wav', default=None)
     ap.add_argument('--candidate-wav', default=None)
     ap.add_argument('--server', default=None)
@@ -131,6 +132,22 @@ def main():
     dur = [1200] + [600]*(len(norm)-1)
     norm[0].save(out, save_all=True, append_images=norm[1:], duration=dur, loop=0)
     print(out)
+
+    # Optionally emit frames and timeline JSON for video renderers
+    if args.frames_dir:
+        os.makedirs(args.frames_dir, exist_ok=True)
+        timeline = {"frames": []}
+        for i,im in enumerate(norm):
+            p = os.path.join(args.frames_dir, f"frame_{i:04d}.png")
+            im.save(p)
+            timeline["frames"].append({
+                "path": p,
+                "durationMs": int(dur[i]),
+                "label": labels[i]
+            })
+        with open(os.path.join(args.frames_dir, 'timeline.json'), 'w') as f:
+            json.dump(timeline, f, indent=2)
+        print(args.frames_dir)
     if args.open and os.name == 'posix': os.system(f'open "{out}" >/dev/null 2>&1 || true')
 
 if __name__ == '__main__':

@@ -38,6 +38,7 @@ let package = Package(
         .executable(name: "pbvrt-rig-seed", targets: ["pbvrt-rig-seed"]),
         .executable(name: "pbvrt-clip-seed", targets: ["pbvrt-clip-seed"]),
         .executable(name: "pbvrt-tone", targets: ["pbvrt-tone"]),
+        .executable(name: "pbvrt-present", targets: ["pbvrt-present"]),
         .executable(name: "engraver-studio-app", targets: ["engraver-studio-app"]),
         .executable(name: "gateway-console", targets: ["gateway-console"]),
         .executable(name: "gateway-console-app", targets: ["gateway-console-app"]),
@@ -176,6 +177,11 @@ let package = Package(
             name: "pbvrt-tone",
             dependencies: [],
             path: "Sources/pbvrt-tone"
+        ),
+        .executableTarget(
+            name: "pbvrt-present",
+            dependencies: [],
+            path: "Sources/pbvrt-present"
         ),
         .executableTarget(
             name: "pbvrt-server",
@@ -851,6 +857,11 @@ let package = Package(
             name: "pbvrt-embed-ci",
             dependencies: ["pbvrt-server"],
             path: "Sources/pbvrt-embed-ci"
+        ),
+        .executableTarget(
+            name: "pbvrt-present",
+            dependencies: [],
+            path: "Sources/pbvrt-present"
         ),
         .executableTarget(
             name: "pbvrt-tone",

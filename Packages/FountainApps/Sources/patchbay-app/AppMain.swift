@@ -1316,7 +1316,7 @@ struct ContentView: View {
                 .navigationTitle("Templates")
                 .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 360)
         } detail: {
-            // Center: Canvas only (right pane removed)
+            // Center: Canvas + PB‑VRT Inspector (right)
             KeyInputContainer(onKey: { event in
                 let flags = event.modifierFlags
                 let stepMult = flags.contains(.option) ? 5 : 1
@@ -1340,6 +1340,9 @@ struct ContentView: View {
                             handleDrop(providers: providers, location: location)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    Divider()
+                    PBVRTInspectorHost()
+                        .frame(width: 380)
                 }
             }
             .navigationTitle("PatchBay Canvas")

@@ -50,6 +50,18 @@ struct PBVRTInspector: View {
                 }
             }
 
+            // Quick Actions
+            HStack(spacing: 10) {
+                Button { startServer() } label: { Label("Start Server", systemImage: "play.circle") }
+                Button { seedBaselineFromPNG() } label: { Label("Seed Baseline", systemImage: "tray.and.arrow.down") }
+                    .disabled(isLoading)
+                Button { runCompareWithCandidatePNG() } label: { Label("Run Compare", systemImage: "checkmark.circle") }
+                    .disabled(selectedBaseline.isEmpty)
+                Button { composePresentation() } label: { Label("Compose Clip", systemImage: "film") }
+                    .disabled(selectedBaseline.isEmpty)
+            }
+            .padding(.vertical, 2)
+
             TabView {
                 summaryTab()
                     .tabItem { Label("Summary", systemImage: "checkmark.seal") }
@@ -67,6 +79,86 @@ struct PBVRTInspector: View {
         }
         .padding(12)
         .onAppear { refreshList() }
+    }
+
+    // MARK: - Actions
+    private func startServer() {
+        Task.detached {
+            _ = runBash(["bash","Scripts/apps/pbvrt-up"]) // best-effort
+        }
+    }
+
+    private func seedBaselineFromPNG() {
+        let panel = NSOpenPanel()
+        panel.allowedFileTypes = ["png"]
+        panel.allowsMultipleSelection = false
+        if panel.runModal() == .OK, let url = panel.url {
+            Task.detached { [sel = selectedBaseline] in
+                let base = pbvrtBaseURL()
+                let out = runBash(["bash","Scripts/apps/pbvrt-baseline-seed","--png", url.path, "--server", base, "--out", "baseline.id"]) ?? ""
+                DispatchQueue.main.async {
+                    refreshList()
+                }
+            }
+        }
+    }
+
+    private func runCompareWithCandidatePNG() {
+        guard !selectedBaseline.isEmpty else { return }
+        let panel = NSOpenPanel()
+        panel.allowedFileTypes = ["png"]
+        panel.allowsMultipleSelection = false
+        if panel.runModal() == .OK, let url = panel.url {
+            Task.detached { [id = selectedBaseline] in
+                let out = runBash(["bash","Scripts/apps/pbvrt-compare-run","--baseline-id", id, "--candidate", url.path]) ?? ""
+                DispatchQueue.main.async {
+                    self.summaryLines = out.split(separator: "\n").map(String.init)
+                    self.loadSelected()
+                }
+            }
+        }
+    }
+
+    private func composePresentation() {
+        guard !selectedBaseline.isEmpty else { return }
+        Task.detached { [id = selectedBaseline] in
+            let fm = FileManager.default
+            let cwd = URL(fileURLWithPath: fm.currentDirectoryPath)
+            let work = cwd.appendingPathComponent(".fountain/demos/pb-vrt/\(Int(Date().timeIntervalSince1970))", isDirectory: true)
+            try? fm.createDirectory(at: work, withIntermediateDirectories: true)
+            // Emit frames + timeline
+            _ = runBash(["python3","Scripts/apps/pbvrt-animate","--baseline-id", id, "--frames-dir", work.appendingPathComponent("frames").path, "--out", work.appendingPathComponent("demo.gif").path])
+            // Build mp4 (best-effort without audio if WAVs not present)
+            _ = runBash(["swift","run","--package-path","Packages/FountainApps","pbvrt-present","--frames-dir", work.appendingPathComponent("frames").path, "--out", work.appendingPathComponent("demo.mp4").path])
+            DispatchQueue.main.async {
+                self.demoGIF = work.appendingPathComponent("demo.gif")
+                self.demoMP4 = work.appendingPathComponent("demo.mp4")
+            }
+        }
+    }
+
+    private func pbvrtBaseURL() -> String {
+        let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let portFile = cwd.appendingPathComponent(".fountain/pb-vrt-port")
+        if let p = try? String(contentsOf: portFile), !p.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "http://127.0.0.1:\(p.trimmingCharacters(in: .whitespacesAndNewlines))/pb-vrt"
+        }
+        return "http://127.0.0.1:8010/pb-vrt"
+    }
+
+    @discardableResult
+    private func runBash(_ argv: [String]) -> String? {
+        let p = Process()
+        p.launchPath = "/usr/bin/env"
+        p.arguments = argv
+        var env = ProcessInfo.processInfo.environment
+        env["FOUNTAIN_SKIP_LAUNCHER_SIG"] = "1"
+        p.environment = env
+        let out = Pipe(); let err = Pipe(); p.standardOutput = out; p.standardError = err
+        do { try p.run() } catch { return nil }
+        p.waitUntilExit()
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        return String(data: data, encoding: .utf8)
     }
 
     @ViewBuilder

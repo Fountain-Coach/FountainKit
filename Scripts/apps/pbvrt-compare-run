@@ -8,7 +8,9 @@ Compares a candidate image (and optional audio pair) against the current baselin
 
 Usage:
   $(basename "$0") --baseline-id <id> --candidate candidate.png [--server <url>] \
-    [--featureprint-max 0.035] [--pixel-l1-max 0.012] [--ssim-min 0.94]
+    [--featureprint-max 0.035] [--pixel-l1-max 0.012] [--ssim-min 0.94] \
+    [--baseline-png <path>] [--drift-max-px 5] [--conf-min 0.85] \
+    [--weighted-ssim-min 0.96] [--weighted-l1-max 0.02]
 
 Optional audio checks:
   --baseline-wav b.wav --candidate-wav c.wav [--lsd-db-max 0.5]
@@ -27,6 +29,11 @@ SSIMMIN=0.94
 BWAV=""
 CWAV=""
 LSDMAX=0.5
+BPNG=""
+DRIFTMAX=5
+CONFMIN=0.85
+WSSIMMIN=0.96
+WL1MAX=0.02
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -39,6 +46,11 @@ while [[ $# -gt 0 ]]; do
     --baseline-wav) BWAV="$2"; shift 2;;
     --candidate-wav) CWAV="$2"; shift 2;;
     --lsd-db-max) LSDMAX="$2"; shift 2;;
+    --baseline-png) BPNG="$2"; shift 2;;
+    --drift-max-px) DRIFTMAX="$2"; shift 2;;
+    --conf-min) CONFMIN="$2"; shift 2;;
+    --weighted-ssim-min) WSSIMMIN="$2"; shift 2;;
+    --weighted-l1-max) WL1MAX="$2"; shift 2;;
     -h|--help) usage; exit 0;;
     *) echo "Unknown arg: $1" >&2; usage; exit 2;;
   esac
@@ -70,6 +82,37 @@ printf "featureprint_distance=%.6f (max %.6f)\n" "$FP" "$FPMAX"
 printf "pixel_l1=%.6f (max %.6f)\n" "$L1" "$L1MAX"
 printf "ssim=%.6f (min %.6f)\n" "$SS" "$SSIMMIN"
 
+# Optional align + saliency if baseline.png is available
+pass_align=1
+pass_sal=1
+if [[ -z "$BPNG" ]]; then
+  # derive default path
+  CANDIDATE_DIR=".fountain/artifacts/pb-vrt/$BASELINE_ID"
+  CAND_BASE="$CANDIDATE_DIR/baseline.png"
+  if [[ -f "$CAND_BASE" ]]; then BPNG="$CAND_BASE"; fi
+fi
+if [[ -n "$BPNG" && -f "$BPNG" ]]; then
+  echo "Probe: align (translation/scale/rotation)" >&2
+  ALIGN=$(curl -sS -X POST "$SERVER/probes/align" -F baselineId="$BASELINE_ID" -F baselinePng=@"$BPNG" -F candidatePng=@"$CAND")
+  DRIFT=$(printf "%s" "$ALIGN" | awk -F '[: ,]+' '/postAlignDriftPx/ {for(i=1;i<=NF;i++) if($i=="postAlignDriftPx") {print $(i+1); exit}}')
+  CONF=$(printf "%s" "$ALIGN" | awk -F '[: ,]+' '/confidence/ {for(i=1;i<=NF;i++) if($i=="confidence") {print $(i+1); exit}}')
+  awk -v v="$DRIFT" -v m="$DRIFTMAX" 'BEGIN{exit !(v<=m)}' || pass_align=0
+  awk -v v="$CONF" -v m="$CONFMIN" 'BEGIN{exit !(v>=m)}' || pass_align=0
+  printf "postAlignDriftPx=%.3f (max %.3f)\n" "$DRIFT" "$DRIFTMAX"
+  printf "align_confidence=%.3f (min %.3f)\n" "$CONF" "$CONFMIN"
+
+  echo "Probe: saliency (weighted)" >&2
+  SAL=$(curl -sS -X POST "$SERVER/probes/saliency/compare" -F baselineId="$BASELINE_ID" -F baselinePng=@"$BPNG" -F candidatePng=@"$CAND")
+  WL1=$(printf "%s" "$SAL" | awk -F '[: ,]+' '/weighted_l1/ {for(i=1;i<=NF;i++) if($i=="weighted_l1") {print $(i+1); exit}}')
+  WSS=$(printf "%s" "$SAL" | awk -F '[: ,]+' '/weighted_ssim/ {for(i=1;i<=NF;i++) if($i=="weighted_ssim") {print $(i+1); exit}}')
+  awk -v v="$WL1" -v m="$WL1MAX" 'BEGIN{exit !(v<=m)}' || pass_sal=0
+  awk -v v="$WSS" -v m="$WSSIMMIN" 'BEGIN{exit !(v>=m)}' || pass_sal=0
+  printf "weighted_l1=%.6f (max %.6f)\n" "$WL1" "$WL1MAX"
+  printf "weighted_ssim=%.6f (min %.6f)\n" "$WSS" "$WSSIMMIN"
+else
+  echo "Note: baseline PNG not found; skipping align/saliency (pass by default)." >&2
+fi
+
 pass_audio=1
 if [[ -n "$BWAV" && -n "$CWAV" ]]; then
   echo "Compare: audio spectrogram" >&2
@@ -80,9 +123,8 @@ if [[ -n "$BWAV" && -n "$CWAV" ]]; then
   printf "lsd_db=%.3f (max %.3f)\n" "$LSD" "$LSDMAX"
 fi
 
-if [[ $pass_img -eq 1 && $pass_audio -eq 1 ]]; then
+if [[ $pass_img -eq 1 && $pass_audio -eq 1 && $pass_align -eq 1 && $pass_sal -eq 1 ]]; then
   echo "PASS"; exit 0
 else
   echo "FAIL"; exit 1
 fi
-

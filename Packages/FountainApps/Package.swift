@@ -36,6 +36,7 @@ let package = Package(
         ,
         .executable(name: "pbvrt-embed-ci", targets: ["pbvrt-embed-ci"]),
         .executable(name: "pbvrt-rig-seed", targets: ["pbvrt-rig-seed"]),
+        .executable(name: "pbvrt-clip-seed", targets: ["pbvrt-clip-seed"]),
         .executable(name: "engraver-studio-app", targets: ["engraver-studio-app"]),
         .executable(name: "gateway-console", targets: ["gateway-console"]),
         .executable(name: "gateway-console-app", targets: ["gateway-console-app"]),
@@ -161,6 +162,14 @@ let package = Package(
                 .product(name: "FountainStoreClient", package: "FountainCore")
             ],
             path: "Sources/pbvrt-rig-seed"
+        ),
+        .executableTarget(
+            name: "pbvrt-clip-seed",
+            dependencies: [
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/pbvrt-clip-seed"
         ),
         .executableTarget(
             name: "pbvrt-server",
@@ -836,6 +845,14 @@ let package = Package(
             name: "pbvrt-embed-ci",
             dependencies: ["pbvrt-server"],
             path: "Sources/pbvrt-embed-ci"
+        ),
+        .executableTarget(
+            name: "pbvrt-clip-seed",
+            dependencies: [
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/pbvrt-clip-seed"
         ),
         .executableTarget(
             name: "pbvrt-rig-seed",

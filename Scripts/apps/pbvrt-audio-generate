@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage(){ cat <<USAGE >&2
+PB‑VRT Audio Generator
+
+Generates a simple WAV tone suitable for PB‑VRT audio baselines/candidates.
+Prefers Csound if installed; falls back to Python if not.
+
+Usage:
+  $(basename "$0") --out out.wav [--freq 440] [--dur 1.5] [--amp 0.2] [--sr 48000]
+
+Examples:
+  $(basename "$0") --out baseline.wav --freq 440 --dur 1.0
+  $(basename "$0") --out candidate.wav --freq 441 --dur 1.0
+USAGE
+}
+
+OUT=""
+FREQ=440
+DUR=1.5
+AMP=0.2
+SR=48000
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --out) OUT="$2"; shift 2;;
+    --freq) FREQ="$2"; shift 2;;
+    --dur) DUR="$2"; shift 2;;
+    --amp) AMP="$2"; shift 2;;
+    --sr) SR="$2"; shift 2;;
+    -h|--help) usage; exit 0;;
+    *) echo "Unknown arg: $1" >&2; usage; exit 2;;
+  esac
+done
+
+if [[ -z "$OUT" ]]; then echo "--out required" >&2; exit 2; fi
+
+if command -v csound >/dev/null 2>&1; then
+  TMP=$(mktemp /tmp/pbvrt-XXXX.csd)
+  cat > "$TMP" <<CSD
+<CsoundSynthesizer>
+<CsOptions>
+-W -o "$OUT"
+</CsOptions>
+<CsInstruments>
+sr = $SR
+ksmps = 64
+nchnls = 1
+0dbfs = 1
+instr 1
+a1 oscili $AMP, $FREQ
+outs a1
+endin
+</CsInstruments>
+<CsScore>
+i1 0 $DUR
+e
+</CsScore>
+</CsoundSynthesizer>
+CSD
+  csound -d -O null "$TMP" >/dev/null
+  rm -f "$TMP"
+  echo "WAV written: $OUT (csound)" >&2
+else
+  python3 - <<PY
+import wave, struct, math, sys
+out, sr, freq, dur, amp = "$OUT", $SR, $FREQ, $DUR, $AMP
+n = int(sr*dur)
+with wave.open(out, 'w') as w:
+    w.setnchannels(1); w.setsampwidth(2); w.setframerate(sr)
+    for i in range(n):
+        v = amp*math.sin(2*math.pi*freq*i/sr)
+        w.writeframes(struct.pack('<h', int(max(-1,min(1,v))*32767)))
+print(f"WAV written: {out} (python)", file=sys.stderr)
+PY
+fi
+

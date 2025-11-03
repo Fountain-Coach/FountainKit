@@ -64,3 +64,8 @@ PB‑VRT baseline seeding
   - Example: `FOUNTAIN_SKIP_LAUNCHER_SIG=1 PBVRT_CORPUS_ID=pb-vrt swift run --package-path Packages/FountainApps pbvrt-server &`
     then `bash Scripts/apps/pbvrt-baseline-seed --png baseline.png --prompt-id quiet-frame-lab --server http://127.0.0.1:8010/pb-vrt --out baseline.id`.
   - Options: `--prompt-file <md>` or `--prompt-text "..."`, `--viewport WxH` (auto‑inferred with `sips`), `--renderer <ver>`.
+
+PB‑VRT local runners
+- Start server and stamp port: `bash Scripts/apps/pbvrt-up` (writes `.fountain/pb-vrt-port` and logs under `.fountain/logs/`).
+- Compare candidate to baseline with thresholds: `bash Scripts/apps/pbvrt-compare-run --baseline-id $(cat baseline.id) --candidate candidate.png`.
+- Generate audio WAVs (Csound or Python fallback): `bash Scripts/apps/pbvrt-audio-generate --out baseline.wav --freq 440`.

@@ -72,6 +72,9 @@ R=$(curl -sS -X POST "$SERVER/compare" \
 FP=$(printf "%s" "$R" | awk -F '[: ,]+' '/featureprint_distance/ {for(i=1;i<=NF;i++) if($i=="featureprint_distance") {print $(i+1); exit}}')
 L1=$(printf "%s" "$R" | awk -F '[: ,]+' '/pixel_l1/ {for(i=1;i<=NF;i++) if($i=="pixel_l1") {print $(i+1); exit}}')
 SS=$(printf "%s" "$R" | awk -F '[: ,]+' '/"ssim"/ {for(i=1;i<=NF;i++) if($i==""ssim""") {print $(i+1); exit}}')
+ART_CAND=$(printf "%s" "$R" | awk -F '"' '/candidatePng/ {print $4; exit}')
+ART_DPNG=$(printf "%s" "$R" | awk -F '"' '/deltaPng/ {print $4; exit}')
+ART_DFULL=$(printf "%s" "$R" | awk -F '"' '/deltaFullPng/ {print $4; exit}')
 
 pass_img=1
 awk -v v="$FP" -v m="$FPMAX" 'BEGIN{exit !(v<=m)}' || pass_img=0
@@ -81,6 +84,12 @@ awk -v v="$SS" -v m="$SSIMMIN" 'BEGIN{exit !(v>=m)}' || pass_img=0
 printf "featureprint_distance=%.6f (max %.6f)\n" "$FP" "$FPMAX"
 printf "pixel_l1=%.6f (max %.6f)\n" "$L1" "$L1MAX"
 printf "ssim=%.6f (min %.6f)\n" "$SS" "$SSIMMIN"
+if [[ -n "$ART_CAND" || -n "$ART_DPNG" || -n "$ART_DFULL" ]]; then
+  echo "artifacts.compare:"
+  [[ -n "$ART_CAND" ]] && echo "  candidatePng: $ART_CAND"
+  [[ -n "$ART_DPNG" ]] && echo "  deltaPng:     $ART_DPNG"
+  [[ -n "$ART_DFULL" ]] && echo "  deltaFullPng: $ART_DFULL"
+fi
 
 # Optional align + saliency if baseline.png is available
 pass_align=1
@@ -100,6 +109,8 @@ if [[ -n "$BPNG" && -f "$BPNG" ]]; then
   awk -v v="$CONF" -v m="$CONFMIN" 'BEGIN{exit !(v>=m)}' || pass_align=0
   printf "postAlignDriftPx=%.3f (max %.3f)\n" "$DRIFT" "$DRIFTMAX"
   printf "align_confidence=%.3f (min %.3f)\n" "$CONF" "$CONFMIN"
+  ART_ALIGN=$(printf "%s" "$ALIGN" | awk -F '"' '/alignedCandidatePng/ {print $4; exit}')
+  [[ -n "$ART_ALIGN" ]] && echo "artifacts.align:\n  alignedCandidatePng: $ART_ALIGN"
 
   echo "Probe: saliency (weighted)" >&2
   SAL=$(curl -sS -X POST "$SERVER/probes/saliency/compare" -F baselineId="$BASELINE_ID" -F baselinePng=@"$BPNG" -F candidatePng=@"$CAND")
@@ -109,6 +120,13 @@ if [[ -n "$BPNG" && -f "$BPNG" ]]; then
   awk -v v="$WSS" -v m="$WSSIMMIN" 'BEGIN{exit !(v>=m)}' || pass_sal=0
   printf "weighted_l1=%.6f (max %.6f)\n" "$WL1" "$WL1MAX"
   printf "weighted_ssim=%.6f (min %.6f)\n" "$WSS" "$WSSIMMIN"
+  ART_SAL_B=$(printf "%s" "$SAL" | awk -F '"' '/baselineSaliency/ {print $4; exit}')
+  ART_SAL_C=$(printf "%s" "$SAL" | awk -F '"' '/candidateSaliency/ {print $4; exit}')
+  ART_SAL_W=$(printf "%s" "$SAL" | awk -F '"' '/weightedDelta/ {print $4; exit}')
+  echo "artifacts.saliency:"
+  [[ -n "$ART_SAL_B" ]] && echo "  baselineSaliency:  $ART_SAL_B"
+  [[ -n "$ART_SAL_C" ]] && echo "  candidateSaliency: $ART_SAL_C"
+  [[ -n "$ART_SAL_W" ]] && echo "  weightedDelta:     $ART_SAL_W"
 else
   echo "Note: baseline PNG not found; skipping align/saliency (pass by default)." >&2
 fi

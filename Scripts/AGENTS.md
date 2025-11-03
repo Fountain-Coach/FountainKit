@@ -57,3 +57,10 @@ PB‑VRT tests (Vision + Audio)
 - Run server kernel tests headless: `bash Scripts/ci/pbvrt-tests.sh`.
 - Scope to a single test: `ROBOT_ONLY=1 swift test --package-path Packages/FountainApps -c debug --filter PBVRTHTTPIntegrationTests.testCompareCandidateWritesBaselineSegment`.
 - Build server only: `swift build --package-path Packages/FountainApps -c debug --target pbvrt-server`.
+
+PB‑VRT baseline seeding
+- One‑shot seeder: `Scripts/apps/pbvrt-baseline-seed`
+  - Seeds a prompt, creates a baseline with viewport, and captures a baseline PNG.
+  - Example: `FOUNTAIN_SKIP_LAUNCHER_SIG=1 PBVRT_CORPUS_ID=pb-vrt swift run --package-path Packages/FountainApps pbvrt-server &`
+    then `bash Scripts/apps/pbvrt-baseline-seed --png baseline.png --prompt-id quiet-frame-lab --server http://127.0.0.1:8010/pb-vrt --out baseline.id`.
+  - Options: `--prompt-file <md>` or `--prompt-text "..."`, `--viewport WxH` (auto‑inferred with `sips`), `--renderer <ver>`.

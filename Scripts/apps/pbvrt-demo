@@ -94,7 +94,7 @@ if [[ -z "$BASELINE_ID" ]]; then echo "Failed to seed baseline" >&2; exit 1; fi
 echo "BaselineId: $BASELINE_ID" >&2
 
 # 5) Compare images
-bash Scripts/apps/pbvrt-compare-run --baseline-id "$BASELINE_ID" --candidate "$WORK/candidate.png" --baseline-png "$WORK/baseline.png"
+bash Scripts/apps/pbvrt-compare-run --baseline-id "$BASELINE_ID" --candidate "$WORK/candidate.png" --baseline-png "$WORK/baseline.png" || true
 
 ARTDIR=".fountain/artifacts/pb-vrt/$BASELINE_ID"
 echo "Artifacts (images): $ARTDIR" >&2
@@ -103,7 +103,7 @@ echo "Artifacts (images): $ARTDIR" >&2
 bash Scripts/apps/pbvrt-audio-generate --out "$WORK/baseline.wav" --freq "$FREQA" --dur 1.2 --amp 0.25 --sr 48000 1>&2
 bash Scripts/apps/pbvrt-audio-generate --out "$WORK/candidate.wav" --freq "$FREQB" --dur 1.2 --amp 0.25 --sr 48000 1>&2
 bash Scripts/apps/pbvrt-compare-run --baseline-id "$BASELINE_ID" --candidate "$WORK/candidate.png" \
-  --baseline-wav "$WORK/baseline.wav" --candidate-wav "$WORK/candidate.wav"
+  --baseline-wav "$WORK/baseline.wav" --candidate-wav "$WORK/candidate.wav" || true
 
 echo "Artifacts (audio): $ARTDIR" >&2
 echo "Demo workspace: $WORK" >&2
@@ -115,9 +115,11 @@ if [[ $OPEN -eq 1 ]]; then
   done
 fi
 
+if command -v osascript >/dev/null 2>&1; then osascript -e 'beep 2' >/dev/null 2>&1 || true; fi
+
 if [[ $PLAY -eq 1 ]]; then
   if command -v afplay >/dev/null 2>&1; then
-    echo "Playing baseline (A=$FREQA Hz) then candidate (B=$FREQB Hz)…" >&2
+    echo "Playing baseline (A=$FREQA Hz) then candidate (B=$FREQB Hz)…"
     afplay "$WORK/baseline.wav" || true
     sleep 0.15
     afplay "$WORK/candidate.wav" || true

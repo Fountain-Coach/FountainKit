@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage(){ cat <<USAGE >&2
+PB‑VRT Compare Runner
+
+Compares a candidate image (and optional audio pair) against the current baseline.
+
+Usage:
+  $(basename "$0") --baseline-id <id> --candidate candidate.png [--server <url>] \
+    [--featureprint-max 0.035] [--pixel-l1-max 0.012] [--ssim-min 0.94]
+
+Optional audio checks:
+  --baseline-wav b.wav --candidate-wav c.wav [--lsd-db-max 0.5]
+
+Server defaults to port stamped in .fountain/pb-vrt-port, or 8010 if missing.
+Prints a concise pass/fail with metric lines.
+USAGE
+}
+
+BASELINE_ID=""
+SERVER=""
+CAND=""
+FPMAX=0.035
+L1MAX=0.012
+SSIMMIN=0.94
+BWAV=""
+CWAV=""
+LSDMAX=0.5
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --baseline-id) BASELINE_ID="$2"; shift 2;;
+    --server) SERVER="$2"; shift 2;;
+    --candidate) CAND="$2"; shift 2;;
+    --featureprint-max) FPMAX="$2"; shift 2;;
+    --pixel-l1-max) L1MAX="$2"; shift 2;;
+    --ssim-min) SSIMMIN="$2"; shift 2;;
+    --baseline-wav) BWAV="$2"; shift 2;;
+    --candidate-wav) CWAV="$2"; shift 2;;
+    --lsd-db-max) LSDMAX="$2"; shift 2;;
+    -h|--help) usage; exit 0;;
+    *) echo "Unknown arg: $1" >&2; usage; exit 2;;
+  esac
+done
+
+if [[ -z "$BASELINE_ID" ]]; then echo "--baseline-id is required" >&2; exit 2; fi
+if [[ -z "$CAND" ]]; then echo "--candidate is required" >&2; exit 2; fi
+if [[ ! -f "$CAND" ]]; then echo "Candidate not found: $CAND" >&2; exit 2; fi
+
+if [[ -z "$SERVER" ]]; then
+  if [[ -f .fountain/pb-vrt-port ]]; then PORT=$(cat .fountain/pb-vrt-port | tr -d '\n'); SERVER="http://127.0.0.1:${PORT}/pb-vrt"; else SERVER="http://127.0.0.1:8010/pb-vrt"; fi
+fi
+
+echo "Compare: image vs baseline=$BASELINE_ID @ $SERVER" >&2
+R=$(curl -sS -X POST "$SERVER/compare" \
+  -F baselineId="$BASELINE_ID" \
+  -F candidatePng=@"$CAND")
+
+FP=$(printf "%s" "$R" | awk -F '[: ,]+' '/featureprint_distance/ {for(i=1;i<=NF;i++) if($i=="featureprint_distance") {print $(i+1); exit}}')
+L1=$(printf "%s" "$R" | awk -F '[: ,]+' '/pixel_l1/ {for(i=1;i<=NF;i++) if($i=="pixel_l1") {print $(i+1); exit}}')
+SS=$(printf "%s" "$R" | awk -F '[: ,]+' '/"ssim"/ {for(i=1;i<=NF;i++) if($i==""ssim""") {print $(i+1); exit}}')
+
+pass_img=1
+awk -v v="$FP" -v m="$FPMAX" 'BEGIN{exit !(v<=m)}' || pass_img=0
+awk -v v="$L1" -v m="$L1MAX" 'BEGIN{exit !(v<=m)}' || pass_img=0
+awk -v v="$SS" -v m="$SSIMMIN" 'BEGIN{exit !(v>=m)}' || pass_img=0
+
+printf "featureprint_distance=%.6f (max %.6f)\n" "$FP" "$FPMAX"
+printf "pixel_l1=%.6f (max %.6f)\n" "$L1" "$L1MAX"
+printf "ssim=%.6f (min %.6f)\n" "$SS" "$SSIMMIN"
+
+pass_audio=1
+if [[ -n "$BWAV" && -n "$CWAV" ]]; then
+  echo "Compare: audio spectrogram" >&2
+  A=$(curl -sS -X POST "$SERVER/probes/audio/spectrogram/compare" \
+    -F baselineId="$BASELINE_ID" -F baselineWav=@"$BWAV" -F candidateWav=@"$CWAV")
+  LSD=$(printf "%s" "$A" | awk -F '[: ,]+' '/lsd_db/ {for(i=1;i<=NF;i++) if($i=="lsd_db") {print $(i+1); exit}}')
+  awk -v v="$LSD" -v m="$LSDMAX" 'BEGIN{exit !(v<=m)}' || pass_audio=0
+  printf "lsd_db=%.3f (max %.3f)\n" "$LSD" "$LSDMAX"
+fi
+
+if [[ $pass_img -eq 1 && $pass_audio -eq 1 ]]; then
+  echo "PASS"; exit 0
+else
+  echo "FAIL"; exit 1
+fi
+

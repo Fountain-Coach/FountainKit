@@ -27,7 +27,7 @@ USAGE
 }
 
 PNG=""
-SERVER="http://127.0.0.1:8010/pb-vrt"
+SERVER=""
 PROMPT_ID="quiet-frame-lab"
 PROMPT_FILE=""
 PROMPT_TEXT=""
@@ -49,6 +49,16 @@ while [[ $# -gt 0 ]]; do
     *) echo "Unknown argument: $1" >&2; usage; exit 2;;
   esac
 done
+
+# Default server from stamp or fallback
+if [[ -z "${SERVER}" ]]; then
+  if [[ -f .fountain/pb-vrt-port ]]; then
+    PORT=$(cat .fountain/pb-vrt-port | tr -d '\n')
+    SERVER="http://127.0.0.1:${PORT}/pb-vrt"
+  else
+    SERVER="http://127.0.0.1:8010/pb-vrt"
+  fi
+fi
 
 if [[ -z "$PNG" ]]; then
   echo "Error: --png <baseline.png> is required" >&2
@@ -103,21 +113,24 @@ PY
 fi
 
 echo "Registering prompt '$PROMPT_ID' at $SERVER" >&2
-set +e
-curl -sS -X POST "$SERVER/prompts" -H 'Content-Type: application/json' \
-  -d @- << JSON >/dev/null
-{"id":"$PROMPT_ID","text":$(python3 - <<PY
-import json,sys
-print(json.dumps(sys.stdin.read()))
+TMP_PROMPT=$(mktemp)
+printf "%s" "$PROMPT_TEXT" > "$TMP_PROMPT"
+PROMPT_JSON=$(TMP_PROMPT="$TMP_PROMPT" PROMPT_ID="$PROMPT_ID" python3 - << 'PY'
+import json, os, pathlib
+pid = os.environ['PROMPT_ID']
+text = pathlib.Path(os.environ['TMP_PROMPT']).read_text()
+print(json.dumps({"id": pid, "text": text, "modality": "visual"}))
 PY
-<<< "$PROMPT_TEXT"),"modality":"visual"}
-JSON
+)
+set +e
+curl -sS -X POST "$SERVER/prompts" -H 'Content-Type: application/json' -d "$PROMPT_JSON" >/dev/null
 RC=$?
 set -e
+rm -f "$TMP_PROMPT"
 if [[ $RC -ne 0 ]]; then echo "Warning: prompt registration may have failed (continuing)" >&2; fi
 
 echo "Creating baseline (viewport ${WIDTH}x${HEIGHT})" >&2
-CREATE=$(curl -sS -X POST "$SERVER/baselines" -H 'Content-Type: application/json' -d @- << JSON)
+CREATE=$(curl -sS -X POST "$SERVER/baselines" -H 'Content-Type: application/json' -d @- << JSON
 {
   "promptId":"$PROMPT_ID",
   "viewport": {"width": $WIDTH, "height": $HEIGHT, "scale": 1},
@@ -125,16 +138,9 @@ CREATE=$(curl -sS -X POST "$SERVER/baselines" -H 'Content-Type: application/json
   "midiSequence": {"sequenceID":"lab","packets":[{"word0":"00000000"}]}
 }
 JSON
+)
 
-BASELINE_ID=$(python3 - << PY
-import sys, json
-try:
-  j = json.loads(sys.stdin.read())
-  print(j.get('baselineId',''))
-except Exception as e:
-  sys.exit(1)
-PY
-<<< "$CREATE")
+BASELINE_ID=$(printf "%s" "$CREATE" | awk -F '"' '/baselineId/ {print $4; exit}')
 
 if [[ -z "$BASELINE_ID" ]]; then
   echo "Error: failed to create baseline — response: $CREATE" >&2
@@ -153,4 +159,3 @@ if [[ -n "$OUTFILE" ]]; then
 fi
 
 echo "Done. Baseline artifacts live under .fountain/artifacts/pb-vrt/$BASELINE_ID" >&2
-

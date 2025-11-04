@@ -37,6 +37,7 @@ let package = Package(
         .executable(name: "pbvrt-embed-ci", targets: ["pbvrt-embed-ci"]),
         .executable(name: "pbvrt-rig-seed", targets: ["pbvrt-rig-seed"]),
         .executable(name: "pbvrt-clip-seed", targets: ["pbvrt-clip-seed"]),
+        .executable(name: "pbvrt-quietframe-seed", targets: ["pbvrt-quietframe-seed"]),
         .executable(name: "pbvrt-tone", targets: ["pbvrt-tone"]),
         .executable(name: "pbvrt-present", targets: ["pbvrt-present"]),
         .executable(name: "engraver-studio-app", targets: ["engraver-studio-app"]),
@@ -172,6 +173,14 @@ let package = Package(
                 .product(name: "FountainStoreClient", package: "FountainCore")
             ],
             path: "Sources/pbvrt-clip-seed"
+        ),
+        .executableTarget(
+            name: "pbvrt-quietframe-seed",
+            dependencies: [
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/pbvrt-quietframe-seed"
         ),
         .executableTarget(
             name: "pbvrt-tone",
@@ -857,6 +866,14 @@ let package = Package(
             name: "pbvrt-embed-ci",
             dependencies: ["pbvrt-server"],
             path: "Sources/pbvrt-embed-ci"
+        ),
+        .executableTarget(
+            name: "pbvrt-quietframe-seed",
+            dependencies: [
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/pbvrt-quietframe-seed"
         ),
         .executableTarget(
             name: "pbvrt-present",

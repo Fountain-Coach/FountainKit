@@ -43,6 +43,13 @@ struct MetalCanvasHost: View {
                         let frame = Int(dash.props["frame"] ?? "0") ?? 0
                         nodes.append(ReplayMetalNode(id: n.id, frameDoc: rect, title: title, fps: fps, playing: playing, frameIndex: frame))
                     }
+                    else {
+                        // Generic fallback node so story patches render even without dashboard entries
+                        let rect = CGRect(x: CGFloat(n.x), y: CGFloat(n.y), width: CGFloat(n.w), height: CGFloat(n.h))
+                        let ins = canonicalSortPorts(n.ports).filter{ $0.dir == .input }.map{ $0.id }
+                        let outs = canonicalSortPorts(n.ports).filter{ $0.dir == .output }.map{ $0.id }
+                        nodes.append(GenericMetalNode(id: n.id, frameDoc: rect, inPorts: ins, outPorts: outs))
+                    }
                 }
                 return nodes
             }, edges: {
@@ -89,7 +96,56 @@ struct MetalCanvasHost: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 .padding(.top, 8)
                 .padding(.trailing, 8)
+            // Human‑readable node titles rendered as SwiftUI overlays (so generic nodes are meaningful)
+            NodeTitlesOverlay()
             // Add-Instruments context menu removed in baseline; no right-click UI
+        }
+    }
+}
+
+// SwiftUI overlay that draws node titles in view space using VM transform (zoom + translation)
+fileprivate struct NodeTitlesOverlay: View {
+    @EnvironmentObject var vm: EditorVM
+    @State private var lastPass: Bool? = nil
+    private func viewPoint(doc: CGPoint, in size: CGSize) -> CGPoint {
+        let z = max(0.0001, vm.zoom)
+        let x = (doc.x + vm.translation.x) * z
+        let y = (doc.y + vm.translation.y) * z
+        return CGPoint(x: x, y: y)
+    }
+    var body: some View {
+        GeometryReader { geo in
+            ForEach(vm.nodes, id: \.id) { n in
+                let title = (n.title ?? n.id)
+                // Position label slightly above the node's top-left
+                let pt = viewPoint(doc: CGPoint(x: CGFloat(n.x), y: CGFloat(n.y) - 18), in: geo.size)
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(Color(nsColor: .labelColor))
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(Color.white.opacity(0.8)).cornerRadius(4)
+                    .position(x: pt.x, y: pt.y)
+                // PASS/FAIL badge for "present" node
+                if n.id.lowercased() == "present", let pass = lastPass {
+                    let badge = pass ? "PASS" : "FAIL"
+                    let color = pass ? Color.green.opacity(0.85) : Color.red.opacity(0.85)
+                    let bpt = viewPoint(doc: CGPoint(x: CGFloat(n.x + n.w) + 10, y: CGFloat(n.y) - 10), in: geo.size)
+                    Text(badge)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(color).cornerRadius(4)
+                        .position(x: bpt.x, y: bpt.y)
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .onAppear {
+            NotificationCenter.default.addObserver(forName: Notification.Name("PBVRTResult"), object: nil, queue: .main) { noti in
+                if let p = noti.userInfo?["pass"] as? Bool {
+                    DispatchQueue.main.async { lastPass = p }
+                }
+            }
         }
     }
 }

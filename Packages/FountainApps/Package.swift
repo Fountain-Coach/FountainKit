@@ -38,6 +38,8 @@ let package = Package(
         .executable(name: "pbvrt-rig-seed", targets: ["pbvrt-rig-seed"]),
         .executable(name: "pbvrt-clip-seed", targets: ["pbvrt-clip-seed"]),
         .executable(name: "pbvrt-quietframe-seed", targets: ["pbvrt-quietframe-seed"]),
+        .executable(name: "pbvrt-quietframe-dump", targets: ["pbvrt-quietframe-dump"]),
+        .executable(name: "pbvrt-quietframe-proof", targets: ["pbvrt-quietframe-proof"]),
         .executable(name: "pbvrt-tone", targets: ["pbvrt-tone"]),
         .executable(name: "pbvrt-present", targets: ["pbvrt-present"]),
         .executable(name: "engraver-studio-app", targets: ["engraver-studio-app"]),
@@ -181,6 +183,23 @@ let package = Package(
                 .product(name: "FountainStoreClient", package: "FountainCore")
             ],
             path: "Sources/pbvrt-quietframe-seed"
+        ),
+        
+        .executableTarget(
+            name: "pbvrt-quietframe-dump",
+            dependencies: [
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/pbvrt-quietframe-dump"
+        ),
+        .executableTarget(
+            name: "pbvrt-quietframe-proof",
+            dependencies: [
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/pbvrt-quietframe-proof"
         ),
         .executableTarget(
             name: "pbvrt-tone",
@@ -866,6 +885,23 @@ let package = Package(
             name: "pbvrt-embed-ci",
             dependencies: ["pbvrt-server"],
             path: "Sources/pbvrt-embed-ci"
+        ),
+        // Quiet‑frame convenience tools (non‑ROBOT_ONLY)
+        .executableTarget(
+            name: "pbvrt-quietframe-dump",
+            dependencies: [
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/pbvrt-quietframe-dump"
+        ),
+        .executableTarget(
+            name: "pbvrt-quietframe-proof",
+            dependencies: [
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/pbvrt-quietframe-proof"
         ),
         .executableTarget(
             name: "pbvrt-quietframe-seed",

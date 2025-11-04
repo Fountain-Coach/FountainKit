@@ -1329,9 +1329,6 @@ struct ContentView: View {
                 }
             }) {
                 HStack(spacing: 0) {
-                    // App‑level MIDI 2.0 instrument (PatchBay App)
-                    PatchBayAppInstrumentBinder()
-                        .environmentObject(state)
                     MetalCanvasHost()
                         .environmentObject(vm)
                         .environmentObject(state)
@@ -1340,6 +1337,12 @@ struct ContentView: View {
                             handleDrop(providers: providers, location: location)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .overlay(
+                            // App‑level MIDI 2.0 instrument (PatchBay App) — overlay so it takes no layout space
+                            PatchBayAppInstrumentBinder()
+                                .environmentObject(state)
+                                .frame(width: 0, height: 0)
+                        )
                     Divider()
                     PBVRTInspectorHost()
                         .frame(width: 380)
@@ -1347,6 +1350,10 @@ struct ContentView: View {
             }
             .navigationTitle("PatchBay Canvas")
             .navigationSplitViewColumnWidth(min: 600, ideal: 900, max: .infinity)
+            .onAppear {
+                // Auto‑insert story patch if canvas is empty
+                if vm.nodes.isEmpty { vm.insertPBVRTStoryPatch() }
+            }
             .toolbar {
                 ToolbarItemGroup(placement: .automatic) {
                     Toggle(isOn: $vm.connectMode) { Label("Connect", systemImage: vm.connectMode ? "link" : "link.badge.plus") }
@@ -1363,6 +1370,8 @@ struct ContentView: View {
                             Button("16 px (major ×5)") { vm.grid = 16; vm.majorEvery = 5 }
                             Button("24 px (major ×5)") { vm.grid = 24; vm.majorEvery = 5 }
                         }
+                        Divider()
+                        Button("Insert PB‑VRT Story Patch") { vm.insertPBVRTStoryPatch() }
                         Divider()
                         Toggle("Show Baseline Index", isOn: $vm.showBaselineIndex)
                         Toggle("Always show (all stages)", isOn: $vm.alwaysShowBaselineIndex)

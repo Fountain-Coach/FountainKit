@@ -159,6 +159,38 @@ final class EditorVM: ObservableObject {
         return candidate
     }
 
+    // MARK: - PB‑VRT Story Patch
+    func insertPBVRTStoryPatch(at origin: CGPoint = CGPoint(x: 200, y: 180)) {
+        // Clear selection
+        selected.removeAll(); selection = nil
+        let g = max(24, grid)
+        func add(_ id: String, _ title: String, _ dx: Int, _ dy: Int) -> String {
+            let n = PBNode(id: id, title: title, x: Int(origin.x)+dx, y: Int(origin.y)+dy, w: g*9, h: g*5, ports: [])
+            nodes.append(n); return id
+        }
+        func ports(_ id: String, _ ins: [String], _ outs: [String]) {
+            for p in ins { addPort(to: id, side: .left, dir: .input, id: p) }
+            for p in outs { addPort(to: id, side: .right, dir: .output, id: p) }
+        }
+        let baseline = add("baseline", "Baseline", 0, 0)
+        let compare  = add("compare",  "Compare",  g*12, 0)
+        let align    = add("align",    "Align",    g*24, -g*6)
+        let saliency = add("saliency", "Saliency", g*24,  g*6)
+        let audio    = add("audio",    "Audio",    g*36,  0)
+        let present  = add("present",  "Present",  g*48,  0)
+        ports(baseline, [], ["png","wav"]) ; ports(compare, ["png"],["metrics","delta"]) ;
+        ports(align,["png"],["aligned"]) ; ports(saliency,["png"],["overlays"]) ;
+        ports(audio,["wav"],["spec"]) ; ports(present,["assets"],["mp4"]) ;
+        ensureEdge(from: (baseline,"png"), to: (compare,"png"))
+        ensureEdge(from: (compare,"delta"), to: (present,"assets"))
+        ensureEdge(from: (baseline,"png"), to: (align,"png"))
+        ensureEdge(from: (align,"aligned"), to: (present,"assets"))
+        ensureEdge(from: (baseline,"png"), to: (saliency,"png"))
+        ensureEdge(from: (saliency,"overlays"), to: (present,"assets"))
+        ensureEdge(from: (baseline,"wav"), to: (audio,"wav"))
+        ensureEdge(from: (audio,"spec"), to: (present,"assets"))
+    }
+
     // MARK: - MIDI 2.0 activity helpers (UI-level events)
     nonisolated private static func postNodeDiffEvents(oldValue: [PBNode], newValue: [PBNode]) {
         // Be tolerant of duplicate ids: last occurrence wins to avoid crashes in tests

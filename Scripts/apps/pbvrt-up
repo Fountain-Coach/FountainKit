@@ -14,13 +14,15 @@ USAGE
 PORT=8010
 CORPUS="pb-vrt"
 STORE=""
-TIMEOUT=25
+TIMEOUT=45
+PREBUILD=1
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --port) PORT="$2"; shift 2;;
     --corpus) CORPUS="$2"; shift 2;;
     --store) STORE="$2"; shift 2;;
     --timeout) TIMEOUT="$2"; shift 2;;
+    --no-prebuild) PREBUILD=0; shift 1;;
     -h|--help) usage; exit 0;;
     *) echo "Unknown arg: $1" >&2; usage; exit 2;;
   esac
@@ -47,6 +49,11 @@ done
 PORT=$(pick_port "$PORT") || { echo "No free port in range." >&2; exit 1; }
 echo "Starting pbvrt-server on port $PORT (corpus=$CORPUS)" >&2
 
+if [[ "$PREBUILD" == "1" ]]; then
+  echo "Prebuilding pbvrt-server (speeds up first launch)…" >&2
+  FOUNTAIN_SKIP_LAUNCHER_SIG=1 swift build --package-path Packages/FountainApps -c debug --target pbvrt-server >/dev/null 2>&1 || true
+fi
+
 ENVVARS=("FOUNTAIN_SKIP_LAUNCHER_SIG=1" "PBVRT_CORPUS_ID=$CORPUS" "PBVRT_PORT=$PORT")
 if [[ -n "$STORE" ]]; then ENVVARS+=("FOUNTAINSTORE_DIR=$STORE"); fi
 
@@ -69,5 +76,6 @@ for ((i=0;i<TIMEOUT;i++)); do
 done
 
 echo "pbvrt-server did not become ready within ${TIMEOUT}s. Logs: .fountain/logs/pbvrt-server.log" >&2
+echo "--- tail logs ---" >&2
+tail -n 60 .fountain/logs/pbvrt-server.log >&2 || true
 exit 1
-

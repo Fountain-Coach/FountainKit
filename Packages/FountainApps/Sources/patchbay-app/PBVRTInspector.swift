@@ -1,6 +1,7 @@
 import SwiftUI
 import AVKit
 import AppKit
+import UniformTypeIdentifiers
 import FountainStoreClient
 
 struct PBVRTInspector: View {
@@ -44,7 +45,7 @@ struct PBVRTInspector: View {
                 Picker("Baseline", selection: $selectedBaseline) {
                     ForEach(baselines, id: \.self) { id in Text(id).tag(id) }
                 }
-                .onChange(of: selectedBaseline) { _ in loadSelected() }
+                .onChange(of: selectedBaseline) { _, _ in loadSelected() }
                 Spacer()
                 if let dir = artifactsDir {
                     Button { NSWorkspace.shared.open(dir) } label: { Label("Open Artifacts", systemImage: "folder") }
@@ -201,7 +202,7 @@ struct PBVRTInspector: View {
 
     private func seedBaselineFromPNG() {
         let panel = NSOpenPanel()
-        panel.allowedFileTypes = ["png"]
+        if #available(macOS 12.0, *) { panel.allowedContentTypes = [.png] } else { panel.allowedFileTypes = ["png"] }
         panel.allowsMultipleSelection = false
         if panel.runModal() == .OK, let url = panel.url {
             Task.detached { [sel = selectedBaseline] in
@@ -217,7 +218,7 @@ struct PBVRTInspector: View {
     private func runCompareWithCandidatePNG() {
         guard !selectedBaseline.isEmpty else { return }
         let panel = NSOpenPanel()
-        panel.allowedFileTypes = ["png"]
+        if #available(macOS 12.0, *) { panel.allowedContentTypes = [.png] } else { panel.allowedFileTypes = ["png"] }
         panel.allowsMultipleSelection = false
         if panel.runModal() == .OK, let url = panel.url {
             Task.detached { [id = selectedBaseline] in

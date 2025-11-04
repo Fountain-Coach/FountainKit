@@ -6,6 +6,7 @@ import AVFoundation
 import CoreMLKit
 import Accelerate
 import CoreGraphics
+import NaturalLanguage
 
 // PB‑VRT core for persistence
 final class PBVRTCore: @unchecked Sendable {
@@ -175,6 +176,38 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
         guard case let .json(b) = input.body else { return .undocumented(statusCode: 400, .init()) }
         let baselineId = UUID().uuidString
         let _ = try await core.writeBaseline(baselineId: baselineId, promptId: b.promptId, viewport: b.viewport, rendererVersion: b.rendererVersion, midiSequence: b.midiSequence, probes: nil)
+        // Optional live-capture hook: if PBVRT_CAPTURE_BASELINE_PNG is set to a file path,
+        // accept it as the baseline image and compute an embedding immediately.
+        if let path = ProcessInfo.processInfo.environment["PBVRT_CAPTURE_BASELINE_PNG"], !path.isEmpty,
+           let data = try? Data(contentsOf: URL(fileURLWithPath: path)) {
+            let dir = core.baselineDir(baselineId)
+            let baselineURL = dir.appendingPathComponent("baseline.png")
+            try? data.write(to: baselineURL)
+            // Minimal embedding (grayscale 32×32), same as captureBaseline fallback
+            if let img = CGImage.fromPNGData(data) {
+                let sample = 32
+                if let thumb = img.resized(width: sample, height: sample) {
+                    let vec = PBVRTHandlers.grayscaleFloat(image: thumb)
+                    let minV = vec.min() ?? 0, maxV = vec.max() ?? 1
+                    let denom = max(1e-9, maxV - minV)
+                    let norm = vec.map { ($0 - minV) / Float(denom) }
+                    let embURL = dir.appendingPathComponent("embedding.json")
+                    let embObj: [String: Any] = [
+                        "model": "grayscale32x32",
+                        "dims": [sample, sample],
+                        "length": norm.count,
+                        "vector": norm
+                    ]
+                    if let d = try? JSONSerialization.data(withJSONObject: embObj, options: [.sortedKeys]) { try? d.write(to: embURL) }
+                    _ = await core.writeBaselineSummary(baselineId: baselineId, kind: "pbvrt.baseline", payload: [
+                        "promptId": b.promptId,
+                        "viewport": ["width": b.viewport.width, "height": b.viewport.height, "scale": b.viewport.scale],
+                        "rendererVersion": b.rendererVersion as Any,
+                        "artifacts": ["baselinePng": baselineURL.path, "embeddingJson": embURL.path]
+                    ])
+                }
+            }
+        }
         let ref = Components.Schemas.BaselineRef(baselineId: baselineId, uri: "store://pbvrt/baseline/\(baselineId)")
         return .created(.init(body: .json(ref)))
     }
@@ -352,12 +385,77 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
                 }
             }
         }
+        // Optional CLIP image embedding cosine if a model path is provided.
+        var clipCosine: Double?
+        if let clipPath = ProcessInfo.processInfo.environment["PBVRT_CLIP_IMAGE_MODEL"],
+           !clipPath.isEmpty,
+           let bImg = try? Data(contentsOf: baselineURL),
+           let cImg = try? Data(contentsOf: candidateURL),
+           let bCG = CGImage.fromPNGData(bImg), let cCG = CGImage.fromPNGData(cImg),
+           let loaded = try? CoreMLInterop.loadModel(at: clipPath) {
+            // Heuristic: pick first input; if image, feed 224×224 pixel buffer.
+            let summary = ModelInfo.summarize(loaded.model)
+            let inputName = summary.inputs.first?.name ?? "image"
+            let size = 224
+            if let pbB = VisionAudioHelpers.pixelBuffer(from: bCG, width: size, height: size),
+               let pbC = VisionAudioHelpers.pixelBuffer(from: cCG, width: size, height: size),
+               let outB = try? CoreMLInterop.predictValues(model: loaded.model, inputs: [inputName: MLFeatureValue(pixelBuffer: pbB)]),
+               let outC = try? CoreMLInterop.predictValues(model: loaded.model, inputs: [inputName: MLFeatureValue(pixelBuffer: pbC)]),
+               let fvB = outB.values.first, let fvC = outC.values.first,
+               let arrB = fvB.multiArrayValue, let arrC = fvC.multiArrayValue {
+                let vb = CoreMLInterop.toArray(arrB)
+                let vc = CoreMLInterop.toArray(arrC)
+                let dist = Self.cosineDistance(a: vb, b: vc)
+                clipCosine = max(0.0, 1.0 - dist) // similarity
+            }
+        }
+        // Optional prompt cosine via OCR(text) ↔ prompt(text) using NL word embeddings.
+        var promptCos: Double?
+        if ProcessInfo.processInfo.environment["PBVRT_PROMPT_COSINE"] == "1" {
+            // Load prompt text through baseline meta
+            if let baseData = try? await core.store.getDoc(corpusId: core.corpusId, collection: "segments", id: "\(core.baselinePageId(bId)):pbvrt.baseline"),
+               let seg = try? JSONSerialization.jsonObject(with: baseData) as? [String: Any],
+               let text = seg["text"] as? String,
+               let obj = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any],
+               let pid = obj["promptId"] as? String,
+               let pData = try? await core.store.getDoc(corpusId: core.corpusId, collection: "segments", id: "\(core.promptPageId(pid)):pbvrt.prompt"),
+               let pSeg = try? JSONSerialization.jsonObject(with: pData) as? [String: Any],
+               let promptText = pSeg["text"] as? String,
+               let cData = try? Data(contentsOf: candidateURL), let cImg = CGImage.fromPNGData(cData) {
+                // OCR candidate
+                let req = VNRecognizeTextRequest(); req.recognitionLevel = .accurate
+                let handler = VNImageRequestHandler(cgImage: cImg, options: [:])
+                try? handler.perform([req])
+                let ocrText = (req.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ")
+                // Average word embeddings
+                func embedAvg(_ s: String) -> [Double]? {
+                    guard let emb = NLEmbedding.wordEmbedding(for: .english) ?? NLEmbedding.wordEmbedding(for: .german) else { return nil }
+                    let tokens = s.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map { String($0).lowercased() }
+                    var sum: [Double] = []; var count = 0
+                    for t in tokens {
+                        if let v = emb.vector(for: t) {
+                            if sum.isEmpty { sum = v } else { for i in 0..<min(sum.count, v.count) { sum[i] += v[i] } }
+                            count += 1
+                        }
+                    }
+                    guard count > 0 else { return nil }
+                    return sum.map { $0 / Double(count) }
+                }
+                if let vp = embedAvg(promptText), let vc = embedAvg(ocrText), !vp.isEmpty, !vc.isEmpty {
+                    let n = min(vp.count, vc.count)
+                    var dot = 0.0, na = 0.0, nb = 0.0
+                    for i in 0..<n { dot += vp[i]*vc[i]; na += vp[i]*vp[i]; nb += vc[i]*vc[i] }
+                    let denom = max(1e-9, sqrt(na)*sqrt(nb))
+                    promptCos = max(0.0, min(1.0, dot/denom))
+                }
+            }
+        }
         let metrics = Components.Schemas.DriftReport.metricsPayload(
             pixel_l1: pixelL1.map { Float($0) },
             ssim: ssim.map { Float($0) },
             featureprint_distance: fdist.map { Float($0) },
-            clip_cosine: nil,
-            prompt_cosine: nil
+            clip_cosine: clipCosine.map { Float($0) },
+            prompt_cosine: promptCos.map { Float($0) }
         )
         let report = Components.Schemas.DriftReport(
             baselineId: bId,
@@ -376,7 +474,9 @@ final class PBVRTHandlers: APIProtocol, @unchecked Sendable {
                 "metrics": [
                     "featureprint_distance": fdist as Any,
                     "pixel_l1": pixelL1 as Any,
-                    "ssim": ssim as Any
+                    "ssim": ssim as Any,
+                    "clip_cosine": clipCosine as Any,
+                    "prompt_cosine": promptCos as Any
                 ],
                 "artifacts": [
                     "candidatePng": candidateURL.path,

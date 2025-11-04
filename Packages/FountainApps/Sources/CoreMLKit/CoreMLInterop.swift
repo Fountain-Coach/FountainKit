@@ -47,4 +47,15 @@ public enum CoreMLInterop {
         }
         return dict
     }
+
+    // Generic variant: accept/return MLFeatureValue so callers may pass images or scalars.
+    public static func predictValues(model: MLModel, inputs: [String: MLFeatureValue]) throws -> [String: MLFeatureValue] {
+        let provider = try MLDictionaryFeatureProvider(dictionary: inputs)
+        let out = try model.prediction(from: provider)
+        var dict: [String: MLFeatureValue] = [:]
+        for name in out.featureNames {
+            if let v = out.featureValue(for: name) { dict[name] = v }
+        }
+        return dict
+    }
 }

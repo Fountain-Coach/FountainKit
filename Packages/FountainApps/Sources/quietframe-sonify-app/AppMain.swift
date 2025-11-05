@@ -37,10 +37,11 @@ struct QuietFrameView: View {
     @State private var muted: Bool = false
     @State private var bpm: Double = 96
     @State private var section: Int = 1
-    @StateObject private var recorder = MP4ScreenRecorder()
+    @State private var midiEvents: [String] = []
     var body: some View {
         GeometryReader { geo in
-            HStack(spacing: 0) {
+            ZStack {
+                // Main content
                 ZStack {
                     Color(NSColor.windowBackgroundColor)
                     VStack {
@@ -117,11 +118,26 @@ struct QuietFrameView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 }
-                // Right pane: Player
-                PlayerPaneView(recorder: recorder)
+                // MIDI feedback overlay (bottom-left)
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("MIDI", systemImage: "music.note").font(.caption)
+                    ForEach(midiEvents.suffix(6), id: \.self) { line in
+                        Text(line).font(.caption2).monospaced()
+                    }
+                    HStack {
+                        Spacer()
+                        Button("Clear") { midiEvents.removeAll() }.font(.caption2)
+                    }
+                }
+                .padding(8)
+                .background(.thinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .frame(maxWidth: 280)
+                .padding(10)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
             }
         }
-        .frame(minWidth: 1200, minHeight: 720)
+        .frame(minWidth: 960, minHeight: 720)
         .onAppear {
             sendCC(value7: 0)
             if lastNote != 0 { QuietFrameInstrument.shared.instrument?.sendNoteOff(note: lastNote, velocity7: 0); lastNote = 0; lastTriggered = false }
@@ -165,6 +181,7 @@ struct QuietFrameView: View {
     private func sendCC(value7: UInt8) {
         if let inst = QuietFrameInstrument.shared.instrument { inst.sendCC(controller: 1, value7: value7) }
         MIDI1Out.shared.sendCC(cc: 1, value: value7)
+        midiEvents.append("CC1 = \(value7)")
     }
 
     private var threshold: Double { 0.65 }
@@ -186,9 +203,10 @@ struct QuietFrameView: View {
             let vel: UInt8 = max(20, UInt8((s * 127).rounded()))
             inst?.sendNoteOn(note: note, velocity7: vel)
             MIDI1Out.shared.sendNoteOn(note: note, velocity: vel)
+            midiEvents.append("NoteOn \(note) vel=\(vel)")
             lastNote = note
         } else if !now && was {
-            if lastNote != 0 { inst?.sendNoteOff(note: lastNote, velocity7: 0); MIDI1Out.shared.sendNoteOff(note: lastNote) }
+            if lastNote != 0 { inst?.sendNoteOff(note: lastNote, velocity7: 0); MIDI1Out.shared.sendNoteOff(note: lastNote); midiEvents.append("NoteOff \(lastNote)") }
             lastNote = 0
         }
         lastTriggered = now
@@ -205,6 +223,7 @@ struct QuietFrameView: View {
     private func panicAllNotes() {
         QuietFrameInstrument.shared.instrument?.sendCC(controller: 123, value7: 0) // All Notes Off (Channel Mode)
         MIDI1Out.shared.allNotesOff()
+        midiEvents.append("AllNotesOff")
         forceSilence()
     }
 
@@ -214,12 +233,14 @@ struct QuietFrameView: View {
         let note: UInt8 = 72
         QuietFrameInstrument.shared.instrument?.sendNoteOn(note: note, velocity7: 100)
         MIDI1Out.shared.sendNoteOn(note: note, velocity: 100)
+        midiEvents.append("NoteOn 72 vel=100 (test)")
         FountainAudioEngine.shared.setFrequency(660)
         FountainAudioEngine.shared.setAmplitude(0.25)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             self.sendCC(value7: 0)
             QuietFrameInstrument.shared.instrument?.sendNoteOff(note: note, velocity7: 0)
             MIDI1Out.shared.sendNoteOff(note: note)
+            midiEvents.append("NoteOff 72 (test)")
             FountainAudioEngine.shared.setAmplitude(0)
         }
     }

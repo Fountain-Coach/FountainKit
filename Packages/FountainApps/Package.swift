@@ -100,7 +100,8 @@ let package = Package(
         ,
         .executable(name: "patchbay-saliency-seed", targets: ["patchbay-saliency-seed"])
         ,
-        .executable(name: "quietframe-sonify-app", targets: ["quietframe-sonify-app"])
+        .executable(name: "quietframe-sonify-app", targets: ["quietframe-sonify-app"]),
+        .executable(name: "quietframe-companion-app", targets: ["quietframe-companion-app"])
         
     ],
     dependencies: [
@@ -1184,6 +1185,13 @@ let package = Package(
                 "FountainAudioEngine"
             ],
             path: "Sources/quietframe-sonify-app"
+        ),
+        .executableTarget(
+            name: "quietframe-companion-app",
+            dependencies: [
+                "FountainAudioEngine"
+            ],
+            path: "Sources/quietframe-companion-app"
         ),
         .executableTarget(
             name: "quietframe-sonify-seed",

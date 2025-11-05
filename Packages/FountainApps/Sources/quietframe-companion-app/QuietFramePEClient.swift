@@ -83,6 +83,7 @@ import MIDI2CI
         sendSysEx7(bytes: bytes)
     }
 
+    // Emit event JSON on the main actor to avoid cross-actor crashes
     var eventSink: ((String) -> Void)? = nil
 
     private func sendSysEx7(bytes: [UInt8]) {
@@ -108,7 +109,7 @@ import MIDI2CI
         if let sink = eventSink {
             let payload = words.map { String(format: "0x%08X", $0) }
             if let data = try? JSONSerialization.data(withJSONObject: ["dir":"out","ump": payload], options: []), let s = String(data: data, encoding: .utf8) {
-                sink(s)
+                Task { @MainActor in sink(s) }
             }
         }
     }
@@ -179,7 +180,7 @@ extension QuietFramePEClient {
         if let sink = eventSink {
             let payload = words.map { String(format: "0x%08X", $0) }
             if let data = try? JSONSerialization.data(withJSONObject: ["dir":"in","ump": payload], options: []), let s = String(data: data, encoding: .utf8) {
-                sink(s)
+                Task { @MainActor in sink(s) }
             }
         }
     }

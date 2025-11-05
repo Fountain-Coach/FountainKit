@@ -34,6 +34,7 @@
     private var targetWindowTitle: String = "QuietFrame Sonify"
     private var scStream: SCStream?
     private let streamQueue = DispatchQueue(label: "quietframe.rec.stream")
+    private let ciContext = CIContext()
     private var tmpVideoURL: URL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("quietframe-video.mp4")
     private var tmpAudioURL: URL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("quietframe-audio.wav")
     private var metaInput: AVAssetWriterInput?
@@ -145,9 +146,14 @@
             let output = StreamOutput(
                 onVideo: { [weak self] pixelBuffer, pts in
                     guard let self, let adaptor = self.pixelAdaptor, let vIn = self.videoInput, vIn.isReadyForMoreMediaData else { return }
-                    self.previewImage = NSImage(cgImage: CIContext().createCGImage(CIImage(cvImageBuffer: pixelBuffer), from: CGRect(x: 0, y: 0, width: CVPixelBufferGetWidth(pixelBuffer), height: CVPixelBufferGetHeight(pixelBuffer)))!, size: .zero)
                     _ = adaptor.append(pixelBuffer, withPresentationTime: pts)
-                    self.duration = CFAbsoluteTimeGetCurrent() - self.startTime
+                    let rect = CGRect(x: 0, y: 0, width: CVPixelBufferGetWidth(pixelBuffer), height: CVPixelBufferGetHeight(pixelBuffer))
+                    if let cg = self.ciContext.createCGImage(CIImage(cvImageBuffer: pixelBuffer), from: rect) {
+                        Task { @MainActor in
+                            self.previewImage = NSImage(cgImage: cg, size: .zero)
+                            self.duration = CFAbsoluteTimeGetCurrent() - self.startTime
+                        }
+                    }
                 },
                 onAudio: { [weak self] sample in
                     guard let self, let aIn = self.audioInput, aIn.isReadyForMoreMediaData else { return }

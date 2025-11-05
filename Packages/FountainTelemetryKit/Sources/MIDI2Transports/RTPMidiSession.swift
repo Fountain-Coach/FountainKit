@@ -27,12 +27,17 @@ public final class RTPMidiSession: MIDITransport, @unchecked Sendable {
     public init(localName: String,
                 mtu: Int = 1500,
                 enableDiscovery: Bool = true,
-                enableCINegotiation: Bool = true) {
+                enableCINegotiation: Bool = true,
+                listenPort: UInt16? = nil) {
         self.localName = localName
         self.mtu = mtu
         self.enableDiscovery = enableDiscovery
         self.enableCINegotiation = enableCINegotiation
+        if let p = listenPort { self._fixedPort = p }
     }
+
+    private var _fixedPort: UInt16? = nil
+    public var port: UInt16? { listener?.port?.rawValue ?? _fixedPort }
 
     public func open() throws {
         // In pure loopback mode (no discovery and no CI negotiation), avoid touching Network framework.
@@ -42,7 +47,11 @@ public final class RTPMidiSession: MIDITransport, @unchecked Sendable {
         }
         let params = NWParameters.udp
         let ready = DispatchSemaphore(value: 0)
-        listener = try NWListener(using: params, on: .any)
+        if let p = _fixedPort, let port = NWEndpoint.Port(rawValue: p) {
+            listener = try NWListener(using: params, on: port)
+        } else {
+            listener = try NWListener(using: params, on: .any)
+        }
         if enableDiscovery {
             listener?.service = NWListener.Service(name: localName, type: "_rtp-midi._udp")
         }

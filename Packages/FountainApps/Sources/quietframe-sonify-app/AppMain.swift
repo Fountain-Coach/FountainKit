@@ -264,28 +264,8 @@ struct QuietFrameView: View {
 
 // SDLKit engine is the default; no AVFoundation fallback.
 
-// MARK: - CoreMIDI 1.0 sender (virtual source for Csound)
-@MainActor final class MIDI1Out {
-    static let shared = MIDI1Out()
-    private var client: MIDIClientRef = 0
-    private var src: MIDIEndpointRef = 0
-    private init() {
-        MIDIClientCreate("QuietFrameM1" as CFString, nil, nil, &client)
-        MIDISourceCreate(client, "QuietFrame M1" as CFString, &src)
-    }
-    private func send(_ bytes: [UInt8]) {
-        var list = MIDIPacketList()
-        withUnsafeMutablePointer(to: &list) { ptr in
-            var pkt = MIDIPacketListInit(ptr)
-            pkt = MIDIPacketListAdd(ptr, 1024, pkt, 0, bytes.count, bytes)
-            MIDIReceived(src, ptr)
-        }
-    }
-    func sendCC(cc: UInt8, value: UInt8, channel: UInt8 = 0) { send([0xB0 | channel, cc, value]) }
-    func sendNoteOn(note: UInt8, velocity: UInt8, channel: UInt8 = 0) { send([0x90 | channel, note, velocity]) }
-    func sendNoteOff(note: UInt8, channel: UInt8 = 0) { send([0x80 | channel, note, 0]) }
-    func allNotesOff(channel: UInt8 = 0) { send([0xB0 | channel, 123, 0]) }
-}
+// MARK: - MIDI1 stub (no CoreMIDI in QuietFrame)
+@MainActor final class MIDI1Out { static let shared = MIDI1Out(); private init() {} ; func sendCC(cc: UInt8, value: UInt8, channel: UInt8 = 0) {} ; func sendNoteOn(note: UInt8, velocity: UInt8, channel: UInt8 = 0) {} ; func sendNoteOff(note: UInt8, channel: UInt8 = 0) {} ; func allNotesOff(channel: UInt8 = 0) {} }
 
 struct QuietFrameShape: Shape {
     func path(in rect: CGRect) -> Path { Path(roundedRect: rect, cornerRadius: 6) }
@@ -326,6 +306,8 @@ struct MouseTracker: NSViewRepresentable {
     init() {
         let sink = SonifyPESink()
         let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "QuietFrame", instanceId: "qf-1", displayName: "Quiet Frame")
+        // Force MIDI2 transport without CoreMIDI: RTP on fixed local port
+        MetalInstrument.setTransportOverride(MIDI2SystemInstrumentTransport(backend: .rtpFixedPort(5868)))
         let inst = MetalInstrument(sink: sink, descriptor: desc)
         inst.stateProvider = {
             var s = FountainAudioEngine.shared.snapshot()

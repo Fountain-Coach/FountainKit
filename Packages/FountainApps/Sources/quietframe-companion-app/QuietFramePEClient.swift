@@ -1,7 +1,7 @@
 import Foundation
-import CoreMIDI
 import MIDI2
 import MIDI2CI
+import MetalViewKit
 
 @MainActor final class QuietFramePEClient: ObservableObject {
     @Published var connectedName: String? = nil
@@ -10,119 +10,25 @@ import MIDI2CI
     @Published var lastSavedURL: String? = nil
     @Published var lastSavedDuration: Double? = nil
 
-    private var client: MIDIClientRef = 0
-    private var outPort: MIDIPortRef = 0
-    private var dest: MIDIEndpointRef = 0
-    private var src: MIDIEndpointRef = 0
-    private var inPort: MIDIPortRef = 0
     private let group: UInt8 = 0
     private var requestId: UInt32 = 1
-    // no core dependency; decode inline and marshal to @MainActor
+    private var session: (any MetalInstrumentTransportSession)? = nil
 
     func connect(displayNameContains name: String = "Quiet Frame") {
-        if client == 0 { MIDIClientCreate("QFCompanion" as CFString, nil, nil, &client) }
-        if outPort == 0 { MIDIOutputPortCreate(client, "out" as CFString, &outPort) }
-        if inPort == 0 {
-            if #available(macOS 13.0, *) {
-                let sink = self.eventSink
-                MIDIInputPortCreateWithProtocol(client, "in" as CFString, ._2_0, &inPort) { list, _ in
-                    // Decode the MIDIEventList into UMP words quickly on the CoreMIDI callback thread
-                    var packet = list.pointee.packet
-                    for _ in 0..<list.pointee.numPackets {
-                        let count = Int(packet.wordCount)
-                        if count > 0 {
-                            var words: [UInt32] = []
-                            withUnsafePointer(to: packet.words) { base in
-                                let raw = UnsafeRawPointer(base).assumingMemoryBound(to: UInt32.self)
-                                let buffer = UnsafeBufferPointer(start: raw, count: count)
-                                words.append(contentsOf: buffer)
-                            }
-                            // Emit event JSON to the UI sink for live feedback
-                            if let sink {
-                                let payload = words.map { String(format: "0x%08X", $0) }
-                                if let data = try? JSONSerialization.data(withJSONObject: ["dir":"in","ump": payload], options: []), let s = String(data: data, encoding: .utf8) {
-                                    Task { @MainActor in sink(s) }
-                                }
-                            }
-                            // Parse SysEx7 → PE JSON and update snapshot on @MainActor
-                            var bytes: [UInt8] = []
-                            var i = 0
-                            while i + 1 < words.count {
-                                let w1 = words[i], w2 = words[i+1]
-                                if ((w1 >> 28) & 0xF) != 0x3 { break }
-                                let n = Int((w1 >> 16) & 0xF)
-                                let d0 = UInt8((w1 >> 8) & 0xFF)
-                                let d1 = UInt8(w1 & 0xFF)
-                                let d2 = UInt8((w2 >> 24) & 0xFF)
-                                let d3 = UInt8((w2 >> 16) & 0xFF)
-                                let d4 = UInt8((w2 >> 8) & 0xFF)
-                                let d5 = UInt8(w2 & 0xFF)
-                                bytes.append(contentsOf: [d0,d1,d2,d3,d4,d5].prefix(n))
-                                let status = UInt8((w1 >> 20) & 0xF)
-                                i += 2
-                                if status == 0x0 || status == 0x3 { break }
-                            }
-                            // Vendor JSON inbound (rec.saved)
-                            if bytes.count >= 8, bytes[0] == 0xF0, bytes[1] == 0x7D, bytes[2] == 0x4A, bytes[3] == 0x53, bytes[4] == 0x4F, bytes[5] == 0x4E, bytes[6] == 0x00 {
-                                let body = Data(bytes[7..<(bytes.count-1)])
-                                if let obj = try? JSONSerialization.jsonObject(with: body) as? [String: Any], let topic = obj["topic"] as? String {
-                                    if topic == "rec.saved", let data = obj["data"] as? [String: Any] {
-                                        let url = data["url"] as? String
-                                        let dur = data["durationSec"] as? Double
-                                        Task { @MainActor in
-                                            self.lastSavedURL = url
-                                            self.lastSavedDuration = dur
-                                        }
-                                    }
-                                }
-                            } else if let env = try? MidiCiEnvelope(sysEx7Payload: bytes) {
-                                if case .propertyExchange(let pe) = env.body, (pe.command == .getReply || pe.command == .notify) {
-                                    if let obj = try? JSONSerialization.jsonObject(with: Data(pe.data)) as? [String: Any] {
-                                        if let data = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted]), let s = String(data: data, encoding: .utf8) {
-                                            Task { @MainActor in self.lastSnapshotJSON = s }
-                                        }
-                                        if let props = obj["properties"] as? [String: Any], let rs = props["rec.state"] as? String {
-                                            Task { @MainActor in self.recState = rs }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        packet = MIDIEventPacketNext(&packet).pointee
-                    }
-                }
+        let transport = MIDI2SystemInstrumentTransport(backend: .rtpFixedPort(5868))
+        let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "QuietFrame-Companion", instanceId: UUID().uuidString, displayName: "Quiet Frame Companion")
+        do {
+            self.session = try transport.makeSession(descriptor: desc) { [weak self] words in
+                self?.handleIncoming(words)
             }
-        }
-        let count = MIDIGetNumberOfDestinations()
-        for i in 0..<count {
-            let d = MIDIGetDestination(i)
-            var cf: Unmanaged<CFString>?
-            if MIDIObjectGetStringProperty(d, kMIDIPropertyDisplayName, &cf) == noErr {
-                let n = cf?.takeRetainedValue() as String? ?? ""
-                if n.localizedCaseInsensitiveContains(name) {
-                    dest = d
-                    connectedName = n
-                    break
-                }
-            }
-        }
-        let scount = MIDIGetNumberOfSources()
-        for i in 0..<scount {
-            let s = MIDIGetSource(i)
-            var cf: Unmanaged<CFString>?
-            if MIDIObjectGetStringProperty(s, kMIDIPropertyDisplayName, &cf) == noErr {
-                let n = cf?.takeRetainedValue() as String? ?? ""
-                if n.localizedCaseInsensitiveContains(name) {
-                    src = s
-                    if inPort != 0 { MIDIPortConnectSource(inPort, src, nil) }
-                    break
-                }
-            }
+            self.connectedName = name
+        } catch {
+            self.connectedName = "Transport error"
         }
     }
 
     func get() {
-        guard dest != 0 else { return }
+        guard session != nil else { return }
         let pe = MidiCiPropertyExchangeBody(command: .get, requestId: requestId, encoding: .json, header: [:], data: [])
         let env = MidiCiEnvelope(scope: .nonRealtime, subId2: 0x7C, version: 1, body: .propertyExchange(pe))
         sendSysEx7(bytes: env.sysEx7Payload())
@@ -130,7 +36,7 @@ import MIDI2CI
     }
 
     func set(_ pairs: [(String, Double)]) {
-        guard dest != 0 else { return }
+        guard session != nil else { return }
         let props = pairs.map { ["name": $0.0, "value": $0.1] }
         let obj: [String: Any] = ["properties": props]
         let data = (try? JSONSerialization.data(withJSONObject: obj)) ?? Data()
@@ -141,11 +47,11 @@ import MIDI2CI
     }
 
     func sendVendor(topic: String, data: [String: Any] = [:]) {
-        guard dest != 0 else { return }
+        guard session != nil else { return }
         var payload: [String: Any] = ["topic": topic]
         if !data.isEmpty { payload["data"] = data }
         guard let json = try? JSONSerialization.data(withJSONObject: payload) else { return }
-        var bytes: [UInt8] = [0xF0, 0x7D, 0x4A, 0x53, 0x4F, 0x4E, 0x00]
+        var bytes: [UInt8] = [0xF0, 0x7D, 0x4A, 0x53, 0x4E, 0x00]
         bytes.append(contentsOf: Array(json))
         bytes.append(0xF7)
         sendSysEx7(bytes: bytes)
@@ -162,10 +68,7 @@ import MIDI2CI
             let remain = total - idx
             let n = min(remain, 6)
             let status: UInt8
-            if idx == 0 && n == remain { status = 0x0 } // complete
-            else if idx == 0 { status = 0x2 } // start
-            else if n == remain { status = 0x3 } // end
-            else { status = 0x1 } // continue
+            if idx == 0 && n == remain { status = 0x0 } else if idx == 0 { status = 0x2 } else if n == remain { status = 0x3 } else { status = 0x1 }
             var b: [UInt8] = Array(bytes[idx..<(idx+n)])
             while b.count < 6 { b.append(0) }
             let w1 = (UInt32(0x3) << 28) | (UInt32(group & 0xF) << 24) | (UInt32(status & 0xF) << 20) | (UInt32(n & 0xF) << 16) | (UInt32(b[0]) << 8) | UInt32(b[1])
@@ -173,7 +76,7 @@ import MIDI2CI
             words.append(w1); words.append(w2)
             idx += n
         }
-        sendUMP(words: words)
+        session?.send(words: words)
         if let sink = eventSink {
             let payload = words.map { String(format: "0x%08X", $0) }
             if let data = try? JSONSerialization.data(withJSONObject: ["dir":"out","ump": payload], options: []), let s = String(data: data, encoding: .utf8) {
@@ -181,18 +84,58 @@ import MIDI2CI
             }
         }
     }
-
-    private func sendUMP(words: [UInt32]) {
-        let listLen = MemoryLayout<MIDIEventList>.size + MemoryLayout<UInt32>.size * max(0, words.count - 1)
-        let raw = UnsafeMutableRawPointer.allocate(byteCount: listLen, alignment: MemoryLayout<MIDIEventList>.alignment)
-        defer { raw.deallocate() }
-        let listPtr = raw.bindMemory(to: MIDIEventList.self, capacity: 1)
-        var cur = MIDIEventListInit(listPtr, ._2_0)
-        words.withUnsafeBufferPointer { buf in
-            cur = MIDIEventListAdd(listPtr, listLen, cur, 0, buf.count, buf.baseAddress!)
-        }
-        MIDISendEventList(outPort, dest, listPtr)
-    }
 }
 
-// (no delegate)
+// MARK: - Inbound handling via RTP transport
+extension QuietFramePEClient {
+    nonisolated private func handleIncoming(_ words: [UInt32]) {
+        // SysEx7 only for now (UMP SysEx7 decode)
+        var bytes: [UInt8] = []
+        var i = 0
+        while i + 1 < words.count {
+            let w1 = words[i], w2 = words[i+1]
+            if ((w1 >> 28) & 0xF) != 0x3 { break }
+            let n = Int((w1 >> 16) & 0xF)
+            let d0 = UInt8((w1 >> 8) & 0xFF)
+            let d1 = UInt8(w1 & 0xFF)
+            let d2 = UInt8((w2 >> 24) & 0xFF)
+            let d3 = UInt8((w2 >> 16) & 0xFF)
+            let d4 = UInt8((w2 >> 8) & 0xFF)
+            let d5 = UInt8(w2 & 0xFF)
+            bytes.append(contentsOf: [d0,d1,d2,d3,d4,d5].prefix(n))
+            let status = UInt8((w1 >> 20) & 0xF)
+            i += 2
+            if status == 0x0 || status == 0x3 { break }
+        }
+        // Vendor JSON inbound (rec.saved)
+        if bytes.count >= 8, bytes[0] == 0xF0, bytes[1] == 0x7D, bytes[2] == 0x4A, bytes[3] == 0x53, bytes[4] == 0x4F, bytes[5] == 0x4E, bytes[6] == 0x00 {
+            let body = Data(bytes[7..<(bytes.count-1)])
+            if let obj = try? JSONSerialization.jsonObject(with: body) as? [String: Any], let topic = obj["topic"] as? String {
+                if topic == "rec.saved", let data = obj["data"] as? [String: Any] {
+                    let url = data["url"] as? String
+                    let dur = data["durationSec"] as? Double
+                    Task { @MainActor in
+                        self.lastSavedURL = url
+                        self.lastSavedDuration = dur
+                    }
+                }
+            }
+        } else if let env = try? MidiCiEnvelope(sysEx7Payload: bytes) {
+            if case .propertyExchange(let pe) = env.body, (pe.command == .getReply || pe.command == .notify) {
+                if let obj = try? JSONSerialization.jsonObject(with: Data(pe.data)) as? [String: Any] {
+                    if let data = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted]), let s = String(data: data, encoding: .utf8) {
+                        Task { @MainActor in self.lastSnapshotJSON = s }
+                    }
+                    if let props = obj["properties"] as? [String: Any], let rs = props["rec.state"] as? String {
+                        Task { @MainActor in self.recState = rs }
+                    }
+                }
+            }
+        }
+        // Emit event JSON for UI
+        let payload = words.map { String(format: "0x%08X", $0) }
+        if let data = try? JSONSerialization.data(withJSONObject: ["dir":"in","ump": payload], options: []), let s = String(data: data, encoding: .utf8) {
+            Task { @MainActor in self.eventSink?(s) }
+        }
+    }
+}

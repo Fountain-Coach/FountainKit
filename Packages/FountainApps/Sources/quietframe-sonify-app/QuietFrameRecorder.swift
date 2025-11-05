@@ -27,6 +27,9 @@ import FountainAudioEngine
     private var scStream: SCStream?
     private var scOutput: RecorderStreamOutput?
     private var scConfig: SCStreamConfiguration?
+    // Audio ring + drain timer
+    private var ring: AudioRingBuffer? = nil
+    private var drainTimer: DispatchSourceTimer? = nil
 
     func startRecording(window: NSWindow, rect: CGRect, fps: Int32 = 30) {
         guard case .idle = state else { return }
@@ -41,26 +44,18 @@ import FountainAudioEngine
             await self.startSCStreamFor(window: window, fps: fps)
         }
         // Install audio tap and begin muxing audio frames
+        ring = AudioRingBuffer(capacityFrames: Int(2.0 * audioSampleRate)) // 2 seconds
         FountainAudioEngine.installAudioTap { [weak self] lptr, rptr, n, sr in
             guard let self else { return }
-            let frames = n
-            // Copy interleaved floats quickly
-            let byteCount = Int(frames) * 2 * MemoryLayout<Float>.size
-            var data = Data(count: byteCount)
-            data.withUnsafeMutableBytes { dstRaw in
-                let dst = dstRaw.bindMemory(to: Float.self).baseAddress!
-                for i in 0..<Int(frames) {
-                    dst[2*i] = lptr[i]
-                    dst[2*i+1] = rptr[i]
-                }
-            }
-            let copy = data
-            self.writerQueue.async {
-                Task { @MainActor in
-                    self.appendAudioPCMInterleaved(data: copy, frames: Int(frames), sampleRate: sr)
-                }
-            }
+            _ = self.ring?.writeStereo(left: lptr, right: rptr, frames: Int(n))
+            self.audioSampleRate = sr
         }
+        // Drain at ~20 ms to keep UI main actor light
+        let timer = DispatchSource.makeTimerSource(queue: writerQueue)
+        timer.schedule(deadline: .now() + .milliseconds(20), repeating: .milliseconds(20))
+        timer.setEventHandler { [weak self] in self?.drainRingOnce() }
+        timer.resume()
+        self.drainTimer = timer
         QuietFrameRuntime.setRecState("recording")
         NotificationCenter.default.post(name: Notification.Name("QuietFrameRecordStateChanged"), object: nil)
         state = .recording
@@ -71,6 +66,7 @@ import FountainAudioEngine
         state = .stopping
         timer?.invalidate(); timer = nil
         FountainAudioEngine.installAudioTap(nil)
+        drainTimer?.cancel(); drainTimer = nil
         vIn?.markAsFinished(); aIn?.markAsFinished()
         // Stop ScreenCaptureKit stream
         if let scStream { try? scStream.stopCapture() }
@@ -166,6 +162,19 @@ import FountainAudioEngine
         let status = CMSampleBufferCreate(allocator: kCFAllocatorDefault, dataBuffer: bb, dataReady: true, makeDataReadyCallback: nil, refcon: nil, formatDescription: fmt, sampleCount: frames, sampleTimingEntryCount: 1, sampleTimingArray: &timing, sampleSizeEntryCount: 0, sampleSizeArray: nil, sampleBufferOut: &sb)
         if status == noErr, let sb {
             if aIn.append(sb) { audioFramesWritten += Int64(frames) }
+        }
+    }
+
+    private func drainRingOnce() {
+        guard let ring else { return }
+        let framesPerPacket = max(1, Int(audioSampleRate / 50)) // ~20 ms
+        var data = Data()
+        let got = ring.readInterleaved(into: &data, frames: framesPerPacket)
+        if got > 0 {
+            let copy = data
+            Task { @MainActor in
+                self.appendAudioPCMInterleaved(data: copy, frames: got, sampleRate: self.audioSampleRate)
+            }
         }
     }
 

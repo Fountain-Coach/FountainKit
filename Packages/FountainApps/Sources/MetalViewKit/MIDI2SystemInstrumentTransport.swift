@@ -13,6 +13,7 @@ public final class MIDI2SystemInstrumentTransport: MetalInstrumentTransport, @un
         case loopback
         case coreMIDI
         case alsa
+        case rtpFixedPort(UInt16)
     }
 
     private let backend: Backend
@@ -37,6 +38,12 @@ public final class MIDI2SystemInstrumentTransport: MetalInstrumentTransport, @un
         switch backend {
         case .loopback:
             return LoopbackTransport()
+        case .rtpFixedPort(let port):
+            #if canImport(Network)
+            return RTPMidiSession(localName: descriptor.displayName, mtu: 1400, enableDiscovery: false, enableCINegotiation: true, listenPort: port)
+            #else
+            return LoopbackTransport()
+            #endif
         case .coreMIDI:
             #if canImport(CoreMIDI)
             if #available(macOS 13.0, *) {

@@ -37,6 +37,7 @@ struct QuietFrameView: View {
     @State private var muted: Bool = false
     @State private var bpm: Double = 96
     @State private var section: Int = 1
+    @StateObject private var recorder = MP4ScreenRecorder()
     var body: some View {
         GeometryReader { geo in
             ZStack {
@@ -82,6 +83,33 @@ struct QuietFrameView: View {
                                     FountainAudioEngine.shared.setParam(name: "tempo.bpm", value: v)
                                 }
                             Text("\(Int(bpm))").font(.caption2).monospaced()
+                        }
+                        Divider().frame(height: 14)
+                        // Screen recorder controls
+                        Group {
+                            Button {
+                                if let win = NSApp.mainWindow {
+                                    recorder.start(window: win, rect: win.frame)
+                                }
+                            } label: {
+                                Label("Record", systemImage: "record.circle")
+                                    .labelStyle(.titleAndIcon)
+                                    .font(.caption)
+                            }
+                            Button {
+                                recorder.stop()
+                            } label: {
+                                Label("Stop", systemImage: "stop.circle")
+                                    .labelStyle(.titleAndIcon)
+                                    .font(.caption)
+                            }
+                            Button {
+                                recorder.saveAs()
+                            } label: {
+                                Label("Save", systemImage: "square.and.arrow.down")
+                                    .labelStyle(.titleAndIcon)
+                                    .font(.caption)
+                            }
                         }
                         Divider().frame(height: 14)
                         Button {

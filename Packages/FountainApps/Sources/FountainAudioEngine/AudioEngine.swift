@@ -66,6 +66,14 @@ import SDLKitAudio
     private var delayBuf: [Float] = []
     private var delayIdx: Int = 0
 
+    // MARK: - Audio tap (optional)
+    // Lightweight callback invoked on the audio render thread. Callers must copy data quickly.
+    private static var _audioTapLock = NSLock()
+    private static var _audioTap: ((UnsafePointer<Float>, UnsafePointer<Float>, Int, Double) -> Void)? = nil
+    public static func installAudioTap(_ tap: ((UnsafePointer<Float>, UnsafePointer<Float>, Int, Double) -> Void)?) {
+        _audioTapLock.lock(); _audioTap = tap; _audioTapLock.unlock()
+    }
+
     // MARK: - Public API
     public func start(sampleRate: Double = 48000, blockSize: Int32 = 256) throws {
         let host = SDLKitAudioHost(sampleRate: sampleRate, channels: 2, framesPerBuffer: Int(blockSize)) { [weak self] lptr, rptr, n, sr in
@@ -159,6 +167,11 @@ import SDLKitAudio
                 s = self.softClip(s * Float(master), threshold: Float(limitT))
                 lptr[i] = s; rptr[i] = s
             }
+            // Publish to optional tap in interleaved form (fast copy in consumer)
+            FountainAudioEngine._audioTapLock.lock()
+            let tap = FountainAudioEngine._audioTap
+            FountainAudioEngine._audioTapLock.unlock()
+            if let tap { tap(lptr, rptr, n, Double(sr)) }
         }
         self.sampleRate = sampleRate
         try host.start()

@@ -4,6 +4,8 @@ import Foundation
 
 let ROBOT_ONLY = ProcessInfo.processInfo.environment["ROBOT_ONLY"] == "1" || ProcessInfo.processInfo.environment["FK_ROBOT_ONLY"] == "1"
 
+let USE_SDLKIT = ProcessInfo.processInfo.environment["FK_USE_SDLKIT"] == "1"
+
 let package = Package(
     name: "FountainApps",
     platforms: [
@@ -105,6 +107,8 @@ let package = Package(
         .package(path: "../FountainCore"),
         .package(path: "../FountainAIKit"),
         .package(path: "../FountainProviders"),
+        // SDLKit for autarkic audio engine (Option B; conditional to avoid impacting seeders/builders)
+        
         .package(path: "../MemChatKit"),
         .package(path: "../FountainDevHarness"),
         .package(path: "../FountainAPIClients"),
@@ -1144,6 +1148,7 @@ let package = Package(
             path: "Sources/metalview-demo-app",
             exclude: ["AGENTS.md"]
         ),
+        
         .executableTarget(
             name: "replay-export",
             dependencies: ["patchbay-app"],
@@ -1163,11 +1168,18 @@ let package = Package(
             dependencies: [],
             path: "Sources/midi-ump2m1-bridge"
         ),
+        // Lightweight autarkic audio engine (SDLKit-backed when available; no-op fallback otherwise)
+        .target(
+            name: "FountainAudioEngine",
+            dependencies: [],
+            path: "Sources/FountainAudioEngine"
+        ),
         .executableTarget(
             name: "quietframe-sonify-app",
             dependencies: [
                 .product(name: "FountainStoreClient", package: "FountainCore"),
-                "MetalViewKit"
+                "MetalViewKit",
+                "FountainAudioEngine"
             ],
             path: "Sources/quietframe-sonify-app"
         ),
@@ -1178,6 +1190,19 @@ let package = Package(
                 .product(name: "FountainStoreClient", package: "FountainCore")
             ],
             path: "Sources/quietframe-sonify-seed"
+        ),
+        .executableTarget(
+            name: "quietframe-companion-seed",
+            dependencies: [
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/quietframe-companion-seed"
+        ),
+        .executableTarget(
+            name: "csound-audio-test",
+            dependencies: [],
+            path: "Sources/csound-audio-test"
         )
     ]
 )

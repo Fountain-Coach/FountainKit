@@ -2,6 +2,8 @@ import SwiftUI
 import AppKit
 import FountainStoreClient
 import MetalViewKit
+import CoreMIDI
+import FountainAudioEngine
 
 @main
 struct QuietFrameSonifyApp: App {
@@ -20,11 +22,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
     }
+    func applicationWillTerminate(_ notification: Notification) {
+        Task { @MainActor in
+            if let inst = QuietFrameInstrument.shared.instrument {
+                inst.sendCC(controller: 123, value7: 0) // All Notes Off, best-effort
+            }
+        }
+    }
 }
 
 struct QuietFrameView: View {
     @State private var saliency: Double = 0
-    @State private var frameRect: CGRect = .zero
+    private let frameSize = CGSize(width: 1024, height: 1536)
+    @State private var muted: Bool = false
+    @State private var bpm: Double = 96
+    @State private var section: Int = 1
     var body: some View {
         GeometryReader { geo in
             ZStack {
@@ -39,12 +51,11 @@ struct QuietFrameView: View {
                                     .stroke(Color.secondary.opacity(0.35), lineWidth: 1)
                             )
                             .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
-                            .frame(width: 1024, height: 1536)
-                            .background(FrameReporter(rect: $frameRect))
+                            .frame(width: frameSize.width, height: frameSize.height)
                         MouseTracker(onMove: { p in
                             updateSaliency(point: p)
                         })
-                        .frame(width: 1024, height: 1536)
+                        .frame(width: frameSize.width, height: frameSize.height)
                         .allowsHitTesting(true)
                     }
                     Spacer()
@@ -54,6 +65,47 @@ struct QuietFrameView: View {
                     HStack(spacing: 10) {
                         Text(String(format: "saliency: %.3f", saliency)).monospaced().font(.caption)
                         ProgressView(value: saliency).frame(width: 140)
+                        Divider().frame(height: 14)
+                        HStack(spacing: 6) {
+                            Text("Sec").font(.caption2)
+                            Stepper(value: $section, in: 1...9, step: 1) {
+                                Text("\(section)").font(.caption2).monospaced()
+                            }
+                            .onChange(of: section) { _, v in
+                                FountainAudioEngine.shared.setParam(name: "act.section", value: Double(v))
+                            }
+                            Divider().frame(height: 12)
+                            Text("BPM").font(.caption2)
+                            Slider(value: $bpm, in: 60...180, step: 1)
+                                .frame(width: 120)
+                                .onChange(of: bpm) { _, v in
+                                    FountainAudioEngine.shared.setParam(name: "tempo.bpm", value: v)
+                                }
+                            Text("\(Int(bpm))").font(.caption2).monospaced()
+                        }
+                        Divider().frame(height: 14)
+                        Button {
+                            muted.toggle()
+                            if muted { forceSilence() }
+                        } label: {
+                            Label(muted ? "Muted" : "Mute", systemImage: muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                                .labelStyle(.titleAndIcon)
+                                .font(.caption)
+                        }
+                        Button {
+                            panicAllNotes()
+                        } label: {
+                            Label("Panic", systemImage: "exclamationmark.triangle")
+                                .labelStyle(.titleAndIcon)
+                                .font(.caption)
+                        }
+                        Button {
+                            testPing()
+                        } label: {
+                            Label("Test", systemImage: "waveform")
+                                .labelStyle(.titleAndIcon)
+                                .font(.caption)
+                        }
                     }
                     .padding(8)
                     .background(.thinMaterial)
@@ -65,35 +117,61 @@ struct QuietFrameView: View {
             }
         }
         .frame(minWidth: 960, minHeight: 720)
+        .onAppear {
+            sendCC(value7: 0)
+            if lastNote != 0 { QuietFrameInstrument.shared.instrument?.sendNoteOff(note: lastNote, velocity7: 0); lastNote = 0; lastTriggered = false }
+            try? FountainAudioEngine.shared.start()
+            FountainAudioEngine.shared.setParam(name: "tempo.bpm", value: bpm)
+            FountainAudioEngine.shared.setParam(name: "act.section", value: Double(section))
+        }
     }
 
     private func updateSaliency(point: CGPoint) {
-        guard frameRect.contains(point) else {
+        guard point.x >= 0, point.y >= 0, point.x <= frameSize.width, point.y <= frameSize.height else {
             sendCC(value7: 0)
             saliency = 0
             return
         }
-        let cx = frameRect.midX, cy = frameRect.midY
-        let dx = Double(abs(point.x - cx)) / Double(max(1, frameRect.width) * 0.5)
-        let dy = Double(abs(point.y - cy)) / Double(max(1, frameRect.height) * 0.5)
+        let nx = Double(point.x / frameSize.width)
+        let ny = Double(point.y / frameSize.height)
+        let cx = frameSize.width * 0.5, cy = frameSize.height * 0.5
+        let dx = Double(abs(point.x - cx)) / Double(max(1, frameSize.width) * 0.5)
+        let dy = Double(abs(point.y - cy)) / Double(max(1, frameSize.height) * 0.5)
         let d = min(1.0, sqrt(dx*dx + dy*dy))
         let s = max(0, 1.0 - d)
         saliency = s
+        if muted { forceSilence(); FountainAudioEngine.shared.setAmplitude(0); return }
         let v7 = UInt8(max(0, min(127, Int((s * 127.0).rounded()))))
         sendCC(value7: v7)
+        // SDLKit engine follows saliency for immediate audibility
+        FountainAudioEngine.shared.setFrequency(220 + s*660)
+        FountainAudioEngine.shared.setAmplitude(min(0.25, max(0.0, s*0.2)))
+        // Map saliency and position to timbre/density
+        // x → brighter; y → density / space
+        let tilt = nx // 0..1
+        let density = ny
+        FountainAudioEngine.shared.setParam(name: "drone.lpfHz", value: 300 + s*2200 + tilt*800)
+        FountainAudioEngine.shared.setParam(name: "breath.level", value: 0.05 + density*0.3)
+        FountainAudioEngine.shared.setParam(name: "fx.delay.mix", value: 0.02 + density*0.12)
+        FountainAudioEngine.shared.setParam(name: "overtones.mix", value: smoothstep(0.35, 0.85, s))
         maybeTriggerNote(s)
     }
 
     private func sendCC(value7: UInt8) {
-        guard let inst = QuietFrameInstrument.shared.instrument else { return }
-        inst.sendCC(controller: 1, value7: value7)
+        if let inst = QuietFrameInstrument.shared.instrument { inst.sendCC(controller: 1, value7: value7) }
+        MIDI1Out.shared.sendCC(cc: 1, value: value7)
     }
 
     private var threshold: Double { 0.65 }
     @State private var lastNote: UInt8 = 0
     @State private var lastTriggered: Bool = false
     private func maybeTriggerNote(_ s: Double) {
-        guard let inst = QuietFrameInstrument.shared.instrument else { return }
+        let inst = QuietFrameInstrument.shared.instrument
+        if muted {
+            if lastNote != 0 { inst?.sendNoteOff(note: lastNote, velocity7: 0); MIDI1Out.shared.sendNoteOff(note: lastNote); lastNote = 0 }
+            lastTriggered = false
+            return
+        }
         let was = lastTriggered
         let now = s >= threshold
         if now && !was {
@@ -101,34 +179,82 @@ struct QuietFrameView: View {
             let idx = min(scale.count - 1, max(0, Int((s * Double(scale.count)).rounded())))
             let note = scale[idx]
             let vel: UInt8 = max(20, UInt8((s * 127).rounded()))
-            inst.sendNoteOn(note: note, velocity7: vel)
+            inst?.sendNoteOn(note: note, velocity7: vel)
+            MIDI1Out.shared.sendNoteOn(note: note, velocity: vel)
             lastNote = note
         } else if !now && was {
-            if lastNote != 0 { inst.sendNoteOff(note: lastNote, velocity7: 0) }
+            if lastNote != 0 { inst?.sendNoteOff(note: lastNote, velocity7: 0); MIDI1Out.shared.sendNoteOff(note: lastNote) }
             lastNote = 0
         }
         lastTriggered = now
     }
+
+    private func forceSilence() {
+        sendCC(value7: 0)
+        if lastNote != 0 { QuietFrameInstrument.shared.instrument?.sendNoteOff(note: lastNote, velocity7: 0); MIDI1Out.shared.sendNoteOff(note: lastNote) }
+        lastNote = 0
+        lastTriggered = false
+        FountainAudioEngine.shared.setAmplitude(0)
+    }
+
+    private func panicAllNotes() {
+        QuietFrameInstrument.shared.instrument?.sendCC(controller: 123, value7: 0) // All Notes Off (Channel Mode)
+        MIDI1Out.shared.allNotesOff()
+        forceSilence()
+    }
+
+    private func testPing() {
+        // Send a short CC1 max + note ping so we can verify audio path
+        sendCC(value7: 127)
+        let note: UInt8 = 72
+        QuietFrameInstrument.shared.instrument?.sendNoteOn(note: note, velocity7: 100)
+        MIDI1Out.shared.sendNoteOn(note: note, velocity: 100)
+        FountainAudioEngine.shared.setFrequency(660)
+        FountainAudioEngine.shared.setAmplitude(0.25)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            self.sendCC(value7: 0)
+            QuietFrameInstrument.shared.instrument?.sendNoteOff(note: note, velocity7: 0)
+            MIDI1Out.shared.sendNoteOff(note: note)
+            FountainAudioEngine.shared.setAmplitude(0)
+        }
+    }
+
+    private func smoothstep(_ edge0: Double, _ edge1: Double, _ x: Double) -> Double {
+        let t = max(0.0, min(1.0, (x - edge0) / max(0.000001, edge1 - edge0)))
+        return t * t * (3 - 2 * t)
+    }
+}
+
+// SDLKit engine is the default; no AVFoundation fallback.
+
+// MARK: - CoreMIDI 1.0 sender (virtual source for Csound)
+@MainActor final class MIDI1Out {
+    static let shared = MIDI1Out()
+    private var client: MIDIClientRef = 0
+    private var src: MIDIEndpointRef = 0
+    private init() {
+        MIDIClientCreate("QuietFrameM1" as CFString, nil, nil, &client)
+        MIDISourceCreate(client, "QuietFrame M1" as CFString, &src)
+    }
+    private func send(_ bytes: [UInt8]) {
+        var list = MIDIPacketList()
+        withUnsafeMutablePointer(to: &list) { ptr in
+            var pkt = MIDIPacketListInit(ptr)
+            pkt = MIDIPacketListAdd(ptr, 1024, pkt, 0, bytes.count, bytes)
+            MIDIReceived(src, ptr)
+        }
+    }
+    func sendCC(cc: UInt8, value: UInt8, channel: UInt8 = 0) { send([0xB0 | channel, cc, value]) }
+    func sendNoteOn(note: UInt8, velocity: UInt8, channel: UInt8 = 0) { send([0x90 | channel, note, velocity]) }
+    func sendNoteOff(note: UInt8, channel: UInt8 = 0) { send([0x80 | channel, note, 0]) }
+    func allNotesOff(channel: UInt8 = 0) { send([0xB0 | channel, 123, 0]) }
 }
 
 struct QuietFrameShape: Shape {
     func path(in rect: CGRect) -> Path { Path(roundedRect: rect, cornerRadius: 6) }
 }
 
-struct FrameReporter: View {
-    @Binding var rect: CGRect
-    var body: some View {
-        GeometryReader { geo in
-            Color.clear.preference(key: RectKey.self, value: geo.frame(in: .global))
-        }
-        .onPreferenceChange(RectKey.self) { rect = $0 }
-    }
-}
-
-private struct RectKey: PreferenceKey {
-    static let defaultValue: CGRect = .zero
-    nonisolated static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
-}
+// Removed global-coordinate reporter; we compute saliency in local 1024×1536 space.
 
 // MARK: - Mouse tracker (AppKit)
 struct MouseTracker: NSViewRepresentable {
@@ -151,11 +277,7 @@ struct MouseTracker: NSViewRepresentable {
         override func mouseMoved(with event: NSEvent) {
             super.mouseMoved(with: event)
             let p = convert(event.locationInWindow, from: nil)
-            // Convert to global for consistent frameRect matching
-            if let w = window {
-                let screenP = w.convertPoint(toScreen: p)
-                onMove?(screenP)
-            }
+            onMove?(p)
         }
     }
 }
@@ -165,16 +287,45 @@ struct MouseTracker: NSViewRepresentable {
     static let shared = QuietFrameInstrument()
     let instrument: MetalInstrument?
     init() {
-        let sink = NoopSink()
+        let sink = SonifyPESink()
         let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "QuietFrame", instanceId: "qf-1", displayName: "Quiet Frame")
         let inst = MetalInstrument(sink: sink, descriptor: desc)
+        inst.stateProvider = { FountainAudioEngine.shared.snapshot() }
         inst.enable()
         self.instrument = inst
     }
-    private final class NoopSink: MetalSceneRenderer {
-        func setUniform(_ name: String, float: Float) {}
-        func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
-        func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
-        func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+}
+
+// MIDI 2.0 instrument sink that maps PE properties and CC to engine params
+final class SonifyPESink: MetalSceneRenderer {
+    func setUniform(_ name: String, float: Float) {
+        Task { @MainActor in
+            FountainAudioEngine.shared.setParam(name: name, value: Double(float))
+        }
+    }
+    func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {
+        // Gate a short audible bump via master gain
+        Task { @MainActor in
+            FountainAudioEngine.shared.setParam(name: "engine.masterGain", value: Double(max(0.1, min(1.0, Float(velocity)/127.0))))
+        }
+    }
+    func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {
+        let v = Double(value) / 127.0
+        Task { @MainActor in
+            switch controller {
+            case 1: FountainAudioEngine.shared.setParam(name: "engine.masterGain", value: v)
+            case 7: FountainAudioEngine.shared.setParam(name: "engine.masterGain", value: v)
+            case 74: FountainAudioEngine.shared.setParam(name: "drone.lpfHz", value: 300 + v * 3000)
+            default: break
+            }
+        }
+    }
+    func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {
+        // Map PB to slight detune
+        let centered = (Int(value14) - 8192)
+        let det = max(-200, min(200, centered))
+        Task { @MainActor in
+            FountainAudioEngine.shared.setParam(name: "drone.detune", value: Double(abs(det)) / 2000.0)
+        }
     }
 }

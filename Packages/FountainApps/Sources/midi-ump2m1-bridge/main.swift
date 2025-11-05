@@ -15,6 +15,7 @@ final class Bridge {
     private var inPort: MIDIPortRef = 0
     private var virtSrc: MIDIEndpointRef = 0
     private var connected = false
+    private var timer: DispatchSourceTimer?
     private let name = "UMP2M1Bridge"
     private let match: String
 
@@ -30,11 +31,22 @@ final class Bridge {
             fatalError("Requires macOS 13+")
         }
         try check(MIDISourceCreate(client, (name+" (1.0)") as CFString, &virtSrc))
-        connectMatchingSource()
+        _ = connectMatchingSource()
+        if !connected {
+            let t = DispatchSource.makeTimerSource(queue: .main)
+            t.schedule(deadline: .now() + 1.0, repeating: 1.0)
+            t.setEventHandler { [weak self] in
+                guard let self else { return }
+                if !self.connected { _ = self.connectMatchingSource() }
+                else { self.timer?.cancel(); self.timer = nil }
+            }
+            t.resume(); timer = t
+        }
         print("bridge: listening to MIDI 2.0 source containing \"\(match)\" → publishing MIDI 1.0 source \(displayName(virtSrc) ?? "(unnamed)")")
     }
 
-    private func connectMatchingSource() {
+    @discardableResult
+    private func connectMatchingSource() -> Bool {
         let count = MIDIGetNumberOfSources()
         for i in 0..<count {
             let s = MIDIGetSource(i)
@@ -42,10 +54,11 @@ final class Bridge {
                 MIDIPortConnectSource(inPort, s, nil)
                 connected = true
                 print("bridge: connected to \(n)")
-                return
+                return true
             }
         }
         print("bridge: no MIDI 2.0 source matched \"\(match)\"; will still run (connect manually if desired)")
+        return false
     }
 
     private func onEventList(_ listPtr: UnsafePointer<MIDIEventList>) {

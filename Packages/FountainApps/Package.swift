@@ -1189,7 +1189,9 @@ let package = Package(
         .executableTarget(
             name: "quietframe-companion-app",
             dependencies: [
-                "FountainAudioEngine"
+                "FountainAudioEngine",
+                .product(name: "MIDI2CI", package: "midi2"),
+                .product(name: "MIDI2", package: "midi2")
             ],
             path: "Sources/quietframe-companion-app"
         ),

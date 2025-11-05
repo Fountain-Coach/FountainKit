@@ -5,6 +5,7 @@
 @_exported import AVKit
 @_exported import SwiftUI
 @_exported import FountainAudioEngine
+@preconcurrency import ScreenCaptureKit
 
 // Pull in the existing implementation from the Sonify app (now removed from there)
 // For now, we keep the code in this file for clarity.
@@ -30,15 +31,15 @@
     private var startTime: CFAbsoluteTime = 0
     private var frameCount: Int64 = 0
     private var fps: Int32 = 30
-    private var windowId: CGWindowID = 0
-    private var renderRect: CGRect = .zero
+    private var targetWindowTitle: String = "QuietFrame Sonify"
+    private var scStream: SCStream?
+    private let streamQueue = DispatchQueue(label: "quietframe.rec.stream")
     private var tmpVideoURL: URL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("quietframe-video.mp4")
     private var tmpAudioURL: URL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("quietframe-audio.wav")
 
-    func start(window: NSWindow, rect: CGRect, fps: Int32 = 30, sampleRate: Double = 48000) {
+    func start(targetWindowTitle: String? = nil, fps: Int32 = 30) {
         switch state { case .idle, .finished: break; default: return }
-        self.windowId = CGWindowID(window.windowNumber)
-        self.renderRect = rect
+        if let t = targetWindowTitle { self.targetWindowTitle = t }
         self.fps = fps
         self.frameCount = 0
         self.startTime = CFAbsoluteTimeGetCurrent()
@@ -46,30 +47,15 @@
         self.previewImage = nil
         try? FileManager.default.removeItem(at: tmpVideoURL)
         try? FileManager.default.removeItem(at: tmpAudioURL)
-        do {
-            try setupWriter(size: rect.size)
-            try setupAudioFile(sampleRate: sampleRate)
-        } catch { print("[rec] setup failed: \(error)"); return }
-        FountainAudioEngine.installAudioTap { [weak self] lptr, rptr, frames, sr in
-            self?.writePCM(left: lptr, right: rptr, frames: frames, sampleRate: sr)
-        }
-        let interval = 1.0 / Double(fps)
-        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.captureFrame() }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        captureTimer = timer
-        writer?.startWriting(); writer?.startSession(atSourceTime: .zero)
-        state = .recording
+        Task { @MainActor in await self.beginStream() }
     }
 
     func stop() {
         guard case .recording = state else { return }
         state = .stopping
         captureTimer?.invalidate(); captureTimer = nil
-        FountainAudioEngine.installAudioTap(nil as ((UnsafePointer<Float>, UnsafePointer<Float>, Int, Double) -> Void)?)
-        if #available(macOS 15.0, *) { audioFile?.close() }
-        audioFile = nil
+        scStream?.stopCapture(completionHandler: { _ in })
+        scStream = nil
         videoInput?.markAsFinished(); audioInput?.markAsFinished()
         writer?.finishWriting { [weak self] in
             guard let self else { return }
@@ -104,14 +90,8 @@
             kCVPixelBufferWidthKey as String: Int(size.width),
             kCVPixelBufferHeightKey as String: Int(size.height)
         ])
-        let aIn = AVAssetWriterInput(mediaType: .audio, outputSettings: [
-            AVFormatIDKey: kAudioFormatLinearPCM,
-            AVNumberOfChannelsKey: 2,
-            AVSampleRateKey: 48000,
-            AVLinearPCMBitDepthKey: 32,
-            AVLinearPCMIsFloatKey: true,
-            AVLinearPCMIsNonInterleaved: false
-        ])
+        // Pass-through audio from ScreenCaptureKit sample buffers
+        let aIn = AVAssetWriterInput(mediaType: .audio, outputSettings: nil)
         aIn.expectsMediaDataInRealTime = true
         if writer.canAdd(vIn) { writer.add(vIn) }
         if writer.canAdd(aIn) { writer.add(aIn) }
@@ -124,26 +104,51 @@
         self.audioFormat = fmt; self.audioFile = file
     }
 
-    private func captureFrame() {
-        guard let input = videoInput, let adaptor = pixelAdaptor, input.isReadyForMoreMediaData else { return }
-        let img = CGWindowListCreateImage(renderRect, .optionIncludingWindow, windowId, [.boundsIgnoreFraming, .bestResolution])
-        guard let cg = img else { return }
-        let nsimg = NSImage(cgImage: cg, size: NSSize(width: renderRect.width, height: renderRect.height))
-        self.previewImage = nsimg
-        self.duration = CFAbsoluteTimeGetCurrent() - startTime
-        var pb: CVPixelBuffer?
-        let w = Int(renderRect.width), h = Int(renderRect.height)
-        let attrs: [CFString: Any] = [ kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA, kCVPixelBufferWidthKey: w, kCVPixelBufferHeightKey: h, kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary ]
-        CVPixelBufferCreate(kCFAllocatorDefault, w, h, kCVPixelFormatType_32BGRA, attrs as CFDictionary, &pb)
-        guard let px = pb else { return }
-        CVPixelBufferLockBaseAddress(px, [])
-        if let ctx = CGContext(data: CVPixelBufferGetBaseAddress(px), width: w, height: h, bitsPerComponent: 8, bytesPerRow: CVPixelBufferGetBytesPerRow(px), space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue) {
-            ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+    // ScreenCaptureKit stream setup
+    private func beginStream() async {
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+            guard let target = content.windows.first(where: { w in
+                w.title?.localizedCaseInsensitiveContains(self.targetWindowTitle) == true
+            }) else {
+                print("[rec] target window not found: \(self.targetWindowTitle)")
+                return
+            }
+            let filter = SCContentFilter(desktopIndependentWindow: target)
+            let cfg = SCStreamConfiguration()
+            cfg.queueDepth = 8
+            cfg.minimumFrameInterval = CMTime(value: 1, timescale: fps)
+            cfg.pixelFormat = kCVPixelFormatType_32BGRA
+            // Set output size from window frame
+            let size = CGSize(width: max(640, Int(target.frame.width)), height: max(360, Int(target.frame.height)))
+            cfg.width = Int(size.width)
+            cfg.height = Int(size.height)
+            try setupWriter(size: size)
+            writer?.startWriting()
+            writer?.startSession(atSourceTime: .zero)
+
+            let stream = SCStream(filter: filter, configuration: cfg, delegate: nil)
+            let output = StreamOutput(
+                onVideo: { [weak self] pixelBuffer, pts in
+                    guard let self, let adaptor = self.pixelAdaptor, let vIn = self.videoInput, vIn.isReadyForMoreMediaData else { return }
+                    self.previewImage = NSImage(cgImage: CIContext().createCGImage(CIImage(cvImageBuffer: pixelBuffer), from: CGRect(x: 0, y: 0, width: CVPixelBufferGetWidth(pixelBuffer), height: CVPixelBufferGetHeight(pixelBuffer)))!, size: .zero)
+                    _ = adaptor.append(pixelBuffer, withPresentationTime: pts)
+                    self.duration = CFAbsoluteTimeGetCurrent() - self.startTime
+                },
+                onAudio: { [weak self] sample in
+                    guard let self, let aIn = self.audioInput, aIn.isReadyForMoreMediaData else { return }
+                    aIn.append(sample)
+                }
+            )
+            try stream.addStreamOutput(output, type: .screen, sampleHandlerQueue: streamQueue)
+            try stream.addStreamOutput(output, type: .audio, sampleHandlerQueue: streamQueue)
+            self.scStream = stream
+            state = .recording
+            try await stream.startCapture()
+        } catch {
+            print("[rec] stream error: \(error)")
+            state = .idle
         }
-        CVPixelBufferUnlockBaseAddress(px, [])
-        let frameTime = CMTime(value: frameCount, timescale: fps)
-        adaptor.append(px, withPresentationTime: frameTime)
-        frameCount += 1
     }
 
     private func writePCM(left: UnsafePointer<Float>, right: UnsafePointer<Float>, frames: Int, sampleRate: Double) {
@@ -182,6 +187,24 @@
     }
 }
 
+final class StreamOutput: NSObject, SCStreamOutput {
+    typealias VideoHandler = (CVPixelBuffer, CMTime) -> Void
+    typealias AudioHandler = (CMSampleBuffer) -> Void
+    private let onVideo: VideoHandler
+    private let onAudio: AudioHandler
+    init(onVideo: @escaping VideoHandler, onAudio: @escaping AudioHandler) { self.onVideo = onVideo; self.onAudio = onAudio }
+    func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
+        switch type {
+        case .screen:
+            if let pb = CMSampleBufferGetImageBuffer(sampleBuffer) { onVideo(pb, CMSampleBufferGetPresentationTimeStamp(sampleBuffer)) }
+        case .audio:
+            onAudio(sampleBuffer)
+        @unknown default:
+            break
+        }
+    }
+}
+
 struct PlayerPaneView: View {
     @ObservedObject var recorder: MP4ScreenRecorder
     @State private var player: AVPlayer? = nil
@@ -214,9 +237,7 @@ struct PlayerPaneView: View {
             }
             Divider()
             HStack(spacing: 10) {
-                Button {
-                    if let win = NSApp.mainWindow { recorder.start(window: win, rect: win.frame) }
-                } label: { Label("Record", systemImage: "record.circle") }
+                Button { recorder.start(targetWindowTitle: "QuietFrame Sonify") } label: { Label("Record", systemImage: "record.circle") }
                 .disabled(!recorder.canRecord)
                 .tint(.red)
 

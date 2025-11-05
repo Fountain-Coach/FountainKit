@@ -65,6 +65,10 @@ public final class MetalInstrument: @unchecked Sendable {
                     self.session = newSession
                     self.enableToken = nil
                     self.publishStateCI()
+                    // Observe recorder-state changes and publish PE notify so companions reflect rec.state
+                    NotificationCenter.default.addObserver(forName: Notification.Name("QuietFrameRecordStateChanged"), object: nil, queue: .main) { [weak self] _ in
+                        self?.publishStateCI()
+                    }
                 }
             } catch {
                 DispatchQueue.main.async { [weak self] in

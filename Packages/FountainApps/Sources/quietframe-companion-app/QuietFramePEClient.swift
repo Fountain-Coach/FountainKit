@@ -6,6 +6,7 @@ import MIDI2CI
 @MainActor final class QuietFramePEClient: ObservableObject {
     @Published var connectedName: String? = nil
     @Published var lastSnapshotJSON: String = ""
+    @Published var recState: String = "idle"
 
     private var client: MIDIClientRef = 0
     private var outPort: MIDIPortRef = 0
@@ -64,6 +65,9 @@ import MIDI2CI
                                     if let obj = try? JSONSerialization.jsonObject(with: Data(pe.data)) as? [String: Any] {
                                         if let data = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted]), let s = String(data: data, encoding: .utf8) {
                                             Task { @MainActor in self.lastSnapshotJSON = s }
+                                        }
+                                        if let props = obj["properties"] as? [String: Any], let rs = props["rec.state"] as? String {
+                                            Task { @MainActor in self.recState = rs }
                                         }
                                     }
                                 }

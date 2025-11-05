@@ -327,7 +327,11 @@ struct MouseTracker: NSViewRepresentable {
         let sink = SonifyPESink()
         let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "QuietFrame", instanceId: "qf-1", displayName: "Quiet Frame")
         let inst = MetalInstrument(sink: sink, descriptor: desc)
-        inst.stateProvider = { FountainAudioEngine.shared.snapshot() }
+        inst.stateProvider = {
+            var s = FountainAudioEngine.shared.snapshot()
+            s["rec.state"] = QuietFrameRuntime.getRecState()
+            return s
+        }
         inst.enable()
         self.instrument = inst
     }

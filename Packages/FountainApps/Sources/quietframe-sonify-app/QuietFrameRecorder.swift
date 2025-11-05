@@ -1,6 +1,8 @@
 import Foundation
 import AppKit
 import AVFoundation
+import CoreMedia
+import AudioToolbox
 import FountainAudioEngine
 
 @MainActor final class QuietFrameRecorder: ObservableObject {
@@ -16,6 +18,10 @@ import FountainAudioEngine
     private var timer: Timer?
     private var windowId: CGWindowID = 0
     private var rect: CGRect = .zero
+    private var writerQueue = DispatchQueue(label: "qfrec.writer")
+    private var audioSampleRate: Double = 48000
+    private var audioFramesWritten: Int64 = 0
+    private var audioFormatDesc: CMAudioFormatDescription?
 
     func startRecording(window: NSWindow, rect: CGRect, fps: Int32 = 30) {
         guard case .idle = state else { return }
@@ -29,7 +35,29 @@ import FountainAudioEngine
         let t = Timer(timeInterval: interval, repeats: true) { [weak self] _ in Task { @MainActor in self?.captureFrame() } }
         RunLoop.main.add(t, forMode: .common)
         timer = t
-        // Tap audio path for alignment: already audible; optional to add audio samples
+        // Install audio tap and begin muxing audio frames
+        FountainAudioEngine.installAudioTap { [weak self] lptr, rptr, n, sr in
+            guard let self else { return }
+            let frames = n
+            // Copy interleaved floats quickly
+            let byteCount = Int(frames) * 2 * MemoryLayout<Float>.size
+            var data = Data(count: byteCount)
+            data.withUnsafeMutableBytes { dstRaw in
+                let dst = dstRaw.bindMemory(to: Float.self).baseAddress!
+                for i in 0..<Int(frames) {
+                    dst[2*i] = lptr[i]
+                    dst[2*i+1] = rptr[i]
+                }
+            }
+            let copy = data
+            self.writerQueue.async {
+                Task { @MainActor in
+                    self.appendAudioPCMInterleaved(data: copy, frames: Int(frames), sampleRate: sr)
+                }
+            }
+        }
+        QuietFrameRuntime.setRecState("recording")
+        NotificationCenter.default.post(name: Notification.Name("QuietFrameRecordStateChanged"), object: nil)
         state = .recording
     }
 
@@ -37,10 +65,15 @@ import FountainAudioEngine
         guard case .recording = state else { return }
         state = .stopping
         timer?.invalidate(); timer = nil
+        FountainAudioEngine.installAudioTap(nil)
         vIn?.markAsFinished(); aIn?.markAsFinished()
         writer?.finishWriting { [weak self] in
             guard let self else { return }
-            DispatchQueue.main.async { self.state = .finished(self.tmpURL) }
+            DispatchQueue.main.async {
+                QuietFrameRuntime.setRecState("idle")
+                NotificationCenter.default.post(name: Notification.Name("QuietFrameRecordStateChanged"), object: nil)
+                self.state = .finished(self.tmpURL)
+            }
         }
     }
 
@@ -54,11 +87,18 @@ import FountainAudioEngine
             kCVPixelBufferWidthKey as String: Int(size.width),
             kCVPixelBufferHeightKey as String: Int(size.height)
         ])
-        let aIn = AVAssetWriterInput(mediaType: .audio, outputSettings: nil)
+        let aSettings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVNumberOfChannelsKey: 2,
+            AVSampleRateKey: audioSampleRate,
+            AVEncoderBitRateKey: 192_000
+        ]
+        let aIn = AVAssetWriterInput(mediaType: .audio, outputSettings: aSettings)
         aIn.expectsMediaDataInRealTime = true
         if writer.canAdd(vIn) { writer.add(vIn) }
         if writer.canAdd(aIn) { writer.add(aIn) }
         self.writer = writer; self.vIn = vIn; self.vAdaptor = adapt; self.aIn = aIn
+        self.audioFramesWritten = 0
     }
 
     private func captureFrame() {
@@ -76,5 +116,48 @@ import FountainAudioEngine
         CVPixelBufferUnlockBaseAddress(px, [])
         let secs = CFAbsoluteTimeGetCurrent() - start
         adaptor.append(px, withPresentationTime: CMTime(seconds: secs, preferredTimescale: 1000))
+    }
+
+    // MARK: - Audio mux helpers
+    private func ensureAudioFormatDescription(sampleRate: Double) {
+        if let _ = audioFormatDesc, abs(sampleRate - audioSampleRate) < 1 { return }
+        audioSampleRate = sampleRate
+        var asbd = AudioStreamBasicDescription(
+            mSampleRate: sampleRate,
+            mFormatID: kAudioFormatLinearPCM,
+            mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked | kAudioFormatFlagsNativeEndian,
+            mBytesPerPacket: 8,
+            mFramesPerPacket: 1,
+            mBytesPerFrame: 8,
+            mChannelsPerFrame: 2,
+            mBitsPerChannel: 32,
+            mReserved: 0
+        )
+        var fmt: CMAudioFormatDescription?
+        let result = CMAudioFormatDescriptionCreate(allocator: kCFAllocatorDefault, asbd: &asbd, layoutSize: 0, layout: nil, magicCookieSize: 0, magicCookie: nil, extensions: nil, formatDescriptionOut: &fmt)
+        if result == noErr, let fmtDesc = fmt { audioFormatDesc = fmtDesc }
+    }
+
+    private func appendAudioPCMInterleaved(data: Data, frames: Int, sampleRate: Double) {
+        guard let aIn, aIn.isReadyForMoreMediaData else { return }
+        ensureAudioFormatDescription(sampleRate: sampleRate)
+        guard let fmt = audioFormatDesc else { return }
+        var bb: CMBlockBuffer?
+        let byteCount = data.count
+        guard CMBlockBufferCreateEmpty(allocator: kCFAllocatorDefault, capacity: 0, flags: 0, blockBufferOut: &bb) == kCMBlockBufferNoErr, let bb else { return }
+        guard CMBlockBufferAppendMemoryBlock(bb, memoryBlock: nil, length: byteCount, blockAllocator: kCFAllocatorDefault, customBlockSource: nil, offsetToData: 0, dataLength: byteCount, flags: 0) == kCMBlockBufferNoErr else { return }
+        data.withUnsafeBytes { raw in
+            _ = CMBlockBufferReplaceDataBytes(with: raw.baseAddress!, blockBuffer: bb, offsetIntoDestination: 0, dataLength: byteCount)
+        }
+        var timing = CMSampleTimingInfo(
+            duration: CMTime(value: CMTimeValue(frames), timescale: CMTimeScale(sampleRate)),
+            presentationTimeStamp: CMTime(value: audioFramesWritten, timescale: CMTimeScale(sampleRate)),
+            decodeTimeStamp: .invalid
+        )
+        var sb: CMSampleBuffer?
+        let status = CMSampleBufferCreate(allocator: kCFAllocatorDefault, dataBuffer: bb, dataReady: true, makeDataReadyCallback: nil, refcon: nil, formatDescription: fmt, sampleCount: frames, sampleTimingEntryCount: 1, sampleTimingArray: &timing, sampleSizeEntryCount: 0, sampleSizeArray: nil, sampleBufferOut: &sb)
+        if status == noErr, let sb {
+            if aIn.append(sb) { audioFramesWritten += Int64(frames) }
+        }
     }
 }

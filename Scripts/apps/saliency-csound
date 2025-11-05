@@ -3,40 +3,107 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: Scripts/apps/saliency-csound [--corpus <id>] [--ollama]
+Usage: Scripts/apps/saliency-csound [--corpus <id>] [--ollama] [--no-csound] [--no-bridge] [--stop]
 
-Seeds the Saliency + Csound + Ollama Teatro prompt and launches PatchBay.
+One-button launcher for Saliency + Csound + Ollama:
+  - seeds Teatro prompts into FountainStore
+  - starts the Csound synth (background)
+  - starts the MIDI 2.0 → 1.0 bridge (background)
+  - launches PatchBay Studio (foreground)
+
 Options
   --corpus <id>   Corpus id (defaults to baseline-patchbay)
   --ollama        Prefer Ollama (PATCHBAY_USE_OLLAMA=1); OLLAMA_MODEL can override
+  --no-csound     Skip starting Csound (assume external)
+  --no-bridge     Skip starting the MIDI bridge
+  --stop          Stop background csound/bridge processes and exit
 
 Environment
   CORPUS_ID               Override corpus id
   PATCHBAY_USE_OLLAMA     Force Ollama path (1=yes)
   OLLAMA_MODEL            Model (default codellama)
+  CSOUND_BIN              Override csound binary
 
-Examples
-  Scripts/audiotalk/run-csound-saliency &
-  Scripts/apps/saliency-csound --ollama
 USAGE
 }
 
+ROOT_DIR=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+PIDS_DIR="$ROOT_DIR/.fountain/pids"
+LOGS_DIR="$ROOT_DIR/.fountain/logs"
+mkdir -p "$PIDS_DIR" "$LOGS_DIR"
+
 CORPUS=${CORPUS_ID:-baseline-patchbay}
 USE_OLLAMA=${PATCHBAY_USE_OLLAMA:-0}
+START_CSOUND=1
+START_BRIDGE=1
+DO_STOP=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --corpus) CORPUS="$2"; shift 2 ;;
     --ollama) USE_OLLAMA=1; shift ;;
+    --no-csound) START_CSOUND=0; shift ;;
+    --no-bridge) START_BRIDGE=0; shift ;;
+    --stop) DO_STOP=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; usage; exit 1 ;;
   esac
 done
 
-ROOT_DIR=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+stop_bg() {
+  local name="$1"; local pidfile="$PIDS_DIR/$name.pid"
+  if [[ -f "$pidfile" ]]; then
+    local pid; pid=$(cat "$pidfile" || true)
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+      echo "[stop] $name pid=$pid"
+      kill "$pid" 2>/dev/null || true
+      sleep 0.2
+      if kill -0 "$pid" 2>/dev/null; then kill -9 "$pid" 2>/dev/null || true; fi
+    fi
+    rm -f "$pidfile"
+  fi
+}
+
+if [[ "$DO_STOP" == "1" ]]; then
+  stop_bg csound-saliency
+  stop_bg midi-bridge
+  exit 0
+fi
+
+start_bg() {
+  local name="$1"; shift
+  local cmd=("$@")
+  local pidfile="$PIDS_DIR/$name.pid"
+  # Skip if already running
+  if [[ -f "$pidfile" ]]; then
+    local pid; pid=$(cat "$pidfile" || true)
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+      echo "[skip] $name already running (pid=$pid)"
+      return 0
+    fi
+  fi
+  echo "[start] $name → ${cmd[*]}"
+  ( "${cmd[@]}" >> "$LOGS_DIR/$name.log" 2>&1 ) &
+  echo $! > "$pidfile"
+}
+
+cleanup() {
+  echo "[cleanup] stopping csound/bridge"
+  stop_bg midi-bridge || true
+  stop_bg csound-saliency || true
+}
+trap cleanup EXIT INT TERM
 
 echo "[seed] CORPUS_ID=$CORPUS"
 CORPUS_ID="$CORPUS" swift run --package-path "$ROOT_DIR/Packages/FountainApps" --target patchbay-saliency-seed
+
+if [[ "$START_CSOUND" == "1" ]]; then
+  start_bg csound-saliency "$ROOT_DIR/Scripts/audiotalk/run-csound-saliency"
+fi
+
+if [[ "$START_BRIDGE" == "1" ]]; then
+  start_bg midi-bridge swift run --package-path "$ROOT_DIR/Packages/FountainApps" midi-ump2m1-bridge
+fi
 
 echo "[app] launching PatchBay Studio"
 if [[ "$USE_OLLAMA" == "1" ]]; then
@@ -44,4 +111,3 @@ if [[ "$USE_OLLAMA" == "1" ]]; then
 else
   swift run --package-path "$ROOT_DIR/Packages/FountainApps" patchbay-app
 fi
-

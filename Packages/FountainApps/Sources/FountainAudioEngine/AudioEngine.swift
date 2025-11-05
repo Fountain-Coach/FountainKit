@@ -1,14 +1,14 @@
 import Foundation
 
-#if canImport(AVFoundation)
-import AVFoundation
+#if canImport(SDLKitAudio)
+import SDLKitAudio
 
-// AVAudioEngine-backed, lock-light synth engine implementing the QuietFrame layers.
+// SDLKitAudio-backed, lock-light synth engine implementing the QuietFrame layers.
 @MainActor public final class FountainAudioEngine {
     public static let shared = FountainAudioEngine()
 
     // MARK: - SDL state
-    private var avEngine: AVAudioEngine? = nil
+    private var host: SDLKitAudioHost? = nil
     private var sampleRate: Double = 48000
 
     // MARK: - Parameters (Atomic)
@@ -68,16 +68,8 @@ import AVFoundation
 
     // MARK: - Public API
     public func start(sampleRate: Double = 48000, blockSize: Int32 = 256) throws {
-        let engine = AVAudioEngine()
-        let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2)!
-        let node = AVAudioSourceNode { [weak self] _, _, frameCount, audioBufferList -> OSStatus in
-            guard let self else { return noErr }
-            let n = Int(frameCount)
-            let sr = self.sampleRate
-            var outLeft = UnsafeMutableAudioBufferListPointer(audioBufferList)[0]
-            var outRight = UnsafeMutableAudioBufferListPointer(audioBufferList)[1]
-            let lptr = outLeft.mData!.bindMemory(to: Float.self, capacity: n)
-            let rptr = outRight.mData!.bindMemory(to: Float.self, capacity: n)
+        let host = SDLKitAudioHost(sampleRate: sampleRate, channels: 2, framesPerBuffer: Int(blockSize)) { [weak self] lptr, rptr, n, sr in
+            guard let self else { return }
 
             // Precompute delay buffer length from tempo (1/8th note)
             let bpm = max(30.0, min(240.0, Double(self.tempoBPM.load())))
@@ -91,7 +83,7 @@ import AVFoundation
             let master = self.engMuted.load() >= 0.5 ? 0.0 : self.engMaster.load()
             if master <= 0.0001 {
                 for i in 0..<n { lptr[i] = 0; rptr[i] = 0 }
-                return noErr
+                return
             }
 
             // Cached params
@@ -167,16 +159,13 @@ import AVFoundation
                 s = self.softClip(s * Float(master), threshold: Float(limitT))
                 lptr[i] = s; rptr[i] = s
             }
-            return noErr
         }
         self.sampleRate = sampleRate
-        engine.attach(node)
-        engine.connect(node, to: engine.mainMixerNode, format: format)
-        try engine.start()
-        self.avEngine = engine
+        try host.start()
+        self.host = host
     }
 
-    public func stop() { avEngine?.stop(); avEngine = nil }
+    public func stop() { host?.stop(); host = nil }
 
     // Back-compat mapping used by UI saliency
     public func setFrequency(_ f: Double) { baseFreq.store(Float(max(20, min(4000, f)))) }

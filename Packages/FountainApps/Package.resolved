@@ -1,5 +1,5 @@
 {
-  "originHash" : "609d47b2600883e85024fa862f9f772f718cda1aeb4f12f533388b1673fa1dc6",
+  "originHash" : "4b2603bf312f0c623bc67254e6317159ebf6e2d5350230a58e2ecbfe245a316e",
   "pins" : [
     {
       "identity" : "async-http-client",
@@ -79,7 +79,7 @@
       "location" : "https://github.com/Fountain-Coach/SDLKit.git",
       "state" : {
         "branch" : "main",
-        "revision" : "f732b40b4b31fbce538910d04de8a9ec90f003b0"
+        "revision" : "b73137213d2669443d4337287fd9f898f1da885d"
       }
     },
     {

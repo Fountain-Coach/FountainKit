@@ -1172,6 +1172,7 @@ let package = Package(
         .target(
             name: "FountainAudioEngine",
             dependencies: [
+                .product(name: "SDLKitAudio", package: "SDLKit")
             ],
             path: "Sources/FountainAudioEngine"
         ),

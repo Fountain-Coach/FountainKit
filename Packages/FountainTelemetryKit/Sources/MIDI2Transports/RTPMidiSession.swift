@@ -183,22 +183,40 @@ public final class RTPMidiSession: MIDITransport, @unchecked Sendable {
                 let payload = data.subdata(in: 12..<data.count)
                 var umps: [[UInt32]] = []
                 var idx = payload.startIndex
+                func loadWord(_ i: Int) -> UInt32 {
+                    let wBE = payload[i..<i+4].withUnsafeBytes { $0.load(as: UInt32.self) }
+                    return UInt32(bigEndian: wBE)
+                }
                 while idx + 4 <= payload.endIndex {
-                    // Peek first word to infer message length by UMP Message Type
-                    let w1BE = payload[idx..<idx+4].withUnsafeBytes { $0.load(as: UInt32.self) }
-                    let w1 = UInt32(bigEndian: w1BE)
+                    let w1 = loadWord(idx)
                     let mt = (w1 >> 28) & 0xF
-                    var words = 4 // default to 128-bit-safe
-                    if mt == 0x4 { words = 2 } // MIDI 2.0 Channel Voice (64-bit)
-                    else if mt == 0x2 { words = 1 } // MIDI 1.0 in UMP (32-bit)
-                    guard idx + words*4 <= payload.endIndex else { break }
-                    var ump: [UInt32] = []
-                    for _ in 0..<words {
-                        let wBE = payload[idx..<idx+4].withUnsafeBytes { $0.load(as: UInt32.self) }
-                        ump.append(UInt32(bigEndian: wBE))
+                    switch mt {
+                    case 0x3: // SysEx7 — group multiple 64-bit chunks into one logical message
+                        var msg: [UInt32] = []
+                        var localIdx = idx
+                        while localIdx + 8 <= payload.endIndex {
+                            let w1i = loadWord(localIdx)
+                            let w2i = loadWord(localIdx + 4)
+                            msg.append(w1i); msg.append(w2i)
+                            let status = (w1i >> 20) & 0xF
+                            localIdx += 8
+                            if status == 0x0 || status == 0x3 { break }
+                        }
+                        if !msg.isEmpty { umps.append(msg) }
+                        idx = localIdx
+                    case 0x4: // Channel Voice 2.0 (64-bit)
+                        guard idx + 8 <= payload.endIndex else { idx = payload.endIndex; break }
+                        let w2 = loadWord(idx + 4)
+                        umps.append([w1, w2])
+                        idx += 8
+                    case 0x2: // MIDI 1.0 in UMP (32-bit)
+                        umps.append([w1])
+                        idx += 4
+                    default:
+                        // Conservatively consume one word to avoid infinite loop
+                        umps.append([w1])
                         idx += 4
                     }
-                    umps.append(ump)
                 }
                 // Deliver to both handlers if present.
                 if let batch = self?.onReceiveUmps { batch(umps) }

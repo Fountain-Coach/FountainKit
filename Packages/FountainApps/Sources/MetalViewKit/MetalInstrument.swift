@@ -151,8 +151,14 @@ public final class MetalInstrument: @unchecked Sendable {
             return
         }
         guard !bytes.isEmpty else { return }
-        // Parse CI envelope
-        guard let env = try? MidiCiEnvelope(sysEx7Payload: bytes) else { return }
+        // Parse CI envelope — accept both raw (leading F0...F7) and payload-only formats
+        var payload = bytes
+        if bytes.count >= 6, bytes.first == 0xF0, bytes.last == 0xF7 {
+            payload = Array(bytes.dropFirst().dropLast())
+        }
+        // Basic sanity: scope (0x7E/0x7F) and subId1 (0x0D)
+        guard payload.count >= 4, (payload[0] == 0x7E || payload[0] == 0x7F), payload[1] == 0x0D else { return }
+        guard let env = try? MidiCiEnvelope(sysEx7Payload: payload) else { return }
         switch env.subId2 {
         case 0x70: // Discovery Inquiry
             sendDiscoveryReply()

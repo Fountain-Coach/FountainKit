@@ -95,7 +95,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo "[seed] CORPUS_ID=$CORPUS"
-CORPUS_ID="$CORPUS" swift run --package-path "$ROOT_DIR/Packages/FountainApps" --target patchbay-saliency-seed
+CORPUS_ID="$CORPUS" swift run --package-path "$ROOT_DIR/Packages/FountainApps" patchbay-saliency-seed
 
 if [[ "$START_CSOUND" == "1" ]]; then
   start_bg csound-saliency "$ROOT_DIR/Scripts/audiotalk/run-csound-saliency"

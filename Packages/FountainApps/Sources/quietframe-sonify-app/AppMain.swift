@@ -40,77 +40,51 @@ struct QuietFrameView: View {
     @StateObject private var recorder = MP4ScreenRecorder()
     var body: some View {
         GeometryReader { geo in
-            ZStack {
-                Color(NSColor.windowBackgroundColor)
-                VStack {
-                    Spacer()
-                    ZStack {
-                        QuietFrameShape()
-                            .fill(Color.white)
-                            .overlay(
-                                QuietFrameShape()
-                                    .stroke(Color.secondary.opacity(0.35), lineWidth: 1)
-                            )
-                            .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
+            HStack(spacing: 0) {
+                ZStack {
+                    Color(NSColor.windowBackgroundColor)
+                    VStack {
+                        Spacer()
+                        ZStack {
+                            QuietFrameShape()
+                                .fill(Color.white)
+                                .overlay(
+                                    QuietFrameShape()
+                                        .stroke(Color.secondary.opacity(0.35), lineWidth: 1)
+                                )
+                                .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
+                                .frame(width: frameSize.width, height: frameSize.height)
+                            MouseTracker(onMove: { p in
+                                updateSaliency(point: p)
+                            })
                             .frame(width: frameSize.width, height: frameSize.height)
-                        MouseTracker(onMove: { p in
-                            updateSaliency(point: p)
-                        })
-                        .frame(width: frameSize.width, height: frameSize.height)
-                        .allowsHitTesting(true)
+                            .allowsHitTesting(true)
+                        }
+                        Spacer()
                     }
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                VStack(alignment: .trailing) {
-                    HStack(spacing: 10) {
-                        Text(String(format: "saliency: %.3f", saliency)).monospaced().font(.caption)
-                        ProgressView(value: saliency).frame(width: 140)
-                        Divider().frame(height: 14)
-                        HStack(spacing: 6) {
-                            Text("Sec").font(.caption2)
-                            Stepper(value: $section, in: 1...9, step: 1) {
-                                Text("\(section)").font(.caption2).monospaced()
-                            }
-                            .onChange(of: section) { _, v in
-                                FountainAudioEngine.shared.setParam(name: "act.section", value: Double(v))
-                            }
-                            Divider().frame(height: 12)
-                            Text("BPM").font(.caption2)
-                            Slider(value: $bpm, in: 60...180, step: 1)
-                                .frame(width: 120)
-                                .onChange(of: bpm) { _, v in
-                                    FountainAudioEngine.shared.setParam(name: "tempo.bpm", value: v)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    VStack(alignment: .trailing) {
+                        HStack(spacing: 10) {
+                            Text(String(format: "saliency: %.3f", saliency)).monospaced().font(.caption)
+                            ProgressView(value: saliency).frame(width: 140)
+                            Divider().frame(height: 14)
+                            HStack(spacing: 6) {
+                                Text("Sec").font(.caption2)
+                                Stepper(value: $section, in: 1...9, step: 1) {
+                                    Text("\(section)").font(.caption2).monospaced()
                                 }
-                            Text("\(Int(bpm))").font(.caption2).monospaced()
-                        }
-                        Divider().frame(height: 14)
-                        // Screen recorder controls
-                        Group {
-                            Button {
-                                if let win = NSApp.mainWindow {
-                                    recorder.start(window: win, rect: win.frame)
+                                .onChange(of: section) { _, v in
+                                    FountainAudioEngine.shared.setParam(name: "act.section", value: Double(v))
                                 }
-                            } label: {
-                                Label("Record", systemImage: "record.circle")
-                                    .labelStyle(.titleAndIcon)
-                                    .font(.caption)
+                                Divider().frame(height: 12)
+                                Text("BPM").font(.caption2)
+                                Slider(value: $bpm, in: 60...180, step: 1)
+                                    .frame(width: 120)
+                                    .onChange(of: bpm) { _, v in
+                                        FountainAudioEngine.shared.setParam(name: "tempo.bpm", value: v)
+                                    }
+                                Text("\(Int(bpm))").font(.caption2).monospaced()
                             }
-                            Button {
-                                recorder.stop()
-                            } label: {
-                                Label("Stop", systemImage: "stop.circle")
-                                    .labelStyle(.titleAndIcon)
-                                    .font(.caption)
-                            }
-                            Button {
-                                recorder.saveAs()
-                            } label: {
-                                Label("Save", systemImage: "square.and.arrow.down")
-                                    .labelStyle(.titleAndIcon)
-                                    .font(.caption)
-                            }
-                        }
                         Divider().frame(height: 14)
                         Button {
                             muted.toggle()
@@ -134,17 +108,20 @@ struct QuietFrameView: View {
                                 .labelStyle(.titleAndIcon)
                                 .font(.caption)
                         }
+                        }
+                        .padding(8)
+                        .background(.thinMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .padding(10)
+                        Spacer()
                     }
-                    .padding(8)
-                    .background(.thinMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .padding(10)
-                    Spacer()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                // Right pane: Player
+                PlayerPaneView(recorder: recorder)
             }
         }
-        .frame(minWidth: 960, minHeight: 720)
+        .frame(minWidth: 1200, minHeight: 720)
         .onAppear {
             sendCC(value7: 0)
             if lastNote != 0 { QuietFrameInstrument.shared.instrument?.sendNoteOff(note: lastNote, velocity7: 0); lastNote = 0; lastTriggered = false }

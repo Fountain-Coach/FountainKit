@@ -2,11 +2,22 @@ import Foundation
 import AppKit
 import FountainAudioEngine
 import AVFoundation
+import AVKit
 import CoreImage
 
 @MainActor final class MP4ScreenRecorder: ObservableObject {
     enum State { case idle, recording, stopping, finished(URL) }
     @Published private(set) var state: State = .idle
+    @Published var previewImage: NSImage? = nil
+    @Published var duration: TimeInterval = 0
+    var lastURL: URL? {
+        if case .finished(let url) = state { return url }
+        return nil
+    }
+    var isRecording: Bool { if case .recording = state { return true } else { return false } }
+    var canRecord: Bool { if case .idle = state { return true } else if case .finished = state { return true } else { return false } }
+    var canStop: Bool { if case .recording = state { return true } else { return false } }
+    var canSave: Bool { if case .finished = state { return true } else { return false } }
 
     private var writer: AVAssetWriter?
     private var videoInput: AVAssetWriterInput?
@@ -35,6 +46,8 @@ import CoreImage
         self.fps = fps
         self.frameCount = 0
         self.startTime = CFAbsoluteTimeGetCurrent()
+        self.duration = 0
+        self.previewImage = nil
         // Remove old temp files
         try? FileManager.default.removeItem(at: tmpVideoURL)
         try? FileManager.default.removeItem(at: tmpAudioURL)
@@ -139,6 +152,10 @@ import CoreImage
         guard let input = videoInput, let adaptor = pixelAdaptor, input.isReadyForMoreMediaData else { return }
         let img = CGWindowListCreateImage(renderRect, .optionIncludingWindow, windowId, [.boundsIgnoreFraming, .bestResolution])
         guard let cg = img else { return }
+        // Update preview
+        let nsimg = NSImage(cgImage: cg, size: NSSize(width: renderRect.width, height: renderRect.height))
+        self.previewImage = nsimg
+        self.duration = CFAbsoluteTimeGetCurrent() - startTime
         var pb: CVPixelBuffer?
         let w = Int(renderRect.width), h = Int(renderRect.height)
         let attrs: [CFString: Any] = [
@@ -199,4 +216,6 @@ import CoreImage
             completion(export?.status == .completed ? outURL : nil)
         }
     }
+
+    func reset() { state = .idle; previewImage = nil; duration = 0 }
 }

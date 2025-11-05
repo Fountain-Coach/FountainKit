@@ -1,7 +1,7 @@
 <CsoundSynthesizer>
 <CsOptions>
-; Realtime audio out; CoreAudio on macOS; enable CoreMIDI and open all MIDI inputs
--odac -d -Ma -+rtmidi=CoreMIDI
+; Realtime audio out (device will be selected by runner)
+-odac -d
 </CsOptions>
 <CsInstruments>
 sr      = 48000
@@ -12,14 +12,12 @@ nchnls  = 2
 giMidiChan init 1
 
 instr 1
-  ; Continuous sonification driven by CC1 (mod), no MIDI notes required
-  kmod    chnget "mod1"         ; 0..1 saliency
-  kamp    = 0.12 + 0.28*kmod     ; output level
-  kcps    = cpsmidinn(60 + (kmod * 12)) ; sweep one octave above middle C
-  as      oscili kamp*(1-kmod), kcps, 1   ; sine
-  at      lfo    kamp*kmod, kcps, 0       ; triangle
-  aL      = (as + at)*0.5
-  outs aL, aL
+  ; Continuous engine; amplitude follows CC1 (saliency). No auto turnoff.
+  kmod    chnget "mod1"
+  kamp    = kmod
+  kcps    = cpsmidinn(60 + (kmod * 12))
+  as      oscili kamp, kcps, 1
+  outs as, as
 endin
 
 ; MIDI routing

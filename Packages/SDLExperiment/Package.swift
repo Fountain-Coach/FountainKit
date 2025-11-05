@@ -9,9 +9,8 @@ let package = Package(
         .executable(name: "sdl-diagnostics", targets: ["SDLDiagnostics"]) 
     ],
     dependencies: [
-        // Local external dependency: initialize with
-        //   git submodule update --init --recursive External/SDLKit
-        .package(path: "../../External/SDLKit")
+        // Use SDLKit from GitHub rather than a local submodule
+        .package(url: "https://github.com/Fountain-Coach/SDLKit.git", branch: "main")
     ],
     targets: [
         .executableTarget(

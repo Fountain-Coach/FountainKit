@@ -36,6 +36,5 @@ fi
 
 mkdir -p "$ROOT_DIR/.fountain/logs"
 LOG="$ROOT_DIR/.fountain/logs/csound-saliency.log"
-echo "[csound] starting: $CSOUND_BIN $PATCH" | tee "$LOG"
-exec "$CSOUND_BIN" "$PATCH"
-
+echo "[csound] starting: $CSOUND_BIN -+rtmidi=CoreMIDI -M 'QuietFrame M1' $PATCH" | tee "$LOG"
+exec "$CSOUND_BIN" -+rtmidi=CoreMIDI -M "QuietFrame M1" "$PATCH"

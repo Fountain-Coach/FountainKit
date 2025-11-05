@@ -107,8 +107,8 @@ let package = Package(
         .package(path: "../FountainCore"),
         .package(path: "../FountainAIKit"),
         .package(path: "../FountainProviders"),
-        // SDLKit for autarkic audio engine (Option B; conditional to avoid impacting seeders/builders)
-        
+        // SDLKit for autarkic audio engine (managed via GitHub)
+        .package(url: "https://github.com/Fountain-Coach/SDLKit.git", branch: "main"),
         .package(path: "../MemChatKit"),
         .package(path: "../FountainDevHarness"),
         .package(path: "../FountainAPIClients"),
@@ -1171,7 +1171,10 @@ let package = Package(
         // Lightweight autarkic audio engine (SDLKit-backed when available; no-op fallback otherwise)
         .target(
             name: "FountainAudioEngine",
-            dependencies: [],
+            dependencies: [
+                // When SDLKit is available, the engine uses it; otherwise the code falls back.
+                .product(name: "SDLKit", package: "SDLKit")
+            ],
             path: "Sources/FountainAudioEngine"
         ),
         .executableTarget(

@@ -72,11 +72,11 @@ start_bg() {
 echo "[seed] CORPUS_ID=$CORPUS"
 FOUNTAIN_SKIP_LAUNCHER_SIG=1 CORPUS_ID="$CORPUS" swift run --package-path "$ROOT_DIR/Packages/FountainApps" quietframe-sonify-seed
 
-start_bg csound-saliency "$ROOT_DIR/Scripts/audiotalk/run-csound-saliency"
 if [[ "$START_BRIDGE" == "1" ]]; then
-  start_bg midi-bridge swift run --package-path "$ROOT_DIR/Packages/FountainApps" midi-ump2m1-bridge
+  start_bg midi-bridge swift run --package-path "$ROOT_DIR/Packages/FountainApps" midi-ump2m1-bridge --source="Quiet Frame"
+  sleep 0.3
 fi
+start_bg csound-saliency "$ROOT_DIR/Scripts/audiotalk/run-csound-saliency"
 
 echo "[app] launching QuietFrame Sonify"
 swift run --package-path "$ROOT_DIR/Packages/FountainApps" quietframe-sonify-app
-

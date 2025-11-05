@@ -2,6 +2,8 @@ import AppKit
 import SwiftUI
 import LLMGatewayAPI
 import FountainAIAdapters
+import FountainAICore
+import ProviderLocalLLM
 
 @MainActor
 final class ChatInstrumentManager: ObservableObject {
@@ -124,12 +126,82 @@ final class ChatSessionController: ObservableObject {
     @Published var streamingText: String = ""
     @Published var state: State = .idle
     enum State { case idle, streaming, failed }
-    var providerLabel: String { "Gateway" }
+    var providerLabel: String { useOllama() ? "Ollama" : "Gateway" }
 
     func send(_ text: String) async {
         messages.append(.init(role: "user", text: text))
         state = .streaming
         defer { if state == .streaming { state = .idle } }
+        if useOllama() {
+            await sendViaOllama(text)
+        } else {
+            await sendViaGateway(text)
+        }
+    }
+
+    // MARK: - Providers
+    private func useOllama() -> Bool {
+        if ProcessInfo.processInfo.environment["PATCHBAY_USE_OLLAMA"] == "1" { return true }
+        if ProcessInfo.processInfo.environment["OLLAMA_URL"] != nil { return true }
+        if ProcessInfo.processInfo.environment["OLLAMA_OPENAI_ENDPOINT"] != nil { return true }
+        return false
+    }
+
+    private func ollamaOpenAIEndpoint() -> URL {
+        if let s = ProcessInfo.processInfo.environment["OLLAMA_OPENAI_ENDPOINT"], let u = URL(string: s) {
+            return u
+        }
+        if let base = ProcessInfo.processInfo.environment["OLLAMA_URL"], !base.isEmpty {
+            // Derive OpenAI-compat endpoint when given base like http://127.0.0.1:11434
+            if let u = URL(string: base.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/v1/chat/completions") {
+                return u
+            }
+        }
+        return URL(string: "http://127.0.0.1:11434/v1/chat/completions")!
+    }
+
+    private func ollamaModel() -> String {
+        ProcessInfo.processInfo.environment["OLLAMA_MODEL"] ?? "codellama"
+    }
+
+    private func toCoreRequest(model: String, userText: String) -> CoreChatRequest {
+        CoreChatRequest(model: model, messages: [
+            .init(role: .user, content: userText)
+        ])
+    }
+
+    private func pulse(_ deltaText: String) {
+        // Emit a lightweight canvas activity so noodles can animate if desired
+        NotificationCenter.default.post(name: .MetalCanvasMIDIActivity, object: nil, userInfo: [
+            "type": "llm.pulse",
+            "chars": deltaText.count
+        ])
+    }
+
+    private func sendViaOllama(_ text: String) async {
+        let endpoint = ollamaOpenAIEndpoint()
+        let model = ollamaModel()
+        let provider = LocalLLMProvider.make(endpoint: endpoint)
+        let req = toCoreRequest(model: model, userText: text)
+        streamingText = ""
+        do {
+            for try await chunk in provider.stream(request: req, preferStreaming: true) {
+                if chunk.isFinal {
+                    messages.append(.init(role: "assistant", text: chunk.response?.answer ?? chunk.text))
+                    streamingText = ""
+                    state = .idle
+                } else {
+                    streamingText += chunk.text
+                    pulse(chunk.text)
+                }
+            }
+        } catch {
+            streamingText = "Error: \(error.localizedDescription)"
+            state = .failed
+        }
+    }
+
+    private func sendViaGateway(_ text: String) async {
         let base = ProcessInfo.processInfo.environment["GATEWAY_URL"].flatMap(URL.init(string:)) ?? URL(string: "http://127.0.0.1:8010")!
         let tokenProvider: GatewayChatClient.TokenProvider = { ProcessInfo.processInfo.environment["GATEWAY_TOKEN"] }
         let client = GatewayChatClient(baseURL: base, tokenProvider: tokenProvider)

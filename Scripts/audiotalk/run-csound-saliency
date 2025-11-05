@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage: Scripts/audiotalk/run-csound-saliency [--device <audio-device>] [--csound <path-to-csound>]
+
+Runs the Csound saliency patch and exposes a realtime synth. Drive it via the
+"Csound Bridge" MIDI 2.0 virtual instrument from the PatchBay app. We map:
+  - Note On/Off → tone
+  - CC1 (mod wheel) → saliency level (0..1)
+
+Tips
+  - Launch PatchBay, Canvas → Insert Saliency + Csound Patch
+  - Move the cursor over the Quiet Frame node to sonify saliency.
+  - Use OLLAMA_MODEL=codellama PATCHBAY_USE_OLLAMA=1 to chat with CodeLlama.
+
+Env vars
+  CSOUND_BIN          Override csound binary path
+
+USAGE
+}
+
+if [[ ${1:-} == "-h" || ${1:-} == "--help" ]]; then
+  usage; exit 0
+fi
+
+ROOT_DIR=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+PATCH="$ROOT_DIR/Scripts/audiotalk/csound/saliency.csd"
+CSOUND_BIN=${CSOUND_BIN:-$(command -v csound || true)}
+
+if [[ -z "$CSOUND_BIN" ]]; then
+  echo "error: csound not found on PATH. Install Csound or set CSOUND_BIN" >&2
+  exit 1
+fi
+
+mkdir -p "$ROOT_DIR/.fountain/logs"
+LOG="$ROOT_DIR/.fountain/logs/csound-saliency.log"
+echo "[csound] starting: $CSOUND_BIN $PATCH" | tee "$LOG"
+exec "$CSOUND_BIN" "$PATCH"
+

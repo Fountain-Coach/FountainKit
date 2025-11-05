@@ -191,6 +191,26 @@ final class EditorVM: ObservableObject {
         ensureEdge(from: (audio,"spec"), to: (present,"assets"))
     }
 
+    // MARK: - Saliency + Csound + Ollama Story Patch
+    func insertSaliencyOllamaPatch(at origin: CGPoint = CGPoint(x: 240, y: 220)) {
+        selected.removeAll(); selection = nil
+        let g = max(24, grid)
+        func add(_ id: String, _ title: String, _ dx: Int, _ dy: Int) -> String {
+            let n = PBNode(id: id, title: title, x: Int(origin.x)+dx, y: Int(origin.y)+dy, w: g*9, h: g*5, ports: [])
+            nodes.append(n); return id
+        }
+        func ports(_ id: String, _ ins: [String], _ outs: [String]) {
+            for p in ins { addPort(to: id, side: .left, dir: .input, id: p) }
+            for p in outs { addPort(to: id, side: .right, dir: .output, id: p) }
+        }
+        let qf = add("quietframe", "Quiet Frame", 0, 0)
+        let cs = add("csound", "Csound", g*12, 0)
+        let chat = add("chat", "LLM Chat (Ollama)", 0, -g*7)
+        ports(qf, [], ["out"]) ; ports(cs, ["in"], []) ;
+        ports(chat, ["prompt"], ["answer"]) // for future expansion
+        ensureEdge(from: (qf, "out"), to: (cs, "in"))
+    }
+
     // MARK: - MIDI 2.0 activity helpers (UI-level events)
     nonisolated private static func postNodeDiffEvents(oldValue: [PBNode], newValue: [PBNode]) {
         // Be tolerant of duplicate ids: last occurrence wins to avoid crashes in tests

@@ -16,6 +16,8 @@ enum AppInstrumentRegistry {
         case "audiotalk.chat": return AudioTalkChatModule()
         case "mvk.triangle": return MVKTriangleModule()
         case "mvk.quad": return MVKQuadModule()
+        case "saliency.quietFrame": return QuietFrameModule()
+        case "csound.sonify": return CsoundSonifyModule()
         default: return nil
         }
     }
@@ -45,5 +47,23 @@ struct MVKQuadModule: AppInstrumentModule {
     let capabilities: Set<InstrumentCapability> = [.visualPreview, .umpProducer, .umpConsumer, .propertyLinks]
     @MainActor func openPreviewIfAvailable(id: String, state: AppState, vm: EditorVM) {
         // Preview window not yet implemented; no-op
+    }
+}
+
+struct QuietFrameModule: AppInstrumentModule {
+    let kind = "saliency.quietFrame"
+    let category = "Vision.Saliency"
+    let capabilities: Set<InstrumentCapability> = [.propertyLinks]
+    @MainActor func openPreviewIfAvailable(id: String, state: AppState, vm: EditorVM) {
+        // Visual is rendered on canvas directly; no separate preview for now
+    }
+}
+
+struct CsoundSonifyModule: AppInstrumentModule {
+    let kind = "csound.sonify"
+    let category = "Audio.Sonification"
+    let capabilities: Set<InstrumentCapability> = [.umpConsumer]
+    @MainActor func openPreviewIfAvailable(id: String, state: AppState, vm: EditorVM) {
+        // External audio process; nothing to preview here
     }
 }

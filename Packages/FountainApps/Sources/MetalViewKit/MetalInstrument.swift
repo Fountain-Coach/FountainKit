@@ -370,6 +370,60 @@ public final class MetalInstrument: @unchecked Sendable {
         NotificationCenter.default.post(name: .MetalCanvasUMPOut, object: nil, userInfo: ["topic": topic, "data": body, "words": words])
     }
 
+    // MARK: - Convenience: Channel Voice UMP senders (Note/CC/PB)
+    // These helpers let hosts drive external instruments (e.g., Csound) directly from view logic.
+    // Values use MIDI 2.0 encodings: 16-bit velocity for notes; 32-bit values for CC/PB.
+    public func sendNoteOn(note: UInt8, velocity7: UInt8 = 100, channel: UInt8 = 0, group: UInt8 = 0) {
+        let mt: UInt32 = 0x4
+        let statusHi: UInt32 = 0x9 // Note On
+        let v16: UInt16 = UInt16(UInt32(velocity7) * 65535 / 127)
+        let w1 = (mt << 28)
+            | (UInt32(group & 0xF) << 24)
+            | (statusHi << 20)
+            | (UInt32(channel & 0xF) << 16)
+            | (UInt32(note) << 8)
+        let w2 = UInt32(v16) << 16 // attrType=0, attrData=0
+        session?.send(words: [w1, w2])
+    }
+
+    public func sendNoteOff(note: UInt8, velocity7: UInt8 = 0, channel: UInt8 = 0, group: UInt8 = 0) {
+        let mt: UInt32 = 0x4
+        let statusHi: UInt32 = 0x8 // Note Off
+        let v16: UInt16 = UInt16(UInt32(velocity7) * 65535 / 127)
+        let w1 = (mt << 28)
+            | (UInt32(group & 0xF) << 24)
+            | (statusHi << 20)
+            | (UInt32(channel & 0xF) << 16)
+            | (UInt32(note) << 8)
+        let w2 = UInt32(v16) << 16
+        session?.send(words: [w1, w2])
+    }
+
+    public func sendCC(controller: UInt8, value7: UInt8, channel: UInt8 = 0, group: UInt8 = 0) {
+        let mt: UInt32 = 0x4
+        let statusHi: UInt32 = 0xB // CC
+        let value32: UInt32 = UInt32(UInt64(value7) * 0xFFFF_FFFF / 127)
+        let w1 = (mt << 28)
+            | (UInt32(group & 0xF) << 24)
+            | (statusHi << 20)
+            | (UInt32(channel & 0xF) << 16)
+            | (UInt32(controller) << 8)
+        let w2 = value32
+        session?.send(words: [w1, w2])
+    }
+
+    public func sendPitchBend(value14: UInt16, channel: UInt8 = 0, group: UInt8 = 0) {
+        let mt: UInt32 = 0x4
+        let statusHi: UInt32 = 0xE // PB
+        let value32: UInt32 = UInt32(UInt64(value14) * 0xFFFF_FFFF / 0x3FFF)
+        let w1 = (mt << 28)
+            | (UInt32(group & 0xF) << 24)
+            | (statusHi << 20)
+            | (UInt32(channel & 0xF) << 16)
+        let w2 = value32
+        session?.send(words: [w1, w2])
+    }
+
     private func handleEnableFailure(token: UUID, message: String, error: Error?) {
         guard enableToken == token else { return }
         enableToken = nil

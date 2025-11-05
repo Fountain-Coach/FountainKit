@@ -123,7 +123,7 @@ components:
   schemas:
     InstrumentKind:
       type: string
-      enum: [mvk.triangle, mvk.quad, external.coremidi, audiotalk.chat]
+      enum: [mvk.triangle, mvk.quad, external.coremidi, audiotalk.chat, saliency.quietFrame, csound.sonify]
     InstrumentIdentity:
       type: object
       properties:

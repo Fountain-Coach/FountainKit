@@ -1372,6 +1372,7 @@ struct ContentView: View {
                         }
                         Divider()
                         Button("Insert PB‑VRT Story Patch") { vm.insertPBVRTStoryPatch() }
+                        Button("Insert Saliency + Csound Patch") { vm.insertSaliencyOllamaPatch() }
                         Divider()
                         Toggle("Show Baseline Index", isOn: $vm.showBaselineIndex)
                         Toggle("Always show (all stages)", isOn: $vm.alwaysShowBaselineIndex)
@@ -1449,6 +1450,14 @@ struct ContentView: View {
                         guard let sel = vm.selection, let inst = state.instruments.first(where: { $0.id == sel }) else { return true }
                         return AppInstrumentRegistry.module(for: inst.kind.rawValue) == nil
                     }())
+                    // Fallback: open a chat window bound to the selected node id
+                    Button {
+                        if let sel = vm.selection { ChatInstrumentManager.shared.open(for: sel) }
+                        else if let n = vm.nodes.first(where: { ($0.title ?? "").lowercased().contains("chat") }) {
+                            ChatInstrumentManager.shared.open(for: n.id)
+                        }
+                    } label: { Label("Chat", systemImage: "message") }
+                    .help("Open chat window (Ollama/Gateway) bound to selection or first *Chat* node")
                 }
             }
         }

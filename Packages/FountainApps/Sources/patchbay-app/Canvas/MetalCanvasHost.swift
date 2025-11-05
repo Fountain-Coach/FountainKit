@@ -139,6 +139,16 @@ fileprivate struct NodeTitlesOverlay: View {
                 }
             }
         }
+        // Attach an always-on Csound Bridge instrument (virtual MIDI 2.0 endpoint)
+        .overlay(
+            CsoundBridgeInstrumentBinder()
+                .frame(width: 0, height: 0)
+        )
+        // Saliency overlay: computes saliency within the Quiet Frame node and drives the bridge
+        .overlay(
+            SaliencyOverlay()
+                .allowsHitTesting(false)
+        )
         .allowsHitTesting(false)
         .onAppear {
             NotificationCenter.default.addObserver(forName: Notification.Name("PBVRTResult"), object: nil, queue: .main) { noti in

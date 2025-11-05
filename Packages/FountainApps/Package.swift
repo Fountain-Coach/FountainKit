@@ -143,7 +143,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.0"),
         .package(url: "https://github.com/apple/swift-openapi-urlsession.git", from: "1.0.0"),
         // MIDI 2.0 + MIDI-CI helpers (Discovery, Property Exchange)
-        .package(url: "https://github.com/Fountain-Coach/midi2.git", branch: "main"),
+        .package(url: "https://github.com/Fountain-Coach/midi2.git", from: "0.3.1"),
         // MIDI2 Instrument Bridge (sampler) — pin to released tag
         .package(url: "https://github.com/Fountain-Coach/midi2sampler.git", exact: "0.1.1")
     ],
@@ -320,6 +320,31 @@ let package = Package(
             name: "replay-export",
             dependencies: ["MetalViewKit"],
             path: "Sources/replay-export"
+        ),
+        // QuietFrameKit + tests (scoped build when ROBOT_ONLY=1)
+        .target(
+            name: "QuietFrameKit",
+            dependencies: [
+                .product(name: "MIDI2CI", package: "midi2"),
+                .product(name: "MIDI2", package: "midi2")
+            ],
+            path: "Sources/QuietFrameKit"
+        ),
+        .testTarget(
+            name: "QuietFrameKitTests",
+            dependencies: [
+                "QuietFrameKit",
+                .product(name: "MIDI2CI", package: "midi2")
+            ],
+            path: "Tests/QuietFrameKitTests"
+        ),
+        // Audio engine (for focused builds with ROBOT_ONLY)
+        .target(
+            name: "FountainAudioEngine",
+            dependencies: [
+                .product(name: "SDLKitAudio", package: "SDLKit")
+            ],
+            path: "Sources/FountainAudioEngine"
         )
     ] : [
         .target(
@@ -1170,6 +1195,15 @@ let package = Package(
             dependencies: [],
             path: "Sources/midi-ump2m1-bridge"
         ),
+        // QuietFrameKit — core utilities for MIDI2 PE + Vendor JSON (UI-free)
+        .target(
+            name: "QuietFrameKit",
+            dependencies: [
+                .product(name: "MIDI2CI", package: "midi2"),
+                .product(name: "MIDI2", package: "midi2")
+            ],
+            path: "Sources/QuietFrameKit"
+        ),
         // Lightweight autarkic audio engine (SDLKit-backed when available; no-op fallback otherwise)
         .target(
             name: "FountainAudioEngine",
@@ -1203,6 +1237,14 @@ let package = Package(
                 .product(name: "MIDI2", package: "midi2")
             ],
             path: "Sources/quietframe-smoke"
+        ),
+        .testTarget(
+            name: "QuietFrameKitTests",
+            dependencies: [
+                "QuietFrameKit",
+                .product(name: "MIDI2CI", package: "midi2")
+            ],
+            path: "Tests/QuietFrameKitTests"
         ),
         .executableTarget(
             name: "quietframe-sonify-seed",

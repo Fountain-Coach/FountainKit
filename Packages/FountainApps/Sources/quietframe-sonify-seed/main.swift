@@ -111,6 +111,8 @@ struct QuietFrameSonifySeed {
                     "fx.plate.mix","fx.delay.mix","fx.delay.feedback","fx.limiter.threshold"
                 ],
                 "vendorJSON": [
+                    "rec.start",
+                    "rec.stop",
                     "ui.cursor.set",
                     "saliency.computeAt",
                     "audio.set",

@@ -14,14 +14,63 @@ import MIDI2CI
     private var inPort: MIDIPortRef = 0
     private let group: UInt8 = 0
     private var requestId: UInt32 = 1
+    // no core dependency; decode inline and marshal to @MainActor
 
     func connect(displayNameContains name: String = "Quiet Frame") {
         if client == 0 { MIDIClientCreate("QFCompanion" as CFString, nil, nil, &client) }
         if outPort == 0 { MIDIOutputPortCreate(client, "out" as CFString, &outPort) }
         if inPort == 0 {
             if #available(macOS 13.0, *) {
-                MIDIInputPortCreateWithProtocol(client, "in" as CFString, ._2_0, &inPort) { [weak self] list, _ in
-                    self?.onEventList(list)
+                let sink = self.eventSink
+                MIDIInputPortCreateWithProtocol(client, "in" as CFString, ._2_0, &inPort) { list, _ in
+                    // Decode the MIDIEventList into UMP words quickly on the CoreMIDI callback thread
+                    var packet = list.pointee.packet
+                    for _ in 0..<list.pointee.numPackets {
+                        let count = Int(packet.wordCount)
+                        if count > 0 {
+                            var words: [UInt32] = []
+                            withUnsafePointer(to: packet.words) { base in
+                                let raw = UnsafeRawPointer(base).assumingMemoryBound(to: UInt32.self)
+                                let buffer = UnsafeBufferPointer(start: raw, count: count)
+                                words.append(contentsOf: buffer)
+                            }
+                            // Emit event JSON to the UI sink for live feedback
+                            if let sink {
+                                let payload = words.map { String(format: "0x%08X", $0) }
+                                if let data = try? JSONSerialization.data(withJSONObject: ["dir":"in","ump": payload], options: []), let s = String(data: data, encoding: .utf8) {
+                                    Task { @MainActor in sink(s) }
+                                }
+                            }
+                            // Parse SysEx7 → PE JSON and update snapshot on @MainActor
+                            var bytes: [UInt8] = []
+                            var i = 0
+                            while i + 1 < words.count {
+                                let w1 = words[i], w2 = words[i+1]
+                                if ((w1 >> 28) & 0xF) != 0x3 { break }
+                                let n = Int((w1 >> 16) & 0xF)
+                                let d0 = UInt8((w1 >> 8) & 0xFF)
+                                let d1 = UInt8(w1 & 0xFF)
+                                let d2 = UInt8((w2 >> 24) & 0xFF)
+                                let d3 = UInt8((w2 >> 16) & 0xFF)
+                                let d4 = UInt8((w2 >> 8) & 0xFF)
+                                let d5 = UInt8(w2 & 0xFF)
+                                bytes.append(contentsOf: [d0,d1,d2,d3,d4,d5].prefix(n))
+                                let status = UInt8((w1 >> 20) & 0xF)
+                                i += 2
+                                if status == 0x0 || status == 0x3 { break }
+                            }
+                            if let env = try? MidiCiEnvelope(sysEx7Payload: bytes) {
+                                if case .propertyExchange(let pe) = env.body, (pe.command == .getReply || pe.command == .notify) {
+                                    if let obj = try? JSONSerialization.jsonObject(with: Data(pe.data)) as? [String: Any] {
+                                        if let data = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted]), let s = String(data: data, encoding: .utf8) {
+                                            Task { @MainActor in self.lastSnapshotJSON = s }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        packet = MIDIEventPacketNext(&packet).pointee
+                    }
                 }
             }
         }
@@ -127,59 +176,4 @@ import MIDI2CI
     }
 }
 
-// MARK: - Inbound handling
-extension QuietFramePEClient {
-    nonisolated private func onEventList(_ listPtr: UnsafePointer<MIDIEventList>) {
-        var packet = listPtr.pointee.packet
-        for _ in 0..<listPtr.pointee.numPackets {
-            let count = Int(packet.wordCount)
-            if count > 0 {
-                var words: [UInt32] = []
-                withUnsafePointer(to: packet.words) { base in
-                    let raw = UnsafeRawPointer(base).assumingMemoryBound(to: UInt32.self)
-                    let buffer = UnsafeBufferPointer(start: raw, count: count)
-                    words.append(contentsOf: buffer)
-                }
-                handleWords(words)
-            }
-            packet = MIDIEventPacketNext(&packet).pointee
-        }
-    }
-
-    nonisolated private func handleWords(_ words: [UInt32]) {
-        // SysEx7 only for now
-        var bytes: [UInt8] = []
-        var i = 0
-        while i + 1 < words.count {
-            let w1 = words[i], w2 = words[i+1]
-            if ((w1 >> 28) & 0xF) != 0x3 { break }
-            let n = Int((w1 >> 16) & 0xF)
-            let d0 = UInt8((w1 >> 8) & 0xFF)
-            let d1 = UInt8(w1 & 0xFF)
-            let d2 = UInt8((w2 >> 24) & 0xFF)
-            let d3 = UInt8((w2 >> 16) & 0xFF)
-            let d4 = UInt8((w2 >> 8) & 0xFF)
-            let d5 = UInt8(w2 & 0xFF)
-            bytes.append(contentsOf: [d0,d1,d2,d3,d4,d5].prefix(n))
-            let status = UInt8((w1 >> 20) & 0xF)
-            i += 2
-            if status == 0x0 || status == 0x3 { break }
-        }
-        guard !bytes.isEmpty else { return }
-        if let env = try? MidiCiEnvelope(sysEx7Payload: bytes) {
-            if case .propertyExchange(let pe) = env.body {
-                if pe.command == .getReply || pe.command == .notify {
-                    if let obj = try? JSONSerialization.jsonObject(with: Data(pe.data)) as? [String: Any] {
-                        if let data = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted]), let s = String(data: data, encoding: .utf8) {
-                            Task { @MainActor in self.lastSnapshotJSON = s }
-                        }
-                    }
-                }
-            }
-        }
-        let payload = words.map { String(format: "0x%08X", $0) }
-        if let data = try? JSONSerialization.data(withJSONObject: ["dir":"in","ump": payload], options: []), let s = String(data: data, encoding: .utf8) {
-            Task { @MainActor in self.eventSink?(s) }
-        }
-    }
-}
+// (no delegate)

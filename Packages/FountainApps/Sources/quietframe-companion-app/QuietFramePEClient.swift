@@ -72,6 +72,17 @@ import MIDI2CI
         requestId &+= 1
     }
 
+    func sendVendor(topic: String, data: [String: Any] = [:]) {
+        guard dest != 0 else { return }
+        var payload: [String: Any] = ["topic": topic]
+        if !data.isEmpty { payload["data"] = data }
+        guard let json = try? JSONSerialization.data(withJSONObject: payload) else { return }
+        var bytes: [UInt8] = [0xF0, 0x7D, 0x4A, 0x53, 0x4F, 0x4E, 0x00]
+        bytes.append(contentsOf: Array(json))
+        bytes.append(0xF7)
+        sendSysEx7(bytes: bytes)
+    }
+
     var eventSink: ((String) -> Void)? = nil
 
     private func sendSysEx7(bytes: [UInt8]) {

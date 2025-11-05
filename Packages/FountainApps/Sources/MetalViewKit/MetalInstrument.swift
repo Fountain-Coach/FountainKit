@@ -163,6 +163,10 @@ public final class MetalInstrument: @unchecked Sendable {
         guard let topic = obj["topic"] as? String else { return }
         let data = (obj["data"] as? [String: Any]) ?? [:]
         switch topic {
+        case "rec.start":
+            NotificationCenter.default.post(name: Notification.Name("QuietFrameRecordCommand"), object: nil, userInfo: ["op": "start"])
+        case "rec.stop":
+            NotificationCenter.default.post(name: Notification.Name("QuietFrameRecordCommand"), object: nil, userInfo: ["op": "stop"])
         case "ui.zoomAround":
             let ax = CGFloat((data["anchor.view.x"] as? Double) ?? 0)
             let ay = CGFloat((data["anchor.view.y"] as? Double) ?? 0)

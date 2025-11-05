@@ -38,6 +38,7 @@ struct QuietFrameView: View {
     @State private var bpm: Double = 96
     @State private var section: Int = 1
     @State private var midiEvents: [String] = []
+    @StateObject private var recorder = QuietFrameRecorder()
     var body: some View {
         GeometryReader { geo in
             ZStack {
@@ -47,18 +48,14 @@ struct QuietFrameView: View {
                     VStack {
                         Spacer()
                     ZStack {
-                        MetalTriangleView(
-                            onReady: nil,
-                            instrument: MetalInstrumentDescriptor(
-                                manufacturer: "Fountain",
-                                product: "QuietFrameView",
-                                instanceId: "qf-view",
-                                displayName: "Quiet Frame View"
+                        QuietFrameShape()
+                            .fill(Color.white)
+                            .overlay(
+                                QuietFrameShape()
+                                    .stroke(Color.secondary.opacity(0.35), lineWidth: 1)
                             )
-                        )
-                        .frame(width: frameSize.width, height: frameSize.height)
-                        .clipShape(QuietFrameShape())
-                        .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
+                            .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
+                            .frame(width: frameSize.width, height: frameSize.height)
                         MouseTracker(onMove: { p in
                             updateSaliency(point: p)
                         })
@@ -148,6 +145,16 @@ struct QuietFrameView: View {
             try? FountainAudioEngine.shared.start()
             FountainAudioEngine.shared.setParam(name: "tempo.bpm", value: bpm)
             FountainAudioEngine.shared.setParam(name: "act.section", value: Double(section))
+            NotificationCenter.default.addObserver(forName: Notification.Name("QuietFrameRecordCommand"), object: nil, queue: .main) { n in
+                let op = (n.userInfo?["op"] as? String) ?? ""
+                Task { @MainActor in
+                    if op == "start", let win = NSApp.mainWindow {
+                        recorder.startRecording(window: win, rect: win.frame)
+                    } else if op == "stop" {
+                        recorder.stopRecording()
+                    }
+                }
+            }
         }
     }
 

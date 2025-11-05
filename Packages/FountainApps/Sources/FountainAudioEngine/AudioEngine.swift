@@ -1,14 +1,14 @@
 import Foundation
 
-#if canImport(SDLKit)
-import SDLKit
+#if canImport(AVFoundation)
+import AVFoundation
 
-// SDLKit-backed, lock-light synth engine implementing the QuietFrame layers.
-public final class FountainAudioEngine {
+// AVAudioEngine-backed, lock-light synth engine implementing the QuietFrame layers.
+@MainActor public final class FountainAudioEngine {
     public static let shared = FountainAudioEngine()
 
     // MARK: - SDL state
-    private var device: SDLAudioDevice? = nil
+    private var avEngine: AVAudioEngine? = nil
     private var sampleRate: Double = 48000
 
     // MARK: - Parameters (Atomic)
@@ -68,12 +68,16 @@ public final class FountainAudioEngine {
 
     // MARK: - Public API
     public func start(sampleRate: Double = 48000, blockSize: Int32 = 256) throws {
-        try SDL.initialize(subSystems: [.audio])
-        let spec = SDLAudioSpec(frequency: Int32(sampleRate), format: .f32, channels: 2, samples: UInt16(blockSize)) { [weak self] buffer, frames in
-            guard let self else { return }
-            let n = Int(frames)
+        let engine = AVAudioEngine()
+        let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2)!
+        let node = AVAudioSourceNode { [weak self] _, _, frameCount, audioBufferList -> OSStatus in
+            guard let self else { return noErr }
+            let n = Int(frameCount)
             let sr = self.sampleRate
-            var out = buffer.bindMemory(to: Float.self, capacity: n*2)
+            var outLeft = UnsafeMutableAudioBufferListPointer(audioBufferList)[0]
+            var outRight = UnsafeMutableAudioBufferListPointer(audioBufferList)[1]
+            let lptr = outLeft.mData!.bindMemory(to: Float.self, capacity: n)
+            let rptr = outRight.mData!.bindMemory(to: Float.self, capacity: n)
 
             // Precompute delay buffer length from tempo (1/8th note)
             let bpm = max(30.0, min(240.0, Double(self.tempoBPM.load())))
@@ -86,9 +90,8 @@ public final class FountainAudioEngine {
 
             let master = self.engMuted.load() >= 0.5 ? 0.0 : self.engMaster.load()
             if master <= 0.0001 {
-                // Fast clear if silent
-                for _ in 0..<n { out.pointee = 0; out = out.advanced(by: 1); out.pointee = 0; out = out.advanced(by: 1) }
-                return
+                for i in 0..<n { lptr[i] = 0; rptr[i] = 0 }
+                return noErr
             }
 
             // Cached params
@@ -112,8 +115,7 @@ public final class FountainAudioEngine {
             let dFb  = max(0.0, min(0.95, self.fxFeed.load()))
             let limitT = max(0.1, min(1.5, self.fxLimitTh.load()))
 
-            // Per-sample loop
-            for _ in 0..<n {
+            for i in 0..<n {
                 // Drone: two detuned sines → simple LPF
                 let f1 = Float(fBase) * (1.0 - Float(det) * 0.01)
                 let f2 = Float(fBase) * (1.0 + Float(det) * 0.01)
@@ -122,71 +124,59 @@ public final class FountainAudioEngine {
                 self.dronePhase1 += d1; if self.dronePhase1 > Float(2.0 * .pi) { self.dronePhase1 -= Float(2.0 * .pi) }
                 self.dronePhase2 += d2; if self.dronePhase2 > Float(2.0 * .pi) { self.dronePhase2 -= Float(2.0 * .pi) }
                 var drone = (sinf(self.dronePhase1) + sinf(self.dronePhase2)) * 0.5
-                // 1-pole LPF
                 self.lpfState = (1 - lpfA) * drone + lpfA * self.lpfState
                 drone = self.lpfState * Float(droneA)
 
-                // Clock: short sine ping at ~1 kHz with decaying env
+                // Clock
                 let beatsPerSec = Float(bpm / 60.0)
                 let ticksPerSec = beatsPerSec * Float(1.0 / clkDiv)
                 self.clockPhase += ticksPerSec / Float(sr)
                 if self.clockPhase >= 1.0 {
                     self.clockPhase -= 1.0
-                    // Ghost probability controls occasional skip (and extra tick)
-                    if Float.random(in: 0...1) > Float(ghostP) {
-                        self.clockEnv = 1.0
-                    }
+                    if Float.random(in: 0...1) > Float(ghostP) { self.clockEnv = 1.0 }
                 }
                 self.clockEnv *= self.clockEnvDecay
                 let clk = sinf(self.dronePhase1 * 10.0) * self.clockEnv * Float(clkLvl)
 
-                // Breath: white noise → HP (~ctr-wid) → LP (~ctr+wid)
-                var noise = (Float.random(in: -1...1))
-                // HP
+                // Breath noise → HP → LP
+                let noise = Float.random(in: -1...1)
                 let hpCut = max(10.0, brCtr - brWid)
                 let aHP = exp(-2.0 * .pi * (hpCut / Float(sr)))
                 self.hpState = (1 - aHP) * noise + aHP * self.hpState
                 var breath = noise - self.hpState
-                // LP
                 let lpCut = min(Float(sr*0.45), brCtr + brWid)
                 let aLP = exp(-2.0 * .pi * (lpCut / Float(sr)))
                 self.lpState = (1 - aLP) * breath + aLP * self.lpState
                 breath = self.lpState * Float(brLvl)
 
-                // Overtones: additive partials
+                // Overtones
                 var over: Float = 0
-                for h in 2...6 {
-                    let p = Float(h)
-                    over += sinf(self.dronePhase1 * p) * (1.0 / p)
-                }
+                for h in 2...6 { let p = Float(h); over += sinf(self.dronePhase1 * p) * (1.0 / p) }
                 over *= Float(overM) * 0.6
 
-                // Sum dry signal
+                // Sum
                 var s = drone + clk + breath + over
-
-                // Simple delay FX (mono)
                 if !self.delayBuf.isEmpty {
                     let rd = self.delayIdx
                     let tapped = self.delayBuf[rd]
                     let wr = (rd + 1) % self.delayBuf.count
                     self.delayBuf[wr] = s + tapped * Float(dFb)
                     self.delayIdx = wr
-                    s = mix(s, tapped, t: Float(dMix))
+                    s = self.mix(s, tapped, t: Float(dMix))
                 }
-
-                // Soft limiter
-                s = softClip(s * Float(master), threshold: Float(limitT))
-
-                out.pointee = s; out = out.advanced(by: 1)
-                out.pointee = s; out = out.advanced(by: 1)
+                s = self.softClip(s * Float(master), threshold: Float(limitT))
+                lptr[i] = s; rptr[i] = s
             }
+            return noErr
         }
         self.sampleRate = sampleRate
-        device = try SDLAudioDevice(desired: spec)
-        device?.start()
+        engine.attach(node)
+        engine.connect(node, to: engine.mainMixerNode, format: format)
+        try engine.start()
+        self.avEngine = engine
     }
 
-    public func stop() { device?.pause(); device = nil; SDL.quit() }
+    public func stop() { avEngine?.stop(); avEngine = nil }
 
     // Back-compat mapping used by UI saliency
     public func setFrequency(_ f: Double) { baseFreq.store(Float(max(20, min(4000, f)))) }

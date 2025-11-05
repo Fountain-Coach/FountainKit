@@ -1143,5 +1143,11 @@ let package = Package(
             dependencies: ["patchbay-app"],
             path: "Sources/replay-export"
         )
+        ,
+        .executableTarget(
+            name: "midi-ump2m1-bridge",
+            dependencies: [],
+            path: "Sources/midi-ump2m1-bridge"
+        )
     ]
 )

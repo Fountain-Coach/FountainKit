@@ -101,7 +101,8 @@ let package = Package(
         .executable(name: "patchbay-saliency-seed", targets: ["patchbay-saliency-seed"])
         ,
         .executable(name: "quietframe-sonify-app", targets: ["quietframe-sonify-app"]),
-        .executable(name: "quietframe-companion-app", targets: ["quietframe-companion-app"])
+        .executable(name: "quietframe-companion-app", targets: ["quietframe-companion-app"]),
+        .executable(name: "quietframe-smoke", targets: ["quietframe-smoke"])
         
     ],
     dependencies: [
@@ -1194,6 +1195,14 @@ let package = Package(
                 .product(name: "MIDI2", package: "midi2")
             ],
             path: "Sources/quietframe-companion-app"
+        ),
+        .executableTarget(
+            name: "quietframe-smoke",
+            dependencies: [
+                .product(name: "MIDI2CI", package: "midi2"),
+                .product(name: "MIDI2", package: "midi2")
+            ],
+            path: "Sources/quietframe-smoke"
         ),
         .executableTarget(
             name: "quietframe-sonify-seed",

@@ -115,7 +115,7 @@ import MIDI2CI
     }
 
     private func sendUMP(words: [UInt32]) {
-        var listLen = MemoryLayout<MIDIEventList>.size + MemoryLayout<UInt32>.size * max(0, words.count - 1)
+        let listLen = MemoryLayout<MIDIEventList>.size + MemoryLayout<UInt32>.size * max(0, words.count - 1)
         let raw = UnsafeMutableRawPointer.allocate(byteCount: listLen, alignment: MemoryLayout<MIDIEventList>.alignment)
         defer { raw.deallocate() }
         let listPtr = raw.bindMemory(to: MIDIEventList.self, capacity: 1)
@@ -129,7 +129,7 @@ import MIDI2CI
 
 // MARK: - Inbound handling
 extension QuietFramePEClient {
-    private func onEventList(_ listPtr: UnsafePointer<MIDIEventList>) {
+    nonisolated private func onEventList(_ listPtr: UnsafePointer<MIDIEventList>) {
         var packet = listPtr.pointee.packet
         for _ in 0..<listPtr.pointee.numPackets {
             let count = Int(packet.wordCount)
@@ -146,7 +146,7 @@ extension QuietFramePEClient {
         }
     }
 
-    private func handleWords(_ words: [UInt32]) {
+    nonisolated private func handleWords(_ words: [UInt32]) {
         // SysEx7 only for now
         var bytes: [UInt8] = []
         var i = 0
@@ -171,17 +171,15 @@ extension QuietFramePEClient {
                 if pe.command == .getReply || pe.command == .notify {
                     if let obj = try? JSONSerialization.jsonObject(with: Data(pe.data)) as? [String: Any] {
                         if let data = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted]), let s = String(data: data, encoding: .utf8) {
-                            DispatchQueue.main.async { self.lastSnapshotJSON = s }
+                            Task { @MainActor in self.lastSnapshotJSON = s }
                         }
                     }
                 }
             }
         }
-        if let sink = eventSink {
-            let payload = words.map { String(format: "0x%08X", $0) }
-            if let data = try? JSONSerialization.data(withJSONObject: ["dir":"in","ump": payload], options: []), let s = String(data: data, encoding: .utf8) {
-                Task { @MainActor in sink(s) }
-            }
+        let payload = words.map { String(format: "0x%08X", $0) }
+        if let data = try? JSONSerialization.data(withJSONObject: ["dir":"in","ump": payload], options: []), let s = String(data: data, encoding: .utf8) {
+            Task { @MainActor in self.eventSink?(s) }
         }
     }
 }

@@ -338,6 +338,24 @@ let package = Package(
             ],
             path: "Tests/QuietFrameKitTests"
         ),
+        .testTarget(
+            name: "MetalInstrumentSysExTests",
+            dependencies: [
+                "MetalViewKit",
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit"),
+                .product(name: "MIDI2CI", package: "midi2")
+            ],
+            path: "Tests/MetalInstrumentSysExTests"
+        ),
+        .testTarget(
+            name: "MetalInstrumentRTPTests",
+            dependencies: [
+                "MetalViewKit",
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit"),
+                .product(name: "MIDI2CI", package: "midi2")
+            ],
+            path: "Tests/MetalInstrumentRTPTests"
+        ),
         // Audio engine (for focused builds with ROBOT_ONLY)
         .target(
             name: "FountainAudioEngine",
@@ -1225,6 +1243,7 @@ let package = Package(
             name: "quietframe-companion-app",
             dependencies: [
                 "FountainAudioEngine",
+                "MetalViewKit",
                 .product(name: "MIDI2CI", package: "midi2"),
                 .product(name: "MIDI2", package: "midi2")
             ],

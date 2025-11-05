@@ -95,6 +95,8 @@ let package = Package(
         .executable(name: "patchbay-test-scene-seed", targets: ["patchbay-test-scene-seed"])
         ,
         .executable(name: "patchbay-docs-seed", targets: ["patchbay-docs-seed"])
+        ,
+        .executable(name: "patchbay-saliency-seed", targets: ["patchbay-saliency-seed"])
         
     ],
     dependencies: [
@@ -1144,6 +1146,14 @@ let package = Package(
             path: "Sources/replay-export"
         )
         ,
+        .executableTarget(
+            name: "patchbay-saliency-seed",
+            dependencies: [
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/patchbay-saliency-seed"
+        ),
         .executableTarget(
             name: "midi-ump2m1-bridge",
             dependencies: [],

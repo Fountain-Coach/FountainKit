@@ -36,8 +36,9 @@
     private let streamQueue = DispatchQueue(label: "quietframe.rec.stream")
     private var tmpVideoURL: URL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("quietframe-video.mp4")
     private var tmpAudioURL: URL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("quietframe-audio.wav")
-    private var eventsURL: URL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("quietframe-events.ndjson")
-    private var eventsHandle: FileHandle?
+    private var metaInput: AVAssetWriterInput?
+    private var metaAdaptor: AVAssetWriterInputMetadataAdaptor?
+    private let metaTimescale: CMTimeScale = 1000
 
     func start(targetWindowTitle: String? = nil, fps: Int32 = 30) {
         switch state { case .idle, .finished: break; default: return }
@@ -49,7 +50,7 @@
         self.previewImage = nil
         try? FileManager.default.removeItem(at: tmpVideoURL)
         try? FileManager.default.removeItem(at: tmpAudioURL)
-        try? FileManager.default.removeItem(at: eventsURL)
+        // no sidecar metadata file
         Task { @MainActor in await self.beginStream() }
     }
 
@@ -96,9 +97,19 @@
         // Pass-through audio from ScreenCaptureKit sample buffers
         let aIn = AVAssetWriterInput(mediaType: .audio, outputSettings: nil)
         aIn.expectsMediaDataInRealTime = true
+        // Timed metadata track for UMP events
+        let mIn = AVAssetWriterInput(mediaType: .metadata, outputSettings: nil)
+        mIn.expectsMediaDataInRealTime = true
+        let mAdaptor = AVAssetWriterInputMetadataAdaptor(assetWriterInput: mIn)
         if writer.canAdd(vIn) { writer.add(vIn) }
         if writer.canAdd(aIn) { writer.add(aIn) }
-        self.writer = writer; self.videoInput = vIn; self.pixelAdaptor = adaptor; self.audioInput = aIn
+        if writer.canAdd(mIn) { writer.add(mIn) }
+        self.writer = writer
+        self.videoInput = vIn
+        self.pixelAdaptor = adaptor
+        self.audioInput = aIn
+        self.metaInput = mIn
+        self.metaAdaptor = mAdaptor
     }
 
     private func setupAudioFile(sampleRate: Double) throws {
@@ -129,8 +140,6 @@
             try setupWriter(size: size)
             writer?.startWriting()
             writer?.startSession(atSourceTime: .zero)
-            FileManager.default.createFile(atPath: eventsURL.path, contents: nil)
-            eventsHandle = try? FileHandle(forWritingTo: eventsURL)
 
             let stream = SCStream(filter: filter, configuration: cfg, delegate: nil)
             let output = StreamOutput(
@@ -188,13 +197,8 @@
         export?.outputURL = outURL
         export?.outputFileType = .mp4
         export?.shouldOptimizeForNetworkUse = true
-        let eventsSrc = self.eventsURL
         export?.exportAsynchronously {
             if export?.status == .completed {
-                // Move sidecar events next to the mp4
-                let eventsOut = outURL.deletingPathExtension().appendingPathExtension("ndjson")
-                try? FileManager.default.removeItem(at: eventsOut)
-                try? FileManager.default.copyItem(at: eventsSrc, to: eventsOut)
                 completion(outURL)
             } else {
                 completion(nil)
@@ -202,11 +206,17 @@
         }
     }
 
-    // Append UMP/PE events as NDJSON lines with coarse wallclock
+    // Append UMP/PE events as timed metadata entries in the MP4
     func appendMidiEvent(json: String) {
-        let ts = CFAbsoluteTimeGetCurrent() - startTime
-        let line = "{\"t\":\(String(format: "%.3f", ts)),\"e\":\(json)}\n"
-        if let d = line.data(using: .utf8) { try? eventsHandle?.write(contentsOf: d) }
+        guard let mIn = metaInput, let adaptor = metaAdaptor, mIn.isReadyForMoreMediaData else { return }
+        let secs = max(0, CFAbsoluteTimeGetCurrent() - startTime)
+        let pts = CMTime(seconds: secs, preferredTimescale: metaTimescale)
+        let item = AVMutableMetadataItem()
+        item.identifier = AVMetadataIdentifier("mdta:com.fountain.ump")
+        item.value = json as (any NSCopying & NSObjectProtocol)
+        item.dataType = kCMMetadataBaseDataType_UTF8 as String
+        let group = AVTimedMetadataGroup(items: [item], timeRange: CMTimeRange(start: pts, duration: CMTime(value: 1, timescale: metaTimescale)))
+        adaptor.append(group)
     }
 }
 

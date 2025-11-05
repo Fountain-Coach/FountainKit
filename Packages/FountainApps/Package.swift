@@ -97,6 +97,8 @@ let package = Package(
         .executable(name: "patchbay-docs-seed", targets: ["patchbay-docs-seed"])
         ,
         .executable(name: "patchbay-saliency-seed", targets: ["patchbay-saliency-seed"])
+        ,
+        .executable(name: "quietframe-sonify-app", targets: ["quietframe-sonify-app"])
         
     ],
     dependencies: [
@@ -286,6 +288,7 @@ let package = Package(
                 "MetalViewKit",
                 .product(name: "FountainStoreClient", package: "FountainCore"),
                 .product(name: "FountainAIAdapters", package: "FountainGatewayKit"),
+                .product(name: "ProviderLocalLLM", package: "FountainProviders"),
                 .product(name: "LLMGatewayAPI", package: "FountainAPIClients"),
                 .product(name: "ApiClientsCore", package: "FountainAPIClients"),
                 .product(name: "TutorDashboard", package: "FountainAPIClients"),
@@ -469,6 +472,7 @@ let package = Package(
                 .product(name: "Flow", package: "Flow"),
                 // Pivot: use MetalViewKit for canvas rendering; keep Flow only for legacy EditorCanvas in tests
                 "MetalViewKit",
+                .product(name: "ProviderLocalLLM", package: "FountainProviders"),
                 .product(name: "FountainAIAdapters", package: "FountainGatewayKit"),
                 .product(name: "LLMGatewayAPI", package: "FountainAPIClients"),
                 .product(name: "ApiClientsCore", package: "FountainAPIClients"),
@@ -1158,6 +1162,22 @@ let package = Package(
             name: "midi-ump2m1-bridge",
             dependencies: [],
             path: "Sources/midi-ump2m1-bridge"
+        ),
+        .executableTarget(
+            name: "quietframe-sonify-app",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                "MetalViewKit"
+            ],
+            path: "Sources/quietframe-sonify-app"
+        ),
+        .executableTarget(
+            name: "quietframe-sonify-seed",
+            dependencies: [
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/quietframe-sonify-seed"
         )
     ]
 )

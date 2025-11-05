@@ -17,13 +17,16 @@ struct SaliencyOverlay: View {
     private func attach() {
         NotificationCenter.default.addObserver(forName: .MetalCanvasMIDIActivity, object: nil, queue: .main) { note in
             guard let info = note.userInfo, let type = info["type"] as? String else { return }
-            if type == "ui.cursor.move" {
-                let dx = (info["doc.x"] as? NSNumber)?.doubleValue ?? 0
-                let dy = (info["doc.y"] as? NSNumber)?.doubleValue ?? 0
-                handleCursor(doc: CGPoint(x: dx, y: dy))
-            } else if type == "llm.pulse" {
-                // Pulse edge glow (optional hook); no-op by default
-                lastPulse = Date()
+            // Copy values out of the userInfo dictionary before hopping to the main actor
+            let dx = (info["doc.x"] as? NSNumber)?.doubleValue ?? 0
+            let dy = (info["doc.y"] as? NSNumber)?.doubleValue ?? 0
+            let isPulse = (type == "llm.pulse")
+            Task { @MainActor in
+                if type == "ui.cursor.move" {
+                    self.handleCursor(doc: CGPoint(x: dx, y: dy))
+                } else if isPulse {
+                    self.lastPulse = Date()
+                }
             }
         }
     }
@@ -34,6 +37,7 @@ struct SaliencyOverlay: View {
         return vm.nodes.first(where: { ($0.title ?? "").lowercased().contains("quiet frame") })
     }
 
+    @MainActor
     private func handleCursor(doc p: CGPoint) {
         guard let n = quietFrameNode() else { return }
         let rect = CGRect(x: CGFloat(n.x), y: CGFloat(n.y), width: CGFloat(n.w), height: CGFloat(n.h))

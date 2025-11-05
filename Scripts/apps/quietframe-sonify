@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage: Scripts/apps/quietframe-sonify [--corpus <id>] [--ollama] [--no-bridge] [--stop]
+
+Seeds the QuietFrame Sonify prompts, starts Csound + MIDI bridge, and launches the app.
+
+Options
+  --corpus <id>   Corpus id (default quietframe-sonify)
+  --ollama        Unused for now (reserved)
+  --no-bridge     Skip MIDI 2.0→1.0 bridge
+  --stop          Stop background services and exit
+USAGE
+}
+
+ROOT_DIR=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+PIDS_DIR="$ROOT_DIR/.fountain/pids"
+LOGS_DIR="$ROOT_DIR/.fountain/logs"
+mkdir -p "$PIDS_DIR" "$LOGS_DIR"
+
+CORPUS=${CORPUS_ID:-quietframe-sonify}
+START_BRIDGE=1
+DO_STOP=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --corpus) CORPUS="$2"; shift 2 ;;
+    --no-bridge) START_BRIDGE=0; shift ;;
+    --stop) DO_STOP=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown arg: $1" >&2; usage; exit 1 ;;
+  esac
+done
+
+stop_bg() {
+  local name="$1"; local pidfile="$PIDS_DIR/$name.pid"
+  if [[ -f "$pidfile" ]]; then
+    local pid; pid=$(cat "$pidfile" || true)
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+      echo "[stop] $name pid=$pid"
+      kill "$pid" 2>/dev/null || true
+      sleep 0.2
+      if kill -0 "$pid" 2>/dev/null; then kill -9 "$pid" 2>/dev/null || true; fi
+    fi
+    rm -f "$pidfile"
+  fi
+}
+
+if [[ "$DO_STOP" == "1" ]]; then
+  stop_bg midi-bridge
+  stop_bg csound-saliency
+  exit 0
+fi
+
+start_bg() {
+  local name="$1"; shift
+  local cmd=("$@")
+  local pidfile="$PIDS_DIR/$name.pid"
+  if [[ -f "$pidfile" ]]; then
+    local pid; pid=$(cat "$pidfile" || true)
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+      echo "[skip] $name already running (pid=$pid)"; return 0
+    fi
+  fi
+  echo "[start] $name → ${cmd[*]}"
+  ( "${cmd[@]}" >> "$LOGS_DIR/$name.log" 2>&1 ) &
+  echo $! > "$pidfile"
+}
+
+echo "[seed] CORPUS_ID=$CORPUS"
+FOUNTAIN_SKIP_LAUNCHER_SIG=1 CORPUS_ID="$CORPUS" swift run --package-path "$ROOT_DIR/Packages/FountainApps" quietframe-sonify-seed
+
+start_bg csound-saliency "$ROOT_DIR/Scripts/audiotalk/run-csound-saliency"
+if [[ "$START_BRIDGE" == "1" ]]; then
+  start_bg midi-bridge swift run --package-path "$ROOT_DIR/Packages/FountainApps" midi-ump2m1-bridge
+fi
+
+echo "[app] launching QuietFrame Sonify"
+swift run --package-path "$ROOT_DIR/Packages/FountainApps" quietframe-sonify-app
+

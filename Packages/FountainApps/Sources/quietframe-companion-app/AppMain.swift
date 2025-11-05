@@ -35,6 +35,9 @@ struct CompanionRootView: View {
             GroupBox {
                 Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
                     GridRow { Text("State").font(.caption); Text(pe.recState.capitalized).font(.caption).bold() }
+                    if let url = pe.lastSavedURL {
+                        GridRow { Text("Saved").font(.caption); Text(url).font(.caption2).truncationMode(.middle).lineLimit(1) }
+                    }
                     GridRow { Text("Master").font(.caption); Slider(value: $master, in: 0...1).frame(width: 160).onChange(of: master) { _, v in pe.set([("engine.masterGain", v)]) } }
                     GridRow { Text("Mute").font(.caption); Toggle("", isOn: $muted).toggleStyle(.switch).onChange(of: muted) { _, v in pe.set([("audio.muted", v ? 1.0 : 0.0)]) } }
                     GridRow { Text("Drone LPF").font(.caption); Slider(value: $droneLPF, in: 50...8000).frame(width: 160).onChange(of: droneLPF) { _, v in pe.set([("drone.lpfHz", v)]) } }

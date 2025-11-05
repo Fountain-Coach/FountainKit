@@ -7,6 +7,8 @@ import MIDI2CI
     @Published var connectedName: String? = nil
     @Published var lastSnapshotJSON: String = ""
     @Published var recState: String = "idle"
+    @Published var lastSavedURL: String? = nil
+    @Published var lastSavedDuration: Double? = nil
 
     private var client: MIDIClientRef = 0
     private var outPort: MIDIPortRef = 0
@@ -60,7 +62,20 @@ import MIDI2CI
                                 i += 2
                                 if status == 0x0 || status == 0x3 { break }
                             }
-                            if let env = try? MidiCiEnvelope(sysEx7Payload: bytes) {
+                            // Vendor JSON inbound (rec.saved)
+                            if bytes.count >= 8, bytes[0] == 0xF0, bytes[1] == 0x7D, bytes[2] == 0x4A, bytes[3] == 0x53, bytes[4] == 0x4F, bytes[5] == 0x4E, bytes[6] == 0x00 {
+                                let body = Data(bytes[7..<(bytes.count-1)])
+                                if let obj = try? JSONSerialization.jsonObject(with: body) as? [String: Any], let topic = obj["topic"] as? String {
+                                    if topic == "rec.saved", let data = obj["data"] as? [String: Any] {
+                                        let url = data["url"] as? String
+                                        let dur = data["durationSec"] as? Double
+                                        Task { @MainActor in
+                                            self.lastSavedURL = url
+                                            self.lastSavedDuration = dur
+                                        }
+                                    }
+                                }
+                            } else if let env = try? MidiCiEnvelope(sysEx7Payload: bytes) {
                                 if case .propertyExchange(let pe) = env.body, (pe.command == .getReply || pe.command == .notify) {
                                     if let obj = try? JSONSerialization.jsonObject(with: Data(pe.data)) as? [String: Any] {
                                         if let data = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted]), let s = String(data: data, encoding: .utf8) {

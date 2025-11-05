@@ -3,6 +3,7 @@ import AppKit
 import AVFoundation
 import CoreMedia
 import AudioToolbox
+@preconcurrency import ScreenCaptureKit
 import FountainAudioEngine
 
 @MainActor final class QuietFrameRecorder: ObservableObject {
@@ -22,6 +23,10 @@ import FountainAudioEngine
     private var audioSampleRate: Double = 48000
     private var audioFramesWritten: Int64 = 0
     private var audioFormatDesc: CMAudioFormatDescription?
+    // ScreenCaptureKit
+    private var scStream: SCStream?
+    private var scOutput: RecorderStreamOutput?
+    private var scConfig: SCStreamConfiguration?
 
     func startRecording(window: NSWindow, rect: CGRect, fps: Int32 = 30) {
         guard case .idle = state else { return }
@@ -31,10 +36,10 @@ import FountainAudioEngine
         do { try setupWriter(size: rect.size) } catch { print("[qfrec] setup error: \(error)"); return }
         writer?.startWriting(); writer?.startSession(atSourceTime: .zero)
         start = CFAbsoluteTimeGetCurrent()
-        let interval = 1.0 / Double(fps)
-        let t = Timer(timeInterval: interval, repeats: true) { [weak self] _ in Task { @MainActor in self?.captureFrame() } }
-        RunLoop.main.add(t, forMode: .common)
-        timer = t
+        // Start ScreenCaptureKit stream (macOS 14+). Falls back to timer capture if stream fails.
+        Task { @MainActor in
+            await self.startSCStreamFor(window: window, fps: fps)
+        }
         // Install audio tap and begin muxing audio frames
         FountainAudioEngine.installAudioTap { [weak self] lptr, rptr, n, sr in
             guard let self else { return }
@@ -67,12 +72,15 @@ import FountainAudioEngine
         timer?.invalidate(); timer = nil
         FountainAudioEngine.installAudioTap(nil)
         vIn?.markAsFinished(); aIn?.markAsFinished()
+        // Stop ScreenCaptureKit stream
+        if let scStream { try? scStream.stopCapture() }
+        scStream = nil; scOutput = nil; scConfig = nil
         writer?.finishWriting { [weak self] in
             guard let self else { return }
             DispatchQueue.main.async {
                 QuietFrameRuntime.setRecState("idle")
                 NotificationCenter.default.post(name: Notification.Name("QuietFrameRecordStateChanged"), object: nil)
-                self.state = .finished(self.tmpURL)
+                self.presentSaveAndNotify()
             }
         }
     }
@@ -159,5 +167,83 @@ import FountainAudioEngine
         if status == noErr, let sb {
             if aIn.append(sb) { audioFramesWritten += Int64(frames) }
         }
+    }
+
+    // MARK: - Save As and vendor notify
+    @MainActor private func presentSaveAndNotify() {
+        let duration = (audioSampleRate > 0) ? Double(audioFramesWritten) / audioSampleRate : max(0, CFAbsoluteTimeGetCurrent() - start)
+        let panel = NSSavePanel()
+        panel.canCreateDirectories = true
+        panel.allowedContentTypes = [.mpeg4Movie]
+        panel.nameFieldStringValue = "QuietFrame-\(Int(Date().timeIntervalSince1970)).mp4"
+        var finalURL = tmpURL
+        if panel.runModal() == .OK, let dest = panel.url {
+            do {
+                if FileManager.default.fileExists(atPath: dest.path) { try FileManager.default.removeItem(at: dest) }
+                try FileManager.default.copyItem(at: tmpURL, to: dest)
+                finalURL = dest
+            } catch {
+                // keep tmp on failure
+            }
+        }
+        // Inform companion via vendor JSON
+        QuietFrameInstrument.shared.instrument?.sendVendorJSONEvent(topic: "rec.saved", dict: [
+            "url": finalURL.absoluteString,
+            "durationSec": duration
+        ])
+        self.state = .finished(finalURL)
+    }
+
+    // MARK: - ScreenCaptureKit video pipeline
+    @MainActor private func startSCStreamFor(window: NSWindow, fps: Int32) async {
+        guard #available(macOS 13.0, *) else { return }
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            guard let scWindow = content.windows.first(where: { Int($0.windowID) == window.windowNumber }) else {
+                // Fallback: timer-based capture
+                let interval = 1.0 / Double(fps)
+                let t = Timer(timeInterval: interval, repeats: true) { [weak self] _ in Task { @MainActor in self?.captureFrame() } }
+                RunLoop.main.add(t, forMode: .common)
+                self.timer = t
+                return
+            }
+            let filter = SCContentFilter(desktopIndependentWindow: scWindow)
+            let cfg = SCStreamConfiguration()
+            cfg.width = Int(rect.width)
+            cfg.height = Int(rect.height)
+            cfg.pixelFormat = kCVPixelFormatType_32BGRA
+            cfg.showsCursor = false
+            cfg.minimumFrameInterval = CMTime(value: 1, timescale: fps)
+            let stream = SCStream(filter: filter, configuration: cfg, delegate: nil)
+            let output = RecorderStreamOutput(owner: self)
+            try stream.addStreamOutput(output, type: .screen, sampleHandlerQueue: .main)
+            try await stream.startCapture()
+            self.scStream = stream
+            self.scOutput = output
+            self.scConfig = cfg
+        } catch {
+            // Fallback to timer-based capture
+            let interval = 1.0 / Double(fps)
+            let t = Timer(timeInterval: interval, repeats: true) { [weak self] _ in Task { @MainActor in self?.captureFrame() } }
+            RunLoop.main.add(t, forMode: .common)
+            self.timer = t
+        }
+    }
+
+    @MainActor fileprivate func appendVideo(sampleBuffer: CMSampleBuffer) {
+        guard let vIn, let adaptor = vAdaptor, vIn.isReadyForMoreMediaData else { return }
+        guard let px = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        adaptor.append(px, withPresentationTime: pts)
+    }
+}
+
+@available(macOS 13.0, *)
+private final class RecorderStreamOutput: NSObject, @preconcurrency SCStreamOutput {
+    weak var owner: QuietFrameRecorder?
+    init(owner: QuietFrameRecorder) { self.owner = owner }
+    @MainActor func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
+        guard type == .screen, let owner else { return }
+        owner.appendVideo(sampleBuffer: sampleBuffer)
     }
 }

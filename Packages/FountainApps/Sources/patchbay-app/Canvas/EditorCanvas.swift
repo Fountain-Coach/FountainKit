@@ -207,8 +207,10 @@ final class EditorVM: ObservableObject {
         let cs = add("csound", "Csound", g*12, 0)
         let chat = add("chat", "LLM Chat (Ollama)", 0, -g*7)
         ports(qf, [], ["out"]) ; ports(cs, ["in"], []) ;
-        ports(chat, ["prompt"], ["answer"]) // for future expansion
+        ports(chat, ["prompt"], ["answer"]) // future expansion
         ensureEdge(from: (qf, "out"), to: (cs, "in"))
+        // Pulse visualization from chat to csound (no payload processing yet)
+        ensureEdge(from: (chat, "answer"), to: (cs, "in"))
     }
 
     // MARK: - MIDI 2.0 activity helpers (UI-level events)

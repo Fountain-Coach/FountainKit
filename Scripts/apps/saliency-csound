@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage: Scripts/apps/saliency-csound [--corpus <id>] [--ollama]
+
+Seeds the Saliency + Csound + Ollama Teatro prompt and launches PatchBay.
+Options
+  --corpus <id>   Corpus id (defaults to baseline-patchbay)
+  --ollama        Prefer Ollama (PATCHBAY_USE_OLLAMA=1); OLLAMA_MODEL can override
+
+Environment
+  CORPUS_ID               Override corpus id
+  PATCHBAY_USE_OLLAMA     Force Ollama path (1=yes)
+  OLLAMA_MODEL            Model (default codellama)
+
+Examples
+  Scripts/audiotalk/run-csound-saliency &
+  Scripts/apps/saliency-csound --ollama
+USAGE
+}
+
+CORPUS=${CORPUS_ID:-baseline-patchbay}
+USE_OLLAMA=${PATCHBAY_USE_OLLAMA:-0}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --corpus) CORPUS="$2"; shift 2 ;;
+    --ollama) USE_OLLAMA=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown arg: $1" >&2; usage; exit 1 ;;
+  esac
+done
+
+ROOT_DIR=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+
+echo "[seed] CORPUS_ID=$CORPUS"
+CORPUS_ID="$CORPUS" swift run --package-path "$ROOT_DIR/Packages/FountainApps" --target patchbay-saliency-seed
+
+echo "[app] launching PatchBay Studio"
+if [[ "$USE_OLLAMA" == "1" ]]; then
+  PATCHBAY_USE_OLLAMA=1 swift run --package-path "$ROOT_DIR/Packages/FountainApps" patchbay-app
+else
+  swift run --package-path "$ROOT_DIR/Packages/FountainApps" patchbay-app
+fi
+

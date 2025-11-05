@@ -156,6 +156,15 @@ fileprivate struct NodeTitlesOverlay: View {
                     DispatchQueue.main.async { lastPass = p }
                 }
             }
+            // Animate edges from Chat → downstream on LLM streaming pulses
+            NotificationCenter.default.addObserver(forName: .MetalCanvasMIDIActivity, object: nil, queue: .main) { noti in
+                guard let info = noti.userInfo, let t = info["type"] as? String, t == "llm.pulse" else { return }
+                // Find all edges that start at chat.answer.* and glow them briefly
+                let refs = vm.edges.filter { $0.from.hasPrefix("chat.answer") }
+                for e in refs {
+                    vm.transientGlowEdge(fromRef: e.from, toRef: e.to, duration: 0.5)
+                }
+            }
         }
     }
 }

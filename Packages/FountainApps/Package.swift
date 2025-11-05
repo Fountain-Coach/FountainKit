@@ -95,6 +95,7 @@ let package = Package(
         .executable(name: "patchbay-test-scene-seed", targets: ["patchbay-test-scene-seed"])
         ,
         .executable(name: "patchbay-docs-seed", targets: ["patchbay-docs-seed"])
+        
     ],
     dependencies: [
         .package(path: "../FountainCore"),
@@ -257,6 +258,14 @@ let package = Package(
                 .product(name: "LauncherSignature", package: "FountainCore"),
             ],
             path: "Sources/patchbay-test-scene-seed"
+        ),
+        .executableTarget(
+            name: "patchbay-saliency-seed",
+            dependencies: [
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/patchbay-saliency-seed"
         ),
         .executableTarget(
             name: "baseline-editor-seed",

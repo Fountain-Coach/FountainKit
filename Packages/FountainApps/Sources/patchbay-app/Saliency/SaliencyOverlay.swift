@@ -49,6 +49,10 @@ struct SaliencyOverlay: View {
         }()
 
         driveCsound(intensity: intensity)
+        if intensity > 0 {
+            // Visualise flow: QuietFrame.out → Csound.in
+            vm.transientGlowEdge(fromRef: "quietframe.out", toRef: "csound.in", duration: 0.8)
+        }
         lastInside = inside
     }
 
@@ -70,4 +74,3 @@ struct SaliencyOverlay: View {
         }
     }
 }
-

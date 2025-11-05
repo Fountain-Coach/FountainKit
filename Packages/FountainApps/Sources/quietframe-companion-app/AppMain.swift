@@ -53,7 +53,10 @@ struct CompanionRootView: View {
             Divider()
             // Right: Player and Recorder
             PlayerPaneView(recorder: recorder)
-                .onAppear { recorder.start(targetWindowTitle: "QuietFrame Sonify") }
+                .onAppear {
+                    recorder.start(targetWindowTitle: "QuietFrame Sonify")
+                    pe.eventSink = { [weak recorder] json in recorder?.appendMidiEvent(json: json) }
+                }
         }
         .frame(minWidth: 1024, minHeight: 600)
     }

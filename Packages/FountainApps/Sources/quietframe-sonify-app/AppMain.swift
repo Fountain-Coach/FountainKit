@@ -46,21 +46,25 @@ struct QuietFrameView: View {
                     Color(NSColor.windowBackgroundColor)
                     VStack {
                         Spacer()
-                        ZStack {
-                            QuietFrameShape()
-                                .fill(Color.white)
-                                .overlay(
-                                    QuietFrameShape()
-                                        .stroke(Color.secondary.opacity(0.35), lineWidth: 1)
-                                )
-                                .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
-                                .frame(width: frameSize.width, height: frameSize.height)
-                            MouseTracker(onMove: { p in
-                                updateSaliency(point: p)
-                            })
-                            .frame(width: frameSize.width, height: frameSize.height)
-                            .allowsHitTesting(true)
-                        }
+                    ZStack {
+                        MetalTriangleView(
+                            onReady: nil,
+                            instrument: MetalInstrumentDescriptor(
+                                manufacturer: "Fountain",
+                                product: "QuietFrameView",
+                                instanceId: "qf-view",
+                                displayName: "Quiet Frame View"
+                            )
+                        )
+                        .frame(width: frameSize.width, height: frameSize.height)
+                        .clipShape(QuietFrameShape())
+                        .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
+                        MouseTracker(onMove: { p in
+                            updateSaliency(point: p)
+                        })
+                        .frame(width: frameSize.width, height: frameSize.height)
+                        .allowsHitTesting(true)
+                    }
                         Spacer()
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

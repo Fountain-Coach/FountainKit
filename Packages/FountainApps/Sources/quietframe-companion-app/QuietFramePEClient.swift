@@ -72,6 +72,8 @@ import MIDI2CI
         requestId &+= 1
     }
 
+    var eventSink: ((String) -> Void)? = nil
+
     private func sendSysEx7(bytes: [UInt8]) {
         var words: [UInt32] = []
         var idx = 0
@@ -92,6 +94,12 @@ import MIDI2CI
             idx += n
         }
         sendUMP(words: words)
+        if let sink = eventSink {
+            let payload = words.map { String(format: "0x%08X", $0) }
+            if let data = try? JSONSerialization.data(withJSONObject: ["dir":"out","ump": payload], options: []), let s = String(data: data, encoding: .utf8) {
+                sink(s)
+            }
+        }
     }
 
     private func sendUMP(words: [UInt32]) {
@@ -155,6 +163,12 @@ extension QuietFramePEClient {
                         }
                     }
                 }
+            }
+        }
+        if let sink = eventSink {
+            let payload = words.map { String(format: "0x%08X", $0) }
+            if let data = try? JSONSerialization.data(withJSONObject: ["dir":"in","ump": payload], options: []), let s = String(data: data, encoding: .utf8) {
+                sink(s)
             }
         }
     }

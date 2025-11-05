@@ -36,6 +36,8 @@
     private let streamQueue = DispatchQueue(label: "quietframe.rec.stream")
     private var tmpVideoURL: URL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("quietframe-video.mp4")
     private var tmpAudioURL: URL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("quietframe-audio.wav")
+    private var eventsURL: URL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("quietframe-events.ndjson")
+    private var eventsHandle: FileHandle?
 
     func start(targetWindowTitle: String? = nil, fps: Int32 = 30) {
         switch state { case .idle, .finished: break; default: return }
@@ -47,6 +49,7 @@
         self.previewImage = nil
         try? FileManager.default.removeItem(at: tmpVideoURL)
         try? FileManager.default.removeItem(at: tmpAudioURL)
+        try? FileManager.default.removeItem(at: eventsURL)
         Task { @MainActor in await self.beginStream() }
     }
 
@@ -126,6 +129,8 @@
             try setupWriter(size: size)
             writer?.startWriting()
             writer?.startSession(atSourceTime: .zero)
+            FileManager.default.createFile(atPath: eventsURL.path, contents: nil)
+            eventsHandle = try? FileHandle(forWritingTo: eventsURL)
 
             let stream = SCStream(filter: filter, configuration: cfg, delegate: nil)
             let output = StreamOutput(
@@ -183,7 +188,25 @@
         export?.outputURL = outURL
         export?.outputFileType = .mp4
         export?.shouldOptimizeForNetworkUse = true
-        export?.exportAsynchronously { completion(export?.status == .completed ? outURL : nil) }
+        let eventsSrc = self.eventsURL
+        export?.exportAsynchronously {
+            if export?.status == .completed {
+                // Move sidecar events next to the mp4
+                let eventsOut = outURL.deletingPathExtension().appendingPathExtension("ndjson")
+                try? FileManager.default.removeItem(at: eventsOut)
+                try? FileManager.default.copyItem(at: eventsSrc, to: eventsOut)
+                completion(outURL)
+            } else {
+                completion(nil)
+            }
+        }
+    }
+
+    // Append UMP/PE events as NDJSON lines with coarse wallclock
+    func appendMidiEvent(json: String) {
+        let ts = CFAbsoluteTimeGetCurrent() - startTime
+        let line = "{\"t\":\(String(format: "%.3f", ts)),\"e\":\(json)}\n"
+        if let d = line.data(using: .utf8) { try? eventsHandle?.write(contentsOf: d) }
     }
 }
 
@@ -199,6 +222,9 @@ final class StreamOutput: NSObject, SCStreamOutput {
             if let pb = CMSampleBufferGetImageBuffer(sampleBuffer) { onVideo(pb, CMSampleBufferGetPresentationTimeStamp(sampleBuffer)) }
         case .audio:
             onAudio(sampleBuffer)
+        case .microphone:
+            // ignore for now
+            break
         @unknown default:
             break
         }

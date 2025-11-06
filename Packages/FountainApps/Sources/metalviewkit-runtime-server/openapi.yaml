@@ -225,6 +225,13 @@ paths:
     get:
       operationId: tracingStream
       tags: [tracing]
+      description: |
+        Upgrades to a WebSocket connection that emits periodic JSON text frames. The initial frame is a
+        JSON array of TraceEvent objects; subsequent frames repeat that array as a heartbeat.
+      x-ws-message:
+        initial:
+          type: array
+          items: { $ref: '#/components/schemas/TraceEvent' }
       responses: { '101': { description: WebSocket established } }
 
   /v1/tracing/dump:
@@ -233,6 +240,17 @@ paths:
       tags: [tracing]
       responses:
         '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TraceEvent' } } } } }
+  /v1/tracing/sse:
+    get:
+      tags: [tracing]
+      summary: Live tracing Server-Sent Events (SSE)
+      description: Emits SSE events with JSON-encoded TraceEvent objects.
+      responses:
+        '200':
+          description: OK (SSE stream)
+          content:
+            text/event-stream:
+              schema: { type: string }
 
   /v1/audio/backend:
     get:
@@ -297,7 +315,21 @@ paths:
     get:
       operationId: audioBackendEvents
       tags: [audio-backend, tracing]
+      description: WebSocket that emits backend status messages as periodic JSON text frames.
+      x-ws-message:
+        example: { $ref: '#/components/schemas/AudioBackendStatus' }
       responses: { '101': { description: WebSocket established } }
+  /v1/audio/backend/events-sse:
+    get:
+      tags: [audio-backend, tracing]
+      summary: Backend events Server-Sent Events (SSE)
+      description: Emits SSE events with JSON-encoded backend status objects.
+      responses:
+        '200':
+          description: OK (SSE stream)
+          content:
+            text/event-stream:
+              schema: { type: string }
 
 components:
   parameters:

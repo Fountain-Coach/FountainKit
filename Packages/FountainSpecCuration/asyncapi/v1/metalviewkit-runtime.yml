@@ -1,0 +1,44 @@
+asyncapi: 2.6.0
+info:
+  title: MetalViewKit Runtime — Streaming API
+  version: 0.1.0
+  description: WebSocket channels for tracing and backend status.
+defaultContentType: application/json
+servers:
+  local:
+    url: ws://localhost:7777
+    protocol: ws
+channels:
+  /v1/tracing/stream:
+    description: Emits JSON frames containing arrays of TraceEvent.
+    subscribe:
+      message:
+        name: TraceEventList
+        payload:
+          type: array
+          items:
+            $ref: '#/components/schemas/TraceEvent'
+  /v1/audio/backend/events:
+    description: Emits backend status frames.
+    subscribe:
+      message:
+        name: BackendEvent
+        payload:
+          $ref: '#/components/schemas/BackendEvent'
+components:
+  schemas:
+    TraceEvent:
+      type: object
+      properties:
+        type: { type: string }
+        tNs: { type: string }
+        detail: { type: object }
+    BackendEvent:
+      type: object
+      properties:
+        type: { type: string, const: backend.status }
+        backend: { type: string, enum: [coreaudio, sdl2, alsa, wasapi, null] }
+        streaming: { type: boolean }
+        deviceId: { type: string }
+        sampleRate: { type: number }
+        blockFrames: { type: integer }

@@ -225,6 +225,13 @@ paths:
     get:
       operationId: tracingStream
       tags: [tracing]
+      description: |
+        Upgrades to a WebSocket connection that emits periodic JSON text frames. The initial frame is a
+        JSON array of TraceEvent objects; subsequent frames repeat that array as a heartbeat for simplicity.
+      x-ws-message:
+        initial:
+          type: array
+          items: { $ref: '#/components/schemas/TraceEvent' }
       responses: { '101': { description: WebSocket established } }
 
   /v1/tracing/dump:
@@ -297,6 +304,11 @@ paths:
     get:
       operationId: audioBackendEvents
       tags: [audio-backend, tracing]
+      description: |
+        WebSocket that emits backend status messages as periodic JSON text frames. The initial frame is
+        a JSON backend event with type `backend.status`.
+      x-ws-message:
+        example: { $ref: '#/components/schemas/BackendEvent' }
       responses: { '101': { description: WebSocket established } }
 
 components:
@@ -446,6 +458,15 @@ components:
         type: { type: string }
         tNs: { $ref: '#/components/schemas/TimestampNs' }
         detail: { type: object }
+    BackendEvent:
+      type: object
+      properties:
+        type: { type: string, const: backend.status }
+        backend: { $ref: '#/components/schemas/AudioBackend' }
+        streaming: { type: boolean }
+        deviceId: { type: string }
+        sampleRate: { type: number, format: float }
+        blockFrames: { type: integer }
 
     AudioBackendStatus:
       type: object

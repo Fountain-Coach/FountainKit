@@ -34,8 +34,8 @@ public final class NIOHTTPServer: @unchecked Sendable {
             return channel.eventLoop.makeFailedFuture(NIOWebSocketUpgradeError.invalidUpgradeHeader)
         }, upgradePipelineHandler: { (channel, head) in
             let path = head.uri.split(separator: "?").first.map(String.init) ?? head.uri
-            let text = self.webSocketRoutes[path]?() ?? "{}"
-            return channel.pipeline.addHandler(BasicWebSocketHandler(initialText: text))
+            let provider = self.webSocketRoutes[path] ?? { "{}" }
+            return channel.pipeline.addHandler(BasicWebSocketHandler(provider: provider))
         })
 
         let config = NIOHTTPServerUpgradeConfiguration(upgraders: [upgrader], completionHandler: { _ in })
@@ -154,18 +154,45 @@ extension NIOHTTPServer.HTTPHandler: @unchecked Sendable {}
 
 extension ChannelHandlerContext: @unchecked @retroactive Sendable {}
 
-final class BasicWebSocketHandler: ChannelInboundHandler {
+final class BasicWebSocketHandler: ChannelInboundHandler, @unchecked Sendable {
     typealias InboundIn = WebSocketFrame
     typealias OutboundOut = WebSocketFrame
-    let initialText: String
-    init(initialText: String) { self.initialText = initialText }
+    private let provider: @Sendable () -> String
+    private let interval: TimeAmount
+    private var task: RepeatedTask?
+    init(provider: @escaping @Sendable () -> String, interval: TimeAmount = .milliseconds(250)) {
+        self.provider = provider
+        self.interval = interval
+    }
     func handlerAdded(context: ChannelHandlerContext) {
+        // Emit initial payload
+        let initialText = provider()
         var buffer = context.channel.allocator.buffer(capacity: initialText.utf8.count)
         buffer.writeString(initialText)
         let frame = WebSocketFrame(fin: true, opcode: .text, data: buffer)
         context.writeAndFlush(self.wrapOutboundOut(frame), promise: nil)
+        // Start periodic emits
+        task = context.eventLoop.scheduleRepeatedTask(initialDelay: interval, delay: interval) { [weak self] _ in
+            guard let self else { return }
+            let text = self.provider()
+            var buf = context.channel.allocator.buffer(capacity: text.utf8.count)
+            buf.writeString(text)
+            let frame = WebSocketFrame(fin: true, opcode: .text, data: buf)
+            context.writeAndFlush(self.wrapOutboundOut(frame), promise: nil)
+        }
     }
-    func channelRead(context: ChannelHandlerContext, data: NIOAny) {}
+    func channelInactive(context: ChannelHandlerContext) {
+        task?.cancel()
+        task = nil
+    }
+    func errorCaught(context: ChannelHandlerContext, error: Error) {
+        task?.cancel()
+        task = nil
+        context.close(promise: nil)
+    }
+    func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+        // Ignore inbound frames for now
+    }
 }
 
 // © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

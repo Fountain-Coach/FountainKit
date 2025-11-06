@@ -238,8 +238,10 @@ extension MetalInstrument {
 
     // Convenience send helpers (Channel Voice 2.0)
     public func sendCC(controller: UInt8, value7: UInt8, channel: UInt8 = 0) {
-        let group = desc.midiGroup
-        let w0 = (UInt32(0x4) << 28) | (UInt32(group & 0xF) << 24) | (UInt32(0xB) << 20) | (UInt32(channel & 0xF) << 16) | (UInt32(controller) << 8)
+        let g = UInt32(desc.midiGroup & 0x0F)
+        let ch = UInt32(channel & 0x0F)
+        let ctrl = UInt32(controller & 0x7F)
+        let w0 = (UInt32(0x4) &<< 28) | (g &<< 24) | (UInt32(0xB) &<< 20) | (ch &<< 16) | (ctrl &<< 8)
         // Scale 7-bit value (0..127) into full 32-bit domain (0..0xFFFF_FFFF)
         // Use floating-point with clamping to avoid any intermediate overflow in debug builds.
         let scaled = min(4294967295.0, max(0.0, (Double(value7) / 127.0) * 4294967295.0))
@@ -248,16 +250,20 @@ extension MetalInstrument {
     }
 
     public func sendNoteOn(note: UInt8, velocity7: UInt8, channel: UInt8 = 0) {
-        let group = desc.midiGroup
-        let w0 = (UInt32(0x4) << 28) | (UInt32(group & 0xF) << 24) | (UInt32(0x9) << 20) | (UInt32(channel & 0xF) << 16) | (UInt32(note) << 8)
+        let g = UInt32(desc.midiGroup & 0x0F)
+        let ch = UInt32(channel & 0x0F)
+        let n = UInt32(note & 0x7F)
+        let w0 = (UInt32(0x4) &<< 28) | (g &<< 24) | (UInt32(0x9) &<< 20) | (ch &<< 16) | (n &<< 8)
         let v16 = UInt16(velocity7) * 65535 / 127
         let w1 = UInt32(v16) << 16
         session?.send(words: [w0, w1])
     }
 
     public func sendNoteOff(note: UInt8, velocity7: UInt8, channel: UInt8 = 0) {
-        let group = desc.midiGroup
-        let w0 = (UInt32(0x4) << 28) | (UInt32(group & 0xF) << 24) | (UInt32(0x8) << 20) | (UInt32(channel & 0xF) << 16) | (UInt32(note) << 8)
+        let g = UInt32(desc.midiGroup & 0x0F)
+        let ch = UInt32(channel & 0x0F)
+        let n = UInt32(note & 0x7F)
+        let w0 = (UInt32(0x4) &<< 28) | (g &<< 24) | (UInt32(0x8) &<< 20) | (ch &<< 16) | (n &<< 8)
         let v16 = UInt16(velocity7) * 65535 / 127
         let w1 = UInt32(v16) << 16
         session?.send(words: [w0, w1])

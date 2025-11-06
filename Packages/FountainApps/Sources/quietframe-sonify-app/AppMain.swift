@@ -39,6 +39,7 @@ struct QuietFrameView: View {
     @State private var section: Int = 1
     @State private var midiEvents: [String] = []
     @StateObject private var recorder = QuietFrameRecorder()
+    @StateObject private var sidecar = SidecarInbound()
     var body: some View {
         GeometryReader { geo in
             ZStack {

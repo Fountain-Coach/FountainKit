@@ -219,16 +219,19 @@ final class CoreMIDIMetalInstrumentSession: MetalInstrumentTransportSession, @un
         source = tmpSource
 
         var tmpDest: MIDIEndpointRef = 0
-        status = MIDIDestinationCreateWithProtocol(client, descriptor.displayName as CFString, ._2_0, &tmpDest) { pktlist, _ in
-            guard let pktlist else { return }
-            for i in 0..<pktlist.pointee.numPackets {
-                let pkt = pktlist.pointee.packet[Int(i)]
-                if pkt.wordCount > 0 {
+        status = MIDIDestinationCreateWithProtocol(client, descriptor.displayName as CFString, ._2_0, &tmpDest) { listPtr, _ in
+            let list = listPtr.pointee
+            var packet = list.packet
+            for _ in 0..<list.numPackets {
+                let count = Int(packet.wordCount)
+                if count > 0 {
                     var words: [UInt32] = []
-                    let ptr = UnsafeBufferPointer(start: pkt.words, count: Int(pkt.wordCount))
-                    words.append(contentsOf: ptr)
+                    let base = withUnsafePointer(to: packet.words) { ptr in UnsafeRawPointer(ptr).assumingMemoryBound(to: UInt32.self) }
+                    let buf = UnsafeBufferPointer(start: base, count: count)
+                    words.append(contentsOf: buf)
                     receiveUMP(words)
                 }
+                packet = MIDIEventPacketNext(&packet).pointee
             }
         }
         guard status == noErr else {
@@ -240,21 +243,18 @@ final class CoreMIDIMetalInstrumentSession: MetalInstrumentTransportSession, @un
     }
 
     func send(words: [UInt32]) {
-        // Send as a single packet list (UMP 128-bit aligned)
-        var words = words
-        words.withUnsafeMutableBufferPointer { buf in
-            var list = MIDIEventList()
-            list.protocol = ._2_0
-            list.timeStamp = 0
-            list.wordCount = UInt32(buf.count)
-            withUnsafeMutablePointer(to: &list) { listPtr in
-                buf.withMemoryRebound(to: UInt32.self) { ptr in
-                    listPtr.pointee.packet.pointee.wordCount = UInt32(ptr.count)
-                    memcpy(listPtr.pointee.packet.pointee.words, ptr.baseAddress, ptr.count * MemoryLayout<UInt32>.size)
-                }
-            }
-            MIDIReceivedEventList(destination, &list)
+        // Send as a single MIDIEventList with one packet
+        let wordsCount = max(1, words.count)
+        let byteCount = MemoryLayout<MIDIEventList>.size + MemoryLayout<UInt32>.size * (wordsCount - 1)
+        let raw = UnsafeMutableRawPointer.allocate(byteCount: byteCount, alignment: MemoryLayout<MIDIEventList>.alignment)
+        defer { raw.deallocate() }
+        let listPtr = raw.bindMemory(to: MIDIEventList.self, capacity: 1)
+        var cur = MIDIEventListInit(listPtr, ._2_0)
+        var ws = words
+        ws.withUnsafeMutableBufferPointer { buf in
+            cur = MIDIEventListAdd(listPtr, byteCount, cur, 0, Int(buf.count), buf.baseAddress!)
         }
+        MIDIReceivedEventList(destination, listPtr)
     }
 
     func close() {
@@ -264,4 +264,3 @@ final class CoreMIDIMetalInstrumentSession: MetalInstrumentTransportSession, @un
     }
 }
 #endif
-

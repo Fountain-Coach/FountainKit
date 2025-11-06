@@ -1,17 +1,14 @@
 import Foundation
-// Minimal bridge stub: in headless tests we do not forward to MVK.
+import MetalViewKit
 
-/// MVKBridge offers a tiny shim for tests to forward runtime UMP words
-/// to a running MetalViewKit instrument by display name.
-///
-/// In ROBOT_ONLY mode, the default transport is Loopback; otherwise CoreMIDI.
+/// MVKBridge forwards UMP words to running MetalViewKit instruments.
+/// In headless/robot tests, Loopback transport is used. CoreMIDI is optional and not required for tests.
 public enum MVKBridge {
     /// Sends UMP words to the first MVK instrument whose display name contains `displayNameSubstring`.
     /// Returns true when a matching instrument was found and accepted the words.
     @discardableResult
     public static func sendUMP(words: [UInt32], toDisplayNameContaining displayNameSubstring: String) -> Bool {
-        _ = displayNameSubstring
-        return false
+        LoopbackMetalInstrumentTransport.shared.send(words: words, toDisplayName: displayNameSubstring)
     }
 
     /// Sends a batch of UMP words arrays to a target resolved from parameters/env.
@@ -20,8 +17,15 @@ public enum MVKBridge {
     public static func sendBatch(_ batch: [[UInt32]],
                                  targetDisplayNameSubstring: String? = nil,
                                  targetInstanceId: String? = nil) -> Int {
-        _ = targetInstanceId; _ = targetDisplayNameSubstring
-        return 0
+        let envTarget = ProcessInfo.processInfo.environment["MVK_BRIDGE_TARGET"]
+        let display = targetDisplayNameSubstring ?? envTarget ?? "Canvas"
+        var delivered = 0
+        if let iid = targetInstanceId, !iid.isEmpty {
+            for words in batch { if LoopbackMetalInstrumentTransport.shared.send(words: words, toInstanceId: iid) { delivered += 1 } }
+            if delivered > 0 { return delivered }
+        }
+        for words in batch { if LoopbackMetalInstrumentTransport.shared.send(words: words, toDisplayName: display) { delivered += 1 } }
+        return delivered
     }
 
     // Build SysEx7 UMP words from a raw bytes payload (6 data bytes per packet)
@@ -45,20 +49,25 @@ public enum MVKBridge {
         return words
     }
 
+    /// Sends a vendor JSON envelope as SysEx7 UMP to the resolved target.
     @discardableResult
     public static func sendVendorJSON(topic: String,
                                       data: [String: Any] = [:],
                                       targetDisplayNameSubstring: String? = nil,
                                       targetInstanceId: String? = nil,
                                       group: UInt8 = 0) -> Bool {
+        let words = buildVendorUMP(topic: topic, data: data, group: group)
+        return sendBatch([words], targetDisplayNameSubstring: targetDisplayNameSubstring, targetInstanceId: targetInstanceId) > 0
+    }
+
+    /// Build vendor JSON SysEx7 UMP words from a topic and optional data map.
+    public static func buildVendorUMP(topic: String, data: [String: Any] = [:], group: UInt8 = 0) -> [UInt32] {
         var payload: [UInt8] = [0xF0, 0x7D, 0x4A, 0x53, 0x4E, 0x00]
         var body: [String: Any] = ["topic": topic]
         if !data.isEmpty { body["data"] = data }
         let json = (try? JSONSerialization.data(withJSONObject: body)) ?? Data()
         payload.append(contentsOf: json)
         payload.append(0xF7)
-        _ = buildSysEx7Words(bytes: payload, group: group)
-        _ = targetDisplayNameSubstring; _ = targetInstanceId
-        return false
+        return buildSysEx7Words(bytes: payload, group: group)
     }
 }

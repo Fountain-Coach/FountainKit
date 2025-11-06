@@ -17,10 +17,17 @@ public final class NIOHTTPServer: @unchecked Sendable {
     ///   - kernel: Router handling incoming requests.
     ///   - group: Event loop group providing NIO threads. Defaults to a single-threaded group.
     let webSocketRoutes: [String: @Sendable () -> String]
-    public init(kernel: HTTPKernel, group: EventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1), webSocketRoutes: [String: @Sendable () -> String] = [:]) {
+    let sseRoutes: [String: @Sendable () -> String]
+    public init(
+        kernel: HTTPKernel,
+        group: EventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1),
+        webSocketRoutes: [String: @Sendable () -> String] = [:],
+        sseRoutes: [String: @Sendable () -> String] = [:]
+    ) {
         self.kernel = kernel
         self.group = group
         self.webSocketRoutes = webSocketRoutes
+        self.sseRoutes = sseRoutes
     }
 
     /// Starts the HTTP server.
@@ -45,7 +52,7 @@ public final class NIOHTTPServer: @unchecked Sendable {
             .serverChannelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
             .childChannelInitializer { channel in
                 channel.pipeline.configureHTTPServerPipeline(withServerUpgrade: config).flatMap {
-                    channel.pipeline.addHandler(HTTPHandler(kernel: self.kernel))
+                    channel.pipeline.addHandler(HTTPHandler(kernel: self.kernel, sseRoutes: self.sseRoutes))
                 }
             }
         self.channel = try await bootstrap.bind(host: "127.0.0.1", port: port).get()
@@ -65,15 +72,19 @@ public final class NIOHTTPServer: @unchecked Sendable {
 
         /// Kernel responsible for routing incoming requests.
         let kernel: HTTPKernel
+        let sseRoutes: [String: @Sendable () -> String]
         /// Stored request head while waiting for the body.
         var head: HTTPRequestHead?
         /// Accumulated body bytes for the current request.
         var body: ByteBuffer?
+        /// Repeated task for SSE streams.
+        var sseTask: RepeatedTask?
 
         /// Creates a new handler bound to the provided ``HTTPKernel``.
         /// - Parameter kernel: Kernel responsible for routing requests.
-        init(kernel: HTTPKernel) {
+        init(kernel: HTTPKernel, sseRoutes: [String: @Sendable () -> String]) {
             self.kernel = kernel
+            self.sseRoutes = sseRoutes
         }
 
         /// Handles inbound HTTP request parts and dispatches them through the ``HTTPKernel``.
@@ -86,6 +97,28 @@ public final class NIOHTTPServer: @unchecked Sendable {
                 body?.writeBuffer(&part)
             case .end:
                 guard let head else { return }
+                // Intercept SSE routes for indefinite streaming
+                let pathOnly = head.uri.split(separator: "?").first.map(String.init) ?? head.uri
+                if let provider = self.sseRoutes[pathOnly] {
+                    var headers = HTTPHeaders()
+                    headers.replaceOrAdd(name: "Content-Type", value: "text/event-stream")
+                    headers.replaceOrAdd(name: "Cache-Control", value: "no-cache")
+                    headers.replaceOrAdd(name: "Connection", value: "keep-alive")
+                    headers.replaceOrAdd(name: "Transfer-Encoding", value: "chunked")
+                    let responseHead = HTTPResponseHead(version: head.version, status: .ok, headers: headers)
+                    context.write(self.wrapOutboundOut(.head(responseHead)), promise: nil)
+
+                    // Send initial event
+                    self.writeSSEChunk("data: \(provider())\n\n", on: context)
+                    // Schedule periodic events
+                    let interval: TimeAmount = .milliseconds(250)
+                    sseTask = context.eventLoop.scheduleRepeatedTask(initialDelay: interval, delay: interval) { [weak self] _ in
+                        guard let self else { return }
+                        self.writeSSEChunk("data: \(provider())\n\n", on: context)
+                    }
+                    return
+                }
+
                 let req = HTTPRequest(
                     method: head.method.rawValue,
                     path: head.uri,
@@ -147,6 +180,19 @@ public final class NIOHTTPServer: @unchecked Sendable {
                 self.writeSSEChunks(chunks, on: context, index: index + 1)
             }
         }
+
+        /// Writes a single SSE chunk line with flushing.
+        private func writeSSEChunk(_ text: String, on context: ChannelHandlerContext) {
+            let data = Data(text.utf8)
+            let buf = context.channel.allocator.buffer(bytes: data)
+            context.write(self.wrapOutboundOut(.body(.byteBuffer(buf))), promise: nil)
+            context.flush()
+        }
+
+        func channelInactive(context: ChannelHandlerContext) {
+            sseTask?.cancel()
+            sseTask = nil
+        }
     }
 }
 
@@ -177,8 +223,8 @@ final class BasicWebSocketHandler: ChannelInboundHandler, @unchecked Sendable {
             let text = self.provider()
             var buf = context.channel.allocator.buffer(capacity: text.utf8.count)
             buf.writeString(text)
-            let frame = WebSocketFrame(fin: true, opcode: .text, data: buf)
-            context.writeAndFlush(self.wrapOutboundOut(frame), promise: nil)
+                        let frame = WebSocketFrame(fin: true, opcode: .text, data: buf)
+                        context.writeAndFlush(self.wrapOutboundOut(frame), promise: nil)
         }
     }
     func channelInactive(context: ChannelHandlerContext) {

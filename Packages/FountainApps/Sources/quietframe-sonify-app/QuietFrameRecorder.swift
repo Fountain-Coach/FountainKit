@@ -5,6 +5,7 @@ import CoreMedia
 import AudioToolbox
 @preconcurrency import ScreenCaptureKit
 import FountainAudioEngine
+import QuietFrameKit
 
 @MainActor final class QuietFrameRecorder: ObservableObject {
     enum State { case idle, recording, stopping, finished(URL) }
@@ -195,8 +196,8 @@ import FountainAudioEngine
                 // keep tmp on failure
             }
         }
-        // Inform companion via vendor JSON
-        QuietFrameInstrument.shared.instrument?.sendVendorJSONEvent(topic: "rec.saved", dict: [
+        // Inform companion via runtime sidecar vendor JSON (authoritative path)
+        SidecarBridge.shared.sendVendor(topic: "rec.saved", data: [
             "url": finalURL.absoluteString,
             "durationSec": duration
         ])

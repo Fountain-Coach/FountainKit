@@ -1,5 +1,8 @@
 #if canImport(SwiftUI) && canImport(AppKit) && canImport(Metal) && canImport(MetalKit)
 import SwiftUI
+extension Notification.Name {
+    static let MetalCanvasMarqueeCommand = Notification.Name("MetalCanvasMarqueeCommand")
+}
 import AppKit
 import Metal
 import MetalKit
@@ -917,6 +920,7 @@ final class MetalCanvasNSView: MTKView {
 final class CanvasInstrumentSink: MetalSceneRenderer {
     weak var renderer: MetalCanvasRenderer?
     init(renderer: MetalCanvasRenderer?) { self.renderer = renderer }
+    func vendorEvent(topic: String, data: Any?) {}
     func setUniform(_ name: String, float: Float) {
         guard let r = renderer else { return }
         Task { @MainActor in r.applyUniform(name, value: float) }

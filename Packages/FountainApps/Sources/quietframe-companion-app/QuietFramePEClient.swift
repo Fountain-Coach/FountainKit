@@ -2,6 +2,7 @@ import Foundation
 import MIDI2
 import MIDI2CI
 import MetalViewKit
+import QuietFrameKit
 
 @MainActor final class QuietFramePEClient: ObservableObject {
     @Published var connectedName: String? = nil
@@ -13,50 +14,74 @@ import MetalViewKit
     private let group: UInt8 = 0
     private var requestId: UInt32 = 1
     private var session: (any MetalInstrumentTransportSession)? = nil
+    private var sidecar: QuietFrameSidecarClient? = nil
+    private var useSidecar: Bool = true
 
     func connect(displayNameContains name: String = "QuietFrame#qf-1") {
-        let transport = MIDI2SystemInstrumentTransport(backend: .rtpFixedPort(5868))
-        let iid = UUID().uuidString
-        let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "QuietFrame-Companion", instanceId: iid, displayName: "QuietFrameCompanion#\(iid)")
-        do {
-            self.session = try transport.makeSession(descriptor: desc) { [weak self] words in
-                self?.handleIncoming(words)
+        if useSidecar {
+            let cfg = QuietFrameSidecarClient.Config(targetDisplayName: name)
+            let client = QuietFrameSidecarClient(config: cfg)
+            self.sidecar = client
+            self.connectedName = "Sidecar: \(cfg.baseURL.absoluteString)"
+            Task { [weak self] in
+                await client.startPolling(pollIntervalMs: 100)
+                await client.setOnUMPSink { words in
+                    self?.handleIncoming(words)
+                }
             }
-            self.connectedName = name
-            print("[quietframe-companion] MVK client instrument ready: displayName=\(desc.displayName) instanceId=\(desc.instanceId)")
-        } catch {
-            self.connectedName = "Transport error"
+        } else {
+            let transport = MIDI2SystemInstrumentTransport(backend: .rtpFixedPort(5868))
+            let iid = UUID().uuidString
+            let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "QuietFrame-Companion", instanceId: iid, displayName: "QuietFrameCompanion#\(iid)")
+            do {
+                self.session = try transport.makeSession(descriptor: desc) { [weak self] words in
+                    self?.handleIncoming(words)
+                }
+                self.connectedName = name
+                print("[quietframe-companion] MVK client instrument ready: displayName=\(desc.displayName) instanceId=\(desc.instanceId)")
+            } catch {
+                self.connectedName = "Transport error"
+            }
         }
     }
 
     func get() {
-        guard session != nil else { return }
         let pe = MidiCiPropertyExchangeBody(command: .get, requestId: requestId, encoding: .json, header: [:], data: [])
         let env = MidiCiEnvelope(scope: .nonRealtime, subId2: 0x7C, version: 1, body: .propertyExchange(pe))
-        sendSysEx7(bytes: env.sysEx7Payload())
+        if useSidecar {
+            Task { await sidecar?.injectSysEx7(bytes: env.sysEx7Payload()) }
+        } else {
+            sendSysEx7(bytes: env.sysEx7Payload())
+        }
         requestId &+= 1
     }
 
     func set(_ pairs: [(String, Double)]) {
-        guard session != nil else { return }
         let props = pairs.map { ["name": $0.0, "value": $0.1] }
         let obj: [String: Any] = ["properties": props]
         let data = (try? JSONSerialization.data(withJSONObject: obj)) ?? Data()
         let pe = MidiCiPropertyExchangeBody(command: .set, requestId: requestId, encoding: .json, header: [:], data: Array(data))
         let env = MidiCiEnvelope(scope: .nonRealtime, subId2: 0x7C, version: 1, body: .propertyExchange(pe))
-        sendSysEx7(bytes: env.sysEx7Payload())
+        if useSidecar {
+            Task { await sidecar?.injectSysEx7(bytes: env.sysEx7Payload()) }
+        } else {
+            sendSysEx7(bytes: env.sysEx7Payload())
+        }
         requestId &+= 1
     }
 
     func sendVendor(topic: String, data: [String: Any] = [:]) {
-        guard session != nil else { return }
-        var payload: [String: Any] = ["topic": topic]
-        if !data.isEmpty { payload["data"] = data }
-        guard let json = try? JSONSerialization.data(withJSONObject: payload) else { return }
-        var bytes: [UInt8] = [0xF0, 0x7D, 0x4A, 0x53, 0x4E, 0x00]
-        bytes.append(contentsOf: Array(json))
-        bytes.append(0xF7)
-        sendSysEx7(bytes: bytes)
+        if useSidecar {
+            Task { await sidecar?.sendVendor(topic: topic, data: data) }
+        } else {
+            var payload: [String: Any] = ["topic": topic]
+            if !data.isEmpty { payload["data"] = data }
+            guard let json = try? JSONSerialization.data(withJSONObject: payload) else { return }
+            var bytes: [UInt8] = [0xF0, 0x7D, 0x4A, 0x53, 0x4E, 0x00]
+            bytes.append(contentsOf: Array(json))
+            bytes.append(0xF7)
+            sendSysEx7(bytes: bytes)
+        }
     }
 
     // Emit event JSON on the main actor to avoid cross-actor crashes
@@ -139,5 +164,12 @@ extension QuietFramePEClient {
         if let data = try? JSONSerialization.data(withJSONObject: ["dir":"in","ump": payload], options: []), let s = String(data: data, encoding: .utf8) {
             Task { @MainActor in self.eventSink?(s) }
         }
+    }
+}
+
+// MARK: - Sidecar helpers
+extension QuietFrameSidecarClient {
+    public func setOnUMPSink(_ sink: @escaping @Sendable ([UInt32]) -> Void) {
+        self.onUMP = sink
     }
 }

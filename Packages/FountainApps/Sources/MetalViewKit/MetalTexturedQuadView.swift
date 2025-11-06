@@ -76,7 +76,7 @@ public struct MetalTexturedQuadView: NSViewRepresentable {
     }
 }
 
-final class MetalTexturedQuadRenderer: NSObject, MTKViewDelegate, MetalSceneRenderer {
+final class MetalTexturedQuadRenderer: NSObject, MTKViewDelegate, MetalSceneRenderer, MetalSceneUniformControls {
     private let device: MTLDevice
     private let commandQueue: MTLCommandQueue
     private var pipelineState: MTLRenderPipelineState!
@@ -158,6 +158,11 @@ final class MetalTexturedQuadRenderer: NSObject, MTKViewDelegate, MetalSceneRend
         cb.present(drawable)
         cb.commit()
     }
+
+    // MARK: - MetalSceneUniformControls
+
+    // MARK: - MetalSceneRenderer
+    func vendorEvent(topic: String, data: Any?) {}
 
     private func buildPipeline(colorFormat: MTLPixelFormat, depthFormat: MTLPixelFormat) throws {
         let src = Self.inlineMetalSource

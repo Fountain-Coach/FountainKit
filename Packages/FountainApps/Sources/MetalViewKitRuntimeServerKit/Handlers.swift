@@ -1,5 +1,9 @@
 import Foundation
 import OpenAPIRuntime
+import Foundation
+#if os(macOS)
+import CoreAudio
+#endif
 import MetalViewKit
 
 // Shared core state for the runtime
@@ -30,7 +34,7 @@ final class MVKRuntimeCore: @unchecked Sendable {
     var faultModel: Components.Schemas.FaultModel? = nil
 
     // Audio backend
-    struct AudioBackendState { var backend: Components.Schemas.AudioBackend = .null; var streaming: Bool = false; var deviceId: String? = nil; var sampleRate: Double = 48000; var blockFrames: Int = 128; var channels: Int = 2 }
+    struct AudioBackendState { var backend: Components.Schemas.AudioBackend = .null; var streaming: Bool = false; var deviceId: String? = nil; var sampleRate: Double = 48000; var blockFrames: Int = 128; var channels: Int = 2; var allowFormatFallback: Bool = true }
     var audio = AudioBackendState()
 
     // Tracing (typed event store)
@@ -123,10 +127,10 @@ final class MVKRuntimeHandlers: APIProtocol, @unchecked Sendable {
             }
         }
         let q = input.query
-        _ = MVKBridge.sendVendorJSON(topic: topic,
-                                     data: dict,
-                                     targetDisplayNameSubstring: q.targetDisplayName,
-                                     targetInstanceId: q.targetInstanceId)
+        // Build words once so we can both emit into out-ring and forward to bridge
+        let words = MVKBridge.buildVendorUMP(topic: topic, data: dict)
+        core.pushEvent(tNs: core.nowNs(), words: words)
+        _ = MVKBridge.sendBatch([words], targetDisplayNameSubstring: q.targetDisplayName, targetInstanceId: q.targetInstanceId)
         return .accepted(.init())
     }
 
@@ -237,7 +241,7 @@ final class MVKRuntimeHandlers: APIProtocol, @unchecked Sendable {
 
     // Tracing
     func tracingDump(_ input: Operations.tracingDump.Input) async throws -> Operations.tracingDump.Output { return .ok(.init(body: .json(core.traces))) }
-    func tracingStream(_ input: Operations.tracingStream.Input) async throws -> Operations.tracingStream.Output { return .undocumented(statusCode: 101, .init()) }
+    func tracingStream(_ input: Operations.tracingStream.Input) async throws -> Operations.tracingStream.Output { return .undocumented(statusCode: 400, .init()) }
 
     // Audio backend
     func getAudioBackendStatus(_ input: Operations.getAudioBackendStatus.Input) async throws -> Operations.getAudioBackendStatus.Output {
@@ -245,31 +249,104 @@ final class MVKRuntimeHandlers: APIProtocol, @unchecked Sendable {
         let st = Components.Schemas.AudioBackendStatus(backend: s.backend, streaming: s.streaming, deviceId: s.deviceId, sampleRate: Float(s.sampleRate), blockFrames: s.blockFrames)
         return .ok(.init(body: .json(st)))
     }
-    func patchAudioBackendPolicy(_ input: Operations.patchAudioBackendPolicy.Input) async throws -> Operations.patchAudioBackendPolicy.Output { return .noContent }
-    func listAudioDevices(_ input: Operations.listAudioDevices.Input) async throws -> Operations.listAudioDevices.Output { return .ok(.init(body: .json([]))) }
+    func patchAudioBackendPolicy(_ input: Operations.patchAudioBackendPolicy.Input) async throws -> Operations.patchAudioBackendPolicy.Output {
+        guard case let .json(p) = input.body else { return .undocumented(statusCode: 400, .init()) }
+        if let pref = p.preferredBackend { core.audio.backend = pref }
+        core.audio.allowFormatFallback = p.allowFormatFallback ?? true
+        return .noContent
+    }
+    func listAudioDevices(_ input: Operations.listAudioDevices.Input) async throws -> Operations.listAudioDevices.Output {
+        let scope: String = {
+            if let v = input.query.scope { return v.rawValue }
+            return "output"
+        }()
+        var devices: [Components.Schemas.AudioDeviceInfo] = []
+        // Try system enumeration; fall back to a synthetic device
+        let listed = AudioDeviceEnumerator.list(scope: scope)
+        for d in listed {
+            let rates = d.rates.map { Float($0) }
+            let dev = Components.Schemas.AudioDeviceInfo(id: d.id, name: d.name, rates: rates, blockSizes: d.blockSizes, latencyMs: d.latencyMs)
+            devices.append(dev)
+        }
+        if devices.isEmpty {
+            devices.append(.init(id: "null-default", name: "Null Output", rates: [48000, 44100], blockSizes: [64, 96, 128, 256, 512], latencyMs: 10))
+        }
+        return .ok(.init(body: .json(devices)))
+    }
     func openAudioDevice(_ input: Operations.openAudioDevice.Input) async throws -> Operations.openAudioDevice.Output {
         guard case let .json(n) = input.body else { return .undocumented(statusCode: 400, .init()) }
         core.audio.deviceId = input.path.id
-        if let sr = n.desiredSampleRate { core.audio.sampleRate = Double(sr) }
-        if let bf = n.desiredBlockFrames { core.audio.blockFrames = bf }
+        var desiredSR = n.desiredSampleRate.map(Double.init)
+        var desiredBF = n.desiredBlockFrames
+        let allowFB = n.allowFormatFallback ?? core.audio.allowFormatFallback
+
+        if let id = core.audio.deviceId {
+            if let info = AudioDeviceEnumerator.get(id: id) {
+                // Negotiate sample rate
+                if let d = desiredSR {
+                    if !info.rates.contains(d) {
+                        if allowFB, let nearest = info.rates.min(by: { abs($0 - d) < abs($1 - d) }) {
+                            desiredSR = nearest
+                        } else {
+                            return .undocumented(statusCode: 400, .init())
+                        }
+                    }
+                } else {
+                    desiredSR = info.rates.first
+                }
+                // Negotiate block frames
+                if let b = desiredBF {
+                    if !info.blockSizes.contains(b) {
+                        if allowFB, let nb = info.blockSizes.min(by: { abs($0 - b) < abs($1 - b) }) {
+                            desiredBF = nb
+                        } else {
+                            return .undocumented(statusCode: 400, .init())
+                        }
+                    }
+                } else {
+                    desiredBF = info.blockSizes.first
+                }
+            } else {
+                // Unknown device id: keep requested or defaults
+            }
+        }
+
+        if let sr = desiredSR { core.audio.sampleRate = sr }
+        if let bf = desiredBF { core.audio.blockFrames = bf }
         if let ch = n.channels { core.audio.channels = ch.rawValue }
         let cfg = Components.Schemas.StreamConfig(deviceId: core.audio.deviceId, sampleRate: Float(core.audio.sampleRate), blockFrames: core.audio.blockFrames, channels: core.audio.channels)
         return .ok(.init(body: .json(cfg)))
     }
-    func startAudioStream(_ input: Operations.startAudioStream.Input) async throws -> Operations.startAudioStream.Output { core.audio.streaming = true; return .noContent }
+    func startAudioStream(_ input: Operations.startAudioStream.Input) async throws -> Operations.startAudioStream.Output {
+        core.audio.streaming = true
+        // Trace event
+        // Trace minimal event (detail omitted for strict Sendable safety)
+        core.recordTrace(.init(_type: "audio.stream.started", tNs: String(core.nowNs()), detail: nil))
+        return .noContent
+    }
     func stopAudioStream(_ input: Operations.stopAudioStream.Input) async throws -> Operations.stopAudioStream.Output { core.audio.streaming = false; return .noContent }
     func getAudioStreamStats(_ input: Operations.getAudioStreamStats.Input) async throws -> Operations.getAudioStreamStats.Output {
         let st = Components.Schemas.IOStats(callbacks: 0, underruns: core.underruns, avgMs: core.callbackAvgMs, p99Ms: core.callbackP99Ms)
         return .ok(.init(body: .json(st)))
     }
-    func audioBackendEvents(_ input: Operations.audioBackendEvents.Input) async throws -> Operations.audioBackendEvents.Output { return .undocumented(statusCode: 101, .init()) }
+    func audioBackendEvents(_ input: Operations.audioBackendEvents.Input) async throws -> Operations.audioBackendEvents.Output { return .undocumented(statusCode: 400, .init()) }
 
     // MIDI endpoints — in-memory runtime endpoints
     func listMidiEndpoints(_ input: Operations.listMidiEndpoints.Input) async throws -> Operations.listMidiEndpoints.Output {
         var list: [Components.Schemas.MidiEndpoint] = []
-        // Include in-memory endpoints
+        // In-memory endpoints
         list.append(contentsOf: endpoints.values)
-        // Live MVK reflection requires in-process UI; omitted in headless runtime
+        // Live Loopback instruments (if present)
+        let live = LoopbackMetalInstrumentTransport.shared.listDescriptors()
+        for d in live {
+            let create = Components.Schemas.MidiEndpointCreate(name: d.displayName,
+                                                               direction: .input,
+                                                               groups: 1,
+                                                               jrTimestampSupport: true)
+            let idwrap = Components.Schemas.MidiEndpoint.Value2Payload(id: d.instanceId)
+            let ep = Components.Schemas.MidiEndpoint(value1: create, value2: idwrap)
+            list.append(ep)
+        }
         return .ok(.init(body: .json(list)))
     }
 
@@ -283,4 +360,153 @@ final class MVKRuntimeHandlers: APIProtocol, @unchecked Sendable {
         endpoints[id] = ep
         return .created(.init(body: .json(ep)))
     }
+}
+
+// MARK: - System Audio Device Enumeration (macOS only)
+struct AudioDeviceEnumerator {
+    struct Info { let id: String, name: String, rates: [Double], blockSizes: [Int], latencyMs: Double }
+    static func list(scope: String) -> [Info] {
+        #if os(macOS)
+        return listMac(scope: scope)
+        #else
+        return []
+        #endif
+    }
+    static func get(id: String) -> Info? {
+        #if os(macOS)
+        if id == "null-default" { return .init(id: id, name: "Null Output", rates: [48000, 44100], blockSizes: [64,96,128,256,512], latencyMs: 10) }
+        return list(scope: "output").first { $0.id == id }
+        #else
+        if id == "null-default" { return .init(id: id, name: "Null Output", rates: [48000, 44100], blockSizes: [64,96,128,256,512], latencyMs: 10) }
+        return nil
+        #endif
+    }
+
+    #if os(macOS)
+    private static func listMac(scope: String) -> [Info] {
+        var out: [Info] = []
+        let wantOutput = scope == "output" || scope == "duplex"
+        let wantInput = scope == "input" || scope == "duplex"
+        for dev in allDeviceIDs() {
+            let hasOut = streamsCount(dev, isOutput: true) > 0
+            let hasIn = streamsCount(dev, isOutput: false) > 0
+            if scope == "output" && !hasOut { continue }
+            if scope == "input" && !hasIn { continue }
+            if scope == "duplex" && !(hasOut && hasIn) { continue }
+            let uid = deviceUID(dev) ?? String(dev)
+            let name = deviceName(dev) ?? "Device#\(uid)"
+            // Prefer output sample rate for calc
+            let sr = deviceNominalSampleRate(dev) ?? 48000
+            let rates = availableNominalSampleRates(dev) ?? [sr]
+            let range = bufferFrameSizeRange(dev)
+            let typical: [Int] = [32, 64, 96, 128, 256, 512, 1024, 2048]
+            let blocks = typical.filter { v in
+                if let r = range { return v >= Int(r.mMinimum) && v <= Int(r.mMaximum) }
+                return true
+            }
+            // Latency: take max of input/output if duplex requested, else pick according to scope
+            let latOut = deviceLatency(dev, isOutput: true) ?? 0
+            let latIn = deviceLatency(dev, isOutput: false) ?? 0
+            let latFrames: UInt32 = scope == "input" ? latIn : (scope == "output" ? latOut : max(latOut, latIn))
+            let latencyMs = (Double(latFrames) / sr) * 1000.0
+            out.append(.init(id: uid, name: name, rates: rates, blockSizes: blocks, latencyMs: latencyMs))
+        }
+        return out
+    }
+
+    private static func allDeviceIDs() -> [AudioObjectID] {
+        var size: UInt32 = 0
+        var addr = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDevices,
+                                              mScope: kAudioObjectPropertyScopeGlobal,
+                                              mElement: kAudioObjectPropertyElementMain)
+        var status = AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &size)
+        guard status == noErr, size > 0 else { return [] }
+        let count = Int(size) / MemoryLayout<AudioObjectID>.size
+        var ids = Array(repeating: AudioObjectID(0), count: count)
+        status = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &size, &ids)
+        guard status == noErr else { return [] }
+        return ids.filter { $0 != 0 }
+    }
+
+    private static func streamsCount(_ device: AudioObjectID, isOutput: Bool) -> Int {
+        var size: UInt32 = 0
+        var addr = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyStreams,
+                                              mScope: isOutput ? kAudioDevicePropertyScopeOutput : kAudioDevicePropertyScopeInput,
+                                              mElement: kAudioObjectPropertyElementMain)
+        var status = AudioObjectGetPropertyDataSize(device, &addr, 0, nil, &size)
+        guard status == noErr else { return 0 }
+        let count = Int(size) / MemoryLayout<AudioStreamID>.size
+        return count
+    }
+
+    private static func deviceName(_ device: AudioObjectID) -> String? {
+        var name: CFString = "" as CFString
+        var size = UInt32(MemoryLayout<CFString>.size)
+        var address = AudioObjectPropertyAddress(mSelector: kAudioObjectPropertyName,
+                                                 mScope: kAudioObjectPropertyScopeGlobal,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        let status = AudioObjectGetPropertyData(device, &address, 0, nil, &size, &name)
+        return status == noErr ? (name as String) : nil
+    }
+
+    private static func deviceUID(_ device: AudioObjectID) -> String? {
+        var uid: CFString = "" as CFString
+        var size = UInt32(MemoryLayout<CFString>.size)
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyDeviceUID,
+                                                 mScope: kAudioObjectPropertyScopeGlobal,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        let status = AudioObjectGetPropertyData(device, &address, 0, nil, &size, &uid)
+        return status == noErr ? (uid as String) : nil
+    }
+
+    private static func deviceNominalSampleRate(_ device: AudioObjectID) -> Double? {
+        var rate = Double(0)
+        var size = UInt32(MemoryLayout<Double>.size)
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyNominalSampleRate,
+                                                 mScope: kAudioObjectPropertyScopeGlobal,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        let status = AudioObjectGetPropertyData(device, &address, 0, nil, &size, &rate)
+        return status == noErr ? rate : nil
+    }
+
+    private static func availableNominalSampleRates(_ device: AudioObjectID) -> [Double]? {
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyAvailableNominalSampleRates,
+                                                 mScope: kAudioObjectPropertyScopeGlobal,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        var size: UInt32 = 0
+        var status = AudioObjectGetPropertyDataSize(device, &address, 0, nil, &size)
+        guard status == noErr, size > 0 else { return nil }
+        let count = Int(size) / MemoryLayout<AudioValueRange>.size
+        var ranges = Array(repeating: AudioValueRange(mMinimum: 0, mMaximum: 0), count: count)
+        status = AudioObjectGetPropertyData(device, &address, 0, nil, &size, &ranges)
+        guard status == noErr else { return nil }
+        var rates: [Double] = []
+        for r in ranges {
+            // Include both min and max if reasonable
+            if r.mMinimum >= 8000, r.mMinimum <= 192000 { rates.append(r.mMinimum) }
+            if r.mMaximum != r.mMinimum, r.mMaximum <= 192000 { rates.append(r.mMaximum) }
+        }
+        return Array(Set(rates)).sorted()
+    }
+
+    private static func bufferFrameSizeRange(_ device: AudioObjectID) -> AudioValueRange? {
+        var range = AudioValueRange(mMinimum: 0, mMaximum: 0)
+        var size = UInt32(MemoryLayout<AudioValueRange>.size)
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyBufferFrameSizeRange,
+                                                 mScope: kAudioObjectPropertyScopeGlobal,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        let status = AudioObjectGetPropertyData(device, &address, 0, nil, &size, &range)
+        return status == noErr ? range : nil
+    }
+
+    private static func deviceLatency(_ device: AudioObjectID, isOutput: Bool) -> UInt32? {
+        var frames: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyLatency,
+                                                 mScope: isOutput ? kAudioDevicePropertyScopeOutput : kAudioDevicePropertyScopeInput,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        let status = AudioObjectGetPropertyData(device, &address, 0, nil, &size, &frames)
+        return status == noErr ? frames : nil
+    }
+    #endif
 }

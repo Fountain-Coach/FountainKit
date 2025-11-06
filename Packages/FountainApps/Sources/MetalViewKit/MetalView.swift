@@ -7,14 +7,13 @@ import AppKit
 import Metal
 import MetalKit
 
-public protocol MetalSceneRenderer: AnyObject {
+// Additional controls for scenes rendered by MetalViewKit. The core instrument sink protocol
+// (MetalSceneRenderer) lives in MetalInstrument.swift and covers musical events.
+public protocol MetalSceneUniformControls: AnyObject {
     func setUniform(_ name: String, float: Float)
-    func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8)
-    func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8)
-    func pitchBend(value14: UInt16, channel: UInt8, group: UInt8)
 }
 
-public typealias MetalSceneOnReady = (MetalSceneRenderer) -> Void
+public typealias MetalSceneOnReady = (MetalSceneRenderer & MetalSceneUniformControls) -> Void
 
 public struct MetalTriangleView: NSViewRepresentable {
     private let onReady: MetalSceneOnReady?
@@ -65,7 +64,7 @@ public struct MetalTriangleView: NSViewRepresentable {
     }
 }
 
-final class MetalTriangleRenderer: NSObject, MTKViewDelegate, MetalSceneRenderer {
+final class MetalTriangleRenderer: NSObject, MTKViewDelegate, MetalSceneRenderer, MetalSceneUniformControls {
     private let device: MTLDevice
     private let commandQueue: MTLCommandQueue
     private var pipelineState: MTLRenderPipelineState!
@@ -266,5 +265,6 @@ extension MetalTriangleRenderer {
     func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
     func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
     func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+    func vendorEvent(topic: String, data: Any?) {}
 }
 #endif

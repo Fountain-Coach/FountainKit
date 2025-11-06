@@ -1249,6 +1249,7 @@ let package = Package(
             dependencies: [
                 "FountainAudioEngine",
                 "MetalViewKit",
+                "QuietFrameKit",
                 .product(name: "MIDI2CI", package: "midi2"),
                 .product(name: "MIDI2", package: "midi2")
             ],
@@ -1291,7 +1292,8 @@ let package = Package(
             name: "MetalViewKitRuntimeServerKit",
             dependencies: [
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
-                .product(name: "FountainRuntime", package: "FountainCore")
+                .product(name: "FountainRuntime", package: "FountainCore"),
+                "MetalViewKit"
             ],
             path: "Sources/MetalViewKitRuntimeServerKit",
             plugins: [

@@ -171,5 +171,24 @@ final class MVKRuntimeServerTests: XCTestCase {
         let obj = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         XCTAssertNotNil(obj["events"]) // currently empty array
     }
-}
 
+    func testLiveLoopbackListing() async throws {
+        let running = try await startServer()
+        defer { Task { try? await running.server.stop() } }
+
+        // Create a loopback instrument session
+        let iid = UUID().uuidString
+        let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "Test", instanceId: iid, displayName: "Test#\(iid)")
+        let session = try LoopbackMetalInstrumentTransport.shared.makeSession(descriptor: desc) { _ in }
+        defer { session.close() }
+
+        // List endpoints and ensure our live session is present
+        let (data, resp) = try await URLSession.shared.data(from: url(running.port, "/v1/midi/endpoints"))
+        XCTAssertEqual((resp as? HTTPURLResponse)?.statusCode, 200)
+        let arr = try JSONSerialization.jsonObject(with: data) as! [[String: Any]]
+        let hasLive = arr.contains { ep in
+            (ep["id"] as? String) == iid || (ep["value2"] as? [String: Any])?["id"] as? String == iid
+        }
+        XCTAssertTrue(hasLive, "expected live loopback endpoint with id \(iid)")
+    }
+}

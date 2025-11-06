@@ -14,14 +14,16 @@ import MetalViewKit
     private var requestId: UInt32 = 1
     private var session: (any MetalInstrumentTransportSession)? = nil
 
-    func connect(displayNameContains name: String = "Quiet Frame") {
+    func connect(displayNameContains name: String = "QuietFrame#qf-1") {
         let transport = MIDI2SystemInstrumentTransport(backend: .rtpFixedPort(5868))
-        let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "QuietFrame-Companion", instanceId: UUID().uuidString, displayName: "Quiet Frame Companion")
+        let iid = UUID().uuidString
+        let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "QuietFrame-Companion", instanceId: iid, displayName: "QuietFrameCompanion#\(iid)")
         do {
             self.session = try transport.makeSession(descriptor: desc) { [weak self] words in
                 self?.handleIncoming(words)
             }
             self.connectedName = name
+            print("[quietframe-companion] MVK client instrument ready: displayName=\(desc.displayName) instanceId=\(desc.instanceId)")
         } catch {
             self.connectedName = "Transport error"
         }

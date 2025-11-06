@@ -305,7 +305,7 @@ struct MouseTracker: NSViewRepresentable {
     let instrument: MetalInstrument?
     init() {
         let sink = SonifyPESink()
-        let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "QuietFrame", instanceId: "qf-1", displayName: "Quiet Frame")
+        let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "QuietFrame", instanceId: "qf-1", displayName: "QuietFrame#qf-1")
         // Force MIDI2 transport without CoreMIDI: RTP on fixed local port
         MetalInstrument.setTransportOverride(MIDI2SystemInstrumentTransport(backend: .rtpFixedPort(5868)))
         let inst = MetalInstrument(sink: sink, descriptor: desc)
@@ -315,6 +315,7 @@ struct MouseTracker: NSViewRepresentable {
             return s
         }
         inst.enable()
+        print("[quietframe-sonify] MVK instrument ready: displayName=\(desc.displayName) instanceId=\(desc.instanceId)")
         self.instrument = inst
     }
 }

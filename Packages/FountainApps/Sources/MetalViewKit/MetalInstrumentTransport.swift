@@ -82,6 +82,10 @@ public final class LoopbackMetalInstrumentTransport: MetalInstrumentTransport, @
         return nil
     }
 
+    public func listDescriptors() -> [MetalInstrumentDescriptor] {
+        hub.sessionDescriptors()
+    }
+
     public func reset() {
         hub.reset()
     }
@@ -172,6 +176,13 @@ final class LoopbackHub: @unchecked Sendable {
         for session in values {
             session.close()
         }
+    }
+
+    func sessionDescriptors() -> [MetalInstrumentDescriptor] {
+        lock.lock()
+        let list = sessionsByInstance.values.map { $0.descriptor }
+        lock.unlock()
+        return list
     }
 }
 

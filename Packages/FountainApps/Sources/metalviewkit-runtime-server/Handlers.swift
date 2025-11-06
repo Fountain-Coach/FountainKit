@@ -1,5 +1,6 @@
 import Foundation
 import OpenAPIRuntime
+import MetalViewKit
 
 final class MVKRuntimeHandlers: APIProtocol, @unchecked Sendable {
     private var endpoints: [String: Components.Schemas.MidiEndpoint] = [:]
@@ -38,7 +39,25 @@ final class MVKRuntimeHandlers: APIProtocol, @unchecked Sendable {
 
     // MIDI endpoints — in-memory runtime endpoints
     func listMidiEndpoints(_ input: Operations.listMidiEndpoints.Input) async throws -> Operations.listMidiEndpoints.Output {
-        .ok(.init(body: .json(Array(endpoints.values))))
+        var list: [Components.Schemas.MidiEndpoint] = []
+        // Include in-memory endpoints
+        list.append(contentsOf: endpoints.values)
+        // Reflect live MVK loopback instruments as input endpoints with id=instanceId
+        let live = LoopbackMetalInstrumentTransport.shared.listDescriptors()
+        for d in live {
+            let create = Components.Schemas.MidiEndpointCreate(
+                name: d.displayName,
+                direction: .input,
+                groups: 1,
+                jrTimestampSupport: true
+            )
+            let ep = Components.Schemas.MidiEndpoint(value1: create, value2: .init(id: d.instanceId))
+            // De-duplicate by id when both in-memory and live share the same id
+            if !list.contains(where: { $0.value2.id == ep.value2.id }) {
+                list.append(ep)
+            }
+        }
+        return .ok(.init(body: .json(list)))
     }
 
     func createMidiEndpoint(_ input: Operations.createMidiEndpoint.Input) async throws -> Operations.createMidiEndpoint.Output {

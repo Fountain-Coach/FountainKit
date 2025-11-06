@@ -1240,7 +1240,8 @@ let package = Package(
             dependencies: [
                 .product(name: "FountainStoreClient", package: "FountainCore"),
                 "MetalViewKit",
-                "FountainAudioEngine"
+                "FountainAudioEngine",
+                "QuietFrameKit"
             ],
             path: "Sources/quietframe-sonify-app"
         ),

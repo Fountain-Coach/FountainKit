@@ -58,11 +58,11 @@ wait_health() {
 cmd_up() {
   local cfg="debug"; if [[ "${1-}" == "--release" ]]; then cfg="release"; fi
   # Build sidecar and run binary
-  start_proc sidecar bash -lc "ROOT='$ROOT'; CACHE='$CACHE'; $(typeset -f swift_build); $(typeset -f swift_bin_path); swift_build metalviewkit-runtime-server $cfg && BIN=\$(swift_bin_path $cfg); CLANG_MODULE_CACHE_PATH='$CACHE' \"\$BIN\"/metalviewkit-runtime-server"
+  start_proc sidecar "$ROOT/Scripts/apps/run-sidecar.sh" "$cfg"
   wait_health || true
   # Launch QuietFrame apps
-  start_proc quietframe-sonify bash -lc "ROOT='$ROOT'; CACHE='$CACHE'; $(typeset -f swift_build); $(typeset -f swift_bin_path); swift_build quietframe-sonify-app $cfg && BIN=\$(swift_bin_path $cfg); CLANG_MODULE_CACHE_PATH='$CACHE' \"\$BIN\"/quietframe-sonify-app"
-  start_proc quietframe-companion bash -lc "ROOT='$ROOT'; CACHE='$CACHE'; $(typeset -f swift_build); $(typeset -f swift_bin_path); swift_build quietframe-companion-app $cfg && BIN=\$(swift_bin_path $cfg); CLANG_MODULE_CACHE_PATH='$CACHE' \"\$BIN\"/quietframe-companion-app"
+  start_proc quietframe-sonify "$ROOT/Scripts/apps/run-quietframe-sonify.sh" "$cfg"
+  start_proc quietframe-companion "$ROOT/Scripts/apps/run-quietframe-companion.sh" "$cfg"
   echo "All started. Use: $0 status"
 }
 

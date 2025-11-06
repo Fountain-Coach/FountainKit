@@ -37,6 +37,25 @@ final class MVKRuntimeHandlers: APIProtocol, @unchecked Sendable {
         return .ok(.init(body: .json(out)))
     }
 
+    // POST /v1/midi/vendor — send vendor JSON SysEx7 UMP to target
+    func sendVendor(_ input: Operations.sendVendor.Input) async throws -> Operations.sendVendor.Output {
+        guard case let .json(body) = input.body else { return .undocumented(statusCode: 400, .init()) }
+        let topic = body.topic
+        var dict: [String: Any] = [:]
+        if let container = body.data {
+            if let d = try? JSONEncoder().encode(container),
+               let obj = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
+                dict = obj
+            }
+        }
+        let q = input.query
+        _ = MVKBridge.sendVendorJSON(topic: topic,
+                                     data: dict,
+                                     targetDisplayNameSubstring: q.targetDisplayName,
+                                     targetInstanceId: q.targetInstanceId)
+        return .accepted(.init())
+    }
+
     // MIDI endpoints — in-memory runtime endpoints
     func listMidiEndpoints(_ input: Operations.listMidiEndpoints.Input) async throws -> Operations.listMidiEndpoints.Output {
         var list: [Components.Schemas.MidiEndpoint] = []

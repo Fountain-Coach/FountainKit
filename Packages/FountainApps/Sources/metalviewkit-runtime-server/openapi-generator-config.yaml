@@ -7,5 +7,6 @@ filter:
     - /health
     - /v1/midi/events
     - /v1/midi/endpoints
+    - /v1/midi/vendor
 accessModifier: internal
 additionalImports: []

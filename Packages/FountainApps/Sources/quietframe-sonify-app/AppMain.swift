@@ -306,8 +306,13 @@ struct MouseTracker: NSViewRepresentable {
     init() {
         let sink = SonifyPESink()
         let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "QuietFrame", instanceId: "qf-1", displayName: "QuietFrame#qf-1")
-        // Force MIDI2 transport without CoreMIDI: RTP on fixed local port
-        MetalInstrument.setTransportOverride(MIDI2SystemInstrumentTransport(backend: .rtpFixedPort(5868)))
+        // Transport selection: prefer Loopback when integrating with MVK runtime
+        if ProcessInfo.processInfo.environment["QF_USE_RUNTIME"] == "1" {
+            MetalInstrument.setTransportOverride(LoopbackMetalInstrumentTransport.shared)
+        } else {
+            // Fallback: RTP on fixed local port for direct pairing demos
+            MetalInstrument.setTransportOverride(MIDI2SystemInstrumentTransport(backend: .rtpFixedPort(5868)))
+        }
         let inst = MetalInstrument(sink: sink, descriptor: desc)
         inst.stateProvider = {
             var s = FountainAudioEngine.shared.snapshot()

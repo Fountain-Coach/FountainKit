@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Launch QuietFrame Sonify app wired to the MVK runtime.
+# The runtime forwards UMP to the MVK instrument via Loopback.
+
+export QF_USE_RUNTIME=${QF_USE_RUNTIME:-1}
+export MVK_BRIDGE_TARGET=${MVK_BRIDGE_TARGET:-"QuietFrame#qf-1"}
+
+echo "[quietframe-runtime] MVK_BRIDGE_TARGET=$MVK_BRIDGE_TARGET"
+
+swift run --package-path Packages/FountainApps metalviewkit-runtime-server &
+RUNTIME_PID=$!
+trap 'kill "$RUNTIME_PID" >/dev/null 2>&1 || true' EXIT
+
+sleep 0.5
+swift run --package-path Packages/FountainApps quietframe-sonify-app

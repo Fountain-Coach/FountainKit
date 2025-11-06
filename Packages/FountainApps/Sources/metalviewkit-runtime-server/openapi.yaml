@@ -127,6 +127,32 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/MidiInBatch' }
       responses: { '202': { description: Accepted } }
+  /v1/midi/vendor:
+    post:
+      operationId: sendVendor
+      tags: [midi]
+      parameters:
+        - in: query
+          name: targetDisplayName
+          required: false
+          schema: { type: string }
+          description: Forward to instrument whose display name contains this substring.
+        - in: query
+          name: targetInstanceId
+          required: false
+          schema: { type: string }
+          description: Forward to instrument with this MVK instanceId.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [topic]
+              properties:
+                topic: { type: string }
+                data: { type: object }
+      responses: { '202': { description: Accepted } }
     get:
       operationId: readMidiEvents
       tags: [midi]

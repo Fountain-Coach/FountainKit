@@ -23,7 +23,8 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-atomics.git", from: "1.3.0"),
         .package(url: "https://github.com/Fountain-Coach/Fountain-Store.git", exact: "0.2.0"),
         .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0"),
-        .package(url: "https://github.com/apple/swift-openapi-urlsession.git", from: "1.2.0")
+        .package(url: "https://github.com/apple/swift-openapi-urlsession.git", from: "1.2.0"),
+        .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.20.0")
     ],
     targets: [
         .target(
@@ -33,6 +34,7 @@ let package = Package(
                 .product(name: "NIO", package: "swift-nio"),
                 .product(name: "NIOCore", package: "swift-nio"),
                 .product(name: "NIOHTTP1", package: "swift-nio"),
+                .product(name: "NIOWebSocket", package: "swift-nio"),
                 "Yams",
                 .product(name: "Crypto", package: "swift-crypto"),
                 .product(name: "Logging", package: "swift-log"),

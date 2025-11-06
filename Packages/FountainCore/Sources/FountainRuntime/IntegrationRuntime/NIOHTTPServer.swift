@@ -1,5 +1,6 @@
 @preconcurrency import NIO
 @preconcurrency import NIOHTTP1
+@preconcurrency import NIOWebSocket
 import Foundation
 
 /// Lightweight SwiftNIO based HTTP server used by FountainAI services.
@@ -15,9 +16,11 @@ public final class NIOHTTPServer: @unchecked Sendable {
     /// - Parameters:
     ///   - kernel: Router handling incoming requests.
     ///   - group: Event loop group providing NIO threads. Defaults to a single-threaded group.
-    public init(kernel: HTTPKernel, group: EventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)) {
+    let webSocketRoutes: [String: @Sendable () -> String]
+    public init(kernel: HTTPKernel, group: EventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1), webSocketRoutes: [String: @Sendable () -> String] = [:]) {
         self.kernel = kernel
         self.group = group
+        self.webSocketRoutes = webSocketRoutes
     }
 
     /// Starts the HTTP server.
@@ -25,11 +28,23 @@ public final class NIOHTTPServer: @unchecked Sendable {
     /// - Returns: The actual bound port.
     @discardableResult
     public func start(port: Int) async throws -> Int {
+        let upgrader = NIOWebSocketServerUpgrader(shouldUpgrade: { (channel, head) in
+            let path = head.uri.split(separator: "?").first.map(String.init) ?? head.uri
+            if self.webSocketRoutes.keys.contains(path) { return channel.eventLoop.makeSucceededFuture([:]) }
+            return channel.eventLoop.makeFailedFuture(NIOWebSocketUpgradeError.invalidUpgradeHeader)
+        }, upgradePipelineHandler: { (channel, head) in
+            let path = head.uri.split(separator: "?").first.map(String.init) ?? head.uri
+            let text = self.webSocketRoutes[path]?() ?? "{}"
+            return channel.pipeline.addHandler(BasicWebSocketHandler(initialText: text))
+        })
+
+        let config = NIOHTTPServerUpgradeConfiguration(upgraders: [upgrader], completionHandler: { _ in })
+
         let bootstrap = ServerBootstrap(group: group)
             .serverChannelOption(ChannelOptions.backlog, value: 256)
             .serverChannelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
             .childChannelInitializer { channel in
-                channel.pipeline.configureHTTPServerPipeline().flatMap {
+                channel.pipeline.configureHTTPServerPipeline(withServerUpgrade: config).flatMap {
                     channel.pipeline.addHandler(HTTPHandler(kernel: self.kernel))
                 }
             }
@@ -138,5 +153,19 @@ public final class NIOHTTPServer: @unchecked Sendable {
 extension NIOHTTPServer.HTTPHandler: @unchecked Sendable {}
 
 extension ChannelHandlerContext: @unchecked @retroactive Sendable {}
+
+final class BasicWebSocketHandler: ChannelInboundHandler {
+    typealias InboundIn = WebSocketFrame
+    typealias OutboundOut = WebSocketFrame
+    let initialText: String
+    init(initialText: String) { self.initialText = initialText }
+    func handlerAdded(context: ChannelHandlerContext) {
+        var buffer = context.channel.allocator.buffer(capacity: initialText.utf8.count)
+        buffer.writeString(initialText)
+        let frame = WebSocketFrame(fin: true, opcode: .text, data: buffer)
+        context.writeAndFlush(self.wrapOutboundOut(frame), promise: nil)
+    }
+    func channelRead(context: ChannelHandlerContext, data: NIOAny) {}
+}
 
 // © 2025 Contexter alias Benedikt Eickhoff 🛡️ All rights reserved.

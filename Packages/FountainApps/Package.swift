@@ -129,6 +129,7 @@ let package = Package(
         .package(path: "../FountainServiceKit-ToolServer"),
         .package(path: "../FountainServiceKit-FKOps"),
         .package(path: "../FountainTooling"),
+        .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.20.0"),
         // External UI graph editor used by PatchBay
         .package(url: "https://github.com/AudioKit/Flow.git", from: "1.0.4"),
         .package(path: "../FountainTelemetryKit"),

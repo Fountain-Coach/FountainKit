@@ -49,7 +49,28 @@ let transport = NIOOpenAPIServerTransport(fallback: fallback)
 do { try MetalViewKitRuntimeServer.register(on: transport) } catch {
     FileHandle.standardError.write(Data("[mvk-runtime] register failed: \(error)\n".utf8))
 }
-let server = NIOHTTPServer(kernel: transport.asKernel())
+let ws: [String: @Sendable () -> String] = [
+    "/v1/tracing/stream": {
+        let traces = MetalViewKitRuntimeServer.sharedCore.traces.suffix(32)
+        let enc = JSONEncoder(); enc.outputFormatting = [.withoutEscapingSlashes]
+        let payload = traces.compactMap { try? enc.encode($0) }.compactMap { String(data: $0, encoding: .utf8) }
+        return "[" + payload.joined(separator: ",") + "]"
+    },
+    "/v1/audio/backend/events": {
+        let s = MetalViewKitRuntimeServer.sharedCore.audio
+        let obj: [String: Any] = [
+            "type": "backend.status",
+            "backend": s.backend.rawValue,
+            "streaming": s.streaming,
+            "deviceId": s.deviceId ?? "",
+            "sampleRate": s.sampleRate,
+            "blockFrames": s.blockFrames
+        ]
+        let data = try? JSONSerialization.data(withJSONObject: obj)
+        return data.flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+    }
+]
+let server = NIOHTTPServer(kernel: transport.asKernel(), webSocketRoutes: ws)
 
 Task {
     do {

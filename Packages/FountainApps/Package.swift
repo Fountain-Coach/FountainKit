@@ -1300,6 +1300,15 @@ let package = Package(
             name: "csound-audio-test",
             dependencies: [],
             path: "Sources/csound-audio-test"
+        ),
+        .testTarget(
+            name: "MVKRuntimeServerTests",
+            dependencies: [
+                "metalviewkit-runtime-server",
+                "MetalViewKit",
+                .product(name: "FountainRuntime", package: "FountainCore")
+            ],
+            path: "Tests/MVKRuntimeServerTests"
         )
     ]
 )

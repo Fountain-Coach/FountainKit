@@ -20,4 +20,6 @@ APP_DIR="$(
 )"
 if [[ -n "${APP_DIR:-}" && -d "$APP_DIR" ]]; then open "$APP_DIR" && exit 0; fi
 echo "[quietframe-sonify] built, but product not found under $BIN" 1>&2
-exit 1
+# Final fallback: swift run directly (no sandbox)
+exec env CLANG_MODULE_CACHE_PATH="$CLANG_MODULE_CACHE_PATH" SWIFTPM_ENABLE_SANDBOX=0 \
+  swift run --disable-sandbox --package-path "$ROOT/Packages/FountainApps" -c "$CFG" quietframe-sonify-app

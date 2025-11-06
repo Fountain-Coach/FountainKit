@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<EOF
+quietframe-stack — start/stop QuietFrame + Sidecar
+
+Usage:
+  quietframe-stack up [--release]    Start sidecar, sonify, companion
+  quietframe-stack down               Stop all processes
+  quietframe-stack status             Show process status and ports
+
+Notes:
+  - Logs:   .fountain/logs/{sidecar,quietframe-sonify,quietframe-companion}.log
+  - PIDs:   .fountain/pids/{sidecar,quietframe-sonify,quietframe-companion}.pid
+  - Health: http://127.0.0.1:7777/health
+EOF
+}
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+LOGDIR="$ROOT/.fountain/logs"
+PIDDIR="$ROOT/.fountain/pids"
+CACHE="$ROOT/.fountain/clang-module-cache"
+mkdir -p "$LOGDIR" "$PIDDIR" "$CACHE"
+
+is_running() { local f="$1"; [[ -f "$f" ]] && kill -0 "$(cat "$f" 2>/dev/null)" 2>/dev/null; }
+kill_pidfile() { local f="$1"; if [[ -f "$f" ]]; then kill "$(cat "$f" 2>/dev/null)" 2>/dev/null || true; rm -f "$f"; fi }
+
+swift_run() {
+  local target="$1"; shift
+  local mode_flag="$1"; shift || true
+  CLANG_MODULE_CACHE_PATH="$CACHE" swift run $mode_flag --package-path "$ROOT/Packages/FountainApps" "$target" "$@"
+}
+
+start_proc() {
+  local name="$1"; shift
+  local pidf="$PIDDIR/$name.pid"
+  local logf="$LOGDIR/$name.log"
+  local cmd=("$@")
+  if is_running "$pidf"; then echo "[$name] already running (pid $(cat "$pidf"))"; return 0; fi
+  echo "[$name] starting... (logs: $logf)"
+  ( nohup "${cmd[@]}" >"$logf" 2>&1 & echo $! >"$pidf" ) || { echo "[$name] failed"; return 1; }
+  sleep 0.2
+}
+
+wait_health() {
+  local url="http://127.0.0.1:7777/health"; local t=0; local max=60
+  until curl -fsS "$url" >/dev/null 2>&1; do
+    sleep 0.5; t=$((t+1)); if [[ $t -ge $max ]]; then echo "[sidecar] health timeout"; return 1; fi
+  done
+  echo "[sidecar] healthy at $url"
+}
+
+cmd_up() {
+  local mode_flag="-c debug"; if [[ "${1-}" == "--release" ]]; then mode_flag="-c release"; fi
+  start_proc sidecar bash -lc "$(typeset -f swift_run); swift_run metalviewkit-runtime-server $mode_flag"
+  wait_health || true
+  # Launch QuietFrame apps
+  start_proc quietframe-sonify bash -lc "$(typeset -f swift_run); swift_run quietframe-sonify-app $mode_flag"
+  start_proc quietframe-companion bash -lc "$(typeset -f swift_run); swift_run quietframe-companion-app $mode_flag"
+  echo "All started. Use: $0 status"
+}
+
+cmd_down() {
+  kill_pidfile "$PIDDIR/quietframe-companion.pid"
+  kill_pidfile "$PIDDIR/quietframe-sonify.pid"
+  kill_pidfile "$PIDDIR/sidecar.pid"
+  echo "All stopped."
+}
+
+cmd_status() {
+  for n in sidecar quietframe-sonify quietframe-companion; do
+    local pidf="$PIDDIR/$n.pid"; if is_running "$pidf"; then echo "[$n] pid $(cat "$pidf") running"; else echo "[$n] stopped"; fi
+  done
+}
+
+case "${1-}" in
+  up) shift; cmd_up "${1-}" ;;
+  down) cmd_down ;;
+  status) cmd_status ;;
+  -h|--help|help|*) usage ;;
+esac
+

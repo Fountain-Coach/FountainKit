@@ -15,6 +15,7 @@ Included scripts (canonical)
 - `baseline-patchbay-web` — Seeds Teatro prompts and launches the web mirror (Vite) of Baseline‑PatchBay.
 - `midi-service` — Launch the MIDI 2.0 HTTP bridge (`/ump/send`) for web MRTS.
 - `quietframe-runtime` — Launch QuietFrame Sonify wired to the MVK runtime (Loopback transport). Sets `QF_USE_RUNTIME=1` and `MVK_BRIDGE_TARGET` (default `QuietFrame#qf-1`).
+- `quietframe-stack` — One‑button dev stack: starts the MVK runtime sidecar, QuietFrame Sonify, and QuietFrame Companion. Supports `up|down|status`.
 
 Conventions
 - Keep the UX/config minimal; all environment and secrets managed via Keychain or defaults.

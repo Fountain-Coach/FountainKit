@@ -42,6 +42,10 @@ public actor QuietFrameSidecarClient {
         pollingTask = nil
     }
 
+    public func setUMPSink(_ sink: @escaping @Sendable ([UInt32]) -> Void) {
+        self.onUMP = sink
+    }
+
     // MARK: - Senders
     public func sendVendor(topic: String, data: [String: Any] = [:]) async {
         let url = url("/v1/midi/vendor", query: query())
@@ -117,4 +121,3 @@ public actor QuietFrameSidecarClient {
         _ = try? await URLSession.shared.data(for: req)
     }
 }
-

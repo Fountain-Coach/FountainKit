@@ -230,5 +230,33 @@ extension MetalInstrument {
     public static func defaultTransport() -> any MetalInstrumentTransport {
         Self.transportHolder.get()
     }
-}
 
+    // Backward-compatible alias for legacy call sites
+    public static func setTransportOverride(_ transport: (any MetalInstrumentTransport)?) {
+        setDefaultTransport(transport)
+    }
+
+    // Convenience send helpers (Channel Voice 2.0)
+    public func sendCC(controller: UInt8, value7: UInt8, channel: UInt8 = 0) {
+        let group = desc.midiGroup
+        let w0 = (UInt32(0x4) << 28) | (UInt32(group & 0xF) << 24) | (UInt32(0xB) << 20) | (UInt32(channel & 0xF) << 16) | (UInt32(controller) << 8)
+        let v32 = UInt32(value7) * 0xFFFFFFFF / 127
+        session?.send(words: [w0, v32])
+    }
+
+    public func sendNoteOn(note: UInt8, velocity7: UInt8, channel: UInt8 = 0) {
+        let group = desc.midiGroup
+        let w0 = (UInt32(0x4) << 28) | (UInt32(group & 0xF) << 24) | (UInt32(0x9) << 20) | (UInt32(channel & 0xF) << 16) | (UInt32(note) << 8)
+        let v16 = UInt16(velocity7) * 65535 / 127
+        let w1 = UInt32(v16) << 16
+        session?.send(words: [w0, w1])
+    }
+
+    public func sendNoteOff(note: UInt8, velocity7: UInt8, channel: UInt8 = 0) {
+        let group = desc.midiGroup
+        let w0 = (UInt32(0x4) << 28) | (UInt32(group & 0xF) << 24) | (UInt32(0x8) << 20) | (UInt32(channel & 0xF) << 16) | (UInt32(note) << 8)
+        let v16 = UInt16(velocity7) * 65535 / 127
+        let w1 = UInt32(v16) << 16
+        session?.send(words: [w0, w1])
+    }
+}

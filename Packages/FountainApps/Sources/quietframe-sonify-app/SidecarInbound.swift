@@ -5,11 +5,11 @@ import QuietFrameKit
     private let client: QuietFrameSidecarClient
     init(targetName: String = "QuietFrame") {
         self.client = QuietFrameSidecarClient(config: .init(targetDisplayName: targetName))
-        Task { [weak self] in
-            guard let self else { return }
-            await self.client.startPolling(pollIntervalMs: 150)
-            await self.client.setOnUMPSink { [weak self] words in
-                self?.handle(words: words)
+        Task { [weak weakSelf = self] in
+            guard let weakSelf else { return }
+            await weakSelf.client.startPolling(pollIntervalMs: 150)
+            await weakSelf.client.setUMPSink { words in
+                Task { @MainActor in weakSelf.handle(words: words) }
             }
         }
     }
@@ -51,4 +51,3 @@ import QuietFrameKit
         return out
     }
 }
-

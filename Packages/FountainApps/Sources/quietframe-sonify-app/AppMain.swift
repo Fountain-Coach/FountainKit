@@ -328,6 +328,7 @@ struct MouseTracker: NSViewRepresentable {
 
 // MIDI 2.0 instrument sink that maps PE properties and CC to engine params
 final class SonifyPESink: MetalSceneRenderer {
+    func vendorEvent(topic: String, data: Any?) {}
     func setUniform(_ name: String, float: Float) {
         Task { @MainActor in
             FountainAudioEngine.shared.setParam(name: name, value: Double(float))

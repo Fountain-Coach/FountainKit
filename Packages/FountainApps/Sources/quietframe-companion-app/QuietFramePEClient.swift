@@ -23,10 +23,10 @@ import QuietFrameKit
             let client = QuietFrameSidecarClient(config: cfg)
             self.sidecar = client
             self.connectedName = "Sidecar: \(cfg.baseURL.absoluteString)"
-            Task { [weak self] in
+            Task { [weak weakSelf = self] in
                 await client.startPolling(pollIntervalMs: 100)
-                await client.setOnUMPSink { words in
-                    self?.handleIncoming(words)
+                await client.setUMPSink { words in
+                    Task { @MainActor in weakSelf?.handleIncoming(words) }
                 }
             }
         } else {

@@ -240,7 +240,8 @@ extension MetalInstrument {
     public func sendCC(controller: UInt8, value7: UInt8, channel: UInt8 = 0) {
         let group = desc.midiGroup
         let w0 = (UInt32(0x4) << 28) | (UInt32(group & 0xF) << 24) | (UInt32(0xB) << 20) | (UInt32(channel & 0xF) << 16) | (UInt32(controller) << 8)
-        let v32 = UInt32(value7) * 0xFFFFFFFF / 127
+        // Scale 7-bit value (0..127) into full 32-bit domain (0..0xFFFF_FFFF) using 64-bit math to avoid overflow
+        let v32 = UInt32((UInt64(value7) * UInt64(0xFFFF_FFFF)) / 127)
         session?.send(words: [w0, v32])
     }
 

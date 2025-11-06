@@ -1288,6 +1288,7 @@ let package = Package(
             name: "metalviewkit-runtime-server",
             dependencies: [
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "FountainRuntime", package: "FountainCore"),
                 "MetalViewKit"
             ],
             path: "Sources/metalviewkit-runtime-server",

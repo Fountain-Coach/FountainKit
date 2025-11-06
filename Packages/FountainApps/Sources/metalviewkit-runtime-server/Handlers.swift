@@ -61,7 +61,8 @@ final class MVKRuntimeCore: @unchecked Sendable {
 
 final class MVKRuntimeHandlers: APIProtocol, @unchecked Sendable {
     private var endpoints: [String: Components.Schemas.MidiEndpoint] = [:]
-    private let core = MVKRuntimeCore()
+    private let core: MVKRuntimeCore
+    init(core: MVKRuntimeCore) { self.core = core }
     // Minimal health implementation to get the server compiling; expand alongside handlers.
     func getHealth(_ input: Operations.getHealth.Input) async throws -> Operations.getHealth.Output {
         let uptime = ProcessInfo.processInfo.systemUptime

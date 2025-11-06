@@ -1,0 +1,9 @@
+generate:
+  - types
+  - server
+filter:
+  # Start narrow so the server compiles; expand as handlers land
+  paths:
+    - /health
+options:
+  accessModifier: public

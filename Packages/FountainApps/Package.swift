@@ -103,6 +103,8 @@ let package = Package(
         .executable(name: "quietframe-sonify-app", targets: ["quietframe-sonify-app"]),
         .executable(name: "quietframe-companion-app", targets: ["quietframe-companion-app"]),
         .executable(name: "quietframe-smoke", targets: ["quietframe-smoke"])
+        ,
+        .executable(name: "metalviewkit-runtime-server", targets: ["metalviewkit-runtime-server"])
         
     ],
     dependencies: [
@@ -157,6 +159,7 @@ let package = Package(
             path: "Sources/MetalViewKit",
             exclude: ["AGENTS.md"]
         ),
+        
         .target(
             name: "CoreMLKit",
             dependencies: [],
@@ -1280,6 +1283,18 @@ let package = Package(
                 .product(name: "FountainStoreClient", package: "FountainCore")
             ],
             path: "Sources/quietframe-companion-seed"
+        ),
+        .executableTarget(
+            name: "metalviewkit-runtime-server",
+            dependencies: [
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                "MetalViewKit"
+            ],
+            path: "Sources/metalviewkit-runtime-server",
+            plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
         ),
         .executableTarget(
             name: "csound-audio-test",

@@ -4,8 +4,8 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CFG="${1:-debug}"
 export CLANG_MODULE_CACHE_PATH="$ROOT/.fountain/clang-module-cache"
 export SWIFTPM_ENABLE_SANDBOX=0
-swift build --package-path "$ROOT/Packages/FountainApps" -c "$CFG" --target quietframe-sonify-app
-BIN="$(swift build --package-path "$ROOT/Packages/FountainApps" -c "$CFG" --show-bin-path)"
+swift build --disable-sandbox --package-path "$ROOT/Packages/FountainApps" -c "$CFG" --target quietframe-sonify-app
+BIN="$(swift build --disable-sandbox --package-path "$ROOT/Packages/FountainApps" -c "$CFG" --show-bin-path)"
 APP="$BIN/quietframe-sonify-app"
 APP_BUNDLE="$BIN/quietframe-sonify-app.app"
 if [[ -x "$APP" ]]; then exec "$APP"; fi

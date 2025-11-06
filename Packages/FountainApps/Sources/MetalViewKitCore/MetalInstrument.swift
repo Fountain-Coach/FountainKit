@@ -90,14 +90,6 @@ public final class MetalInstrument: @unchecked Sendable {
         session = nil
     }
 
-    private func handleEnableFailure(token: UUID, message: String, error: Error?) {
-        // Minimal diagnostic; real implementation may publish state or notify
-        #if DEBUG
-        print("[MetalInstrument] enable failed: \(message) \(error.map { String(describing: $0) } ?? "")")
-        #endif
-        if enableToken == token { enableToken = nil }
-    }
-
     private func handleUMP(_ words: [UInt32]) {
         guard let w1 = words.first else { return }
         let mt = UInt8((w1 >> 28) & 0xF)
@@ -213,7 +205,7 @@ final class TransportHolder: @unchecked Sendable {
     private let lock = NSLock()
     init(defaultTransport: any MetalInstrumentTransport) { self.fallback = defaultTransport }
     func get() -> any MetalInstrumentTransport { lock.lock(); defer { lock.unlock() }; return current ?? fallback }
-    func set(_ t: (any MetalInstrumentTransport)?) { lock.lock(); current = t; lock.unlock() }
+    func set(_ t: any MetalInstrumentTransport?) { lock.lock(); current = t; lock.unlock() }
 }
 
 extension MetalInstrument {
@@ -231,4 +223,3 @@ extension MetalInstrument {
         Self.transportHolder.get()
     }
 }
-

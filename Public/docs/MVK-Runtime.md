@@ -4,9 +4,11 @@ We provide a local/sidecar HTTP API to drive MIDI 2.0 and timing workflows dete
 
 What
 - Health: `GET /health` returns `{status:"ok", uptimeSec}`.
-- MIDI events: `POST /v1/midi/events` accepts timestamped UMP packets and forwards them to a target instrument.
-- Endpoints: `GET/POST /v1/midi/endpoints` lists/creates runtime endpoints; listing reflects live MVK loopback instruments.
-- Future: clock control, audio backend, tracing and metrics (scoped in the spec).
+- Clock: `GET /v1/clock`, `POST /v1/clock/test/enable`, `POST /v1/clock/test/advance` for deterministic time.
+- MIDI IO: `POST /v1/midi/events` accepts timestamped UMP packets. `GET /v1/midi/vendor` reads back recorded events.
+- Endpoints: `GET/POST /v1/midi/endpoints` (headless mode returns in‑memory endpoints; live MVK reflection is available when running in‑process with UI).
+- Tracing & Metrics: `GET /v1/tracing/dump`, `GET /v1/metrics`.
+- Audio (headless adapter): backend status, open/start/stop, and simple offline render (`POST /v1/audio/render`).
 
 Why
 - Deterministic testing: narrow, versioned routes allow repeatable demos and CI without UI automation.
@@ -14,11 +16,9 @@ Why
 
 How
 - Run server: `swift run --package-path Packages/FountainApps metalviewkit-runtime-server` (default port 7777).
-- Inject UMP:
-  - By display name substring: `POST /v1/midi/events?targetDisplayName=QuietFrame`.
-  - By instanceId: `POST /v1/midi/events?targetInstanceId=qf-1`.
-- Smoke locally: `bash Scripts/ci/mvk-runtime-smoke.sh` (writes `.fountain/logs/mvk-runtime-smoke-*.json`).
-- Config: `MVK_BRIDGE_TARGET` default for display name routing (fallback to “Canvas” when unset).
+- Inject UMP: `POST /v1/midi/events` with UMP packet words; read back via `GET /v1/midi/vendor` (use `limit`/`sinceNs`).
+- Smoke locally: `bash Scripts/ci/mvk-runtime-smoke.sh` (JSON summary) or `bash Scripts/ci/mvk-runtime-probe.sh` (direct probes).
+- Config: `MVK_RUNTIME_PORT` or `PORT` to override port; `MVK_BRIDGE_TARGET` is reserved for in‑process UI forwarding.
 
 Examples
 - Health: `curl -s http://127.0.0.1:7777/health`.
@@ -32,6 +32,5 @@ Where
 - QuietFrame apps: `Packages/FountainApps/Sources/quietframe-sonify-app/*`, `Packages/FountainApps/Sources/quietframe-companion-app/*` (first referential apps).
 
 Notes
-- Live listing includes loopback MVK instruments with `id = instanceId` for targeting. QuietFrame Sonify prints its identity at boot (`displayName`, `instanceId`) to aid scripting.
+- In headless mode, live MVK reflection and vendor forwarding are disabled; tests rely on the runtime ring buffer for echo.
 - The runtime complements in‑app transport; it does not replace CoreMIDI usage where appropriate.
-

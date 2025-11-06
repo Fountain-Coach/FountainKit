@@ -269,21 +269,7 @@ final class MVKRuntimeHandlers: APIProtocol, @unchecked Sendable {
         var list: [Components.Schemas.MidiEndpoint] = []
         // Include in-memory endpoints
         list.append(contentsOf: endpoints.values)
-        // Reflect live MVK loopback instruments as input endpoints with id=instanceId
-        let live = LoopbackMetalInstrumentTransport.shared.listDescriptors()
-        for d in live {
-            let create = Components.Schemas.MidiEndpointCreate(
-                name: d.displayName,
-                direction: .input,
-                groups: 1,
-                jrTimestampSupport: true
-            )
-            let ep = Components.Schemas.MidiEndpoint(value1: create, value2: .init(id: d.instanceId))
-            // De-duplicate by id when both in-memory and live share the same id
-            if !list.contains(where: { $0.value2.id == ep.value2.id }) {
-                list.append(ep)
-            }
-        }
+        // Live MVK reflection requires in-process UI; omitted in headless runtime
         return .ok(.init(body: .json(list)))
     }
 

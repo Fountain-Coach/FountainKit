@@ -221,8 +221,8 @@ final class CoreMIDIMetalInstrumentSession: MetalInstrumentTransportSession, @un
         var tmpDest: MIDIEndpointRef = 0
         status = MIDIDestinationCreateWithProtocol(client, descriptor.displayName as CFString, ._2_0, &tmpDest) { pktlist, _ in
             guard let pktlist else { return }
-            for i in 0..<pktlist.pointee.numPackets {
-                let pkt = pktlist.pointee.packet[Int(i)]
+            for i in 0..<pktlist.numPackets {
+                let pkt = pktlist.packet[Int(i)]
                 if pkt.wordCount > 0 {
                     var words: [UInt32] = []
                     let ptr = UnsafeBufferPointer(start: pkt.words, count: Int(pkt.wordCount))
@@ -243,7 +243,7 @@ final class CoreMIDIMetalInstrumentSession: MetalInstrumentTransportSession, @un
         // Send as a single packet list (UMP 128-bit aligned)
         var words = words
         words.withUnsafeMutableBufferPointer { buf in
-            var list = MIDIEventList()
+            var list = MIDIUDMCPacketList()
             list.protocol = ._2_0
             list.timeStamp = 0
             list.wordCount = UInt32(buf.count)
@@ -264,4 +264,3 @@ final class CoreMIDIMetalInstrumentSession: MetalInstrumentTransportSession, @un
     }
 }
 #endif
-

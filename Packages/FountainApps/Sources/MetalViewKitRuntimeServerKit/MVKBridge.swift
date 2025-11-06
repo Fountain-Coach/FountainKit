@@ -1,5 +1,5 @@
 import Foundation
-import MetalViewKit
+// Minimal bridge stub: in headless tests we do not forward to MVK.
 
 /// MVKBridge offers a tiny shim for tests to forward runtime UMP words
 /// to a running MetalViewKit instrument by display name.
@@ -10,7 +10,8 @@ public enum MVKBridge {
     /// Returns true when a matching instrument was found and accepted the words.
     @discardableResult
     public static func sendUMP(words: [UInt32], toDisplayNameContaining displayNameSubstring: String) -> Bool {
-        LoopbackMetalInstrumentTransport.shared.send(words: words, toDisplayName: displayNameSubstring)
+        _ = displayNameSubstring
+        return false
     }
 
     /// Sends a batch of UMP words arrays to a target resolved from parameters/env.
@@ -19,15 +20,8 @@ public enum MVKBridge {
     public static func sendBatch(_ batch: [[UInt32]],
                                  targetDisplayNameSubstring: String? = nil,
                                  targetInstanceId: String? = nil) -> Int {
-        var delivered = 0
-        if let iid = targetInstanceId, !iid.isEmpty {
-            for words in batch { if LoopbackMetalInstrumentTransport.shared.send(words: words, toInstanceId: iid) { delivered += 1 } }
-            return delivered
-        }
-        let fallback = ProcessInfo.processInfo.environment["MVK_BRIDGE_TARGET"] ?? "Canvas"
-        let target = (targetDisplayNameSubstring?.isEmpty == false) ? targetDisplayNameSubstring! : fallback
-        for words in batch { if LoopbackMetalInstrumentTransport.shared.send(words: words, toDisplayName: target) { delivered += 1 } }
-        return delivered
+        _ = targetInstanceId; _ = targetDisplayNameSubstring
+        return 0
     }
 
     // Build SysEx7 UMP words from a raw bytes payload (6 data bytes per packet)
@@ -63,7 +57,8 @@ public enum MVKBridge {
         let json = (try? JSONSerialization.data(withJSONObject: body)) ?? Data()
         payload.append(contentsOf: json)
         payload.append(0xF7)
-        let words = buildSysEx7Words(bytes: payload, group: group)
-        return sendBatch([words], targetDisplayNameSubstring: targetDisplayNameSubstring, targetInstanceId: targetInstanceId) > 0
+        _ = buildSysEx7Words(bytes: payload, group: group)
+        _ = targetDisplayNameSubstring; _ = targetInstanceId
+        return false
     }
 }

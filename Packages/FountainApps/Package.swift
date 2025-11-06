@@ -15,7 +15,8 @@ let package = Package(
         // Robot-only: expose just what PatchBay tests need
         .executable(name: "patchbay-app", targets: ["patchbay-app"]),
         .executable(name: "replay-export", targets: ["replay-export"]),
-        .library(name: "MetalViewKit", targets: ["MetalViewKit"])
+        .library(name: "MetalViewKit", targets: ["MetalViewKit"]) 
+        
     ] : [
         .executable(name: "gateway-server", targets: ["gateway-server"]),
         .executable(name: "gateway-ci-smoke", targets: ["gateway-ci-smoke"]),
@@ -1285,18 +1286,25 @@ let package = Package(
             ],
             path: "Sources/quietframe-companion-seed"
         ),
-        .executableTarget(
-            name: "metalviewkit-runtime-server",
+        // MVK Runtime Server split: library (kit) + thin executable
+        .target(
+            name: "MetalViewKitRuntimeServerKit",
             dependencies: [
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
-                .product(name: "FountainRuntime", package: "FountainCore"),
-                "MetalViewKit"
+                .product(name: "FountainRuntime", package: "FountainCore")
             ],
-            path: "Sources/metalviewkit-runtime-server",
+            path: "Sources/MetalViewKitRuntimeServerKit",
             plugins: [
                 .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
+        ),
+        .executableTarget(
+            name: "metalviewkit-runtime-server",
+            dependencies: [
+                "MetalViewKitRuntimeServerKit"
+            ],
+            path: "Sources/metalviewkit-runtime-server"
         ),
         .executableTarget(
             name: "csound-audio-test",
@@ -1306,8 +1314,7 @@ let package = Package(
         .executableTarget(
             name: "mvk-runtime-tests",
             dependencies: [
-                "metalviewkit-runtime-server",
-                "MetalViewKit",
+                "MetalViewKitRuntimeServerKit",
                 .product(name: "FountainRuntime", package: "FountainCore")
             ],
             path: "Sources/mvk-runtime-tests"

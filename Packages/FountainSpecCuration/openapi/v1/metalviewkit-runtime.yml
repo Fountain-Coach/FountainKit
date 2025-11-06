@@ -241,6 +241,18 @@ paths:
       responses:
         '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TraceEvent' } } } } }
 
+  /v1/tracing/sse:
+    get:
+      tags: [tracing]
+      summary: Live tracing Server-Sent Events (SSE)
+      description: Emits Server-Sent Events with JSON-encoded TraceEvent objects.
+      responses:
+        '200':
+          description: OK (SSE stream)
+          content:
+            text/event-stream:
+              schema: { type: string }
+
   /v1/audio/backend:
     get:
       operationId: getAudioBackendStatus
@@ -310,6 +322,18 @@ paths:
       x-ws-message:
         example: { $ref: '#/components/schemas/BackendEvent' }
       responses: { '101': { description: WebSocket established } }
+
+  /v1/audio/backend/events-sse:
+    get:
+      tags: [audio-backend, tracing]
+      summary: Backend events Server-Sent Events (SSE)
+      description: Emits SSE events with JSON-encoded backend status objects.
+      responses:
+        '200':
+          description: OK (SSE stream)
+          content:
+            text/event-stream:
+              schema: { type: string }
 
 components:
   parameters:

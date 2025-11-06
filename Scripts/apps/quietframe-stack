@@ -28,8 +28,8 @@ kill_pidfile() { local f="$1"; if [[ -f "$f" ]]; then kill "$(cat "$f" 2>/dev/nu
 
 swift_run() {
   local target="$1"; shift
-  local mode_flag="$1"; shift || true
-  CLANG_MODULE_CACHE_PATH="$CACHE" swift run $mode_flag --package-path "$ROOT/Packages/FountainApps" "$target" "$@"
+  local cfg="$1"; shift || true
+  CLANG_MODULE_CACHE_PATH="$CACHE" swift run -c "$cfg" --package-path "$ROOT/Packages/FountainApps" "$target" "$@"
 }
 
 start_proc() {
@@ -52,12 +52,12 @@ wait_health() {
 }
 
 cmd_up() {
-  local mode_flag="-c debug"; if [[ "${1-}" == "--release" ]]; then mode_flag="-c release"; fi
-  start_proc sidecar bash -lc "$(typeset -f swift_run); swift_run metalviewkit-runtime-server $mode_flag"
+  local cfg="debug"; if [[ "${1-}" == "--release" ]]; then cfg="release"; fi
+  start_proc sidecar bash -lc "$(typeset -f swift_run); swift_run metalviewkit-runtime-server $cfg"
   wait_health || true
   # Launch QuietFrame apps
-  start_proc quietframe-sonify bash -lc "$(typeset -f swift_run); swift_run quietframe-sonify-app $mode_flag"
-  start_proc quietframe-companion bash -lc "$(typeset -f swift_run); swift_run quietframe-companion-app $mode_flag"
+  start_proc quietframe-sonify bash -lc "$(typeset -f swift_run); swift_run quietframe-sonify-app $cfg"
+  start_proc quietframe-companion bash -lc "$(typeset -f swift_run); swift_run quietframe-companion-app $cfg"
   echo "All started. Use: $0 status"
 }
 
@@ -80,4 +80,3 @@ case "${1-}" in
   status) cmd_status ;;
   -h|--help|help|*) usage ;;
 esac
-

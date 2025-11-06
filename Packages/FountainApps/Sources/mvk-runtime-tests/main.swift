@@ -44,10 +44,17 @@ struct Main {
         // Create a loopback MVK instrument
         let iid = UUID().uuidString
         let displayName = "MVKTest#\(iid)"
-        var received: [[UInt32]] = []
+        // Thread-safe inbox for received UMP frames
+        actor UMPInbox {
+            private var items: [[UInt32]] = []
+            func push(_ words: [UInt32]) { items.append(words) }
+            func snapshot() -> [[UInt32]] { items }
+        }
+        let inbox = UMPInbox()
         let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "MVKTest", instanceId: iid, displayName: displayName)
         let session = try LoopbackMetalInstrumentTransport.shared.makeSession(descriptor: desc) { words in
-            received.append(words)
+            // Hop to an async context to avoid mutating from concurrently-executing code
+            Task { await inbox.push(words) }
         }
         defer { session.close() }
 
@@ -64,7 +71,8 @@ struct Main {
         guard (iresp as? HTTPURLResponse)?.statusCode == 202 else { throw NSError(domain: "mvk-runtime-tests", code: 2, userInfo: [NSLocalizedDescriptionKey: "inject failed"]) }
 
         // Allow delivery
-        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        try await Task.sleep(nanoseconds: 50_000_000)
+        let received = await inbox.snapshot()
         guard received.count == 1, received.first == [w0, w1] else {
             throw NSError(domain: "mvk-runtime-tests", code: 3, userInfo: [NSLocalizedDescriptionKey: "no UMP received"])
         }
@@ -88,4 +96,3 @@ struct Main {
         return String(data: data, encoding: .utf8) ?? "{\"ok\":true}"
     }
 }
-

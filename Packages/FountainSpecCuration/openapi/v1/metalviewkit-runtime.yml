@@ -110,6 +110,17 @@ paths:
     post:
       operationId: injectMidiEvents
       tags: [midi]
+      parameters:
+        - in: query
+          name: targetDisplayName
+          required: false
+          schema: { type: string }
+          description: Forward UMP to the instrument whose display name contains this substring.
+        - in: query
+          name: targetInstanceId
+          required: false
+          schema: { type: string }
+          description: Forward UMP to the instrument with this MVK instanceId.
       requestBody:
         required: true
         content:

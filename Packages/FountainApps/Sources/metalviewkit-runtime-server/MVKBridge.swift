@@ -13,16 +13,20 @@ public enum MVKBridge {
         LoopbackMetalInstrumentTransport.shared.send(words: words, toDisplayName: displayNameSubstring)
     }
 
-    /// Sends a batch of UMP words arrays to a target resolved from env or a provided substring.
-    /// If `targetDisplayNameSubstring` is nil, falls back to `MVK_BRIDGE_TARGET` env, else "Canvas".
+    /// Sends a batch of UMP words arrays to a target resolved from parameters/env.
+    /// Priority: instanceId > displayName substring > MVK_BRIDGE_TARGET env > "Canvas".
     @discardableResult
-    public static func sendBatch(_ batch: [[UInt32]], targetDisplayNameSubstring: String? = nil) -> Int {
+    public static func sendBatch(_ batch: [[UInt32]],
+                                 targetDisplayNameSubstring: String? = nil,
+                                 targetInstanceId: String? = nil) -> Int {
+        var delivered = 0
+        if let iid = targetInstanceId, !iid.isEmpty {
+            for words in batch { if LoopbackMetalInstrumentTransport.shared.send(words: words, toInstanceId: iid) { delivered += 1 } }
+            return delivered
+        }
         let fallback = ProcessInfo.processInfo.environment["MVK_BRIDGE_TARGET"] ?? "Canvas"
         let target = (targetDisplayNameSubstring?.isEmpty == false) ? targetDisplayNameSubstring! : fallback
-        var delivered = 0
-        for words in batch {
-            if LoopbackMetalInstrumentTransport.shared.send(words: words, toDisplayName: target) { delivered += 1 }
-        }
+        for words in batch { if LoopbackMetalInstrumentTransport.shared.send(words: words, toDisplayName: target) { delivered += 1 } }
         return delivered
     }
 }

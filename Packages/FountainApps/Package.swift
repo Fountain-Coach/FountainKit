@@ -1301,6 +1301,15 @@ let package = Package(
             dependencies: [],
             path: "Sources/csound-audio-test"
         ),
+        .executableTarget(
+            name: "mvk-runtime-tests",
+            dependencies: [
+                "metalviewkit-runtime-server",
+                "MetalViewKit",
+                .product(name: "FountainRuntime", package: "FountainCore")
+            ],
+            path: "Sources/mvk-runtime-tests"
+        ),
         .testTarget(
             name: "MVKRuntimeServerTests",
             dependencies: [

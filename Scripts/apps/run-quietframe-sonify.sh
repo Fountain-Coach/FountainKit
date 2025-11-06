@@ -12,11 +12,11 @@ if [[ -x "$APP" ]]; then exec "$APP"; fi
 if [[ -d "$APP_BUNDLE" ]]; then open "$APP_BUNDLE" && exit 0; fi
 # Fallback: search under .build for a matching product
 PROD="$(
-  find "$ROOT/Packages/FountainApps/.build" -type f -maxdepth 3 -perm +111 -name 'quietframe*sonify*' -print 2>/dev/null | head -n 1
+  find "$ROOT/Packages/FountainApps/.build" -type f -name 'quietframe*sonify*' -print 2>/dev/null | head -n 1
 )"
 if [[ -n "${PROD:-}" && -x "$PROD" ]]; then exec "$PROD"; fi
 APP_DIR="$(
-  find "$ROOT/Packages/FountainApps/.build" -type d -maxdepth 3 -name 'quietframe*sonify*.app' -print 2>/dev/null | head -n 1
+  find "$ROOT/Packages/FountainApps/.build" -type d -name 'quietframe*sonify*.app' -print 2>/dev/null | head -n 1
 )"
 if [[ -n "${APP_DIR:-}" && -d "$APP_DIR" ]]; then open "$APP_DIR" && exit 0; fi
 echo "[quietframe-sonify] built, but product not found under $BIN" 1>&2

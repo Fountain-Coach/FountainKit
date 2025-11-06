@@ -195,7 +195,38 @@ final class MVKRuntimeHandlers: APIProtocol, @unchecked Sendable {
     func setFaultModel(_ input: Operations.setFaultModel.Input) async throws -> Operations.setFaultModel.Output { if case let .json(m) = input.body { core.faultModel = m }; return .noContent }
 
     // Test scenario (no-op loader)
-    func loadTestScenario(_ input: Operations.loadTestScenario.Input) async throws -> Operations.loadTestScenario.Output { return .noContent }
+    func loadTestScenario(_ input: Operations.loadTestScenario.Input) async throws -> Operations.loadTestScenario.Output {
+        guard case let .json(scen) = input.body else { return .undocumented(statusCode: 400, .init()) }
+        // Execute steps sequentially; recognized ops: advanceClock, injectUMP, sendVendor, sleepMs
+        for container in scen.steps ?? [] {
+            guard let data = try? JSONEncoder().encode(container),
+                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
+            let op = (obj["op"] as? String) ?? ""
+            switch op {
+            case "advanceClock":
+                if let d = obj["deltaNs"] as? String, let val = UInt64(d) { _ = core.advanceTestClock(deltaNs: val, steps: Int(obj["steps"] as? Double ?? 1)) }
+            case "injectUMP":
+                if let arr = obj["words"] as? [Any] {
+                    let words = arr.compactMap { v -> UInt32? in
+                        if let s = v as? String, s.hasPrefix("0x"), let n = UInt32(s, radix: 16) { return n }
+                        if let i = v as? Int { return UInt32(truncatingIfNeeded: i) }
+                        return nil
+                    }
+                    if !words.isEmpty { core.pushEvent(tNs: core.nowNs(), words: words); _ = MVKBridge.sendBatch([words]) }
+                }
+            case "sendVendor":
+                let topic = (obj["topic"] as? String) ?? ""
+                let data = (obj["data"] as? [String: Any]) ?? [:]
+                _ = MVKBridge.sendVendorJSON(topic: topic, data: data)
+            case "sleepMs":
+                let ms = Int((obj["ms"] as? Double) ?? 0)
+                if ms > 0 { try? await Task.sleep(nanoseconds: UInt64(ms) * 1_000_000) }
+            default:
+                continue
+            }
+        }
+        return .noContent
+    }
 
     // Metrics
     func getMetrics(_ input: Operations.getMetrics.Input) async throws -> Operations.getMetrics.Output {

@@ -53,11 +53,11 @@ wait_health() {
 
 cmd_up() {
   local cfg="debug"; if [[ "${1-}" == "--release" ]]; then cfg="release"; fi
-  start_proc sidecar bash -lc "$(typeset -f swift_run); swift_run metalviewkit-runtime-server $cfg"
+  start_proc sidecar bash -lc "ROOT='$ROOT'; CACHE='$CACHE'; $(typeset -f swift_run); swift_run metalviewkit-runtime-server $cfg"
   wait_health || true
   # Launch QuietFrame apps
-  start_proc quietframe-sonify bash -lc "$(typeset -f swift_run); swift_run quietframe-sonify-app $cfg"
-  start_proc quietframe-companion bash -lc "$(typeset -f swift_run); swift_run quietframe-companion-app $cfg"
+  start_proc quietframe-sonify bash -lc "ROOT='$ROOT'; CACHE='$CACHE'; $(typeset -f swift_run); swift_run quietframe-sonify-app $cfg"
+  start_proc quietframe-companion bash -lc "ROOT='$ROOT'; CACHE='$CACHE'; $(typeset -f swift_run); swift_run quietframe-companion-app $cfg"
   echo "All started. Use: $0 status"
 }
 

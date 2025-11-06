@@ -313,6 +313,12 @@ components:
       schema: { type: string }
 
   schemas:
+    ClockNow:
+      type: object
+      properties:
+        nowNs: { $ref: '#/components/schemas/TimestampNs' }
+        mode: { type: string, enum: [system, test] }
+      required: [nowNs, mode]
     TimestampNs:
       type: string
       pattern: '^[0-9]+$'

@@ -9,6 +9,15 @@ body {
   min-height: 100vh;
   color: #101828;
 }
+.announcement {
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(90deg, rgba(16,24,40,0.85), rgba(16,24,40,0.75));
+  color: #e6f0ff;
+  margin: 0 0 1rem 0;
+}
+.announcement a { color: #dbeafe; text-decoration: underline; }
+.announcement .badge { background: #1c7ed6; color: white; padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.75rem; margin-right: 0.5rem; }
 .chatkit-shell {
   background: rgba(255, 255, 255, 0.85);
   border-radius: 16px;

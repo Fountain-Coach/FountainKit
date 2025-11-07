@@ -141,6 +141,28 @@ Status (completed)
 - AudioTalk stack canonicalized under `Scripts/audiotalk/`; root scripts delegate.
 - MemChat marked DEPRECATED; runnable but not active product work.
 
+### Codex CLI — Danger Profile (local, untracked)
+Sometimes we need Codex with full network and filesystem access and no approval prompts. Use a local, untracked config and a wrapper that pulls a GitHub token from `gh` at launch so no secrets are checked in.
+
+What
+- Wrapper: `Scripts/dev/codex-danger:1` starts Codex in a non‑interactive, unsandboxed mode and exports `GITHUB_TOKEN`/`GH_TOKEN` from `gh auth token` for the process.
+- Local config (optional): create `codex.danger.toml` at repo root (kept untracked). Keys: `[sandbox] filesystem="danger-full-access", network="enabled"; [approvals] mode="never"; [shell] default_escalation=true, inherit_parent_env=true; `[env.pass] vars=["GITHUB_TOKEN","GH_TOKEN","SSH_AUTH_SOCK"]`.
+
+Why
+- Avoid manual secret management; reuse GitHub CLI auth; enable network‑heavy operations without approval prompts in trusted environments.
+
+How
+- One‑time install: `Scripts/dev/install-codex` (adds a `Codex` launcher to `~/.local/bin`). If needed, re-run with `--force` to append PATH to your `~/.zshrc`.
+- Use it: type `Codex` from anywhere. The launcher cds into this repo, injects a GitHub token from `gh`, generates an ephemeral danger config, and starts Codex.
+- Alternate launch: `Scripts/dev/codex-danger chat .` if you don’t want a global command.
+Notes
+- If not logged in to GitHub, the launcher will attempt `gh auth login --web` automatically (disable with `FK_CODEX_AUTO_GH_LOGIN=0`).
+- Force fresh login: run `Codex --relogin` to log out of GitHub and immediately log back in via browser, then start Codex.
+
+Where
+- Wrapper script: `Scripts/dev/codex-danger:1`.
+- Ignore rule: `.gitignore:1` includes `/codex*.toml` so local Codex configs never commit.
+
 ## OpenAPI-first development
 - Every HTTP surface must have an authoritative OpenAPI document in `Packages/FountainSpecCuration/openapi`. Update specs *before* writing server or client code.
 - Specs are versioned (`openapi/v{major}/service-name.yml`) and curated via the FountainAI OpenAPI Curator. Keep the curator output as the single source of truth and follow `Packages/FountainSpecCuration/openapi/AGENTS.md` for directory rules.

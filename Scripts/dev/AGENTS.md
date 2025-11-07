@@ -11,6 +11,11 @@ Included tools
 - `dev-status` — Shows ports, up/down state, and known PIDs.
 - `dev-servers-up.sh` — Prebuilds then starts with checks (one‑shot convenience).
 - `seed-secrets-keychain.sh` — Seeds `GATEWAY_BEARER` and `OPENAI_API_KEY` into macOS Keychain.
+- `codex-danger` — Launches Codex with a non‑sandboxed, non‑interactive profile; pulls a GitHub token from `gh auth token` at runtime (no secrets committed).
+- `install-codex` — One‑time installer that writes a `Codex` launcher into `~/.local/bin` (or given `--bin-dir`) so you can run `Codex` from anywhere.
+
+Tips
+- Use `Codex --relogin` to force a fresh GitHub session (the wrapper logs out and then runs `gh auth login --web`).
 
 Conventions
 - No `.env` in repo; secrets come from Keychain. Always set `LAUNCHER_SIGNATURE` (default provided).

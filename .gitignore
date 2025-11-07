@@ -34,3 +34,6 @@ External/swiftcurseskit/
 External/AudioTalk/
 External/AudioTalk-LegacyDocs/
 Workspace/the-four-stars/
+
+# Codex CLI local configs (do not commit)
+/codex*.toml

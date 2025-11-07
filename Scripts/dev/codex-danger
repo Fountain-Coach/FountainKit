@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: Scripts/dev/codex-danger [codex-subcommand] [args...]
+
+Starts Codex with a danger profile (no sandboxing, no approvals) and
+injects a GitHub token from `gh auth token` if available.
+
+Examples:
+  Scripts/dev/codex-danger chat .
+  Scripts/dev/codex-danger run --package .
+
+Flags:
+  --relogin   Force a fresh GitHub login (logs out, then logs in via browser)
+EOF
+}
+
+REL=0
+if [[ $# -gt 0 ]]; then
+  NEW_ARGS=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      --relogin) REL=1; shift; continue ;;
+      *) NEW_ARGS+=("$1"); shift ;;
+    esac
+  done
+  set -- "${NEW_ARGS[@]}"
+fi
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+# Prefer a local untracked config if present; otherwise, create an ephemeral one.
+CONFIG_PATH="$REPO_ROOT/codex.danger.toml"
+EPHEMERAL_DIR="$REPO_ROOT/.fountain/tmp"
+EPHEMERAL_CONFIG="$EPHEMERAL_DIR/codex.danger.toml"
+
+if [[ ! -f "$CONFIG_PATH" ]]; then
+  mkdir -p "$EPHEMERAL_DIR"
+  cat >"$EPHEMERAL_CONFIG" <<'EOF'
+[run]
+workspace_root = "."
+
+[sandbox]
+filesystem = "danger-full-access"
+network = "enabled"
+
+[approvals]
+mode = "never"
+
+[shell]
+default_escalation = true
+inherit_parent_env = true
+
+[env.pass]
+vars = ["GITHUB_TOKEN", "GH_TOKEN", "SSH_AUTH_SOCK"]
+
+[mcp.servers.github]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-github"]
+environment = { GITHUB_TOKEN = "$GITHUB_TOKEN" }
+EOF
+  CONFIG_PATH="$EPHEMERAL_CONFIG"
+  echo "[codex-danger] Using ephemeral danger config at $CONFIG_PATH" >&2
+fi
+
+# If GitHub CLI is logged in, export an ephemeral token for this process only.
+if command -v gh >/dev/null 2>&1 && [[ "$REL" -eq 1 ]]; then
+  echo "[codex-danger] Forcing fresh GitHub login..." >&2
+  # Attempt non-interactive logout; ignore failures if already logged out
+  if command -v yes >/dev/null 2>&1; then
+    yes | gh auth logout -h github.com >/dev/null 2>&1 || true
+  else
+    printf 'y\n' | gh auth logout -h github.com >/dev/null 2>&1 || true
+  fi
+  # Interactive login via browser
+  if gh auth login --web; then
+    GH_TOK="$(gh auth token 2>/dev/null || true)"
+    if [[ -n "${GH_TOK}" ]]; then
+      export GITHUB_TOKEN="$GH_TOK"
+      export GH_TOKEN="${GH_TOKEN:-$GH_TOK}"
+      echo "[codex-danger] GitHub login complete; token loaded." >&2
+    fi
+  else
+    echo "[codex-danger] GitHub login failed or was cancelled; continuing without token." >&2
+  fi
+elif command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+  GH_TOK="$(gh auth token 2>/dev/null || true)"
+  if [[ -n "${GH_TOK}" ]]; then
+    export GITHUB_TOKEN="$GH_TOK"
+    export GH_TOKEN="${GH_TOKEN:-$GH_TOK}"
+    echo "[codex-danger] Using GitHub token from gh auth." >&2
+  fi
+else
+  echo "[codex-danger] gh not available or not logged in." >&2
+  if command -v gh >/dev/null 2>&1 && [[ "${FK_CODEX_AUTO_GH_LOGIN:-1}" != "0" ]] && [[ -t 1 ]]; then
+    echo "[codex-danger] Attempting GitHub login via browser..." >&2
+    if gh auth login --web >/dev/null 2>&1; then
+      GH_TOK="$(gh auth token 2>/dev/null || true)"
+      if [[ -n "${GH_TOK}" ]]; then
+        export GITHUB_TOKEN="$GH_TOK"
+        export GH_TOKEN="${GH_TOKEN:-$GH_TOK}"
+        echo "[codex-danger] GitHub login complete; token loaded." >&2
+      fi
+    else
+      echo "[codex-danger] GitHub login was skipped or failed; continuing without token." >&2
+    fi
+  else
+    echo "[codex-danger] Proceeding without GITHUB_TOKEN." >&2
+  fi
+fi
+
+# If no remaining args (e.g., only --relogin was passed), default to chat .
+if [[ $# -eq 0 ]]; then
+  set -- chat .
+fi
+
+# Prefer env var, but only set it if the config actually exists.
+export CODEX_CONFIG="${CODEX_CONFIG:-$CONFIG_PATH}"
+case " $* " in
+  *" --config "*) ;;
+  *) set -- --config "$CONFIG_PATH" "$@" ;;
+esac
+
+exec codex "$@"

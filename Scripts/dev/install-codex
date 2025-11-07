@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: Scripts/dev/install-codex [--bin-dir <dir>] [--force]
+
+Installs a single-command launcher named `Codex` onto your PATH that
+starts Codex in "danger" mode for this repo, reusing GitHub auth from `gh`.
+
+Defaults to ~/.local/bin when available; otherwise suggests adding it to PATH.
+
+Examples:
+  Scripts/dev/install-codex
+  Scripts/dev/install-codex --bin-dir "$HOME/.local/bin" --force
+  # After install:
+  Codex                # starts Codex (danger profile)
+  Codex --relogin      # forces fresh GitHub login, then starts Codex
+EOF
+}
+
+BIN_DIR=""
+FORCE=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    --bin-dir) BIN_DIR="${2:-}"; shift 2 ;;
+    --force) FORCE=1; shift ;;
+    *) echo "Unknown arg: $1" >&2; usage; exit 2 ;;
+  esac
+done
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+
+if [[ -z "$BIN_DIR" ]]; then
+  if [[ -d "$HOME/.local/bin" ]]; then
+    BIN_DIR="$HOME/.local/bin"
+  else
+    BIN_DIR="$HOME/bin"
+  fi
+fi
+
+mkdir -p "$BIN_DIR"
+LAUNCHER_PATH="$BIN_DIR/Codex"
+
+cat >"$LAUNCHER_PATH" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$REPO_ROOT"
+
+# If no args, default to chat .; else pass subcommand
+if [[ "
+${1:-}
+" == "" ]]; then
+  exec Scripts/dev/codex-danger chat .
+else
+  exec Scripts/dev/codex-danger "$@"
+fi
+EOF
+
+chmod +x "$LAUNCHER_PATH"
+
+# Check PATH contains BIN_DIR
+case ":$PATH:" in
+  *":$BIN_DIR:"*) IN_PATH=1 ;;
+  *) IN_PATH=0 ;;
+esac
+
+echo "[install-codex] Installed: $LAUNCHER_PATH"
+if [[ "$IN_PATH" -eq 1 ]]; then
+  echo "[install-codex] Ready. Try: Codex"
+else
+  echo "[install-codex] Note: $BIN_DIR is not on your PATH. Add this to your shell profile:"
+  echo "  export PATH=\"$BIN_DIR:\$PATH\""
+  if [[ "$FORCE" -eq 1 ]]; then
+    SHELL_RC="$HOME/.zshrc"
+    echo "export PATH=\"$BIN_DIR:\$PATH\"" >> "$SHELL_RC"
+    echo "[install-codex] Appended PATH to $SHELL_RC. Restart your shell."
+  fi
+fi

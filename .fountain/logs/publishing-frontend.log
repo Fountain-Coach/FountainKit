@@ -1,0 +1,12 @@
+Another instance of SwiftPM is already running using '/Users/benedikteickhoff/Development/Github-Desktop/FountainKit/Packages/FountainApps/.build', waiting until that process has finished execution...warning: 'fountainapps': dependency 'swift-nio-extras' is not used by any target
+warning: prohibited flag(s): -DAVIF_DLL, -DHWY_SHARED_DEFINE, -Wl,-rpath,/opt/homebrew/lib
+warning: prohibited flag(s): -Wl,-rpath,/opt/homebrew/lib
+warning: prohibited flag(s): -Wl,-rpath,/opt/homebrew/lib
+[0/3] Write swift-version--58304C5D6DBC2206.txt
+warning: prohibited flag(s): -DAVIF_DLL, -DHWY_SHARED_DEFINE, -Wl,-rpath,/opt/homebrew/lib
+warning: prohibited flag(s): -Wl,-rpath,/opt/homebrew/lib
+warning: prohibited flag(s): -Wl,-rpath,/opt/homebrew/lib
+[0/1] Planning build
+Building for debugging...
+[0/3] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'publishing-frontend' complete! (16.95s)

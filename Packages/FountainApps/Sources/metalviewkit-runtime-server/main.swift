@@ -2,9 +2,13 @@ import Foundation
 import OpenAPIRuntime
 import FountainRuntime
 import MetalViewKitRuntimeServerKit
+// CI decode can be added via SafeMidiCI in QuietFrameKit; for fallback routes we do a guarded light parse to avoid linking issues.
 
 let env = ProcessInfo.processInfo.environment
 let port = Int(env["MVK_RUNTIME_PORT"] ?? env["PORT"] ?? "7777") ?? 7777
+
+fileprivate var _ciEvents: [[String: Any]] = []
+fileprivate var _noteEvents: [[String: Any]] = []
 
 let fallback = HTTPKernel { req in
     // Serve curated spec via local $ref file
@@ -43,6 +47,56 @@ let fallback = HTTPKernel { req in
                             body: body)
     }
 
+    // CI parser: POST /v1/midi/ci/parse, body { "sysEx7": [ints] }
+    if req.path.split(separator: "?").first == "/v1/midi/ci/parse" {
+        let body = req.body
+        guard let obj = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any], let arr = obj["sysEx7"] as? [Any] else {
+            return HTTPResponse(status: 400)
+        }
+        let bytes: [UInt8] = arr.compactMap { v in
+            if let i = v as? Int { return UInt8(truncatingIfNeeded: i) }
+            if let s = v as? String, s.hasPrefix("0x"), let n = UInt8(s.dropFirst(2), radix: 16) { return n }
+            return nil
+        }
+        if let out = ciEnvelopeJSONLight(bytes) {
+            if let data = try? JSONSerialization.data(withJSONObject: out) {
+                _ciEvents.append(out); if _ciEvents.count > 1000 { _ciEvents.removeFirst(_ciEvents.count - 1000) }
+                return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: data)
+            }
+        }
+        return HTTPResponse(status: 422)
+    }
+    // Note events ingest: POST /v1/midi/notes/ingest { events: [ {event:"noteOn", note, velocity, channel, group, tNs} ... ] }
+    if req.path.split(separator: "?").first == "/v1/midi/notes/ingest" {
+        guard let obj = (try? JSONSerialization.jsonObject(with: req.body)) as? [String: Any] else {
+            return HTTPResponse(status: 400)
+        }
+        if let ev = obj["event"] as? String { // single event form
+            var e = obj; e["tNs"] = e["tNs"] ?? "\(DispatchTime.now().uptimeNanoseconds)"
+            _noteEvents.append(e)
+        }
+        if let arr = obj["events"] as? [[String: Any]] { // batch form
+            for var e0 in arr { if e0["tNs"] == nil { e0["tNs"] = "\(DispatchTime.now().uptimeNanoseconds)" }; _noteEvents.append(e0) }
+        }
+        if _noteEvents.count > 2000 { _noteEvents.removeFirst(_noteEvents.count - 2000) }
+        return HTTPResponse(status: 204)
+    }
+    // CI SSE stream
+    if req.path.split(separator: "?").first == "/v1/midi/ci/sse" {
+        let json = (try? JSONSerialization.data(withJSONObject: _ciEvents))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+        let line = "data: \(json)\n\n"
+        let body = Data(Array(repeating: line, count: 10).joined().utf8)
+        return HTTPResponse(status: 200, headers: ["Content-Type": "text/event-stream", "X-Chunked-SSE": "1"], body: body)
+    }
+    // Notes SSE stream
+    if req.path.split(separator: "?").first == "/v1/midi/notes/stream" {
+        let json = (try? JSONSerialization.data(withJSONObject: _noteEvents))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+        let line = "data: \(json)\n\n"
+        let body = Data(Array(repeating: line, count: 10).joined().utf8)
+        return HTTPResponse(status: 200, headers: ["Content-Type": "text/event-stream", "X-Chunked-SSE": "1"], body: body)
+    }
     return HTTPResponse(status: 404)
 }
 
@@ -57,7 +111,9 @@ let ws: [String: @Sendable () -> String] = [
 ]
 let sse: [String: @Sendable () -> String] = [
     "/v1/tracing/sse": { MetalViewKitRuntimeServer.tracingJSON() },
-    "/v1/audio/backend/events-sse": { MetalViewKitRuntimeServer.backendEventJSON() }
+    "/v1/audio/backend/events-sse": { MetalViewKitRuntimeServer.backendEventJSON() },
+    "/v1/midi/ci/sse": { MetalViewKitRuntimeServer.tracingJSON() },
+    "/v1/midi/notes/stream": { (try? String(data: JSONSerialization.data(withJSONObject: _noteEvents), encoding: .utf8)) ?? "[]" }
 ]
 let server = NIOHTTPServer(kernel: transport.asKernel(), webSocketRoutes: ws, sseRoutes: sse)
 
@@ -72,3 +128,19 @@ Task {
     }
 }
 dispatchMain()
+
+// MARK: - CI helpers (light validator)
+func ciEnvelopeJSONLight(_ bytes: [UInt8]) -> [String: Any]? {
+    guard bytes.count >= 7, bytes.first == 0xF0, bytes.last == 0xF7 else { return nil }
+    let manuf = bytes[1]
+    guard manuf == 0x7E || manuf == 0x7F else { return nil }
+    // F0 7E/7F <devId> 0x0D <subId2> ... F7
+    guard bytes[3] == 0x0D else { return nil }
+    let scope = (manuf == 0x7E) ? "nonRealtime" : "realtime"
+    let subId2 = (bytes.count > 4) ? bytes[4] : 0
+    return [
+        "scope": scope,
+        "subId2": Int(subId2),
+        "length": bytes.count
+    ]
+}

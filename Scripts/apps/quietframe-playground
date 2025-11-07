@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<EOF
+quietframe-playground — One-button QuietFrame Web (sidecar + publishing frontend + Vite)
+
+Usage:
+  quietframe-playground up [--release]        Start sidecar, publishing-frontend (:8085), and Vite dev (:5175)
+  quietframe-playground down                   Stop all processes
+  quietframe-playground status                 Show process status and URLs
+
+Notes:
+  - Logs: .fountain/logs/{sidecar,publishing-frontend,quietframe-web}.log
+  - PIDs: .fountain/pids/{sidecar,publishing-frontend,quietframe-web}.pid
+  - Web Playground: http://127.0.0.1:5175
+  - Static Frontend: http://127.0.0.1:8085 (serves Public/)
+EOF
+}
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+LOGDIR="$ROOT/.fountain/logs"
+PIDDIR="$ROOT/.fountain/pids"
+CACHE="$ROOT/.fountain/clang-module-cache"
+WEB_DIR="$ROOT/Public/quietframe-web"
+mkdir -p "$LOGDIR" "$PIDDIR" "$CACHE"
+
+is_running() { local f="$1"; [[ -f "$f" ]] && kill -0 "$(cat "$f" 2>/dev/null)" 2>/dev/null; }
+kill_pidfile() { local f="$1"; if [[ -f "$f" ]]; then kill "$(cat "$f" 2>/dev/null)" 2>/dev/null || true; rm -f "$f"; fi }
+
+start_proc() {
+  local name="$1"; shift
+  local pidf="$PIDDIR/$name.pid"
+  local logf="$LOGDIR/$name.log"
+  local cmd=("$@")
+  if is_running "$pidf"; then echo "[$name] already running (pid $(cat "$pidf"))"; return 0; fi
+  echo "[$name] starting... (logs: $logf)"
+  ( nohup "${cmd[@]}" >"$logf" 2>&1 & echo $! >"$pidf" ) || { echo "[$name] failed"; return 1; }
+  sleep 0.25
+}
+
+wait_http() {
+  local url="$1"; local max="${2:-40}"; local t=0
+  until curl -fsS "$url" >/dev/null 2>&1; do
+    sleep 0.5; t=$((t+1)); if [[ $t -ge $max ]]; then echo "[wait] timeout $url"; return 1; fi
+  done
+  echo "[wait] ready: $url"
+}
+
+cmd_up() {
+  local cfg="debug"; if [[ "${1-}" == "--release" ]]; then cfg="release"; fi
+  # Ensure sidecar is up (reuses existing script)
+  "$ROOT/Scripts/apps/quietframe-stack" up "--$cfg" || true
+  wait_http "http://127.0.0.1:7777/health" 80 || true
+
+  # publishing-frontend on :8085
+  start_proc publishing-frontend env CLANG_MODULE_CACHE_PATH="$CACHE" SWIFTPM_ENABLE_SANDBOX=0 \
+    swift run --disable-sandbox --package-path "$ROOT/Packages/FountainApps" -c "$cfg" publishing-frontend
+  wait_http "http://127.0.0.1:8085" 80 || true
+
+  # Vite dev server on :5175
+  if [[ ! -d "$WEB_DIR/node_modules" ]]; then
+    echo "[quietframe-web] installing deps..."
+    ( cd "$WEB_DIR" && if [[ -f package-lock.json ]]; then npm ci; else npm install; fi )
+  fi
+  start_proc quietframe-web bash -lc "cd '$WEB_DIR' && VITE_PORT=5175 npm run dev -- --port 5175"
+  wait_http "http://127.0.0.1:5175" 80 || true
+
+  echo "All started. URLs:"
+  echo "  Playground:           http://127.0.0.1:5175"
+  echo "  Publishing Frontend:  http://127.0.0.1:8085"
+  echo "  Sidecar health:       http://127.0.0.1:7777/health"
+}
+
+cmd_down() {
+  kill_pidfile "$PIDDIR/quietframe-web.pid"
+  kill_pidfile "$PIDDIR/publishing-frontend.pid"
+  "$ROOT/Scripts/apps/quietframe-stack" down || true
+  echo "All stopped."
+}
+
+cmd_status() {
+  for n in quietframe-web publishing-frontend sidecar quietframe-sonify; do
+    local pidf="$PIDDIR/$n.pid"; if is_running "$pidf"; then echo "[$n] pid $(cat "$pidf") running"; else echo "[$n] stopped"; fi
+  done
+  echo "Try: curl -sS http://127.0.0.1:8085 | head -n1"
+}
+
+case "${1-}" in
+  up) shift; cmd_up "${1-}" ;;
+  down) cmd_down ;;
+  status) cmd_status ;;
+  -h|--help|help|*) usage ;;
+esac
+

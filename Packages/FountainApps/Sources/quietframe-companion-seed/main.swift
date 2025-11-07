@@ -37,34 +37,34 @@ struct QuietFrameCompanionSeed {
         let mrtsId = "prompt:quietframe-companion-mrts"
         _ = try? await store.addPage(.init(corpusId: corpusId, pageId: mrtsId, url: "store://prompt/quietframe-companion-mrts", host: "store", title: "Quiet Frame Companion — MRTS"))
         _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(mrtsId):teatro", pageId: mrtsId, kind: "teatro.prompt", text: mrtsPrompt))
-
-        print("Seeded Quiet Frame Companion prompts → corpus=\(corpusId) pages=[\(pageId), prompt:quietframe-companion-mrts]")
+        await seedRefs(store, corpusId: corpusId)
+        print("Seeded Quiet Frame Companion prompts + refs → corpus=\(corpusId) pages=[\(pageId), prompt:quietframe-companion-mrts, docs:quietframe:act1:refs]")
     }
 
     static let creationPrompt = """
-    Scene: Quiet Frame Companion — PE Inspector for Sonify (Midified)
+    Scene: Quiet Frame Companion — Param Controller for Sonify (OpenAPI‑first, PE bridge)
 
     What
-    - A compact control surface for Quiet Frame Sonify. Discovers the “Quiet Frame” MIDI 2.0 endpoint, fetches PE properties, and exposes grouped controls (Engine, Drone, Clock, Breath, Overtones, FX, Act).
-    - Uses MIDI 2.0 PE (GET/SET/snapshot) primarily; falls back to MIDI 1.0 CC on “Quiet Frame M1” for coarse control. Provides preset save/load via vendor JSON.
+    - A compact control surface for Quiet Frame Sonify. Talks to the Sidecar Params service to GET/LIST/PATCH parameters and subscribes to the SSE stream to mirror live state across apps. Exposes grouped controls (Engine, Drone, Clock, Breath, Overtones, FX, Act).
+    - OpenAPI Params is primary; Sidecar bridges to MIDI‑CI PE for compatibility. MIDI 1.0 CC on “Quiet Frame M1” is a coarse fallback. Preset save/load via OpenAPI (and vendor JSON fallback).
 
     Why
     - Tune sound parameters live from a reliable companion; capture/apply presets deterministically; accelerate testing.
 
     How
-    - On launch: discover endpoints; PE GET snapshot; build UI with ranges from Facts; bind controls to PE SET with debounce (50–100 ms).
-    - CC fallback (Ch.1) for quick coarse changes if PE is unavailable.
+    - On launch: connect to Sidecar; GET /v1/params to build UI with ranges from Facts; subscribe `/v1/params/stream` for mirroring; bind controls to `PATCH /v1/params` (50–100 ms debounce).
+    - PE bridge: when OpenAPI is unavailable, fall back to PE (GET/SET/Notify) to keep the test surface operable. CC fallback (Ch.1) remains as a last resort.
     """
 
     static let mrtsPrompt = """
-    Scene: Quiet Frame Companion — MRTS (PE Inspector)
+    Scene: Quiet Frame Companion — MRTS (OpenAPI Params + PE Bridge)
 
     Steps
-    - Discover endpoints → PE GET returns properties (>= 24 properties), no error.
-    - Engine Master: 0.8 → 0.5 → audible drop on Sonify; PE GET reflects 0.5.
+    - Connect to Sidecar → GET /v1/params returns properties (>= 24), no error.
+    - Engine Master: 0.8 → 0.5 via PATCH → audible drop on Sonify; SSE pushes 0.5.
     - Drone LPF sweep 1200→4000 Hz → Sonify brightens; frequency map within ±2%.
     - Mute toggle → silence; Panic → All Notes Off; Sonify engine remains running.
-    - Preset roundtrip: save PE snapshot; modify 3 controls; load preset → PE + sound revert.
+    - Preset roundtrip: POST preset; modify 3 controls; apply preset → sound + SSE revert.
     """
 
     static func factsJSON() -> String? {
@@ -75,6 +75,17 @@ struct QuietFrameCompanionSeed {
                 "endpoint1": "Quiet Frame M1",
                 "channel1": 1
             ]],
+            "openapi": [
+                "baseURL": "http://127.0.0.1:7777",
+                "params": [
+                    "GET /v1/params",
+                    "PATCH /v1/params",
+                    "GET /v1/params/stream"],
+                "presets": [
+                    "GET /v1/presets",
+                    "POST /v1/presets",
+                    "POST /v1/presets/{name}/apply"]
+            ],
             "pe.buckets": [
                 ["name":"Engine",    "props":["engine.masterGain","audio.muted"]],
                 ["name":"Drone",     "props":["drone.amp","drone.lpfHz","drone.reso","drone.detune","drone.mixSaw"]],
@@ -89,5 +100,18 @@ struct QuietFrameCompanionSeed {
         if let data = try? JSONSerialization.data(withJSONObject: facts, options: [.prettyPrinted, .sortedKeys]), let s = String(data: data, encoding: .utf8) { return s }
         return nil
     }
-}
 
+    // Optional: add cross-references for Act I and reviews page pointers
+    static func seedRefs(_ store: FountainStoreClient, corpusId: String) async {
+        let pageId = "docs:quietframe:act1:refs"
+        _ = try? await store.addPage(.init(corpusId: corpusId, pageId: pageId, url: "store://docs/quietframe/act1/refs", host: "store", title: "QuietFrame — References (Act I)"))
+        let refs = [
+            ["ref": "store://docs/quietframe/act1#die-maschine-traeumt", "corpus": "quietframe-sonify"],
+            ["ref": "store://docs/quietframe/act1#quietframe-note", "corpus": "quietframe-sonify"],
+            ["ref": "store://reviews/quietframe/act2/cell-collider#index", "corpus": "quietframe-sonify"]
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: refs, options: [.prettyPrinted]), let text = String(data: data, encoding: .utf8) {
+            _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(pageId):index", pageId: pageId, kind: "refs", text: text))
+        }
+    }
+}

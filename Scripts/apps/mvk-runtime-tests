@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CFG="${1:-debug}"
+export CLANG_MODULE_CACHE_PATH="$ROOT/.fountain/clang-module-cache"
+export SWIFTPM_ENABLE_SANDBOX=0
+swift run --disable-sandbox --package-path "$ROOT/Packages/FountainApps" -c "$CFG" mvk-runtime-tests
+echo "--- cc-fuzz ---"
+exec swift run --disable-sandbox --package-path "$ROOT/Packages/FountainApps" -c "$CFG" metalviewkit-cc-fuzz

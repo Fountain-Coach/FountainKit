@@ -66,5 +66,6 @@ struct CompanionRootView: View {
             .padding(12)
             .frame(minWidth: 640, minHeight: 480)
             .background(Color(NSColor.windowBackgroundColor))
+            .onAppear { pe.connect() }
     }
 }

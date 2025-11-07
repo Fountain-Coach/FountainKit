@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# quietframe-bridge — Bridge MIDI 2.0 (UMP) → virtual MIDI 1.0 source via CoreMIDI
+#
+# Usage:
+#   quietframe-bridge up [--source <match>] [--dest <m1-destination>]
+#                                       Start bridge (defaults: --source QuietFrame)
+#   quietframe-bridge down                    Stop bridge
+#   quietframe-bridge status                  Show status
+#
+# Notes:
+# - Publishes a virtual MIDI 1.0 source named "UMP2M1Bridge (1.0)". Connect this
+#   in your DAW (or route via RTP/BLE to iPad/AUM).
+# - Matches an existing MIDI 2.0 virtual source by display name substring.
+#   The QuietFrame app publishes CoreMIDI virtual endpoints by default; ensure it’s running.
+
+ROOT=$(cd "$(dirname "$0")"/../.. && pwd)
+PID_DIR="$ROOT/.fountain/pids"
+LOG_DIR="$ROOT/.fountain/logs"
+mkdir -p "$PID_DIR" "$LOG_DIR"
+PID_FILE="$PID_DIR/quietframe-bridge.pid"
+LOG_FILE="$LOG_DIR/quietframe-bridge.log"
+
+cmd=${1:-}
+shift || true
+
+case "${cmd}" in
+  up)
+    SRC="QuietFrame"
+    DEST=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --source)
+          SRC="$2"; shift 2 ;;
+        --dest)
+          DEST="$2"; shift 2 ;;
+        --*)
+          echo "Unknown option: $1"; exit 2 ;;
+        *)
+          SRC="$1"; shift ;;
+      esac
+    done
+    if [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+      echo "[bridge] already running (pid=$(cat "$PID_FILE"))"; exit 0
+    fi
+    echo "[bridge] starting (source contains: $SRC) …"
+    (
+      cd "$ROOT"
+      CLANG_MODULE_CACHE_PATH="$ROOT/.fountain/clang-module-cache" SWIFTPM_ENABLE_SANDBOX=0 \
+      swift run --package-path Packages/FountainApps -c debug midi-ump2m1-bridge --source="$SRC" ${DEST:+--mirror-dest="$DEST"} --auto-dest \
+        >> "$LOG_FILE" 2>&1 & echo $! > "$PID_FILE"
+    )
+    sleep 1
+    echo "[bridge] pid=$(cat "$PID_FILE") logs=$LOG_FILE"
+    ;;
+  down)
+    if [[ -f "$PID_FILE" ]]; then
+      PID=$(cat "$PID_FILE")
+      if kill -0 "$PID" 2>/dev/null; then
+        kill "$PID" || true
+        echo "[bridge] stopped (pid=$PID)"
+      else
+        echo "[bridge] not running"
+      fi
+      rm -f "$PID_FILE"
+    else
+      echo "[bridge] not running"
+    fi
+    ;;
+  status)
+    if [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+      echo "[bridge] running (pid=$(cat "$PID_FILE"))"
+    else
+      echo "[bridge] not running"
+    fi
+    ;;
+  *)
+    echo "Usage: quietframe-bridge {up|down|status} [--source <match>]"; exit 2 ;;
+esac

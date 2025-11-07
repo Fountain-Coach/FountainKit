@@ -26,6 +26,8 @@ public final class MetalInstrument: @unchecked Sendable {
     private weak var sink: MetalSceneRenderer?
     private let desc: MetalInstrumentDescriptor
     public var stateProvider: (() -> [String: Any])? = nil
+    // Optional provider for CI/PE replies; when nil falls back to filtering numeric values from stateProvider
+    public var peProvider: (() -> [String: Any])? = nil
 
     private let transport: any MetalInstrumentTransport
     private var session: (any MetalInstrumentTransportSession)?
@@ -106,11 +108,14 @@ public final class MetalInstrument: @unchecked Sendable {
             let statusHi = UInt8((w1 >> 20) & 0xF) << 4
             let ch = UInt8((w1 >> 16) & 0xF)
             let group = UInt8((w1 >> 24) & 0xF)
-            if statusHi == 0x90, words.count >= 2 { // Note On
+            if statusHi == 0x90, words.count >= 2 { // Note On (velocity 0 treated as Off by sink)
                 let note = UInt8((w1 >> 8) & 0xFF)
                 let v16 = UInt16((words[1] >> 16) & 0xFFFF)
                 let vel7 = UInt8((UInt32(v16) * 127) / 65535)
                 sink?.noteOn(note: note, velocity: vel7, channel: ch, group: group)
+            } else if statusHi == 0x80 { // Note Off
+                let note = UInt8((w1 >> 8) & 0xFF)
+                sink?.noteOn(note: note, velocity: 0, channel: ch, group: group)
             } else if statusHi == 0xB0, words.count >= 2 { // CC (32-bit => 7-bit)
                 let cc = UInt8((w1 >> 8) & 0xFF)
                 let value32 = words[1]
@@ -150,13 +155,73 @@ public final class MetalInstrument: @unchecked Sendable {
 
     private func handleSysEx7(_ bytes: [UInt8]) {
         guard bytes.count >= 7 else { return }
-        guard bytes[0] == 0xF0 && bytes[1] == 0x7D && bytes[2] == 0x4A && bytes[3] == 0x53 && bytes[4] == 0x4E else { return }
-        let typ = bytes[5]
-        guard typ == 0x00 else { return } // Vendor JSON event
-        let payload = Array(bytes.dropFirst(6).dropLast(bytes.last == 0xF7 ? 1 : 0))
-        guard let json = try? JSONSerialization.jsonObject(with: Data(payload)) as? [String: Any] else { return }
-        let topic = json["topic"] as? String ?? "event"
-        sink?.vendorEvent(topic: topic, data: json["data"]) // optional
+        guard bytes[0] == 0xF0 else { return }
+        // Vendor JSON: F0 7D 'J' 'S' 'N' 00 ... F7
+        if bytes[1] == 0x7D && bytes.count >= 8 && bytes[2] == 0x4A && bytes[3] == 0x53 && bytes[4] == 0x4E && bytes[5] == 0x00 {
+            let payload = Array(bytes.dropFirst(6).dropLast(bytes.last == 0xF7 ? 1 : 0))
+            guard let json = try? JSONSerialization.jsonObject(with: Data(payload)) as? [String: Any] else { return }
+            let topic = json["topic"] as? String ?? "event"
+            sink?.vendorEvent(topic: topic, data: json["data"]) // optional
+            return
+        }
+        // MIDI-CI (Universal 7E/7F, subId1 0x0D)
+        if (bytes[1] == 0x7E || bytes[1] == 0x7F), bytes[3] == 0x0D, bytes.last == 0xF7 {
+            // Guarded decode to avoid traps on malformed frames
+            if let env = decodeCIIfValid(bytes) {
+                if case .propertyExchange(let pe) = env.body {
+                    if pe.command == .get { // Reply with current values
+                        var filter: Set<String> = []
+                        if let obj = try? JSONSerialization.jsonObject(with: Data(pe.data)) as? [String: Any], let arr = obj["properties"] as? [[String: Any]] {
+                            for p in arr { if let name = p["name"] as? String { filter.insert(name) } }
+                        }
+                        let props = currentPEProps(filter: filter)
+                        sendPEGetReply(props)
+                    } else if pe.command == .set || pe.command == .notify || pe.command == .getReply {
+                        if let obj = try? JSONSerialization.jsonObject(with: Data(pe.data)) as? [String: Any] {
+                            if let arr = obj["properties"] as? [[String: Any]] {
+                                for p in arr {
+                                    guard let name = p["name"] as? String else { continue }
+                                    if let v = p["value"] as? Double, let controls = sink as? MetalSceneUniformControls {
+                                        controls.setUniform(name, float: Float(v))
+                                    } else if let s = p["value"] as? String, let controls = sink as? MetalSceneUniformControls {
+                                        // Minimal string→code mapping for rules
+                                        if name == "cells.rule.name" {
+                                            let code: Float = (s.lowercased() == "life") ? 0 : (s.lowercased() == "seeds" ? 1 : (s.lowercased() == "highlife" ? 2 : 3))
+                                            controls.setUniform(name, float: code)
+                                        } else if name.hasPrefix("cells.seed.") {
+                                            // Route strings via vendorEvent to allow sink-specific handling
+                                            sink?.vendorEvent(topic: "pe.string", data: ["name": name, "value": s])
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Also accept flat map { key: value }
+                                for (k, v) in obj {
+                                    if let d = v as? Double, let controls = sink as? MetalSceneUniformControls {
+                                        controls.setUniform(k, float: Float(d))
+                                    } else if let s = v as? String, let controls = sink as? MetalSceneUniformControls, k == "cells.rule.name" {
+                                        let code: Float = (s.lowercased() == "life") ? 0 : (s.lowercased() == "seeds" ? 1 : (s.lowercased() == "highlife" ? 2 : 3))
+                                        controls.setUniform(k, float: code)
+                                    } else if let s = v as? String, k.hasPrefix("cells.seed." ) {
+                                        sink?.vendorEvent(topic: "pe.string", data: ["name": k, "value": s])
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Minimal guarded MIDI-CI decode to avoid traps from malformed vendor frames
+    private func decodeCIIfValid(_ bytes: [UInt8]) -> MidiCiEnvelope? {
+        // Basic invariants: F0...F7 framing, Universal (7E/7F), subId1 0x0D present
+        guard bytes.count >= 7, bytes.first == 0xF0, bytes.last == 0xF7 else { return nil }
+        let manuf = bytes[1]
+        guard manuf == 0x7E || manuf == 0x7F else { return nil }
+        guard bytes.count > 4, bytes[3] == 0x0D else { return nil }
+        return try? MidiCiEnvelope(sysEx7Payload: bytes)
     }
 
     // MARK: - State publish and vendor helpers
@@ -176,6 +241,45 @@ public final class MetalInstrument: @unchecked Sendable {
         let words = MetalInstrument.buildSysEx7Words(bytes: payload, group: desc.midiGroup)
         session?.send(words: words)
         return true
+    }
+
+    private func currentPEProps(filter: Set<String>) -> [String: Any] {
+        if let pe = peProvider?() { return filter.isEmpty ? pe : pe.filter { filter.contains($0.key) } }
+        // Fallback: numeric-only from stateProvider
+        let all = stateProvider?() ?? [:]
+        var out: [String: Any] = [:]
+        for (k, v) in all { if let d = v as? Double { out[k] = d } }
+        return filter.isEmpty ? out : out.filter { filter.contains($0.key) }
+    }
+
+    // Send a MIDI-CI Property Exchange message (Set/Notify) with a flat map of name → Double
+    public enum PECommand { case set, notify }
+    public func sendPEProperties(_ props: [String: Double], command: PECommand = .notify) {
+        // Encode a simple JSON body compatible with our decoder: { properties: [ { name, value } ] }
+        var arr: [[String: Any]] = []
+        for (k, v) in props { arr.append(["name": k, "value": v]) }
+        let obj: [String: Any] = ["properties": arr]
+        guard let json = try? JSONSerialization.data(withJSONObject: obj) else { return }
+        // Build a MIDI-CI Property Exchange envelope (Universal Non-RT, subId1 0x0D)
+        let cmd: UInt8 = (command == .set) ? 0x12 : 0x14 // Set or Notify (subId2)
+        var bytes: [UInt8] = [0xF0, 0x7E, 0x7F, 0x0D, cmd, 0x01] // F0 7E <dev> 0D <cmd> <version>
+        bytes.append(contentsOf: json)
+        bytes.append(0xF7)
+        let words = MetalInstrument.buildSysEx7Words(bytes: bytes, group: desc.midiGroup)
+        session?.send(words: words)
+    }
+
+    public func sendPEGetReply(_ props: [String: Any]) {
+        var arr: [[String: Any]] = []
+        for (k,v) in props { arr.append(["name": k, "value": v]) }
+        let obj: [String: Any] = ["properties": arr]
+        guard let json = try? JSONSerialization.data(withJSONObject: obj) else { return }
+        // subId2 0x11 for GetReply, version 1
+        var bytes: [UInt8] = [0xF0, 0x7E, 0x7F, 0x0D, 0x11, 0x01]
+        bytes.append(contentsOf: json)
+        bytes.append(0xF7)
+        let words = MetalInstrument.buildSysEx7Words(bytes: bytes, group: desc.midiGroup)
+        session?.send(words: words)
     }
 
     private static func buildSysEx7Words(bytes: [UInt8], group: UInt8) -> [UInt32] {
@@ -238,34 +342,62 @@ extension MetalInstrument {
 
     // Convenience send helpers (Channel Voice 2.0)
     public func sendCC(controller: UInt8, value7: UInt8, channel: UInt8 = 0) {
-        let g = UInt32(desc.midiGroup & 0x0F)
-        let ch = UInt32(channel & 0x0F)
-        let ctrl = UInt32(controller & 0x7F)
-        let w0 = (UInt32(0x4) &<< 28) | (g &<< 24) | (UInt32(0xB) &<< 20) | (ch &<< 16) | (ctrl &<< 8)
-        // Scale 7-bit value (0..127) into full 32-bit domain (0..0xFFFF_FFFF)
-        // Use floating-point with clamping to avoid any intermediate overflow in debug builds.
-        let scaled = min(4294967295.0, max(0.0, (Double(value7) / 127.0) * 4294967295.0))
-        let v32 = UInt32(scaled.rounded())
+        // Scale 7-bit to 32-bit without division by expanding to 8-bit then replicating
+        @inline(__always)
+        func scale7to32(_ v: UInt8) -> UInt32 {
+            let v7 = v & 0x7F
+            // Expand 7-bit to 8-bit approximately: v8 ≈ round(v7 * 255 / 127)
+            let v8 = UInt32(v7) &* 2 &+ UInt32(v7 >> 6) // ≤ 255
+            // Replicate byte into 32-bit without multiplication
+            return (v8 &<< 24) | (v8 &<< 16) | (v8 &<< 8) | v8
+        }
+        // Build w0 using byte assembly to avoid any shifting on masked integers
+        let g = desc.midiGroup & 0x0F
+        let ch = channel & 0x0F
+        let ctrl = controller & 0x7F
+        let b0 = UInt8(0x40) | g
+        let b1 = UInt8(0xB0) | ch
+        let b2 = ctrl
+        let b3: UInt8 = 0
+        let w0 = (UInt32(b0) << 24) | (UInt32(b1) << 16) | (UInt32(b2) << 8) | UInt32(b3)
+        let v32 = scale7to32(value7)
         session?.send(words: [w0, v32])
     }
 
     public func sendNoteOn(note: UInt8, velocity7: UInt8, channel: UInt8 = 0) {
-        let g = UInt32(desc.midiGroup & 0x0F)
-        let ch = UInt32(channel & 0x0F)
-        let n = UInt32(note & 0x7F)
+        let g = (UInt32(truncatingIfNeeded: desc.midiGroup)) & 0x0F
+        let ch = (UInt32(truncatingIfNeeded: channel)) & 0x0F
+        let n = (UInt32(truncatingIfNeeded: note)) & 0x7F
         let w0 = (UInt32(0x4) &<< 28) | (g &<< 24) | (UInt32(0x9) &<< 20) | (ch &<< 16) | (n &<< 8)
-        let v16 = UInt16(velocity7) * 65535 / 127
+        let v16 = UInt16((UInt32(velocity7) * 65535) / 127)
         let w1 = UInt32(v16) << 16
         session?.send(words: [w0, w1])
     }
 
     public func sendNoteOff(note: UInt8, velocity7: UInt8, channel: UInt8 = 0) {
-        let g = UInt32(desc.midiGroup & 0x0F)
-        let ch = UInt32(channel & 0x0F)
-        let n = UInt32(note & 0x7F)
+        let g = (UInt32(truncatingIfNeeded: desc.midiGroup)) & 0x0F
+        let ch = (UInt32(truncatingIfNeeded: channel)) & 0x0F
+        let n = (UInt32(truncatingIfNeeded: note)) & 0x7F
         let w0 = (UInt32(0x4) &<< 28) | (g &<< 24) | (UInt32(0x8) &<< 20) | (ch &<< 16) | (n &<< 8)
-        let v16 = UInt16(velocity7) * 65535 / 127
+        let v16 = UInt16((UInt32(velocity7) * 65535) / 127)
         let w1 = UInt32(v16) << 16
         session?.send(words: [w0, w1])
     }
+
+    public func sendPitchBend(value14: UInt16, channel: UInt8 = 0) {
+        // Assemble Channel Voice 2.0 PB: w0 header, w1 32-bit value scaled from 14-bit
+        let g = desc.midiGroup & 0x0F
+        let ch = channel & 0x0F
+        let b0 = UInt8(0x40) | g
+        let b1 = UInt8(0xE0) | ch
+        let b2: UInt8 = 0
+        let b3: UInt8 = 0
+        let w0 = (UInt32(b0) << 24) | (UInt32(b1) << 16) | (UInt32(b2) << 8) | UInt32(b3)
+        let v14 = UInt16(min(16383, Int(value14)))
+        let v32 = UInt32((UInt64(v14) * 0xFFFF_FFFF) / 16383)
+        session?.send(words: [w0, v32])
+    }
 }
+
+// MARK: - Static lookup tables
+extension MetalInstrument {}

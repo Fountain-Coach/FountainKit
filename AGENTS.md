@@ -61,6 +61,12 @@ Rule of conduct (prompt‑first)
 - Propose prompt edits (Creation and MRTS) first, review, then implement strictly according to the updated prompt. Seed and print the prompt on boot; keep facts synchronized.
 - Keep mac and web incarnations consistent with the same prompt, and record any platform constraints explicitly in the prompt (e.g., web: three scroll panes, no fixed bottom).
 
+Hard rule — prompts live only in FountainStore
+- Never author, persist, or suggest prompts/facts anywhere except FountainStore. Seeders (`Packages/*-seed`) are the only write path; apps must read/print from the store at boot. No ad‑hoc files, no README embeds.
+
+Hard rule (no exceptions)
+- Prompts and facts live only in FountainStore. Never author or suggest prompts in ad‑hoc files or other stores. Always seed via small `*-seed` executables and read from FountainStore at runtime.
+
 Why
 - Provenance and determinism across builds; agents and humans can diff and reason about behavior.
 
@@ -72,6 +78,11 @@ How
 Where
 - Example: `Packages/FountainApps/Sources/grid-dev-seed` and `Scripts/apps/grid-dev`.
 - Store client: `Packages/FountainCore/Sources/FountainStoreClient/*`.
+
+Hard rule — Prompt storage location (authoritative)
+- Prompts and their “facts” are stored only in FountainStore. Do not add or maintain prompts in ad‑hoc files, comments, design docs, or code.
+- All agents must read from and write to FountainStore via seeders. Any proposal or change to prompts must be reflected in the corpus first, then implemented.
+- Documentation and UIs must reference the FountainStore corpus (page `prompt:<app-id>`, segments `teatro.prompt` and `facts`) as the single source of truth. No alternative locations.
 
 ## Documentation Tone & Style (for humans and LLMs)
 
@@ -134,6 +145,51 @@ Status (completed)
 - Every HTTP surface must have an authoritative OpenAPI document in `Packages/FountainSpecCuration/openapi`. Update specs *before* writing server or client code.
 - Specs are versioned (`openapi/v{major}/service-name.yml`) and curated via the FountainAI OpenAPI Curator. Keep the curator output as the single source of truth and follow `Packages/FountainSpecCuration/openapi/AGENTS.md` for directory rules.
 - Treat OpenAPI schema changes like code changes: include them in reviews, mention owning teams, and cite them in changelog/PR descriptions.
+
+## SwiftPM‑Only Dependencies (authoritative)
+
+Goal
+- Eliminate `External/` path dependencies. All third‑party and cross‑repo code is consumed via SwiftPM `.package(url:)` from the Fountain Coach GitHub org (private or public). No Git submodules in this repo.
+
+Hard rules
+- No `External/*` code referenced by `.package(path:)` or scripts. Remove/deny path imports of third‑party code. First‑party in‑repo packages under `Packages/` remain `.package(path: "../<Pkg>")`.
+- Packages must own their assets with `resources: [...]` — no stray top‑level files that trigger “unhandled resource” warnings.
+- Optional/external engines (e.g., SDLKit) are gated behind env flags (e.g., `FK_USE_SDLKIT=1`) to keep offline builds working.
+
+Deprecated (Teatro Csound)
+- The Teatro Csound path is deprecated and off by default. The authoritative audio engine is our Metal/DSP stack (`FountainAudioEngine`). Csound demos/tests in Teatro must be guarded (compile flag) and optional. No app targets may import or require Csound assets. Missing demo assets must not fail planning/builds; tests should skip when assets are absent.
+
+Working plan (kept current; update in PRs)
+1) Inventory & mapping
+   - Produce `Tools/deps-mapping.json` listing every `External/*` module → target(s) → GitHub URL → initial tag.
+2) Publish/split packages to GitHub
+   - Create/fork under `github.com/Fountain-Coach/<package>` with a clean `Package.swift`, semantic tags, and a dedicated `Resources/` target where needed (e.g., `TeatroAssets`).
+3) Swap to `.package(url:)`
+   - Update `Packages/FountainApps/Package.swift` (and other manifests) to replace `.package(path: ../../External/...)` with `.package(url: ...)` and pin `from:` or `exact:`.
+   - Keep only in‑repo first‑party path deps (e.g., `../FountainCore`).
+4) Clean & remove `External/`
+   - After green builds online/offline, `git rm -r External/`.
+
+Bootstrap & caching
+- Use module cache: `CLANG_MODULE_CACHE_PATH=.fountain/clang-module-cache`.
+- Add `Scripts/dev/spm-bootstrap`:
+  - `swift package resolve` at repo root (and hot packages) to populate cache.
+  - Optional `--offline` to skip network and use previously resolved pins.
+
+CI requirements
+- Commit `Package.resolved`; CI verifies no `.package(path: ...)` for third‑party. Lint with: `rg -n "\.package\(path:" -S` must match only in‑repo packages under `Packages/`.
+- Cache `.build/` and `.fountain/clang-module-cache/` between jobs.
+- Online build (cold) and offline build (using cache) must both succeed.
+
+Operator ergonomics
+- `Scripts/apps/quietframe-stack` avoids starting SwiftPM work at launch; it can seed via app on first boot and prebuild with `Scripts/dev/spm-bootstrap`.
+- `--offline` disables network fetch during development sessions; optional flags (e.g., `FK_USE_SDLKIT=0/1`) control heavy externals.
+
+Review checklist (deps)
+- No remaining `External/` path references.
+- All third‑party deps use `.package(url:)` under the Fountain Coach org or allowed public repos.
+- Assets are declared via package `resources:`; no “unhandled resource” warnings during build.
+- CI caches hit and builds are reproducible from tags.
 
 ## Swift OpenAPI Generator workflow
 - We standardise on Apple’s `OpenAPIGeneratorPlugin` plus `swift-openapi-runtime`. Running `swift build` generates clients, server stubs, and types—never commit generated output.

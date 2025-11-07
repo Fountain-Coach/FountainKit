@@ -66,6 +66,18 @@ import SDLKitAudio
     private var delayBuf: [Float] = []
     private var delayIdx: Int = 0
 
+    // MARK: - Polyphonic synth (Act I re‑sonification)
+    private struct Voice { var note: UInt8 = 0; var phase: Float = 0; var freqHz: Float = 0; var env: Float = 0; var gate: Bool = false; var active: Bool = false }
+    private var voices: [Voice] = Array(repeating: Voice(), count: 32)
+    private let synthPolyLimit = AtomicF(16.0)
+    private let synthAttackMs  = AtomicF(5.0)
+    private let synthReleaseMs = AtomicF(180.0)
+    private let synthGain      = AtomicF(0.14)
+    private let pbCents        = AtomicF(0.0)
+    private let eventLock = NSLock()
+    private enum Event { case noteOn(UInt8, UInt8), noteOnHz(Float, UInt8, UInt8), noteOff(UInt8), pitchBend(UInt16) }
+    private var pendingEvents: [Event] = []
+
     // MARK: - Audio tap (optional)
     // Lightweight callback invoked on the audio render thread. Callers must copy data quickly.
     private static var _audioTapLock = NSLock()
@@ -92,6 +104,48 @@ import SDLKitAudio
             if master <= 0.0001 {
                 for i in 0..<n { lptr[i] = 0; rptr[i] = 0 }
                 return
+            }
+
+            // Consume pending note events at buffer start (voice alloc and PB update)
+            self.eventLock.lock(); let events = self.pendingEvents; self.pendingEvents.removeAll(keepingCapacity: true); self.eventLock.unlock()
+            if !events.isEmpty {
+                let maxPolyVoices = Int(max(1.0, min(32.0, self.synthPolyLimit.load())))
+                for ev in events {
+                    switch ev {
+                    case .noteOn(let nn, _):
+                        var idx: Int? = nil
+                        for i in 0..<min(self.voices.count, maxPolyVoices) { if !self.voices[i].active { idx = i; break } }
+                        if idx == nil { idx = 0 }
+                        var v = self.voices[idx!]
+                        v.note = nn
+                        let cents = self.pbCents.load()
+                        let ratio = pow(2.0, cents / 1200.0)
+                        v.freqHz = Float(440.0 * pow(2.0, (Float(nn) - 69.0)/12.0) * Float(ratio))
+                        v.env = max(v.env, 0.001)
+                        v.gate = true
+                        v.active = true
+                        self.voices[idx!] = v
+                    case .noteOnHz(let hz, let nn, _):
+                        var idx: Int? = nil
+                        for i in 0..<min(self.voices.count, maxPolyVoices) { if !self.voices[i].active { idx = i; break } }
+                        if idx == nil { idx = 0 }
+                        var v = self.voices[idx!]
+                        v.note = nn
+                        v.freqHz = max(20.0, min(Float(sr*0.45), hz))
+                        v.env = max(v.env, 0.001)
+                        v.gate = true
+                        v.active = true
+                        self.voices[idx!] = v
+                    case .noteOff(let nn):
+                        for i in 0..<min(self.voices.count, maxPolyVoices) { if self.voices[i].active && self.voices[i].note == nn { self.voices[i].gate = false } }
+                    case .pitchBend(let v14):
+                        let centered = Int(v14) - 8192
+                        let cents = max(-200.0, min(200.0, Double(centered) * (200.0/8192.0)))
+                        self.pbCents.store(Float(cents))
+                        let ratio = pow(2.0, Float(cents) / 1200.0)
+                        for i in 0..<self.voices.count { if self.voices[i].active { let nn = self.voices[i].note; self.voices[i].freqHz = Float(440.0 * pow(2.0, (Float(nn) - 69.0)/12.0) * ratio) } }
+                    }
+                }
             }
 
             // Cached params
@@ -154,8 +208,26 @@ import SDLKitAudio
                 for h in 2...6 { let p = Float(h); over += sinf(self.dronePhase1 * p) * (1.0 / p) }
                 over *= Float(overM) * 0.6
 
-                // Sum
+                // Sum base layers
                 var s = drone + clk + breath + over
+
+                // Polyphonic layer: simple sine voices with AR envelope
+                let att = max(0.5, self.synthAttackMs.load()) / 1000.0
+                let rel = max(1.0, self.synthReleaseMs.load()) / 1000.0
+                let attA = Float(1.0 - exp(-1.0 / (Float(sr) * Float(att))))
+                let relA = Float(1.0 - exp(-1.0 / (Float(sr) * Float(rel))))
+                let vGain = self.synthGain.load()
+                var polyMix: Float = 0
+                let maxPolyVoices = Int(max(1.0, min(32.0, self.synthPolyLimit.load())))
+                for vi in 0..<min(self.voices.count, maxPolyVoices) {
+                    if !self.voices[vi].active { continue }
+                    if self.voices[vi].gate { self.voices[vi].env += attA * (1.0 - self.voices[vi].env) }
+                    else { self.voices[vi].env -= relA * (self.voices[vi].env); if self.voices[vi].env < 0.0005 { self.voices[vi].env = 0; self.voices[vi].active = false } }
+                    let dphi = Float(2.0 * .pi) * (self.voices[vi].freqHz / Float(sr))
+                    self.voices[vi].phase += dphi; if self.voices[vi].phase > Float(2.0 * .pi) { self.voices[vi].phase -= Float(2.0 * .pi) }
+                    polyMix += sin(self.voices[vi].phase) * self.voices[vi].env
+                }
+                s += polyMix * vGain
                 if !self.delayBuf.isEmpty {
                     let rd = self.delayIdx
                     let tapped = self.delayBuf[rd]
@@ -186,6 +258,9 @@ import SDLKitAudio
 
     public func setParam(name: String, value: Double) {
         switch name {
+        case "synth.polyphonyLimit": synthPolyLimit.store(Float(max(1.0, min(32.0, value))))
+        case "synth.attackMs": synthAttackMs.store(Float(max(0.1, min(500.0, value))))
+        case "synth.releaseMs": synthReleaseMs.store(Float(max(5.0, min(2000.0, value))))
         case "engine.masterGain": engMaster.store(Float(clamp01(value)))
         case "audio.muted": engMuted.store(value >= 0.5 ? 1.0 : 0.0)
         case "drone.amp": droneAmp.store(Float(clamp01(value)))
@@ -278,3 +353,11 @@ fileprivate final class AtomicF {
 
 // Shared helpers
 fileprivate func clamp01(_ x: Double) -> Double { max(0.0, min(1.0, x)) }
+
+// MARK: - Public performance API (SDLKit path)
+public extension FountainAudioEngine {
+    func noteOn(note: UInt8, velocity: UInt8) { eventLock.lock(); pendingEvents.append(.noteOn(note, velocity)); eventLock.unlock() }
+    func noteOn(hz: Double, midiNote: UInt8, velocity: UInt8) { eventLock.lock(); pendingEvents.append(.noteOnHz(Float(hz), midiNote, velocity)); eventLock.unlock() }
+    func noteOff(note: UInt8) { eventLock.lock(); pendingEvents.append(.noteOff(note)); eventLock.unlock() }
+    func pitchBend(value14: UInt16) { eventLock.lock(); pendingEvents.append(.pitchBend(value14)); eventLock.unlock() }
+}

@@ -40,6 +40,7 @@ struct QuietFrameView: View {
     @State private var midiEvents: [String] = []
     @StateObject private var recorder = QuietFrameRecorder()
     @StateObject private var sidecar = SidecarInbound()
+    @State private var act: Int = 1
     var body: some View {
         GeometryReader { geo in
             ZStack {
@@ -57,11 +58,15 @@ struct QuietFrameView: View {
                             )
                             .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
                             .frame(width: frameSize.width, height: frameSize.height)
-                        MouseTracker(onMove: { p in
-                            updateSaliency(point: p)
-                        })
-                        .frame(width: frameSize.width, height: frameSize.height)
-                        .allowsHitTesting(true)
+                        if act == 1 {
+                            MouseTracker(onMove: { p in updateSaliency(point: p) })
+                                .frame(width: frameSize.width, height: frameSize.height)
+                                .allowsHitTesting(true)
+                        } else {
+                            CellsView(frameSize: frameSize)
+                                .frame(width: frameSize.width, height: frameSize.height)
+                                .allowsHitTesting(false)
+                        }
                     }
                         Spacer()
                     }
@@ -89,6 +94,34 @@ struct QuietFrameView: View {
                                 Text("\(Int(bpm))").font(.caption2).monospaced()
                             }
                         Divider().frame(height: 14)
+                        HStack(spacing: 8) {
+                            Text("Act").font(.caption2)
+                            Picker("Act", selection: $act) {
+                                Text("I").tag(1)
+                                Text("II").tag(2)
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(width: 120)
+                            .onChange(of: act) { _, v in
+                                if v == 2 {
+                                    printActIIPrompts()
+                                    // Ensure we hear Act II immediately
+                                    FountainAudioEngine.shared.setParam(name: "engine.masterGain", value: 0.20)
+                                    CellAutomataSim.shared.setRunning(true)
+                                }
+                            }
+                            if act == 2 {
+                                Divider().frame(height: 12)
+                                Button(action: { CellAutomataSim.shared.setRunning(true) }) { Text("Run").font(.caption) }
+                                Button(action: { CellAutomataSim.shared.setRunning(false) }) { Text("Pause").font(.caption) }
+                                Button(action: { CellAutomataSim.shared.stepOnce() }) { Text("Step").font(.caption) }
+                                HStack(spacing: 6) {
+                                    Text("Hz").font(.caption2)
+                                    Slider(value: Binding(get: { CellAutomataSim.shared.stepHz }, set: { CellAutomataSim.shared.setStepHz($0) }), in: 1...30, step: 1).frame(width: 120)
+                                    Text("\(Int(CellAutomataSim.shared.stepHz))").font(.caption2).monospaced()
+                                }
+                            }
+                        }
                         Button {
                             muted.toggle()
                             if muted { forceSilence() }
@@ -116,6 +149,10 @@ struct QuietFrameView: View {
                         .background(.thinMaterial)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                         .padding(10)
+                        // Place the monitor HUD under the primary controls (top-right)
+                        MidiMonitorHUD()
+                            .frame(width: 320)
+                            .padding(.horizontal, 10)
                         Spacer()
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
@@ -136,6 +173,14 @@ struct QuietFrameView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .frame(maxWidth: 280)
                 .padding(10)
+                .overlay(
+                    VStack(alignment: .leading, spacing: 12) {
+                        Spacer()
+                        MidiMonitorHUD()
+                            .frame(maxWidth: 320)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                )
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
             }
         }
@@ -146,6 +191,8 @@ struct QuietFrameView: View {
             try? FountainAudioEngine.shared.start()
             FountainAudioEngine.shared.setParam(name: "tempo.bpm", value: bpm)
             FountainAudioEngine.shared.setParam(name: "act.section", value: Double(section))
+            AudioOnsetToNotes.shared.start()
+            Task { await NotesSSEClient.shared.start() }
             NotificationCenter.default.addObserver(forName: Notification.Name("QuietFrameRecordCommand"), object: nil, queue: .main) { n in
                 let op = (n.userInfo?["op"] as? String) ?? ""
                 Task { @MainActor in
@@ -194,6 +241,8 @@ struct QuietFrameView: View {
         if let inst = QuietFrameInstrument.shared.instrument { inst.sendCC(controller: 1, value7: value7) }
         MIDI1Out.shared.sendCC(cc: 1, value: value7)
         midiEvents.append("CC1 = \(value7)")
+        MidiMonitorStore.shared.add("CC1 = \(value7)")
+        SidecarBridge.shared.sendNoteEvent(["event":"cc","cc":1,"value":Int(value7),"channel":0,"group":0])
     }
 
     private var threshold: Double { 0.65 }
@@ -216,9 +265,17 @@ struct QuietFrameView: View {
             inst?.sendNoteOn(note: note, velocity7: vel)
             MIDI1Out.shared.sendNoteOn(note: note, velocity: vel)
             midiEvents.append("NoteOn \(note) vel=\(vel)")
+            MidiMonitorStore.shared.add("NoteOn n=\(note) v=\(vel)")
+            SidecarBridge.shared.sendNoteEvent(["event":"noteOn","note":Int(note),"velocity":Int(vel),"channel":0,"group":0,"source":"saliency"])        
             lastNote = note
         } else if !now && was {
-            if lastNote != 0 { inst?.sendNoteOff(note: lastNote, velocity7: 0); MIDI1Out.shared.sendNoteOff(note: lastNote); midiEvents.append("NoteOff \(lastNote)") }
+            if lastNote != 0 {
+                inst?.sendNoteOff(note: lastNote, velocity7: 0)
+                MIDI1Out.shared.sendNoteOff(note: lastNote)
+                midiEvents.append("NoteOff \(lastNote)")
+                MidiMonitorStore.shared.add("NoteOff n=\(lastNote)")
+                SidecarBridge.shared.sendNoteEvent(["event":"noteOff","note":Int(lastNote),"channel":0,"group":0,"source":"saliency"])        
+            }
             lastNote = 0
         }
         lastTriggered = now
@@ -246,6 +303,8 @@ struct QuietFrameView: View {
         QuietFrameInstrument.shared.instrument?.sendNoteOn(note: note, velocity7: 100)
         MIDI1Out.shared.sendNoteOn(note: note, velocity: 100)
         midiEvents.append("NoteOn 72 vel=100 (test)")
+        MidiMonitorStore.shared.add("NoteOn n=72 v=100 (test)")
+        SidecarBridge.shared.sendNoteEvent(["event":"noteOn","note":72,"velocity":100,"channel":0,"group":0,"source":"test"])        
         FountainAudioEngine.shared.setFrequency(660)
         FountainAudioEngine.shared.setAmplitude(0.25)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
@@ -253,6 +312,8 @@ struct QuietFrameView: View {
             QuietFrameInstrument.shared.instrument?.sendNoteOff(note: note, velocity7: 0)
             MIDI1Out.shared.sendNoteOff(note: note)
             midiEvents.append("NoteOff 72 (test)")
+            MidiMonitorStore.shared.add("NoteOff n=72 (test)")
+            SidecarBridge.shared.sendNoteEvent(["event":"noteOff","note":72,"channel":0,"group":0,"source":"test"])        
             FountainAudioEngine.shared.setAmplitude(0)
         }
     }
@@ -310,16 +371,22 @@ struct MouseTracker: NSViewRepresentable {
         // Transport selection: prefer Loopback when integrating with MVK runtime
         if ProcessInfo.processInfo.environment["QF_USE_RUNTIME"] == "1" {
             MetalInstrument.setTransportOverride(LoopbackMetalInstrumentTransport.shared)
-        } else {
-            // Fallback: RTP on fixed local port for direct pairing demos
+        } else if ProcessInfo.processInfo.environment["QF_TRANSPORT"] == "rtp" {
             MetalInstrument.setTransportOverride(MIDI2SystemInstrumentTransport(backend: .rtpFixedPort(5868)))
+        } else {
+            // Default: CoreMIDI virtual endpoints so tools/bridges can tap our UMP
+            MetalInstrument.setTransportOverride(MIDI2SystemInstrumentTransport(backend: .coreMIDI))
         }
         let inst = MetalInstrument(sink: sink, descriptor: desc)
         inst.stateProvider = {
             var s = FountainAudioEngine.shared.snapshot()
             s["rec.state"] = QuietFrameRuntime.getRecState()
+            // Include Act II numeric state for PE replies
+            let cells = CellAutomataSim.shared.snapshotNumeric()
+            for (k,v) in cells { s[k] = v }
             return s
         }
+        inst.peProvider = { CellAutomataSim.shared.snapshotPE() }
         inst.enable()
         print("[quietframe-sonify] MVK instrument ready: displayName=\(desc.displayName) instanceId=\(desc.instanceId)")
         self.instrument = inst
@@ -327,22 +394,46 @@ struct MouseTracker: NSViewRepresentable {
 }
 
 // MIDI 2.0 instrument sink that maps PE properties and CC to engine params
-final class SonifyPESink: MetalSceneRenderer {
-    func vendorEvent(topic: String, data: Any?) {}
+final class SonifyPESink: MetalSceneRenderer, MetalSceneUniformControls {
+    func vendorEvent(topic: String, data: Any?) {
+        if topic == "pe.string", let obj = data as? [String: Any], let name = obj["name"] as? String, let value = obj["value"] as? String {
+            Task { @MainActor in CellAutomataSim.shared.setString(name: name, value: value) }
+        }
+    }
     func setUniform(_ name: String, float: Float) {
         Task { @MainActor in
-            FountainAudioEngine.shared.setParam(name: name, value: Double(float))
+            switch name {
+            case "analysis.onset.thresholdRMS":
+                AudioOnsetToNotes.shared.setThresholdRMS(float)
+            case "analysis.onset.cooldownMs":
+                AudioOnsetToNotes.shared.setCooldownMs(Double(float))
+            case "analysis.onset.noteHoldMs":
+                AudioOnsetToNotes.shared.setNoteHoldMs(Double(float))
+            case _ where name.hasPrefix("cells."):
+                CellAutomataSim.shared.set(name, value: Double(float))
+            default:
+                FountainAudioEngine.shared.setParam(name: name, value: Double(float))
+            }
         }
     }
     func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {
-        // Gate a short audible bump via master gain
         Task { @MainActor in
-            FountainAudioEngine.shared.setParam(name: "engine.masterGain", value: Double(max(0.1, min(1.0, Float(velocity)/127.0))))
+            if velocity == 0 {
+                MidiMonitorStore.shared.add(String(format: "NoteOff n=%d ch=%d g=%d", note, channel, group))
+                SidecarBridge.shared.sendNoteEvent(["event":"noteOff","note":Int(note),"channel":Int(channel),"group":Int(group)])
+                FountainAudioEngine.shared.noteOff(note: note)
+            } else {
+                MidiMonitorStore.shared.add(String(format: "NoteOn n=%d v=%d ch=%d g=%d", note, velocity, channel, group))
+                SidecarBridge.shared.sendNoteEvent(["event":"noteOn","note":Int(note),"velocity":Int(velocity),"channel":Int(channel),"group":Int(group)])
+                FountainAudioEngine.shared.noteOn(note: note, velocity: velocity)
+            }
         }
     }
     func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {
         let v = Double(value) / 127.0
         Task { @MainActor in
+            MidiMonitorStore.shared.add(String(format: "CC %d = %d ch=%d g=%d", controller, value, channel, group))
+            SidecarBridge.shared.sendNoteEvent(["event":"cc","cc":Int(controller),"value":Int(value),"channel":Int(channel),"group":Int(group)])
             switch controller {
             case 1: FountainAudioEngine.shared.setParam(name: "engine.masterGain", value: v)
             case 7: FountainAudioEngine.shared.setParam(name: "engine.masterGain", value: v)
@@ -352,11 +443,34 @@ final class SonifyPESink: MetalSceneRenderer {
         }
     }
     func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {
-        // Map PB to slight detune
-        let centered = (Int(value14) - 8192)
-        let det = max(-200, min(200, centered))
         Task { @MainActor in
-            FountainAudioEngine.shared.setParam(name: "drone.detune", value: Double(abs(det)) / 2000.0)
+            MidiMonitorStore.shared.add(String(format: "PB v14=%d ch=%d g=%d", value14, channel, group))
+            SidecarBridge.shared.sendNoteEvent(["event":"pb","value14":Int(value14),"channel":Int(channel),"group":Int(group)])
+            FountainAudioEngine.shared.pitchBend(value14: value14)
+        }
+    }
+}
+
+// MARK: - Prompt printing (Act II)
+fileprivate func makeStoreClient() -> FountainStoreClient {
+    let env = ProcessInfo.processInfo.environment
+    if let dir = env["FOUNTAINSTORE_DIR"], !dir.isEmpty {
+        let url: URL = dir.hasPrefix("~") ? URL(fileURLWithPath: FileManager.default.homeDirectoryForCurrentUser.path + String(dir.dropFirst()), isDirectory: true) : URL(fileURLWithPath: dir, isDirectory: true)
+        if let disk = try? DiskFountainStoreClient(rootDirectory: url) { return FountainStoreClient(client: disk) }
+    }
+    let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+    if let disk = try? DiskFountainStoreClient(rootDirectory: cwd.appendingPathComponent(".fountain/store", isDirectory: true)) { return FountainStoreClient(client: disk) }
+    return FountainStoreClient(client: EmbeddedFountainStoreClient())
+}
+
+fileprivate func printActIIPrompts(corpus: String = ProcessInfo.processInfo.environment["CORPUS_ID"] ?? "quietframe-sonify") {
+    Task { @MainActor in
+        let store = makeStoreClient()
+        let ids = ["prompt:quietframe-act2:teatro", "prompt:quietframe-act2:mrts", "prompt:quietframe-act2:facts"]
+        for id in ids {
+            if let data = try? await store.getDoc(corpusId: corpus, collection: "segments", id: id), let text = String(data: data, encoding: .utf8) {
+                print("\n===== \(id) =====\n\(text)\n===== end \(id) =====\n")
+            }
         }
     }
 }

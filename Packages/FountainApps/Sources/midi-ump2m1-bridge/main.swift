@@ -4,8 +4,22 @@ import CoreMIDI
 @main
 struct UMP2M1Bridge {
     static func main() throws {
-        let srcMatch = (CommandLine.arguments.dropFirst().first { $0.hasPrefix("--source=") }?.split(separator: "=", maxSplits: 1).last).map(String.init) ?? "Csound Bridge"
-        try Bridge(sourceContains: srcMatch).run()
+        var srcMatch: String = "QuietFrame"
+        var mirrorDest: String? = nil
+        var listDests = false
+        var autoDest = false
+        for arg in CommandLine.arguments.dropFirst() {
+            if arg.hasPrefix("--source=") { srcMatch = String(arg.split(separator: "=", maxSplits: 1).last ?? "QuietFrame") }
+            else if arg.hasPrefix("--mirror-dest=") { mirrorDest = String(arg.split(separator: "=", maxSplits: 1).last ?? "") }
+            else if arg == "--list-dests" { listDests = true }
+            else if arg == "--auto-dest" { autoDest = true }
+        }
+        if listDests {
+            for name in Bridge.listDestinations() { print(name) }
+            return
+        }
+        if autoDest, mirrorDest == nil { mirrorDest = Bridge.pickAutoDestination() }
+        try Bridge(sourceContains: srcMatch, mirrorDestination: mirrorDest).run()
         RunLoop.main.run()
     }
 }
@@ -14,12 +28,14 @@ final class Bridge {
     private var client: MIDIClientRef = 0
     private var inPort: MIDIPortRef = 0
     private var virtSrc: MIDIEndpointRef = 0
+    private var mirrorDest: MIDIEndpointRef = 0
     private var connected = false
     private var timer: DispatchSourceTimer?
     private let name = "UMP2M1Bridge"
     private let match: String
+    private let mirrorDestName: String?
 
-    init(sourceContains: String) { self.match = sourceContains }
+    init(sourceContains: String, mirrorDestination: String?) { self.match = sourceContains; self.mirrorDestName = mirrorDestination }
 
     func run() throws {
         try check(MIDIClientCreateWithBlock(name as CFString, &client) { _ in })
@@ -31,6 +47,11 @@ final class Bridge {
             fatalError("Requires macOS 13+")
         }
         try check(MIDISourceCreate(client, (name+" (1.0)") as CFString, &virtSrc))
+        if let dn = mirrorDestName, !dn.isEmpty {
+            mirrorDest = findDestination(named: dn) ?? 0
+            if mirrorDest != 0 { print("bridge: mirroring to dest=\(displayName(mirrorDest) ?? dn)") }
+            else { print("bridge: mirror destination not found: \(dn)") }
+        }
         _ = connectMatchingSource()
         if !connected {
             let t = DispatchSource.makeTimerSource(queue: .main)
@@ -109,6 +130,7 @@ final class Bridge {
             let pkt = MIDIPacketListInit(ptr)
             _ = MIDIPacketListAdd(ptr, 1024, pkt, 0, bytes.count, bytes)
             MIDIReceived(virtSrc, ptr)
+            if mirrorDest != 0 { MIDISend(outPort, mirrorDest, ptr) }
         }
     }
 
@@ -118,6 +140,33 @@ final class Bridge {
             return param?.takeRetainedValue() as String?
         }
         return nil
+    }
+
+    private func findDestination(named name: String) -> MIDIEndpointRef? {
+        let count = MIDIGetNumberOfDestinations()
+        for i in 0..<count {
+            let d = MIDIGetDestination(i)
+            if let n = displayName(d), n.localizedCaseInsensitiveContains(name) { return d }
+        }
+        return nil
+    }
+
+    // Static helpers for scripting
+    static func listDestinations() -> [String] {
+        var out: [String] = []
+        let count = MIDIGetNumberOfDestinations()
+        for i in 0..<count {
+            let d = MIDIGetDestination(i)
+            if let name = Bridge(sourceContains: "", mirrorDestination: nil).displayName(d) { out.append(name) }
+        }
+        return out
+    }
+
+    static func pickAutoDestination() -> String? {
+        let prefs = ["AUM", "Bluetooth", "BLE", "Session", "iPad", "Network"]
+        let names = listDestinations()
+        for p in prefs { if let n = names.first(where: { $0.localizedCaseInsensitiveContains(p) }) { return n } }
+        return names.first
     }
 
     private func check(_ status: OSStatus) throws {

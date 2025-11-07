@@ -6,6 +6,8 @@ let ROBOT_ONLY = ProcessInfo.processInfo.environment["ROBOT_ONLY"] == "1" || Pro
 
 let USE_SDLKIT = ProcessInfo.processInfo.environment["FK_USE_SDLKIT"] == "1"
 
+let FK_DISABLE_QFCELLS = ProcessInfo.processInfo.environment["FK_DISABLE_QFCELLS"] == "1"
+
 let package = Package(
     name: "FountainApps",
     platforms: [
@@ -15,7 +17,8 @@ let package = Package(
         // Robot-only: expose just what PatchBay tests need
         .executable(name: "patchbay-app", targets: ["patchbay-app"]),
         .executable(name: "replay-export", targets: ["replay-export"]),
-        .library(name: "MetalViewKit", targets: ["MetalViewKit"]) 
+        .library(name: "MetalViewKit", targets: ["MetalViewKit"]) ,
+        .executable(name: "metalviewkit-cc-fuzz", targets: ["metalviewkit-cc-fuzz"]) 
         
     ] : [
         .executable(name: "gateway-server", targets: ["gateway-server"]),
@@ -65,6 +68,7 @@ let package = Package(
         .library(name: "EngraverChatCore", targets: ["EngraverChatCore"]),
         .library(name: "EngraverStudio", targets: ["EngraverStudio"]),
         .library(name: "MetalViewKit", targets: ["MetalViewKit"]),
+        .executable(name: "metalviewkit-cc-fuzz", targets: ["metalviewkit-cc-fuzz"]),
         .library(name: "MetalComputeKit", targets: ["MetalComputeKit"]),
         .library(name: "CoreMLKit", targets: ["CoreMLKit"]),
         .executable(name: "metalcompute-demo", targets: ["metalcompute-demo"]),
@@ -103,7 +107,8 @@ let package = Package(
         ,
         .executable(name: "quietframe-sonify-app", targets: ["quietframe-sonify-app"]),
         .executable(name: "quietframe-companion-app", targets: ["quietframe-companion-app"]),
-        .executable(name: "quietframe-smoke", targets: ["quietframe-smoke"])
+        .executable(name: "quietframe-smoke", targets: ["quietframe-smoke"]),
+        .executable(name: "quietframe-replay", targets: ["quietframe-replay"])
         ,
         .executable(name: "metalviewkit-runtime-server", targets: ["metalviewkit-runtime-server"])
         
@@ -112,8 +117,10 @@ let package = Package(
         .package(path: "../FountainCore"),
         .package(path: "../FountainAIKit"),
         .package(path: "../FountainProviders"),
-        // SDLKit for autarkic audio engine (managed via GitHub)
-        .package(url: "https://github.com/Fountain-Coach/SDLKit.git", branch: "main"),
+        // SDLKit (optional, only when FK_USE_SDLKIT=1)
+    ] + (USE_SDLKIT ? [
+        .package(url: "https://github.com/Fountain-Coach/SDLKit.git", branch: "main")
+    ] : []) + [
         .package(path: "../MemChatKit"),
         .package(path: "../FountainDevHarness"),
         .package(path: "../FountainAPIClients"),
@@ -135,7 +142,9 @@ let package = Package(
         .package(url: "https://github.com/AudioKit/Flow.git", from: "1.0.4"),
         .package(path: "../FountainTelemetryKit"),
         .package(path: "../../Tools/PersistenceSeeder"),
-        .package(path: "../../External/TeatroFull"),
+        // Remote Teatro package (authoritative)
+        .package(name: "TeatroFull", url: "https://github.com/Fountain-Coach/TeatroFull.git", branch: "main"),
+    ] + [
         
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
@@ -326,7 +335,7 @@ let package = Package(
             dependencies: ["MetalViewKit"],
             path: "Sources/replay-export"
         ),
-        // QuietFrameKit + tests (scoped build when ROBOT_ONLY=1)
+        // QuietFrameCells (migrated into app via shim; target removed to avoid manifest hiccups)
         .target(
             name: "QuietFrameKit",
             dependencies: [
@@ -1230,9 +1239,7 @@ let package = Package(
         // Lightweight autarkic audio engine (SDLKit-backed when available; no-op fallback otherwise)
         .target(
             name: "FountainAudioEngine",
-            dependencies: [
-                .product(name: "SDLKitAudio", package: "SDLKit")
-            ],
+            dependencies: USE_SDLKIT ? [ .product(name: "SDLKitAudio", package: "SDLKit") ] : [],
             path: "Sources/FountainAudioEngine"
         ),
         .executableTarget(
@@ -1241,7 +1248,8 @@ let package = Package(
                 .product(name: "FountainStoreClient", package: "FountainCore"),
                 "MetalViewKit",
                 "FountainAudioEngine",
-                "QuietFrameKit"
+                "QuietFrameKit",
+                .target(name: "QuietFrameCells")
             ],
             path: "Sources/quietframe-sonify-app"
         ),
@@ -1255,6 +1263,13 @@ let package = Package(
                 .product(name: "MIDI2", package: "midi2")
             ],
             path: "Sources/quietframe-companion-app"
+        ),
+        .executableTarget(
+            name: "quietframe-replay",
+            dependencies: [
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit")
+            ],
+            path: "Sources/quietframe-replay"
         ),
         .executableTarget(
             name: "quietframe-smoke",
@@ -1321,6 +1336,13 @@ let package = Package(
                 .product(name: "FountainRuntime", package: "FountainCore")
             ],
             path: "Sources/mvk-runtime-tests"
+        ),
+        .executableTarget(
+            name: "metalviewkit-cc-fuzz",
+            dependencies: [
+                "MetalViewKit"
+            ],
+            path: "Sources/metalviewkit-cc-fuzz"
         ),
         .testTarget(
             name: "MVKRuntimeServerTests",

@@ -3,16 +3,16 @@ set -euo pipefail
 
 usage() {
   cat <<EOF
-quietframe-stack — start/stop QuietFrame + Sidecar
+quietframe-stack — start/stop QuietFrame (instrument) + Sidecar
 
 Usage:
-  quietframe-stack up [--release]    Start sidecar, sonify, companion
+  quietframe-stack up [--release]    Start sidecar and sonify (instrument)
   quietframe-stack down               Stop all processes
   quietframe-stack status             Show process status and ports
 
 Notes:
-  - Logs:   .fountain/logs/{sidecar,quietframe-sonify,quietframe-companion}.log
-  - PIDs:   .fountain/pids/{sidecar,quietframe-sonify,quietframe-companion}.pid
+  - Logs:   .fountain/logs/{sidecar,quietframe-sonify}.log
+  - PIDs:   .fountain/pids/{sidecar,quietframe-sonify}.pid
   - Health: http://127.0.0.1:7777/health
 EOF
 }
@@ -56,25 +56,49 @@ wait_health() {
 }
 
 cmd_up() {
-  local cfg="debug"; if [[ "${1-}" == "--release" ]]; then cfg="release"; fi
+  local cfg="debug"; local coremidi="0"; local with_bridge="0"; local bridge_dest=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --release) cfg="release" ;;
+      --coremidi) coremidi="1" ;;
+      --with-bridge) with_bridge="1" ;;
+      --dest) bridge_dest="$2"; shift ;;
+      *) ;; 
+    esac
+    shift || true
+  done
   # Build sidecar and run binary
   start_proc sidecar "$ROOT/Scripts/apps/run-sidecar.sh" "$cfg"
   wait_health || true
-  # Launch QuietFrame apps
-  start_proc quietframe-sonify "$ROOT/Scripts/apps/run-quietframe-sonify.sh" "$cfg"
-  start_proc quietframe-companion "$ROOT/Scripts/apps/run-quietframe-companion.sh" "$cfg"
+  # (Temporarily skip seeding here to avoid overlapping SwiftPM work; seed via app on demand.)
+  # Launch QuietFrame app (skip rebuild)
+  if [[ "$coremidi" == "1" ]]; then
+    start_proc quietframe-sonify env QF_USE_RUNTIME=0 SKIP_BUILD=1 "$ROOT/Scripts/apps/run-quietframe-sonify.sh" "$cfg"
+  else
+    start_proc quietframe-sonify env SKIP_BUILD=1 "$ROOT/Scripts/apps/run-quietframe-sonify.sh" "$cfg"
+  fi
+  # Optionally start the MIDI bridge automatically
+  if [[ "$with_bridge" == "1" ]]; then
+    if [[ -n "$bridge_dest" ]]; then
+      "$ROOT/Scripts/apps/quietframe-bridge" up --source "QuietFrame" --dest "$bridge_dest" || true
+    else
+      "$ROOT/Scripts/apps/quietframe-bridge" up --source "QuietFrame" || true
+    fi
+  fi
   echo "All started. Use: $0 status"
 }
 
 cmd_down() {
   kill_pidfile "$PIDDIR/quietframe-companion.pid"
   kill_pidfile "$PIDDIR/quietframe-sonify.pid"
+  # Stop bridge if running
+  if [[ -f "$PIDDIR/quietframe-bridge.pid" ]]; then "$ROOT/Scripts/apps/quietframe-bridge" down || true; fi
   kill_pidfile "$PIDDIR/sidecar.pid"
   echo "All stopped."
 }
 
 cmd_status() {
-  for n in sidecar quietframe-sonify quietframe-companion; do
+  for n in sidecar quietframe-sonify; do
     local pidf="$PIDDIR/$n.pid"; if is_running "$pidf"; then echo "[$n] pid $(cat "$pidf") running"; else echo "[$n] stopped"; fi
   done
 }

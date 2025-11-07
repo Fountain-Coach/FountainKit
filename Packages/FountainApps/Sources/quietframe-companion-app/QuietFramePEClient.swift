@@ -35,7 +35,7 @@ import QuietFrameKit
             let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "QuietFrame-Companion", instanceId: iid, displayName: "QuietFrameCompanion#\(iid)")
             do {
                 self.session = try transport.makeSession(descriptor: desc) { [weak self] words in
-                    self?.handleIncoming(words)
+                    Task { @MainActor in self?.handleIncoming(words) }
                 }
                 self.connectedName = name
                 print("[quietframe-companion] MVK client instrument ready: displayName=\(desc.displayName) instanceId=\(desc.instanceId)")
@@ -115,7 +115,7 @@ import QuietFrameKit
 
 // MARK: - Inbound handling via RTP transport
 extension QuietFramePEClient {
-    nonisolated private func handleIncoming(_ words: [UInt32]) {
+    @MainActor private func handleIncoming(_ words: [UInt32]) {
         // SysEx7 only for now (UMP SysEx7 decode)
         var bytes: [UInt8] = []
         var i = 0
@@ -134,37 +134,37 @@ extension QuietFramePEClient {
             i += 2
             if status == 0x0 || status == 0x3 { break }
         }
-        // Vendor JSON inbound (rec.saved)
-        if bytes.count >= 8, bytes[0] == 0xF0, bytes[1] == 0x7D, bytes[2] == 0x4A, bytes[3] == 0x53, bytes[4] == 0x4F, bytes[5] == 0x4E, bytes[6] == 0x00 {
-            let body = Data(bytes[7..<(bytes.count-1)])
+        // Vendor JSON inbound (rec.saved) — Sidecar uses header: F0 7D 'J' 'S' 'N' 00 ... F7
+        if bytes.count >= 8, bytes[0] == 0xF0, bytes[1] == 0x7D, bytes[2] == 0x4A, bytes[3] == 0x53, bytes[4] == 0x4E, bytes[5] == 0x00, bytes.last == 0xF7 {
+            let body = Data(bytes[6..<(bytes.count-1)])
             if let obj = try? JSONSerialization.jsonObject(with: body) as? [String: Any], let topic = obj["topic"] as? String {
                 if topic == "rec.saved", let data = obj["data"] as? [String: Any] {
                     let url = data["url"] as? String
                     let dur = data["durationSec"] as? Double
-                    Task { @MainActor in
-                        self.lastSavedURL = url
-                        self.lastSavedDuration = dur
-                    }
-                }
-            }
-        } else if let env = try? MidiCiEnvelope(sysEx7Payload: bytes) {
-            if case .propertyExchange(let pe) = env.body, (pe.command == .getReply || pe.command == .notify) {
-                if let obj = try? JSONSerialization.jsonObject(with: Data(pe.data)) as? [String: Any] {
-                    if let data = try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted]), let s = String(data: data, encoding: .utf8) {
-                        Task { @MainActor in self.lastSnapshotJSON = s }
-                    }
-                    if let props = obj["properties"] as? [String: Any], let rs = props["rec.state"] as? String {
-                        Task { @MainActor in self.recState = rs }
-                    }
+                    self.lastSavedURL = url
+                    self.lastSavedDuration = dur
                 }
             }
         }
         // Emit event JSON for UI
-        let payload = words.map { String(format: "0x%08X", $0) }
+        let payload: [String] = words.map {
+            let hex = String($0, radix: 16, uppercase: true)
+            let pad = String(repeating: "0", count: max(0, 8 - hex.count))
+            return "0x" + pad + hex
+        }
         if let data = try? JSONSerialization.data(withJSONObject: ["dir":"in","ump": payload], options: []), let s = String(data: data, encoding: .utf8) {
-            Task { @MainActor in self.eventSink?(s) }
+            self.eventSink?(s)
         }
     }
+}
+
+// MARK: - Parsing guards
+private func isLikelyMidiCI(_ bytes: [UInt8]) -> Bool {
+    guard bytes.count >= 7 else { return false }
+    guard bytes[0] == 0xF0, (bytes[1] == 0x7E || bytes[1] == 0x7F) else { return false }
+    // Manufacturer is Universal (7E/7F), and Sub-ID #1 for MIDI-CI is 0x0D
+    // Typical pattern: F0 7E/7F <deviceId> 0x0D <subId2> ... F7
+    return bytes[3] == 0x0D && bytes.last == 0xF7
 }
 
 // MARK: - Sidecar helpers

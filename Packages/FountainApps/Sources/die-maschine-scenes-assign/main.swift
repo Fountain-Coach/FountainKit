@@ -46,20 +46,31 @@ struct DieMaschineScenesAssign {
             "notes": "Based on default; refactored for midi2sampler. Subject to curation."
         ]
 
-        // Update facts.acts[0].scenes[0] and facts.acts[1].scenes[0]
+        // Place Act I mapping under Act 1 / Scene 1 / rehearsals
+        // Place Act II mapping under Act 3 / Scene 1 / rehearsals
         if var acts = facts["acts"] as? [[String: Any]] {
-            for actIndex in [0, 1] { // act1 and act2
-                if actIndex < acts.count {
-                    var act = acts[actIndex]
-                    if var scenes = act["scenes"] as? [[String: Any]], !scenes.isEmpty {
-                        var s0 = scenes[0]
-                        s0["instrumentation"] = instrumentation
-                        scenes[0] = s0
-                        act["scenes"] = scenes
-                        acts[actIndex] = act
-                    }
-                }
+            func putRehearsal(actIndex: Int, sceneIndex: Int, title: String, instr: [String: Any]) {
+                guard actIndex < acts.count else { return }
+                var act = acts[actIndex]
+                guard var scenes = act["scenes"] as? [[String: Any]], sceneIndex < scenes.count else { return }
+                var scene = scenes[sceneIndex]
+                var rehearsals = (scene["rehearsals"] as? [[String: Any]]) ?? []
+                let reh: [String: Any] = [
+                    "id": "\(actIndex+1)-\(sceneIndex+1)-reh-1",
+                    "title": title,
+                    "instrumentation": instr
+                ]
+                // Replace first or append
+                if rehearsals.isEmpty { rehearsals = [reh] } else { rehearsals[0] = reh }
+                scene["rehearsals"] = rehearsals
+                // Remove top-level instrumentation if present
+                scene.removeValue(forKey: "instrumentation")
+                scenes[sceneIndex] = scene
+                act["scenes"] = scenes
+                acts[actIndex] = act
             }
+            putRehearsal(actIndex: 0, sceneIndex: 0, title: "Rehearsals", instr: instrumentation)
+            putRehearsal(actIndex: 2, sceneIndex: 0, title: "Rehearsals", instr: instrumentation)
             facts["acts"] = acts
         }
 
@@ -70,7 +81,7 @@ struct DieMaschineScenesAssign {
             return
         }
         _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: segId, pageId: pageId, kind: "facts", text: outText))
-        print("Updated instrumentation for Act I/II Scene 1 in \(segId)")
+        print("Updated instrumentation: Act I → Act1/Scene1/Rehearsals, Act II → Act3/Scene1/Rehearsals in \(segId)")
     }
 
     static func resolveStore() -> FountainStoreClient {
@@ -91,4 +102,3 @@ struct DieMaschineScenesAssign {
 }
 
 func fprint(_ s: String) { FileHandle.standardError.write((s + "\n").data(using: .utf8)!) }
-

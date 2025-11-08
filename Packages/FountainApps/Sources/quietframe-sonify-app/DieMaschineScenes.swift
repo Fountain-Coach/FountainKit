@@ -17,7 +17,11 @@ struct ActsScenesView: View {
             if let actIdx = selectedAct, actIdx < model.acts.count {
                 List(selection: $selectedScene) {
                     ForEach(model.acts[actIdx].scenes.indices, id: \.self) { sidx in
-                        Text(model.acts[actIdx].scenes[sidx].title)
+                        let sc = model.acts[actIdx].scenes[sidx]
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(sc.title)
+                            if let reh = sc.rehearsals.first { Text("Rehearsals: \(reh.title)").font(.caption2).foregroundStyle(.secondary) }
+                        }
                     }
                 }
                 .navigationTitle(model.acts[actIdx].title)
@@ -44,6 +48,15 @@ struct SceneDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text(scene.title).font(.title3)
             if let instr = scene.instrumentation {
+                Text("Sampler: \(instr.samplerProfile) (base=\(instr.programBase))").font(.caption).foregroundStyle(.secondary)
+                Table(instr.channels) {
+                    TableColumn("Ch") { ch in Text("\(ch.channel)").monospaced() }
+                    TableColumn("Name") { ch in Text(ch.name) }
+                }
+                .frame(minHeight: 200)
+                if !instr.notes.isEmpty { Text(instr.notes).font(.caption2).foregroundStyle(.secondary) }
+            } else if let reh = scene.rehearsals.first, let instr = reh.instrumentation {
+                Text("Rehearsals → \(reh.title)").font(.caption).foregroundStyle(.secondary)
                 Text("Sampler: \(instr.samplerProfile) (base=\(instr.programBase))").font(.caption).foregroundStyle(.secondary)
                 Table(instr.channels) {
                     TableColumn("Ch") { ch in Text("\(ch.channel)").monospaced() }
@@ -87,7 +100,27 @@ struct ActsModel {
                             }
                             inst = Instrumentation(samplerProfile: profile, programBase: base, notes: notes, channels: channels)
                         }
-                        scenes.append(SceneModel(title: stitle, instrumentation: inst))
+                        var rehearsals: [Rehearsal] = []
+                        if let rehArr = s["rehearsals"] as? [[String: Any]] {
+                            for r in rehArr {
+                                let rtitle = (r["title"] as? String) ?? "Rehearsals"
+                                var rinstr: Instrumentation? = nil
+                                if let ri = r["instrumentation"] as? [String: Any] {
+                                    let profile = (ri["samplerProfile"] as? String) ?? ""
+                                    let base = (ri["programBase"] as? String) ?? ""
+                                    let notes = (ri["notes"] as? String) ?? ""
+                                    var channels: [ChannelMap] = []
+                                    if let mapping = ri["mapping"] as? [String: Any], let chans = mapping["channels"] as? [[String: Any]] {
+                                        for c in chans {
+                                            if let ch = c["channel"] as? Int, let name = c["name"] as? String { channels.append(ChannelMap(channel: ch, name: name)) }
+                                        }
+                                    }
+                                    rinstr = Instrumentation(samplerProfile: profile, programBase: base, notes: notes, channels: channels)
+                                }
+                                rehearsals.append(Rehearsal(title: rtitle, instrumentation: rinstr))
+                            }
+                        }
+                        scenes.append(SceneModel(title: stitle, instrumentation: inst, rehearsals: rehearsals))
                     }
                 }
                 out.append(ActModel(title: title, scenes: scenes))
@@ -114,9 +147,10 @@ struct ActsModel {
 }
 
 struct ActModel { var title: String; var scenes: [SceneModel] }
-struct SceneModel { var title: String; var instrumentation: Instrumentation? }
+struct SceneModel { var title: String; var instrumentation: Instrumentation?; var rehearsals: [Rehearsal] }
 struct Instrumentation { var samplerProfile: String; var programBase: String; var notes: String; var channels: [ChannelMap] }
 struct ChannelMap: Identifiable { var id: Int { channel }; var channel: Int; var name: String }
+struct Rehearsal { var title: String; var instrumentation: Instrumentation? }
 
 func resolveStore() -> FountainStoreClient {
     let env = ProcessInfo.processInfo.environment
@@ -133,4 +167,3 @@ func resolveStore() -> FountainStoreClient {
     }
     return FountainStoreClient(client: EmbeddedFountainStoreClient())
 }
-

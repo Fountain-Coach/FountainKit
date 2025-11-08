@@ -25,7 +25,7 @@ struct DieMaschineTeatroSeed {
         Die Maschine träumt — Teatro (Acts, Scenes, Samplers)
 
         What
-        - Each Akt owns one midi2sampler instance in a neutral "default" state (program TBD). Acts are containers for Scenes; Scenes carry the current instrumentation and reference one or more Scores (Notensetzungen / Engravings).
+        - Each Akt owns one midi2sampler instance in a neutral "default" state (program TBD). Acts are containers for Scenes; Scenes carry the current instrumentation and reference one or more Scores (Notensetzungen / Engravings). Scenes may host a nested "Rehearsals" container for work‑in‑progress instrumental mappings.
 
         Why
         - Keep the creative structure legible while the instrument state remains interchangeable. The sampler default is intentionally undefined; provenance and determinism are carried by Store facts and Engravings.
@@ -33,7 +33,7 @@ struct DieMaschineTeatroSeed {
         How (profile)
         - Transport: MIDI 2.0 first; BLE/RTP via midi2. No CoreMIDI.
         - Engine: midi2sampler per Akt (one instance), default program; PE channels gated by facts.
-        - Scenes: two or more per Akt; order is flexible. Scenes attach Scores (Engravings) for later realization.
+        - Scenes: two or more per Akt; order is flexible. Scenes attach Scores (Engravings) for later realization. The optional "rehearsals" list lives inside a Scene and holds instrumentation variants (e.g., draft channel maps for midi2sampler).
 
         Notes
         - The in-app routing panel is removed. Orchestration remains Store-backed (Partiture YAML; routing blueprint) for reference and tools.
@@ -57,14 +57,16 @@ struct DieMaschineTeatroSeed {
                     "title": "Scene 1",
                     "order": 1,
                     "instrumentation": "placeholder",
-                    "engravings": [] as [String]
+                    "engravings": [] as [String],
+                    "rehearsals": [] as [[String: Any]]
                 ],
                 [
                     "id": "\(actId)-scene-2",
                     "title": "Scene 2",
                     "order": 2,
                     "instrumentation": "placeholder",
-                    "engravings": [] as [String]
+                    "engravings": [] as [String],
+                    "rehearsals": [] as [[String: Any]]
                 ]
             ]
             return [

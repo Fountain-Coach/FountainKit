@@ -2,8 +2,8 @@ import SwiftUI
 import AppKit
 import FountainStoreClient
 import MetalViewKit
-import CoreMIDI
 import FountainAudioEngine
+import FountainStoreClient
 
 @main
 struct QuietFrameSonifyApp: App {
@@ -14,6 +14,23 @@ struct QuietFrameSonifyApp: App {
         }
         .windowStyle(.titleBar)
         .windowToolbarStyle(.expanded)
+        .commands {
+            CommandMenu("Bluetooth") {
+                Button("Bluetooth MIDI…") {
+                    NotificationCenter.default.post(name: .OpenBLEPanel, object: nil)
+                }
+                .keyboardShortcut("b")
+            }
+            CommandMenu("Die Maschine") {
+                Button("Acts & Scenes…") {
+                    NotificationCenter.default.post(name: .OpenDieMaschineUI, object: nil)
+                }
+                .keyboardShortcut("d")
+            }
+        }
+        WindowGroup("Die Maschine — Acts & Scenes") {
+            ActsScenesView()
+        }
     }
 }
 
@@ -41,6 +58,10 @@ struct QuietFrameView: View {
     @StateObject private var recorder = QuietFrameRecorder()
     @StateObject private var sidecar = SidecarInbound()
     @State private var act: Int = 1
+    @StateObject private var bleMgr = BLEManager(instrument: QuietFrameInstrument.shared.instrument)
+    @State private var bleSending: Bool = false
+    @State private var bleTxCount: Int = 0
+    @State private var bleRxCount: Int = 0
     var body: some View {
         GeometryReader { geo in
             ZStack {
@@ -71,7 +92,17 @@ struct QuietFrameView: View {
                         Spacer()
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    VStack(alignment: .trailing) {
+                    if false { // HUD removed; keep code for reference but disabled
+                    VStack(alignment: .trailing, spacing: 6) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "bluetooth").foregroundColor(.blue)
+                            Text("BLE: central").font(.caption2).monospaced()
+                            Circle()
+                                .fill(bleSending ? Color.green : Color.gray.opacity(0.3))
+                                .frame(width: 8, height: 8)
+                                .help("Lights briefly when sending over BLE")
+                            Text("TX \(bleTxCount) | RX \(bleRxCount)").font(.caption2).monospaced().foregroundColor(.secondary)
+                        }
                         HStack(spacing: 10) {
                             Text(String(format: "saliency: %.3f", saliency)).monospaced().font(.caption)
                             ProgressView(value: saliency).frame(width: 140)
@@ -130,25 +161,13 @@ struct QuietFrameView: View {
                                 .labelStyle(.titleAndIcon)
                                 .font(.caption)
                         }
-                        Button {
-                            panicAllNotes()
-                        } label: {
-                            Label("Panic", systemImage: "exclamationmark.triangle")
-                                .labelStyle(.titleAndIcon)
-                                .font(.caption)
-                        }
-                        Button {
-                            testPing()
-                        } label: {
-                            Label("Test", systemImage: "waveform")
-                                .labelStyle(.titleAndIcon)
-                                .font(.caption)
-                        }
+                        
                         }
                         .padding(8)
                         .background(.thinMaterial)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .padding(10)
+                        .padding(.trailing, 10)
+                        .padding(.top, 30)
                         // Place the monitor HUD under the primary controls (top-right)
                         MidiMonitorHUD()
                             .frame(width: 320)
@@ -156,8 +175,10 @@ struct QuietFrameView: View {
                         Spacer()
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    }
                 }
-                // MIDI feedback overlay (bottom-left)
+                // MIDI feedback overlay (bottom-left) — disabled
+                if false {
                 VStack(alignment: .leading, spacing: 4) {
                     Label("MIDI", systemImage: "music.note").font(.caption)
                     ForEach(midiEvents.suffix(6), id: \.self) { line in
@@ -178,13 +199,74 @@ struct QuietFrameView: View {
                         Spacer()
                         MidiMonitorHUD()
                             .frame(maxWidth: 320)
+                            
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                }
+                // (removed) overlay — routing panel is summoned on demand
             }
         }
         .frame(minWidth: 960, minHeight: 720)
+        .toolbar {
+            ToolbarItemGroup(placement: .automatic) {
+                // Act selector (Partiture mapping)
+                Picker("Akt", selection: $act) {
+                    Text("I").tag(1)
+                    Text("II").tag(2)
+                    Text("III").tag(3)
+                    Text("IV").tag(4)
+                    Text("V").tag(5)
+                }
+                .onChange(of: act) { _, v in
+                    if v == 2 {
+                        printActIIPrompts()
+                        FountainAudioEngine.shared.setParam(name: "engine.masterGain", value: 0.20)
+                        CellAutomataSim.shared.setRunning(true)
+                    } else {
+                        CellAutomataSim.shared.setRunning(false)
+                    }
+                }
+                Text({
+                    switch act {
+                    case 1: return "Genesis des Rauschens"
+                    case 2: return "Topologie des Schalls"
+                    case 3: return "Formalismus träumt"
+                    case 4: return "Die Stimme der Architektur"
+                    case 5: return "Das Schweigen"
+                    default: return ""
+                    }
+                }()).font(.caption)
+                .padding(.leading, EngraverTokens.Spacing.s)
+                Divider().padding(.horizontal, EngraverTokens.Spacing.s)
+                // Section stepper
+                HStack(spacing: 6) {
+                    Text("Satz")
+                    Stepper(value: $section, in: 1...9, step: 1) {
+                        Text("\(section)").monospaced()
+                    }
+                }
+                .onChange(of: section) { _, v in
+                    FountainAudioEngine.shared.setParam(name: "act.section", value: Double(v))
+                }
+                Divider().padding(.horizontal, EngraverTokens.Spacing.s)
+                // Tempo
+                HStack(spacing: EngraverTokens.Spacing.s) {
+                    Text("BPM")
+                    Slider(value: $bpm, in: 60...180, step: 1).frame(width: EngraverTokens.Metrics.toolbarControlWidth)
+                    Text("\(Int(bpm))").monospaced()
+                }
+                .onChange(of: bpm) { _, v in
+                    FountainAudioEngine.shared.setParam(name: "tempo.bpm", value: v)
+                }
+                Divider().padding(.horizontal, EngraverTokens.Spacing.s)
+                Button(action: { muted.toggle(); if muted { forceSilence() } }) { Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill") }
+                Button(action: { panicAllNotes() }) { Image(systemName: "exclamationmark.triangle") }
+                Button(action: { testPing() }) { Image(systemName: "waveform") }
+                Divider().padding(.horizontal, EngraverTokens.Spacing.s)
+            }
+        }
         .onAppear {
             sendCC(value7: 0)
             if lastNote != 0 { QuietFrameInstrument.shared.instrument?.sendNoteOff(note: lastNote, velocity7: 0); lastNote = 0; lastTriggered = false }
@@ -193,6 +275,13 @@ struct QuietFrameView: View {
             FountainAudioEngine.shared.setParam(name: "act.section", value: Double(section))
             AudioOnsetToNotes.shared.start()
             Task { await NotesSSEClient.shared.start() }
+            // Auto-enable BLE based on env, so users don't need the HUD icon first
+            let env = ProcessInfo.processInfo.environment
+            if let tgt = env["QF_BLE_TARGET"], !tgt.isEmpty { bleMgr.targetNameSubstr = tgt }
+            #if DEBUG
+            print("[BLE-AUTO] enabling BLE central target=\(bleMgr.targetNameSubstr)")
+            #endif
+            bleMgr.apply()
             NotificationCenter.default.addObserver(forName: Notification.Name("QuietFrameRecordCommand"), object: nil, queue: .main) { n in
                 let op = (n.userInfo?["op"] as? String) ?? ""
                 Task { @MainActor in
@@ -202,6 +291,29 @@ struct QuietFrameView: View {
                         recorder.stopRecording()
                     }
                 }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .OpenBLEPanel)) { _ in }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("BLETransportEvent"))) { n in
+            guard let info = n.userInfo as? [String: Any], let evt = info["event"] as? String else { return }
+            switch evt {
+            case "connected":
+                let name = (info["name"] as? String) ?? ""
+                BLEFacts.shared.set(key: "status.connected", 1)
+                if !name.isEmpty { BLEFacts.shared.set(key: "status.device", name) }
+            case "disconnected":
+                BLEFacts.shared.set(key: "status.connected", 0)
+            case "rx":
+                bleRxCount &+= 1
+                BLEFacts.shared.set(key: "rx.count", bleRxCount)
+            case "tx":
+                bleTxCount &+= 1
+                BLEFacts.shared.set(key: "tx.count", bleTxCount)
+                BLEFacts.shared.set(key: "tx.lastNs", String(DispatchTime.now().uptimeNanoseconds))
+                bleSending = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { bleSending = false }
+            default:
+                break
             }
         }
     }
@@ -243,6 +355,8 @@ struct QuietFrameView: View {
         midiEvents.append("CC1 = \(value7)")
         MidiMonitorStore.shared.add("CC1 = \(value7)")
         SidecarBridge.shared.sendNoteEvent(["event":"cc","cc":1,"value":Int(value7),"channel":0,"group":0])
+        bleSending = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { bleSending = false }
     }
 
     private var threshold: Double { 0.65 }
@@ -268,6 +382,8 @@ struct QuietFrameView: View {
             MidiMonitorStore.shared.add("NoteOn n=\(note) v=\(vel)")
             SidecarBridge.shared.sendNoteEvent(["event":"noteOn","note":Int(note),"velocity":Int(vel),"channel":0,"group":0,"source":"saliency"])        
             lastNote = note
+            bleSending = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { bleSending = false }
         } else if !now && was {
             if lastNote != 0 {
                 inst?.sendNoteOff(note: lastNote, velocity7: 0)
@@ -277,6 +393,8 @@ struct QuietFrameView: View {
                 SidecarBridge.shared.sendNoteEvent(["event":"noteOff","note":Int(lastNote),"channel":0,"group":0,"source":"saliency"])        
             }
             lastNote = 0
+            bleSending = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { bleSending = false }
         }
         lastTriggered = now
     }
@@ -324,6 +442,11 @@ struct QuietFrameView: View {
     }
 }
 
+extension Notification.Name {
+    static let OpenBLEPanel = Notification.Name("OpenBLEPanel")
+    static let OpenDieMaschineUI = Notification.Name("OpenDieMaschineUI")
+}
+
 // SDLKit engine is the default; no AVFoundation fallback.
 
 // MARK: - MIDI1 stub (no CoreMIDI in QuietFrame)
@@ -364,32 +487,51 @@ struct MouseTracker: NSViewRepresentable {
 // Expose a single MIDI 2.0 instrument for the app
 @MainActor final class QuietFrameInstrument {
     static let shared = QuietFrameInstrument()
-    let instrument: MetalInstrument?
+    private let sink = SonifyPESink()
+    private let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "QuietFrame", instanceId: "qf-1", displayName: "QuietFrame#qf-1")
+    var instrument: MetalInstrument?
+
     init() {
-        let sink = SonifyPESink()
-        let desc = MetalInstrumentDescriptor(manufacturer: "Fountain", product: "QuietFrame", instanceId: "qf-1", displayName: "QuietFrame#qf-1")
-        // Transport selection: prefer Loopback when integrating with MVK runtime
-        if ProcessInfo.processInfo.environment["QF_USE_RUNTIME"] == "1" {
-            MetalInstrument.setTransportOverride(LoopbackMetalInstrumentTransport.shared)
-        } else if ProcessInfo.processInfo.environment["QF_TRANSPORT"] == "rtp" {
-            MetalInstrument.setTransportOverride(MIDI2SystemInstrumentTransport(backend: .rtpFixedPort(5868)))
-        } else {
-            // Default: CoreMIDI virtual endpoints so tools/bridges can tap our UMP
-            MetalInstrument.setTransportOverride(MIDI2SystemInstrumentTransport(backend: .coreMIDI))
-        }
-        let inst = MetalInstrument(sink: sink, descriptor: desc)
+        // Default to single BLE target via env or loopback if not available.
+        #if canImport(CoreBluetooth)
+        let nameSub = ProcessInfo.processInfo.environment["QF_BLE_TARGET"]
+        let t: any MetalInstrumentTransport = MIDI2SystemInstrumentTransport(backend: .ble(nameSub))
+        #else
+        let t: any MetalInstrumentTransport = LoopbackMetalInstrumentTransport.shared
+        #endif
+        buildAndEnable(transport: t)
+    }
+
+    private func configure(inst: MetalInstrument) {
         inst.stateProvider = {
             var s = FountainAudioEngine.shared.snapshot()
             s["rec.state"] = QuietFrameRuntime.getRecState()
-            // Include Act II numeric state for PE replies
             let cells = CellAutomataSim.shared.snapshotNumeric()
             for (k,v) in cells { s[k] = v }
+            let ble = BLEFacts.shared.snapshot()
+            for (k,v) in ble { s["ble.\(k)"] = v }
             return s
         }
         inst.peProvider = { CellAutomataSim.shared.snapshotPE() }
-        inst.enable()
+    }
+
+    private func buildAndEnable(transport: any MetalInstrumentTransport) {
+        let newInst = MetalInstrument(sink: sink, descriptor: desc, transport: transport)
+        configure(inst: newInst)
+        newInst.enable()
+        instrument?.disable()
+        instrument = newInst
         print("[quietframe-sonify] MVK instrument ready: displayName=\(desc.displayName) instanceId=\(desc.instanceId)")
-        self.instrument = inst
+    }
+
+    func applyTransports(_ transports: [any MetalInstrumentTransport]) {
+        guard !transports.isEmpty else { return }
+        if transports.count == 1 {
+            buildAndEnable(transport: transports[0])
+        } else {
+            let fanout = MultiMetalInstrumentTransport(transports: transports)
+            buildAndEnable(transport: fanout)
+        }
     }
 }
 
@@ -434,11 +576,15 @@ final class SonifyPESink: MetalSceneRenderer, MetalSceneUniformControls {
         Task { @MainActor in
             MidiMonitorStore.shared.add(String(format: "CC %d = %d ch=%d g=%d", controller, value, channel, group))
             SidecarBridge.shared.sendNoteEvent(["event":"cc","cc":Int(controller),"value":Int(value),"channel":Int(channel),"group":Int(group)])
-            switch controller {
-            case 1: FountainAudioEngine.shared.setParam(name: "engine.masterGain", value: v)
-            case 7: FountainAudioEngine.shared.setParam(name: "engine.masterGain", value: v)
-            case 74: FountainAudioEngine.shared.setParam(name: "drone.lpfHz", value: 300 + v * 3000)
-            default: break
+            if let mapped = CCMappingCenter.shared.mappedParam(for: Int(controller), value7: value) {
+                FountainAudioEngine.shared.setParam(name: mapped.name, value: mapped.value)
+                return
+            }
+            // Fallbacks when no mapping entry exists
+            if controller == 1 || controller == 7 {
+                FountainAudioEngine.shared.setParam(name: "engine.masterGain", value: v)
+            } else if controller == 74 {
+                FountainAudioEngine.shared.setParam(name: "drone.lpfHz", value: 300 + v * 3000)
             }
         }
     }
@@ -450,6 +596,8 @@ final class SonifyPESink: MetalSceneRenderer, MetalSceneUniformControls {
         }
     }
 }
+
+// BLE configuration panel removed (central‑only policy)
 
 // MARK: - Prompt printing (Act II)
 fileprivate func makeStoreClient() -> FountainStoreClient {

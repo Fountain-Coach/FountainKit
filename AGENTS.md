@@ -13,6 +13,12 @@ Welcome to FountainKit, the modular SwiftPM workspace for the Fountain Coach org
 - `FountainSpecCuration`: Canonical OpenAPI specs, fixtures, and regeneration scripts shared across packages.
 - `FountainExamples`: Sample apps and Teatro integrations that consume the published packages.
 
+## Quick Start
+- Bring the workspace up: `Scripts/dev/dev-up` (UI auto‑launches). Add `--check` for readiness probes.
+- Check status: `Scripts/dev/dev-status`.
+- Stop everything: `Scripts/dev/dev-down`.
+- Codex (safe by default): run `codex` or `Scripts/dev/codex-danger`; opt‑in to danger via a sentinel. See `Scripts/dev/AGENTS.md:1`.
+
 ### Plans Index
 - Unified Master Plan — embedded below in this file (authoritative).
 - ML × MIDI 2.0 plan — `Plans/ML-MIDI2-Plan.md` (models, runners, CI/PE, integration).
@@ -112,56 +118,12 @@ We will evolve existing AGENTS.md files toward this style without losing substan
 
 Process per file: capture intent in a brief opening paragraph; collapse long lists into paragraphs; keep essential commands and routes as a short list; remove repetition by linking to source files; preserve all technical facts.
 
-## Scripts — Spec and Structure (authoritative)
-- Canonical locations live under `Scripts/<area>/` with a scoped AGENTS.md per area. Root‑level paths remain as thin wrappers for compatibility.
-- Areas (current):
-  - `Scripts/design/` — GUI/engraving tooling (SVG↔PNG, LilyPond). Source of truth lives in `Design/`.
-  - `Scripts/openapi/` — spec lint and curated‑list validator.
-  - `Scripts/ci/` — workspace smoke and optional toolserver smoke.
-  - `Scripts/dev/` — workspace lifecycle (up/down/status/prebuild/keychain).
-  - `Scripts/audiotalk/` — AudioTalk stack runners and tool registration.
-  - `Scripts/apps/` — app launchers (composer, legacy studio, engraver, memchat).
-  - `Scripts/memchat/` — DEPRECATED (learnings only); see AGENT for scope.
+## Scripts — Overview
+- Canonical scripts live under `Scripts/<area>/` with a scoped AGENTS.md per area. Root paths are thin wrappers only.
+- See `Scripts/AGENTS.md:1` for full conventions, areas, and lifecycle tools. Dev lifecycle and Codex details are in `Scripts/dev/AGENTS.md:1`.
 
-Conventions
-- Idempotent, safe scripts with `set -euo pipefail`; clear `Usage:` help at top.
-- No `.env` in repo; secrets only via Keychain. Signature defaults provided (`LAUNCHER_SIGNATURE`).
-- Logs under `.fountain/logs`, PIDs under `.fountain/pids` at repo root.
-- New scripts must live in the correct subdirectory and be documented in that area’s AGENTS.md. Root wrappers may be added only for compatibility.
-
-Migration policy (enforced)
-- Do not add new functional scripts at the root of `Scripts/`.
-- If an existing root script is enhanced, prefer converting it to a wrapper and moving the body into the appropriate subdirectory in the same PR.
-- CI may call canonical paths or wrappers; wrappers must be kept stable.
-
-Status (completed)
-- Design tooling canonicalized; PNG converter and LilyPond renderer added.
-- OpenAPI and CI scripts moved under `Scripts/openapi/` and `Scripts/ci/`.
-- Dev lifecycle canonicalized under `Scripts/dev/`.
-- AudioTalk stack canonicalized under `Scripts/audiotalk/`; root scripts delegate.
-- MemChat marked DEPRECATED; runnable but not active product work.
-
-### Codex CLI — Danger Profile (local, untracked)
-Sometimes we need Codex with full network and filesystem access and no approval prompts. Use a local, untracked config and a wrapper that pulls a GitHub token from `gh` at launch so no secrets are checked in.
-
-What
-- Wrapper: `Scripts/dev/codex-danger:1` starts Codex in a non‑interactive, unsandboxed mode and exports `GITHUB_TOKEN`/`GH_TOKEN` from `gh auth token` for the process.
-- Local config (optional): create `codex.danger.toml` at repo root (kept untracked). Keys: `[sandbox] filesystem="danger-full-access", network="enabled"; [approvals] mode="never"; [shell] default_escalation=true, inherit_parent_env=true; `[env.pass] vars=["GITHUB_TOKEN","GH_TOKEN","SSH_AUTH_SOCK"]`.
-
-Why
-- Avoid manual secret management; reuse GitHub CLI auth; enable network‑heavy operations without approval prompts in trusted environments.
-
-How
-- One‑time install: `Scripts/dev/install-codex` (adds a `Codex` launcher to `~/.local/bin`). If needed, re-run with `--force` to append PATH to your `~/.zshrc`.
-- Use it: type `Codex` from anywhere. The launcher cds into this repo, injects a GitHub token from `gh`, generates an ephemeral danger config, and starts Codex.
-- Alternate launch: `Scripts/dev/codex-danger chat .` if you don’t want a global command.
-Notes
-- If not logged in to GitHub, the launcher will attempt `gh auth login --web` automatically (disable with `FK_CODEX_AUTO_GH_LOGIN=0`).
-- Force fresh login: run `Codex --relogin` to log out of GitHub and immediately log back in via browser, then start Codex.
-
-Where
-- Wrapper script: `Scripts/dev/codex-danger:1`.
-- Ignore rule: `.gitignore:1` includes `/codex*.toml` so local Codex configs never commit.
+- Launcher: `Scripts/dev/codex-danger:1`; installer wrapper: `Scripts/dev/install-codex:1`.
+- Local config (optional): `codex.danger.toml:1` (ignored by git).
 
 ## OpenAPI-first development
 - Every HTTP surface must have an authoritative OpenAPI document in `Packages/FountainSpecCuration/openapi`. Update specs *before* writing server or client code.
@@ -299,10 +261,30 @@ Thank you for helping FountainKit stay modular and healthy!
 
 ---
 
+## Hard Rule — CoreMIDI Prohibited (Swift 6)
+
+Summary
+- CoreMIDI is prohibited across this repository. It is not concurrency‑safe and is incompatible with our Swift 6 concurrency model. No target may `import CoreMIDI` or call CoreMIDI C APIs directly.
+
+Allowed transports (authoritative)
+- Loopback (in‑process) — `LoopbackMetalInstrumentTransport` for tests and sidecar IPC.
+- RTP MIDI 2.0 — provided by the `midi2` workspace (`github.com/Fountain-Coach/midi2`) and consumed via `MIDI2SystemInstrumentTransport(backend: .rtpFixedPort(..))` or equivalent.
+- BLE MIDI 2.0 — via the `midi2` BLE transport (no CoreMIDI; wire as available). Until then, prefer RTP or Loopback.
+
+Enforcement (must pass CI)
+- No `import CoreMIDI`, no `canImport(CoreMIDI)`, no calls like `MIDIClientCreate*`, `MIDISourceCreate*`, `MIDIDestinationCreate*`, `MIDISend*`, `MIDIReceived*`.
+- Lint locally and in CI: `! rg -n "\\bimport\\s+CoreMIDI\\b|\\bMIDI(Client|Source|Destination|Port|Send|Received)" -S` must succeed (no matches) outside vendored history.
+- Apps/services must select transports from `midi2` or Loopback only. Defaults must not rely on CoreMIDI.
+
+Migration notes
+- Existing CoreMIDI helpers are considered legacy and must not be used by apps. Replace with `midi2` RTP/BLE or Loopback. If a stop‑gap is unavoidable, isolate behind a separate repository; do not re‑introduce CoreMIDI usage here.
+
+---
+
 ## MIDI 2.0 Everywhere (Concept)
 Every interactive surface is a MIDI 2.0 instrument. The canvas, nodes, inspectors, and monitors may advertise a MIDI‑CI identity and optional Property Exchange so external tools can introspect and set state deterministically.
 
-- Identity: stable names (`<product>#<instanceId>`) and CoreMIDI virtual endpoints (protocol 2.0).
+- Identity: stable names (`<product>#<instanceId>`) and MIDI 2.0 endpoints via our `midi2` transports (RTP/BLE). CoreMIDI is prohibited.
 - State mapping: small PE schemas per surface (e.g., canvas: `zoom`, `translation.x/y`; stage: `page`, `margins.*`, `baseline`). GET is deterministic; SET applies and notifies.
 - Topology: begin with one group/function block per canvas; promote per‑node blocks as needed.
 - Transport‑agnostic: rendering and composition remain independent of MIDI; instrument mode is additive and optional.
@@ -317,6 +299,11 @@ Every interactive surface is a MIDI 2.0 instrument. The canvas, nodes, inspector
 **Maintenance**: This file embeds the unified master plan below. Keep this plan and
 `Plans/ROADMAP.md` in sync; prefer editing here and letting `Plans/ROADMAP.md` remain
 the canonical “human‑facing” copy for external links.
+
+Historical note — Routing Matrix (removed)
+- The in‑app routing matrix panel used during early AUM parity work has been removed to focus the UI on MIDI 2.0 flows. The technical capacity remains:
+  - Store‑backed Partiture (docs:quietframe:orchestra-default:doc), CC mapping (docs:quietframe:cc-mapping:doc), generated routing blueprint (prompt:quietframe-routing:routes), and BLE/RTP transports with per‑route filters live on as tools/CLIs and documentation.
+  - Use the seeders/generators under `Packages/FountainApps/Sources/*orchestra*` to reproduce or evolve orchestration outside the app; do not re‑introduce the panel.
 
 ---
 
@@ -414,3 +401,8 @@ Milestones (high level)
 8) M7 Perf/Hygiene: precompile, quiet warnings.
 9) M8 QA/CI: smoke matrix; headless E2E; coverage.
 10) M9 Docs: user guide, API refs, onboarding.
+ 11) M10 MIDI 2.0 → MIDI‑1 Interop (ACHIEVED): end‑to‑end CoreMIDI‑less routing to external MIDI‑1 samplers over BLE, with UMP‑first internal model and explicit per‑route downgrade/filters.
+     - Transport: BLE via `midi2` (no CoreMIDI); optional RTP peer remains MIDI‑2 end‑to‑end.
+     - Mapping: CC → engine params now store‑backed (docs:quietframe:cc-mapping:doc).
+     - Orchestration: Partiture YAML (docs:quietframe:orchestra-default:doc) + generator produce `prompt:quietframe-routing:routes` deterministically (with ETag provenance).
+     - UI: Routing panel can Generate → Load → Apply; shows Partiture preview, ETag sync, and plan view.

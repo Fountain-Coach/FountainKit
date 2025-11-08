@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# die-maschine — one-click launcher
+# Default: run QuietFrame Sonify app (BLE, MIDI 2.0). Optional --ui opens Acts & Scenes viewer.
+#
+# Usage:
+#   Scripts/apps/die-maschine            # build + run QuietFrame (debug)
+#   Scripts/apps/die-maschine --release  # build + run (release)
+#   Scripts/apps/die-maschine --no-build # run without building
+#   Scripts/apps/die-maschine --ui       # open Acts & Scenes viewer instead
+#
+# Env:
+#   CORPUS_ID            (default: die-maschine)
+#   FOUNTAINSTORE_DIR    (default: .fountain/store)
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CACHE="$ROOT/.fountain/clang-module-cache"
+mkdir -p "$CACHE"
+
+cfg="debug"
+do_build=1
+mode="app"   # app | ui
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --release) cfg="release" ;;
+    --no-build) do_build=0 ;;
+    --ui) mode="ui" ;;
+    -h|--help|help)
+      sed -n '1,40p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "unknown arg: $1" 1>&2; exit 2 ;;
+  esac; shift
+done
+
+if [[ "$mode" == "app" ]]; then
+  # Delegate to QuietFrame launcher (authoritative), passing through args
+  export CORPUS_ID="${CORPUS_ID:-die-maschine}"
+  export FOUNTAINSTORE_DIR="${FOUNTAINSTORE_DIR:-$ROOT/.fountain/store}"
+  exec bash "$ROOT/Scripts/apps/quietframe" "$@"
+fi
+
+swift_target="die-maschine-ui"
+
+if [[ "$do_build" != "0" ]]; then
+  echo "[build] die-maschine-ui ($cfg) …"
+  CLANG_MODULE_CACHE_PATH="$CACHE" SWIFTPM_ENABLE_SANDBOX=0 \
+    swift build --package-path "$ROOT/Packages/FountainApps" -c "$cfg" --target "$swift_target"
+fi
+
+echo "[launch] running $swift_target …"
+export CLANG_MODULE_CACHE_PATH="$CACHE"
+export SWIFTPM_ENABLE_SANDBOX=0
+export CORPUS_ID="${CORPUS_ID:-die-maschine}"
+export FOUNTAINSTORE_DIR="${FOUNTAINSTORE_DIR:-$ROOT/.fountain/store}"
+
+exec swift run --package-path "$ROOT/Packages/FountainApps" -c "$cfg" "$swift_target"

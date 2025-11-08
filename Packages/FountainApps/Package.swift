@@ -31,6 +31,7 @@ let package = Package(
         .executable(name: "baseline-awareness-server", targets: ["baseline-awareness-server"]),
         .executable(name: "bootstrap-server", targets: ["bootstrap-server"]),
         .executable(name: "publishing-frontend", targets: ["publishing-frontend"]),
+        .executable(name: "quietframe-service-server", targets: ["quietframe-service-server"]),
         .executable(name: "tutor-dashboard", targets: ["tutor-dashboard"]),
         .executable(name: "pbvrt-server", targets: ["pbvrt-server"]),
         // removed: add-instruments-seed (context menu removed from baseline)
@@ -106,6 +107,11 @@ let package = Package(
         .executable(name: "patchbay-saliency-seed", targets: ["patchbay-saliency-seed"])
         ,
         .executable(name: "quietframe-sonify-app", targets: ["quietframe-sonify-app"]),
+        .executable(name: "quietframe-cc-mapping-seed", targets: ["quietframe-cc-mapping-seed"]),
+        .executable(name: "quietframe-orchestra-seed", targets: ["quietframe-orchestra-seed"]),
+        .executable(name: "quietframe-orchestra-generate", targets: ["quietframe-orchestra-generate"]),
+        .executable(name: "die-maschine-teatro-seed", targets: ["die-maschine-teatro-seed"]),
+        .executable(name: "die-maschine-scenes-assign", targets: ["die-maschine-scenes-assign"]),
         .executable(name: "quietframe-companion-app", targets: ["quietframe-companion-app"]),
         .executable(name: "quietframe-smoke", targets: ["quietframe-smoke"]),
         .executable(name: "quietframe-replay", targets: ["quietframe-replay"])
@@ -142,8 +148,8 @@ let package = Package(
         .package(url: "https://github.com/AudioKit/Flow.git", from: "1.0.4"),
         .package(path: "../FountainTelemetryKit"),
         .package(path: "../../Tools/PersistenceSeeder"),
-        // Remote Teatro package (authoritative)
-        .package(name: "TeatroFull", url: "https://github.com/Fountain-Coach/TeatroFull.git", branch: "main"),
+        // Temporary: unify to path-based Teatro until all packages swap to URL
+        .package(path: "../../External/TeatroFull"),
     ] + [
         
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
@@ -369,6 +375,11 @@ let package = Package(
                 .product(name: "MIDI2CI", package: "midi2")
             ],
             path: "Tests/MetalInstrumentRTPTests"
+        ),
+        .testTarget(
+            name: "MetalInstrumentCoreMIDITests",
+            dependencies: ["MetalViewKit"],
+            path: "Tests/MetalInstrumentCoreMIDITests"
         ),
         // Audio engine (for focused builds with ROBOT_ONLY)
         .target(
@@ -937,6 +948,45 @@ let package = Package(
             exclude: ["README.md"]
         ),
         .executableTarget(
+            name: "ble-midi-scan",
+            dependencies: [],
+            path: "Sources/ble-midi-scan"
+        ),
+        .executableTarget(
+            name: "ble-midi-adv-check",
+            dependencies: [.product(name: "MIDI2Transports", package: "FountainTelemetryKit")],
+            path: "Sources/ble-midi-adv-check"
+        ),
+        // Lightweight CoreMIDI integration check (avoids building full test bundles)
+        .executableTarget(
+            name: "midi-coremidi-integration-check",
+            dependencies: ["MetalViewKit"],
+            path: "Sources/midi-coremidi-integration-check"
+        ),
+        // QuietFrame OpenAPI service (control + MIDI)
+        .target(
+            name: "quietframe-service",
+            dependencies: [
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                "MetalViewKit"
+            ],
+            path: "Sources/quietframe-service",
+            plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
+        .executableTarget(
+            name: "quietframe-service-server",
+            dependencies: [
+                "quietframe-service",
+                .product(name: "FountainRuntime", package: "FountainCore"),
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
+            ],
+            path: "Sources/quietframe-service-server"
+        ),
+        .executableTarget(
             name: "tutor-dashboard",
             dependencies: [
                 .product(name: "TutorDashboard", package: "FountainAPIClients"),
@@ -1242,17 +1292,61 @@ let package = Package(
             dependencies: USE_SDLKIT ? [ .product(name: "SDLKitAudio", package: "SDLKit") ] : [],
             path: "Sources/FountainAudioEngine"
         ),
+        // AUM-inspired MIDI routing matrix kit (SwiftUI)
+        .target(
+            name: "Midi2MappingKit",
+            dependencies: [],
+            path: "Sources/Midi2MappingKit"
+        ),
         .executableTarget(
             name: "quietframe-sonify-app",
             dependencies: [
                 .product(name: "FountainStoreClient", package: "FountainCore"),
                 "MetalViewKit",
                 "FountainAudioEngine",
-                "QuietFrameKit",
-                .target(name: "QuietFrameCells")
+                "QuietFrameKit"
+                // Routing view removed; Midi2MappingKit/Yams/Crypto not required here
             ],
             path: "Sources/quietframe-sonify-app"
         ),
+        .executableTarget(
+            name: "quietframe-cc-mapping-seed",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/quietframe-cc-mapping-seed"
+        ),
+        .executableTarget(
+            name: "quietframe-orchestra-seed",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/quietframe-orchestra-seed"
+        ),
+        .executableTarget(
+            name: "quietframe-orchestra-generate",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "Yams", package: "Yams")
+            ],
+            path: "Sources/quietframe-orchestra-generate"
+        ),
+        .executableTarget(
+            name: "die-maschine-teatro-seed",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "Crypto", package: "swift-crypto")
+            ],
+            path: "Sources/die-maschine-teatro-seed"
+        ),
+        .executableTarget(
+            name: "die-maschine-scenes-assign",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/die-maschine-scenes-assign"
+        ),
+        
         .executableTarget(
             name: "quietframe-companion-app",
             dependencies: [

@@ -76,25 +76,8 @@ struct QuietFrameView: View {
                     Color(NSColor.windowBackgroundColor)
                     VStack {
                         Spacer()
-                    ZStack {
-                        QuietFrameShape()
-                            .fill(Color.white)
-                            .overlay(
-                                QuietFrameShape()
-                                    .stroke(Color.secondary.opacity(0.35), lineWidth: 1)
-                            )
-                            .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
-                            .frame(width: frameSize.width, height: frameSize.height)
-                        if act == 1 {
-                            MouseTracker(onMove: { p in updateSaliency(point: p) })
-                                .frame(width: frameSize.width, height: frameSize.height)
-                                .allowsHitTesting(true)
-                        } else {
-                            CellsView(frameSize: frameSize)
-                                .frame(width: frameSize.width, height: frameSize.height)
-                                .allowsHitTesting(false)
-                        }
-                    }
+                        // Fountain Editor integrated as the QuietFrame surface
+                        FountainEditorSurface(frameSize: frameSize)
                         Spacer()
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

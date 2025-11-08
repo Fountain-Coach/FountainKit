@@ -1,0 +1,18 @@
+generate:
+  - types
+  - server
+accessModifier: internal
+additionalImports: []
+filter:
+  paths:
+    - /editor/health
+    - /editor/{corpusId}/script
+    - /editor/{corpusId}/structure
+    - /editor/preview/parse
+    - /editor/{corpusId}/instruments
+    - /editor/{corpusId}/instruments/{instrumentId}
+    - /editor/{corpusId}/placements
+    - /editor/{corpusId}/placements/{placementId}
+    - /editor/{corpusId}/proposals
+    - /editor/{corpusId}/proposals/{proposalId}
+    - /editor/sessions

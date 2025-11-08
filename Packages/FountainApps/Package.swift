@@ -987,6 +987,27 @@ let package = Package(
             ],
             path: "Sources/quietframe-service-server"
         ),
+        // Fountain Editor service (server stubs via OpenAPI)
+        .target(
+            name: "fountain-editor-service-core",
+            dependencies: [
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/fountain-editor-service"
+        ),
+        .executableTarget(
+            name: "fountain-editor-service-server",
+            dependencies: [
+                "fountain-editor-service-core",
+                .product(name: "FountainRuntime", package: "FountainCore")
+            ],
+            path: "Sources/fountain-editor-service-server",
+            plugins: [
+                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
         .executableTarget(
             name: "tutor-dashboard",
             dependencies: [

@@ -1,0 +1,300 @@
+openapi: 3.1.0
+info:
+  title: Fountain Editor Instrument API
+  version: 1.0.0
+  description: |
+    HTTP API for the Fountain Editor Instrument. ETag-aware script persistence,
+    parser-backed structure, instruments library, placements, proposals, and chat sessions.
+    Editor never deletes corpora; lifecycle is managed by FountainAI.
+servers:
+  - url: http://localhost:8080
+    description: Dev
+tags:
+  - name: editor
+  - name: instruments
+  - name: placements
+  - name: proposals
+  - name: sessions
+paths:
+  /editor/health:
+    get:
+      summary: Liveness/Readiness
+      tags: [editor]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Health' } } } }
+
+  /editor/{corpusId}/script:
+    get:
+      summary: Get current Fountain script (text + ETag)
+      tags: [editor]
+      parameters: [ { $ref: '#/components/parameters/CorpusId' } ]
+      responses:
+        '200':
+          description: Script text
+          headers: { ETag: { description: Strong ETag for current content, schema: { type: string } } }
+          content:
+            text/plain: { schema: { type: string } }
+        '404': { description: Not found }
+    put:
+      summary: Save Fountain script (ETag required)
+      tags: [editor]
+      parameters: [ { $ref: '#/components/parameters/CorpusId' } ]
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema: { type: string }
+      responses:
+        '204': { description: Saved }
+        '409': { description: ETag mismatch }
+      security: []
+
+  /editor/{corpusId}/structure:
+    get:
+      summary: Parsed structure (acts/scenes/beats) with anchors and ETag
+      tags: [editor]
+      parameters: [ { $ref: '#/components/parameters/CorpusId' } ]
+      responses:
+        '200': { description: Structure, content: { application/json: { schema: { $ref: '#/components/schemas/Structure' } } } }
+        '404': { description: Not found }
+
+  /editor/preview/parse:
+    post:
+      summary: Parse a transcript (no persistence)
+      tags: [editor]
+      requestBody:
+        required: true
+        content: { text/plain: { schema: { type: string } } }
+      responses:
+        '200': { description: Structure preview, content: { application/json: { schema: { $ref: '#/components/schemas/Structure' } } } }
+
+  /editor/{corpusId}/instruments:
+    get:
+      summary: List instruments in library
+      tags: [instruments]
+      parameters: [ { $ref: '#/components/parameters/CorpusId' }, { name: q, in: query, required: false, schema: { type: string } } ]
+      responses:
+        '200': { description: Instruments, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Instrument' } } } } }
+    post:
+      summary: Create instrument (profile midi2sampler)
+      tags: [instruments]
+      parameters: [ { $ref: '#/components/parameters/CorpusId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/InstrumentCreate' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Instrument' } } } }
+
+  /editor/{corpusId}/instruments/{instrumentId}:
+    get:
+      summary: Get instrument
+      tags: [instruments]
+      parameters: [ { $ref: '#/components/parameters/CorpusId' }, { $ref: '#/components/parameters/InstrumentId' } ]
+      responses:
+        '200': { description: Instrument, content: { application/json: { schema: { $ref: '#/components/schemas/Instrument' } } } }
+        '404': { description: Not found }
+    patch:
+      summary: Update instrument
+      tags: [instruments]
+      parameters: [ { $ref: '#/components/parameters/CorpusId' }, { $ref: '#/components/parameters/InstrumentId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/InstrumentUpdate' } } } }
+      responses:
+        '204': { description: Updated }
+
+  /editor/{corpusId}/placements:
+    get:
+      summary: List placements for anchor
+      tags: [placements]
+      parameters:
+        - { $ref: '#/components/parameters/CorpusId' }
+        - { name: anchor, in: query, required: true, schema: { $ref: '#/components/schemas/AnchorId' } }
+      responses:
+        '200': { description: Placements, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Placement' } } } } }
+    post:
+      summary: Add placement at anchor
+      tags: [placements]
+      parameters: [ { $ref: '#/components/parameters/CorpusId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PlacementCreate' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Placement' } } } }
+
+  /editor/{corpusId}/placements/{placementId}:
+    patch:
+      summary: Update placement
+      tags: [placements]
+      parameters: [ { $ref: '#/components/parameters/CorpusId' }, { $ref: '#/components/parameters/PlacementId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PlacementUpdate' } } } }
+      responses: { '204': { description: Updated } }
+    delete:
+      summary: Remove placement
+      tags: [placements]
+      parameters: [ { $ref: '#/components/parameters/CorpusId' }, { $ref: '#/components/parameters/PlacementId' } ]
+      responses: { '204': { description: Removed } }
+
+  /editor/{corpusId}/proposals:
+    post:
+      summary: Create proposal (e.g., rewriteRange, insertScene)
+      tags: [proposals]
+      parameters: [ { $ref: '#/components/parameters/CorpusId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ProposalCreate' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Proposal' } } } }
+
+  /editor/{corpusId}/proposals/{proposalId}:
+    post:
+      summary: Apply decision (accept/reject)
+      tags: [proposals]
+      parameters: [ { $ref: '#/components/parameters/CorpusId' }, { $ref: '#/components/parameters/ProposalId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ProposalDecision' } } } }
+      responses:
+        '200': { description: Result, content: { application/json: { schema: { $ref: '#/components/schemas/ProposalResult' } } } }
+
+  /editor/sessions:
+    get:
+      summary: List recent chat sessions (global/recent)
+      tags: [sessions]
+      responses:
+        '200': { description: Sessions, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ChatSession' } } } } }
+
+components:
+  parameters:
+    CorpusId: { name: corpusId, in: path, required: true, schema: { type: string, pattern: '^[a-z0-9][a-z0-9-]{1,63}$' } }
+    InstrumentId: { name: instrumentId, in: path, required: true, schema: { type: string } }
+    PlacementId: { name: placementId, in: path, required: true, schema: { type: string, format: uuid } }
+    ProposalId: { name: proposalId, in: path, required: true, schema: { type: string, format: uuid } }
+  schemas:
+    Health:
+      type: object
+      properties:
+        ok: { type: boolean }
+        ready: { type: boolean }
+        version: { type: string }
+      required: [ok, ready, version]
+    ETag: { type: string, description: Strong ETag (opaque) }
+    AnchorId:
+      type: string
+      description: act{n}.scene{m}[.beat{k}]
+      examples: [ 'act1.scene1', 'act1.scene2.beat3' ]
+    Structure:
+      type: object
+      properties:
+        etag: { $ref: '#/components/schemas/ETag' }
+        acts:
+          type: array
+          items:
+            type: object
+            properties:
+              index: { type: integer, minimum: 1 }
+              title: { type: string }
+              scenes:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    index: { type: integer, minimum: 1 }
+                    title: { type: string }
+                    beats:
+                      type: array
+                      items:
+                        type: object
+                        properties: { index: { type: integer, minimum: 1 }, title: { type: string } }
+      required: [etag, acts]
+    Instrument:
+      type: object
+      properties:
+        instrumentId: { type: string }
+        name: { type: string }
+        profile: { type: string, enum: [midi2sampler] }
+        programBase: { type: integer, minimum: 0, maximum: 127 }
+        defaultMapping: { $ref: '#/components/schemas/Mapping' }
+        tags: { type: array, items: { type: string } }
+        notes: { type: string }
+      required: [instrumentId, name, profile]
+    InstrumentCreate:
+      type: object
+      properties:
+        name: { type: string }
+        profile: { type: string, enum: [midi2sampler] }
+        programBase: { type: integer, minimum: 0, maximum: 127 }
+        defaultMapping: { $ref: '#/components/schemas/Mapping' }
+        tags: { type: array, items: { type: string } }
+        notes: { type: string }
+      required: [name, profile]
+    InstrumentUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        programBase: { type: integer }
+        defaultMapping: { $ref: '#/components/schemas/Mapping' }
+        tags: { type: array, items: { type: string } }
+        notes: { type: string }
+    Mapping:
+      type: object
+      properties:
+        channels: { type: array, items: { type: integer, minimum: 1, maximum: 16 } }
+        group: { type: integer, minimum: 0, maximum: 15 }
+        filters: { type: array, items: { type: string, enum: [cv2, m1, pe, util] } }
+      additionalProperties: false
+    Placement:
+      type: object
+      properties:
+        placementId: { type: string, format: uuid }
+        anchor: { $ref: '#/components/schemas/AnchorId' }
+        instrumentId: { type: string }
+        order: { type: integer }
+        bus: { type: string }
+        overrides: { $ref: '#/components/schemas/Mapping' }
+        notes: { type: string }
+      required: [placementId, anchor, instrumentId]
+    PlacementCreate:
+      type: object
+      properties:
+        anchor: { $ref: '#/components/schemas/AnchorId' }
+        instrumentId: { type: string }
+        order: { type: integer }
+        bus: { type: string }
+        overrides: { $ref: '#/components/schemas/Mapping' }
+        notes: { type: string }
+      required: [anchor, instrumentId]
+    PlacementUpdate:
+      type: object
+      properties:
+        order: { type: integer }
+        bus: { type: string }
+        overrides: { $ref: '#/components/schemas/Mapping' }
+        notes: { type: string }
+    ProposalCreate:
+      type: object
+      properties:
+        op: { type: string, enum: [composeBlock, rewriteRange, insertScene, renameScene, moveScene, splitScene, applyPatch] }
+        params: { type: object, additionalProperties: true }
+        anchor: { $ref: '#/components/schemas/AnchorId' }
+      required: [op]
+    Proposal:
+      type: object
+      properties:
+        proposalId: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        op: { type: string }
+        params: { type: object }
+        anchor: { $ref: '#/components/schemas/AnchorId' }
+        status: { type: string, enum: [pending, accepted, rejected] }
+      required: [proposalId, createdAt, op, status]
+    ProposalDecision:
+      type: object
+      properties: { decision: { type: string, enum: [accept, reject] } }
+      required: [decision]
+    ProposalResult:
+      type: object
+      properties:
+        scriptETag: { $ref: '#/components/schemas/ETag' }
+        applied: { type: boolean }
+        message: { type: string }
+      required: [applied]
+    ChatSession:
+      type: object
+      properties:
+        sessionId: { type: string, format: uuid }
+        corpusId: { type: string }
+        createdAt: { type: string, format: date-time }
+        lastMessageAt: { type: string, format: date-time }
+      required: [sessionId, corpusId, createdAt]
+

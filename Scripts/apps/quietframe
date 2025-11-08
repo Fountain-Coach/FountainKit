@@ -1,0 +1,231 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# quietframe — one-button launcher with clear, streamed output
+#
+# Usage:
+#   Scripts/apps/quietframe status            Show PIDs and last crash
+#   Scripts/apps/quietframe ble-scan          Scan for BLE MIDI devices
+#   Scripts/apps/quietframe health            Run MIDI telemetry tests
+#   Scripts/apps/quietframe doctor            Run telemetry + CoreMIDI integration tests
+#   Scripts/apps/quietframe logs              Tail bridge + app logs
+#   Scripts/apps/quietframe [--rtp|--ble|--runtime] [--release] [--no-build] [--dest <CoreMIDI-dest>]
+#
+# Defaults:
+#   Transport: BLE (default, CoreMIDI-free). Use --rtp for RTP MIDI 2.0. Use --runtime for MVK sidecar.
+#   Config:    debug
+#
+# Behavior:
+#   - Always prints what it’s doing (Build → Launch → Optional sidecars) with streamed output.
+#   - Fails fast with concise errors and non-zero exit codes.
+#   - On --ble, starts UMP→MIDI1 CoreMIDI bridge. On --runtime, starts MVK runtime sidecar.
+
+usage() {
+  sed -n '1,60p' "$0" | sed -n '2,30p' | sed 's/^# \{0,1\}//'
+}
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+LOGDIR="$ROOT/.fountain/logs"
+PIDDIR="$ROOT/.fountain/pids"
+CACHE="$ROOT/.fountain/clang-module-cache"
+mkdir -p "$LOGDIR" "$PIDDIR" "$CACHE"
+
+mode="ble"   # default: ble | rtp | runtime
+cfg="debug"
+do_build=1
+dest=""
+
+if [[ "${1-}" == "status" ]]; then
+  echo "[status] PIDs:"
+  for n in sidecar quietframe-bridge quietframe-sonify; do
+    if [[ -f "$PIDDIR/$n.pid" ]] && kill -0 "$(cat "$PIDDIR/$n.pid" 2>/dev/null)" 2>/dev/null; then
+      echo "  $n: pid $(cat "$PIDDIR/$n.pid")"
+    else
+      echo "  $n: stopped"
+    fi
+  done
+  echo "[status] Recent crash report:"
+  ls -t "$HOME/Library/Logs/DiagnosticReports"/quietframe-sonify-app-*.ips 2>/dev/null | head -n1 || echo "  none"
+  echo "[status] Use 'Scripts/apps/quietframe ble-scan' to list BLE devices."
+  exit 0
+fi
+
+if [[ "${1-}" == "stop" ]]; then
+  echo "[stop] stopping sidecars (quietframe-bridge, sidecar)…"
+  for n in quietframe-bridge sidecar; do
+    if [[ -f "$PIDDIR/$n.pid" ]]; then
+      pid=$(cat "$PIDDIR/$n.pid" 2>/dev/null || true)
+      if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+        kill -9 "$pid" 2>/dev/null || true
+        echo "  $n: killed ($pid)"
+      fi
+      rm -f "$PIDDIR/$n.pid"
+    fi
+  done
+  echo "[stop] done."
+  exit 0
+fi
+
+if [[ "${1-}" == "health" ]]; then
+  echo "[health] Running MIDI telemetry tests…";
+  bash "$ROOT/Scripts/ci/midi-tests.sh" || { echo "[health] FAIL"; exit 1; }
+  echo "[health] OK"; exit 0
+fi
+
+if [[ "${1-}" == "clean" ]]; then
+  echo "[clean] Resetting SwiftPM state and removing build artifacts…"
+  rm -rf "$ROOT/Packages/FountainApps/.build" "$ROOT/Packages/FountainTelemetryKit/.build" "$ROOT/.fountain/clang-module-cache" || true
+  (cd "$ROOT/Packages/FountainApps" && swift package reset) || true
+  (cd "$ROOT/Packages/FountainTelemetryKit" && swift package reset) || true
+  echo "[clean] Done."
+  exit 0
+fi
+
+if [[ "${1-}" == "doctor" ]]; then
+  echo "[doctor] Running telemetry tests…";
+  bash "$ROOT/Scripts/ci/midi-tests.sh" || { echo "[doctor] telemetry FAIL"; exit 1; }
+  echo "[doctor] BLE diagnostics (non-fatal) …";
+  CLANG_MODULE_CACHE_PATH="$CACHE" SWIFTPM_ENABLE_SANDBOX=0 \
+    "$0" ble-diag || echo "[doctor] BLE diagnostics returned non-zero (no devices?)"
+  echo "[doctor] All OK"; exit 0
+fi
+
+if [[ "${1-}" == "ble-scan" ]]; then
+  echo "[ble] scanning for BLE MIDI devices (5s)…";
+  CLANG_MODULE_CACHE_PATH="$CACHE" SWIFTPM_ENABLE_SANDBOX=0 \
+    swift run --package-path "$ROOT/Packages/FountainApps" -c "$cfg" ble-midi-scan
+  exit 0
+fi
+
+if [[ "${1-}" == "ble-diag" ]]; then
+  echo "[ble] diagnostics: scan (6s) then advertise (5s)…"
+  CLANG_MODULE_CACHE_PATH="$CACHE" SWIFTPM_ENABLE_SANDBOX=0 BLE_SCAN_SECONDS=6 \
+    swift run --package-path "$ROOT/Packages/FountainApps" -c "$cfg" ble-midi-scan || echo "[ble] scan returned non-zero"
+  CLANG_MODULE_CACHE_PATH="$CACHE" SWIFTPM_ENABLE_SANDBOX=0 BLE_ADV_NAME="${BLE_ADV_NAME:-QuietFrame}" BLE_ADV_SECONDS=5 \
+    swift run --package-path "$ROOT/Packages/FountainApps" -c "$cfg" ble-midi-adv-check || echo "[ble] advertise returned non-zero"
+  echo "[ble] diagnostics done"
+  exit 0
+fi
+
+if [[ "${1-}" == "ble-adv-check" ]]; then
+  secs=${BLE_ADV_SECONDS:-5}
+  name=${BLE_ADV_NAME:-QuietFrame}
+  echo "[ble] advertising check (\$BLE_ADV_NAME=$name, \$BLE_ADV_SECONDS=$secs)…";
+  CLANG_MODULE_CACHE_PATH="$CACHE" SWIFTPM_ENABLE_SANDBOX=0 BLE_ADV_NAME="$name" BLE_ADV_SECONDS="$secs" \
+    swift run --package-path "$ROOT/Packages/FountainApps" -c "$cfg" ble-midi-adv-check || { echo "[ble] adv check failed"; exit 1; }
+  exit 0
+fi
+
+if [[ "${1-}" == "logs" ]]; then
+  echo "[logs] Tailing bridge + app (Ctrl-C to stop)…";
+  tail -n 20 -F "$LOGDIR/quietframe-bridge.log" "$LOGDIR/quietframe-sonify.log" 2>/dev/null || true
+  exit 0
+fi
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --rtp) mode="rtp" ;;
+    --ble) mode="ble" ;;
+    --runtime) mode="runtime" ;;
+    --release) cfg="release" ;;
+    --no-build) do_build=0 ;;
+    --dest) dest="$2"; shift ;;
+    -h|--help|help) usage; exit 0 ;;
+    *) echo "[quietframe] unknown arg: $1" 1>&2; usage; exit 2 ;;
+  esac; shift
+done
+
+swift_target="quietframe-sonify-app"
+bin_path=""
+
+build() {
+  if [[ "$do_build" == "0" ]]; then
+    echo "[build] skipping (requested --no-build)"; return 0
+  fi
+  echo "[build] swift build -c $cfg --target $swift_target (streaming)…"
+  CLANG_MODULE_CACHE_PATH="$CACHE" SWIFTPM_ENABLE_SANDBOX=0 FK_USE_SDLKIT=1 \
+    swift build --package-path "$ROOT/Packages/FountainApps" -c "$cfg" --target "$swift_target" || {
+      echo "[build] FAILED: see output above" 1>&2; exit 1; }
+  bin_path="$(CLANG_MODULE_CACHE_PATH="$CACHE" SWIFTPM_ENABLE_SANDBOX=0 FK_USE_SDLKIT=1 swift build --package-path "$ROOT/Packages/FountainApps" -c "$cfg" --show-bin-path)"
+  echo "[build] ok → $bin_path"
+}
+
+start_runtime() {
+  echo "[runtime] starting MVK sidecar… (logs: $LOGDIR/sidecar.log)"
+  if [[ -f "$PIDDIR/sidecar.pid" ]] && kill -0 "$(cat "$PIDDIR/sidecar.pid" 2>/dev/null)" 2>/dev/null; then
+    echo "[runtime] already running (pid $(cat "$PIDDIR/sidecar.pid"))"; return 0
+  fi
+  ( CLANG_MODULE_CACHE_PATH="$CACHE" SWIFTPM_ENABLE_SANDBOX=0 \
+      swift run --package-path "$ROOT/Packages/FountainApps" -c "$cfg" metalviewkit-runtime-server \
+      >"$LOGDIR/sidecar.log" 2>&1 & echo $! >"$PIDDIR/sidecar.pid" )
+  sleep 0.4
+  if ! kill -0 "$(cat "$PIDDIR/sidecar.pid" 2>/dev/null)" 2>/dev/null; then
+    echo "[runtime] failed to start (see $LOGDIR/sidecar.log)" 1>&2; exit 1
+  fi
+  echo "[runtime] up (pid $(cat "$PIDDIR/sidecar.pid"))"
+}
+
+start_bridge() { :; }
+
+# Ensure banned bridge (CoreMIDI) is not running from an old session
+ensure_no_legacy_bridge() {
+  if [[ -f "$PIDDIR/quietframe-bridge.pid" ]]; then
+    local pid=$(cat "$PIDDIR/quietframe-bridge.pid" 2>/dev/null || true)
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+      echo "[guard] killing banned legacy quietframe-bridge (pid $pid)…"
+      kill -9 "$pid" 2>/dev/null || true
+    fi
+    rm -f "$PIDDIR/quietframe-bridge.pid"
+  fi
+}
+
+cleanup() {
+  # Don’t auto-kill app; keep sidecars tidy when we started them
+  if [[ -f "$PIDDIR/sidecar.pid" ]] && kill -0 "$(cat "$PIDDIR/sidecar.pid" 2>/dev/null)" 2>/dev/null; then
+    : # leave sidecar up for developer convenience
+  fi
+}
+trap cleanup EXIT
+
+launch_app() {
+  echo "[launch] transport=$mode cfg=$cfg"
+  local envs=("CLANG_MODULE_CACHE_PATH=$CACHE" "SWIFTPM_ENABLE_SANDBOX=0" "FK_USE_SDLKIT=1" "FK_MIDI_DISABLE_INPUT=1")
+  case "$mode" in
+    rtp) envs+=("QF_USE_RUNTIME=0" "QF_TRANSPORT=rtp") ;;
+    ble) envs+=("QF_USE_RUNTIME=0" "QF_TRANSPORT=ble") ;;
+    runtime) envs+=("QF_USE_RUNTIME=1") ;;
+  esac
+  echo "[launch] running $swift_target … (streaming)"
+  # Run as foreground so user sees errors; if a .app exists, prefer open.
+  local APP_BIN="$bin_path/$swift_target"
+  local APP_BUNDLE="$bin_path/$swift_target.app"
+  local APP_BIN_UNDERSCORE="$bin_path/${swift_target//-/_}"
+  if [[ -d "$APP_BUNDLE" ]]; then
+    # Execute the bundle’s binary directly to preserve env and stream output
+    local INNER_BIN="$APP_BUNDLE/Contents/MacOS/${swift_target}"
+    if [[ -x "$INNER_BIN" ]]; then
+      echo "[launch] exec bundle binary: $INNER_BIN"
+      exec env "${envs[@]}" "$INNER_BIN"
+    else
+      echo "[launch] app bundle present but inner binary missing: $INNER_BIN" 1>&2; exit 1
+    fi
+  elif [[ -x "$APP_BIN" ]]; then
+    echo "[launch] exec binary: $APP_BIN"
+    exec env "${envs[@]}" "$APP_BIN"
+  elif [[ -x "$APP_BIN_UNDERSCORE" ]]; then
+    echo "[launch] exec binary: $APP_BIN_UNDERSCORE"
+    exec env "${envs[@]}" "$APP_BIN_UNDERSCORE"
+  else
+    echo "[launch] binary not found in $bin_path; using swift run fallback"
+    exec env "${envs[@]}" swift run --package-path "$ROOT/Packages/FountainApps" -c "$cfg" "$swift_target"
+  fi
+}
+
+echo "[quietframe] Build → (optional) Sidecars → Launch"
+build
+case "$mode" in
+  runtime) start_runtime ;;
+  ble) start_bridge ;;
+esac
+ensure_no_legacy_bridge
+launch_app

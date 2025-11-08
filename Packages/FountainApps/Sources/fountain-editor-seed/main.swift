@@ -1,186 +1,176 @@
 import Foundation
 import FountainStoreClient
-import LauncherSignature
-import CryptoKit
 
 @main
 struct FountainEditorSeed {
     static func main() async {
+        // Seed the multi-corpus Fountain Editor Instrument prompt (teatro + facts)
+        // Default corpus for the editor prompt itself: "fountain-editor"
         let env = ProcessInfo.processInfo.environment
-        if env["FOUNTAIN_SKIP_LAUNCHER_SIG"] != "1" { verifyLauncherSignature() }
-
         let corpusId = env["CORPUS_ID"] ?? "fountain-editor"
-        let store = resolveStore()
-
-        // Ensure corpus
-        do { _ = try await store.createCorpus(corpusId, metadata: ["app": "fountain-editor", "kind": "teatro+mrts"]) } catch { /* ignore if exists */ }
-
-        // Creation prompt page
-        let creationId = "prompt:fountain-editor"
-        let creationPage = Page(corpusId: corpusId, pageId: creationId, url: "store://prompt/fountain-editor", host: "store", title: "Fountain Editor — A4 Typewriter (Creation)")
-        _ = try? await store.addPage(creationPage)
-        _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(creationId):teatro", pageId: creationId, kind: "teatro.prompt", text: creationPrompt))
-
-        // MRTS prompt page + facts
-        let mrtsId = "prompt:fountain-editor-mrts"
-        let mrtsPage = Page(corpusId: corpusId, pageId: mrtsId, url: "store://prompt/fountain-editor-mrts", host: "store", title: "Fountain Editor — A4 Typewriter (MRTS)")
-        _ = try? await store.addPage(mrtsPage)
-        _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(mrtsId):teatro", pageId: mrtsId, kind: "teatro.prompt", text: mrtsPrompt))
-
-        // PB‑VRT Prompt metadata (facts) for Creation and MRTS
-        let creationHashHex = sha256Hex(of: creationPrompt)
-        let mrtsHashHex = sha256Hex(of: mrtsPrompt)
-        let creationFacts = buildPbvrtFacts(id: "fountain-editor",
-                                            modality: "visual",
-                                            tags: ["UI","editor","A4","typewriter"],
-                                            embeddingModel: "text-embedding-3-small",
-                                            hashHex: creationHashHex,
-                                            robotTests: nil)
-        let mrtsFacts = buildPbvrtFacts(id: "fountain-editor-mrts",
-                                        modality: "visual",
-                                        tags: ["UI","editor","A4","typewriter","MRTS"],
-                                        embeddingModel: "text-embedding-3-small",
-                                        hashHex: mrtsHashHex,
-                                        robotTests: ["FountainEditorPEAndParseTests","FountainEditorVendorOpsTests"])
-        if let creationFacts = creationFacts {
-            _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(creationId):facts", pageId: creationId, kind: "facts", text: creationFacts))
+        let root = URL(fileURLWithPath: env["FOUNTAINSTORE_DIR"] ?? ".fountain/store")
+        let client: FountainStoreClient
+        do { client = FountainStoreClient(client: try DiskFountainStoreClient(rootDirectory: root)) } catch {
+            print("seed: store init failed: \(error)"); return
         }
-        if let mrtsFacts = mrtsFacts {
-            _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(mrtsId):facts", pageId: mrtsId, kind: "facts", text: mrtsFacts))
-        }
+        do { _ = try await client.createCorpus(corpusId, metadata: ["app":"fountain-editor","kind":"teatro"]) } catch { }
 
-        print("seeded fountain-editor prompts → corpusId=\(corpusId) pages=[\(creationId), \(mrtsId)]")
-    }
+        let pageId = "prompt:fountain-editor"
+        _ = try? await client.addPage(.init(corpusId: corpusId, pageId: pageId, url: "store://prompt/fountain-editor", host: "store", title: "Fountain Editor Instrument — Teatro"))
 
-    static func sha256Hex(of text: String) -> String {
-        let digest = SHA256.hash(data: Data(text.utf8))
-        return digest.compactMap { String(format: "%02x", $0) }.joined()
-    }
+        let teatro = """
+        Fountain Editor Instrument — multi‑corpus, Slugline‑class
 
-    static func buildPbvrtFacts(id: String, modality: String, tags: [String], embeddingModel: String?, hashHex: String, robotTests: [String]?) -> String? {
-        struct PBVRT: Codable { let id: String; let tags: [String]; let modality: String; let embedding_model: String?; let hash: String }
-        struct Robot: Codable { let tests: [String] }
-        struct Facts: Codable { let pbvrt: PBVRT; let robot: Robot? }
-        let pbvrt = PBVRT(id: id, tags: tags, modality: modality, embedding_model: embeddingModel, hash: "sha256:\(hashHex)")
-        let facts = Facts(pbvrt: pbvrt, robot: robotTests.map { Robot(tests: $0) })
-        let enc = JSONEncoder(); enc.outputFormatting = [.sortedKeys]
-        return String(data: (try? enc.encode(facts)) ?? Data(), encoding: .utf8)
-    }
+        What
+        - Slugline UI: Outline (acts/scenes/beats), Typewriter Editor, Status, Page counter, Instruments drawer.
+        - Multi‑corpus: create/open/switch/duplicate corpora in the editor; no delete in editor.
+        - Modes: Editor and Chat share the same structural bed (anchors from the Fountain AST), not hard‑coded menus.
 
-    static func resolveStore() -> FountainStoreClient {
-        let env = ProcessInfo.processInfo.environment
-        if let dir = env["FOUNTAINSTORE_DIR"], !dir.isEmpty {
-            let url: URL
-            if dir.hasPrefix("~") {
-                url = URL(fileURLWithPath: FileManager.default.homeDirectoryForCurrentUser.path + String(dir.dropFirst()), isDirectory: true)
-            } else { url = URL(fileURLWithPath: dir, isDirectory: true) }
-            if let disk = try? DiskFountainStoreClient(rootDirectory: url) { return FountainStoreClient(client: disk) }
-        }
-        let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
-        if let disk = try? DiskFountainStoreClient(rootDirectory: cwd.appendingPathComponent(".fountain/store", isDirectory: true)) {
-            return FountainStoreClient(client: disk)
-        }
-        return FountainStoreClient(client: EmbeddedFountainStoreClient())
-    }
+        Why
+        - Keep screenplay text, structure, and instrument placement in one deterministic, Store‑backed surface. Changes are anchored, diffable, reproducible, and CI‑gated.
 
-    // MARK: - Prompts
-    static let creationPrompt = """
-    Scene: Fountain Editor — A4 Typewriter (Instrument)
-    Text:
-    - Identity: { manufacturer: Fountain, product: FountainEditor, displayName: "Fountain Editor", instanceId: "fountain-editor-1" }.
-    - Page model (A4): 210×297 mm; margins L/R/T/B = 35/20/25/25 mm; paper centered on #FAFAFA with subtle shadow.
-    - Typewriter feel: Courier Prime 12 pt (mono), line-height 1.10, ragged right; tabs→4 spaces; hard line breaks only; target wrap.column ∈ [58..62]; ~55±2 lines per page.
-    - Sources (inputs):
-      • Typing (primary): local edits to text.content.
-      • LLM Agent: streaming deltas and suggestions; appears as queued suggestions with accept/apply.
-      • Semantic Memory (Awareness): slots pane with read‑only cards for Drifts, Patterns, Reflections, History, Semantic Arcs; cards can be promoted into suggestions.
-    - Property Exchange (PE):
-      • text.content (string), cursor.index (int), cursor.select.start/end (int)
-      • page.size ("A4"), page.margins.top/left/right/bottom (mm), font.name ("Courier Prime"), font.size.pt (12), line.height.em (1.10)
-      • wrap.column (int; read‑only), parse.auto (0/1; default 1), parse.snapshot (write‑only; triggers notify)
-      • awareness.corpusId (string; active corpus; mirrors Corpus Instrument `corpus.id`)
-      • suggestions.count (int; R/O), suggestions.active.id (string?), overlays.show.{drifts,patterns,reflections,history,arcs} (0/1)
-      • memory.counts.{drifts,patterns,reflections,history,arcs} (ints; R/O)
-      • roles.enabled (0/1), roles.available[] (strings; R/O), roles.active (string)
-    - Vendor JSON (SysEx7 UMP):
-      • text.set { text, cursor? }, text.insert { text }, text.replace { start, end, text }, text.clear {}
-      • agent.delta { text, id? }, agent.suggest { id, text, policy:"insertAt|append|replace", cursor? }, suggestion.apply { id }
-      • awareness.setCorpus { corpusId }, awareness.refresh { kinds?:[drifts,patterns,reflections,history,arcs] }
-      • memory.inject.{drifts|patterns|reflections|history|arcs} { items:[{ id, text, anchors?, meta? }] }, memory.promote { slot, id, policy, cursor? }
-      • role.suggest { role, id, text, policy, cursor? }
-      • editor.submit { text, cursor? } — forward normalized content to Corpus Instrument baseline.add under the active corpus/page context.
-    - Flow Ports (typed wiring):
-      • outputs: text.parsed.out (kind:text), text.content.out (kind:text)
-      • routing: if a Flow graph is present and connected from an Editor output to a compatible input/Submit transform, editor.submit forwards via Flow; otherwise it falls back to Corpus baseline.add directly.
-    - Monitor/CI Events:
-      • "text.parsed" { nodes, lines, chars, types{…}, wrapColumn, page{…} }
-      • "suggestion.queued" { id, source:"agent"|"role:<name>"|"memory:<slot>", policy, len }
-      • "suggestion.applied" { id, deltaChars, newChars, newLines }
-      • "memory.slots.updated" { counts:{ drifts,patterns,reflections,history,arcs } }
-      • "awareness.synced" { corpusId }
-    """
+        How
+        - Parser: TeatroCore.FountainParser (full Fountain syntax).
+        - Anchors: act{n}.scene{m}[.beat{k}] with byte and line/col spans and script ETag.
+        - Persistence (Store): script, structure facts, instruments library, placements, proposals, chat sessions, recents.
+        - Instruments: library + placements attached to anchors; audition via midi2 BLE/RTP; no CoreMIDI.
+        - Modes: Editor (smart blocks, typewriter) and Chat (draft/rewrite/structure/placements via proposals).
+        - Safety: save requires matching ETag; facts and placements record ETags; proposals tracked with fingerprints.
 
-    static let mrtsPrompt = """
-    Scene: Fountain Editor — A4 Typewriter (MRTS)
-    Text:
-    - Objective: Validate typing + agent suggestions + semantic memory slots under A4 metrics with deterministic snapshots.
-    - Sample:
-      INT. ROOM — DAY\nJOHN\n(whispering)\nHello.\nHe sits.\n
-    Steps:
-    1) Reset + A4: PE SET text.content="", cursor.index=0, page.size="A4", margins(35/20/25/25), font, lineHeight; parse.snapshot=1. Expect lines=0, chars=0, nodes=0; wrap.column∈[58..62].
-    2) Typing baseline: PE SET text.content=<sample>; parse.snapshot=1. Expect types include sceneHeading≥1, character≥1, parenthetical≥1, dialogue≥1, action≥1; lines=5; nodes≥5.
-    3) Agent suggestion: agent.suggest { id:"s1", text:"\nCUT TO:", policy:"append" } → suggestion.queued; suggestion.apply { id:"s1" }; parse.snapshot=1 → transition≥1.
-    4) Memory slots: memory.inject.* with ≥1 item each; expect memory.slots.updated counts and PE memory.counts.*.
-    5) Promote memory→suggestion: role or memory card → suggestion; apply; parse.snapshot=1; assert chars/lines deltas.
-    6) Overlays toggle: PE SET overlays.show.arcs=1, overlays.show.drifts=1; expect overlays change (no text change).
+        Shortcuts
+        - Cmd+N New, Cmd+O Open, Cmd+K Switch, Cmd+S Save, Cmd+F Find, Cmd+Shift+N New scene, Cmd+\\ toggle Editor/Chat.
 
-    Invariants:
-    - Snapshot latency ≤ 300 ms; wrap.column ∈ [58..62]; ~55±2 lines per A4 page.
-    - Exact line/char counts; required types present for the sample.
-    - suggestion.* lifecycle produces queued/applied events; memory counts track injections; awareness.synced posts on setCorpus/refresh.
-    """
+        Testing & CI
+        - Parser + anchors unit; persistence + proposals integration; instruments audition; PB‑VRT numeric + snapshots. Any failure blocks merges.
+        """
+        _ = try? await client.addSegment(.init(corpusId: corpusId, segmentId: "\(pageId):teatro", pageId: pageId, kind: "teatro.prompt", text: teatro))
 
-    static let factsJSON: String = {
-        let facts: [String: Any] = [
-            "instrument": [
-                "manufacturer": "Fountain",
-                "product": "FountainEditor",
-                "displayName": "Fountain Editor",
-                "pe": [
-                    "text.content","cursor.index","cursor.select.start","cursor.select.end",
-                    "page.size","page.margins.top","page.margins.left","page.margins.right","page.margins.bottom",
-                    "font.name","font.size.pt","line.height.em","wrap.column","parse.auto","parse.snapshot",
-                    "awareness.corpusId","suggestions.count","suggestions.active.id",
-                    "overlays.show.drifts","overlays.show.patterns","overlays.show.reflections","overlays.show.history","overlays.show.arcs",
-                    "memory.counts.drifts","memory.counts.patterns","memory.counts.reflections","memory.counts.history","memory.counts.arcs",
-                "roles.enabled","roles.available","roles.active"
-            ],
-            "vendorJSON": [
-                "text.set","text.insert","text.replace","text.clear",
-                "agent.delta","agent.suggest","suggestion.apply",
-                "awareness.setCorpus","awareness.refresh",
-                "memory.inject.drifts","memory.inject.patterns","memory.inject.reflections","memory.inject.history","memory.inject.arcs","memory.promote",
-                "role.suggest",
-                "editor.submit"
-            ],
-            "ports": [
-                "outputs": [
-                    ["id": "text.parsed.out", "kind": "text"],
-                    ["id": "text.content.out", "kind": "text"]
+        // Facts JSON (validator-safe). Use a Swift dictionary and encode to JSON to avoid escaping issues.
+        var facts: [String: Any] = [:]
+        facts["prompt.version"] = 2
+        facts["ui"] = [
+            "layout": "outline+editor+status+drawer",
+            "modes": ["editor","chat"],
+            "modeToggle.shortcut": "cmd\\u005C",
+            "outline.minWidth": 220,
+            "gutter": ["editorMarkers": true, "widthPx": 14],
+            "editor": ["typewriter": true, "typeface": "Courier Prime", "fontSizePt": 12],
+            "status.items": ["cursor","words","pages","etag","corpus"],
+            "drawer": ["placements": true, "library": true]
+        ]
+        facts["parser"] = [
+            "engine": "TeatroCore.FountainParser",
+            "acts": ["from": "section.level1"],
+            "scenes": ["from": ["section.level2","sceneHeading"]],
+            "beats": ["from": "synopsis"],
+            "anchors": ["format": "act{n}.scene{m}[.beat{k}]"]
+        ]
+        facts["pagination"] = [
+            "paper": "USLetter",
+            "font": "Courier12",
+            "marginsInches": ["left": 1.5, "right": 1.0, "top": 1.0, "bottom": 1.0],
+            "dualDialogue": true,
+            "continuedMarks": true
+        ]
+        facts["persistence"] = [
+            "script.page": "docs:{corpusId}:fountain:script",
+            "structure.page": "prompt:{corpusId}:fountain-structure",
+            "instruments.page": "docs:{corpusId}:instruments",
+            "placements.page": "docs:{corpusId}:instrument-placements",
+            "meta.page": "docs:{corpusId}:meta",
+            "proposals.page": "docs:{corpusId}:proposals",
+            "chat.sessions.prefix": "docs:{corpusId}:chat:sessions",
+            "recents.page": "docs:fountain-editor:recents"
+        ]
+        facts["corpus"] = [
+            "create": ["title": true, "corpusId.slug.fromTitle": true, "seedFromImport": true],
+            "open": ["recents": true, "search": true],
+            "switch": ["quickSwitcher": true],
+            "duplicate": ["allowed": true],
+            "delete": ["allowed": false, "note": "lifecycle managed externally (FountainAI)"]
+        ]
+        facts["instruments"] = [
+            "profiles": ["midi2sampler"],
+            "library.schema": ["instrumentId","name","tags","profile","programBase","defaultMapping","notes"],
+            "placement.schema": ["placementId","anchor","instrumentId","overrides","order","bus","notes"],
+            "anchor.format": "act{n}.scene{m}[.beat{k}]",
+            "audition": ["enabled": true, "transport": ["ble","rtp"], "route": "midi2sampler"]
+        ]
+        facts["chat"] = [
+            "instrument.id": "fountain-chat",
+            "modes": ["draft","rewrite","controller"],
+            "state": ["persona": "default", "threadId": NSNull(), "currentAnchor": NSNull(), "lastScriptETag": NSNull()],
+            "ops": [
+                "notify": ["chat.message","proposal.created","proposal.updated","proposal.accepted","proposal.rejected"],
+                "set": ["chat.ask","chat.reply","chat.attachAnchor","chat.setPersona"],
+                "tools": [
+                    "editor.composeBlock","editor.rewriteRange","editor.insertScene","editor.renameScene",
+                    "editor.moveScene","editor.splitScene","editor.applyPatch","placements.add","placements.update","cueSheet.generate"
                 ]
             ]
-        ],
-            "robot": [
-                "tests": ["FountainEditorPEAndParseTests","FountainEditorVendorOpsTests"],
-                "invariants": [
-                    "snapshotLatency<=300ms","wrapColumnIn58..62","linesPerPage≈55±2",
-                    "lineCountExact","charCountExact",
-                    "typesContain(sceneHeading,character,parenthetical,dialogue,action)"
-                ],
-                "sample": "INT. ROOM — DAY\nJOHN\n(whispering)\nHello.\nHe sits.\n"
+        ]
+        facts["shortcuts"] = [
+            "newCorpus": "cmd+n",
+            "openCorpus": "cmd+o",
+            "switchCorpus": "cmd+k",
+            "save": "cmd+s",
+            "find": "cmd+f",
+            "newScene": "cmd+shift+n",
+            "toggleMode": "cmd+\\u005C"
+        ]
+        facts["invariants"] = [
+            "outlineMinWidthPx": 220,
+            "editorBaselineGridPx": 20,
+            "gutterWidthPx": 14,
+            "typewriterCenterTolerancePx": 1
+        ]
+        facts["testing"] = [
+            "fixtures.corpus": "fountain-editor-fixtures",
+            "fixtures.scripts": [
+                "docs:fountain-editor-fixtures:fountain:script:baseline",
+                "docs:fountain-editor-fixtures:fountain:script:dual-dialogue",
+                "docs:fountain-editor-fixtures:fountain:script:notes-boneyard",
+                "docs:fountain-editor-fixtures:fountain:script:sections-scenes"
+            ],
+            "pbvrt.numeric": [
+                "outlineMinWidthPx": 220,
+                "gutterWidthPx": 14,
+                "editorBaselineGridPx": 20,
+                "typewriterCenterTolerancePx": 1
+            ],
+            "pbvrt.snapshots": [
+                "sizes": ["1440x900","1280x800"],
+                "targets": ["editor.surface","chat.surface"]
+            ],
+            "parser.unit": ["assert": ["nodeCounts","anchorIds","lineColRanges","byteRanges","sectionsScenesBeats"]],
+            "reconcile.unit": [
+                "edits": ["insertNearAnchor","deleteNearAnchor","renameSection","sceneSplit"],
+                "assert": ["placementsReattach","anchorsStableOrRenamed"]
+            ],
+            "persistence.integration": [
+                "checks": ["saveRequiresMatchingETag","structureCarriesScriptETag","placementsRecordETags","staleWriteRejected"]
+            ],
+            "proposals.integration": [
+                "ops": ["create","accept","reject"],
+                "assert": ["patchApplied","scriptETagAdvanced","structureUpdated","historyRecorded"]
+            ],
+            "instruments.integration": [
+                "library": ["create","duplicate","list","search"],
+                "placements": ["add","update","remove","listForAnchor"],
+                "audition": ["midi2Only","fanoutHonorsChannelGroupFilters"]
+            ],
+            "ci": [
+                "runner": "Scripts/ci/fountain-editor-tests.sh",
+                "gates": ["parser","persistence","proposals","instruments","pbvrt.numeric","pbvrt.snapshots"]
             ]
         ]
-        let data = try! JSONSerialization.data(withJSONObject: facts, options: [.prettyPrinted, .sortedKeys])
-        return String(data: data, encoding: .utf8)!
-    }()
+
+        if let data = try? JSONSerialization.data(withJSONObject: facts, options: [.prettyPrinted, .sortedKeys]),
+           let text = String(data: data, encoding: .utf8) {
+            _ = try? await client.addSegment(.init(corpusId: corpusId, segmentId: "\(pageId):facts", pageId: pageId, kind: "facts", text: text))
+        }
+
+        print("Seeded Fountain Editor Instrument → corpus=\(corpusId) page=\(pageId)")
+    }
 }
+

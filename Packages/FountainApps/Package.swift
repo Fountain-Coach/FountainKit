@@ -112,6 +112,7 @@ let package = Package(
         .executable(name: "quietframe-orchestra-generate", targets: ["quietframe-orchestra-generate"]),
         .executable(name: "die-maschine-teatro-seed", targets: ["die-maschine-teatro-seed"]),
         .executable(name: "die-maschine-scenes-assign", targets: ["die-maschine-scenes-assign"]),
+        .executable(name: "fountain-editor-seed", targets: ["fountain-editor-seed"]),
         .executable(name: "quietframe-companion-app", targets: ["quietframe-companion-app"]),
         .executable(name: "quietframe-smoke", targets: ["quietframe-smoke"]),
         .executable(name: "quietframe-replay", targets: ["quietframe-replay"])
@@ -148,8 +149,8 @@ let package = Package(
         .package(url: "https://github.com/AudioKit/Flow.git", from: "1.0.4"),
         .package(path: "../FountainTelemetryKit"),
         .package(path: "../../Tools/PersistenceSeeder"),
-        // Temporary: unify to path-based Teatro until all packages swap to URL
-        .package(url: "https://github.com/Fountain-Coach/Teatro.git", branch: "main"),
+        // Teatro (path-based until repo splits subpackages for URL consumption)
+        .package(path: "../../External/TeatroFull"),
     ] + [
         
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
@@ -1302,7 +1303,7 @@ let package = Package(
             name: "quietframe-sonify-app",
             dependencies: [
                 .product(name: "FountainStoreClient", package: "FountainCore"),
-                .product(name: "Teatro", package: "teatro"),
+                .product(name: "Teatro", package: "TeatroFull"),
                 "MetalViewKit",
                 "FountainAudioEngine",
                 "QuietFrameKit"
@@ -1347,6 +1348,7 @@ let package = Package(
             ],
             path: "Sources/die-maschine-scenes-assign"
         ),
+        
         
         .executableTarget(
             name: "quietframe-companion-app",

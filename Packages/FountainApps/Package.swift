@@ -149,7 +149,7 @@ let package = Package(
         .package(path: "../FountainTelemetryKit"),
         .package(path: "../../Tools/PersistenceSeeder"),
         // Temporary: unify to path-based Teatro until all packages swap to URL
-        .package(path: "../../External/TeatroFull"),
+        .package(url: "https://github.com/Fountain-Coach/Teatro.git", branch: "main"),
     ] + [
         
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
@@ -1302,6 +1302,7 @@ let package = Package(
             name: "quietframe-sonify-app",
             dependencies: [
                 .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "Teatro", package: "teatro"),
                 "MetalViewKit",
                 "FountainAudioEngine",
                 "QuietFrameKit"

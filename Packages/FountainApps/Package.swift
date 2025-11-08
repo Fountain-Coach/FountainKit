@@ -992,7 +992,8 @@ let package = Package(
             name: "fountain-editor-service-core",
             dependencies: [
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
-                .product(name: "FountainStoreClient", package: "FountainCore")
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "Teatro", package: "TeatroFull")
             ],
             path: "Sources/fountain-editor-service"
         ),
@@ -1007,6 +1008,11 @@ let package = Package(
                 .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
+        ),
+        .testTarget(
+            name: "FountainEditorCoreTests",
+            dependencies: ["fountain-editor-service-core"],
+            path: "Tests/FountainEditorCoreTests"
         ),
         .executableTarget(
             name: "tutor-dashboard",

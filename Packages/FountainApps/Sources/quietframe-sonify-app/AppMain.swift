@@ -8,6 +8,7 @@ import FountainStoreClient
 @main
 struct QuietFrameSonifyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @Environment(\.openWindow) private var openWindow
     var body: some Scene {
         WindowGroup("QuietFrame Sonify") {
             QuietFrameView()
@@ -22,15 +23,20 @@ struct QuietFrameSonifyApp: App {
                 .keyboardShortcut("b")
             }
             CommandMenu("Die Maschine") {
-                Button("Acts & Scenes…") {
-                    NotificationCenter.default.post(name: .OpenDieMaschineUI, object: nil)
-                }
-                .keyboardShortcut("d")
+                Button("Acts & Scenes…") { openWindow(id: "die-maschine-ui") }
+                    .keyboardShortcut("d")
+            }
+            CommandMenu("Fountain") {
+                Button("Fountain Editor…") { openWindow(id: "fountain-editor") }
+                    .keyboardShortcut("e", modifiers: [.command, .shift])
             }
         }
-        WindowGroup("Die Maschine — Acts & Scenes") {
+        WindowGroup(id: "die-maschine-ui") {
             ActsScenesView()
-        }
+        }.windowStyle(.titleBar)
+        WindowGroup(id: "fountain-editor") {
+            FountainEditorWindow()
+        }.windowStyle(.titleBar)
     }
 }
 
@@ -442,10 +448,7 @@ struct QuietFrameView: View {
     }
 }
 
-extension Notification.Name {
-    static let OpenBLEPanel = Notification.Name("OpenBLEPanel")
-    static let OpenDieMaschineUI = Notification.Name("OpenDieMaschineUI")
-}
+extension Notification.Name { static let OpenBLEPanel = Notification.Name("OpenBLEPanel") }
 
 // SDLKit engine is the default; no AVFoundation fallback.
 

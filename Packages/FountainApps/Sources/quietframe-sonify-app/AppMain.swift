@@ -200,60 +200,10 @@ struct QuietFrameView: View {
         .frame(minWidth: 960, minHeight: 720)
         .toolbar {
             ToolbarItemGroup(placement: .automatic) {
-                // Act selector (Partiture mapping)
-                Picker("Akt", selection: $act) {
-                    Text("I").tag(1)
-                    Text("II").tag(2)
-                    Text("III").tag(3)
-                    Text("IV").tag(4)
-                    Text("V").tag(5)
+                Button(action: { NotificationCenter.default.post(name: .SaveFountainScript, object: nil) }) {
+                    Label("Save", systemImage: "tray.and.arrow.down")
                 }
-                .onChange(of: act) { _, v in
-                    if v == 2 {
-                        printActIIPrompts()
-                        FountainAudioEngine.shared.setParam(name: "engine.masterGain", value: 0.20)
-                        CellAutomataSim.shared.setRunning(true)
-                    } else {
-                        CellAutomataSim.shared.setRunning(false)
-                    }
-                }
-                Text({
-                    switch act {
-                    case 1: return "Genesis des Rauschens"
-                    case 2: return "Topologie des Schalls"
-                    case 3: return "Formalismus träumt"
-                    case 4: return "Die Stimme der Architektur"
-                    case 5: return "Das Schweigen"
-                    default: return ""
-                    }
-                }()).font(.caption)
-                .padding(.leading, EngraverTokens.Spacing.s)
-                Divider().padding(.horizontal, EngraverTokens.Spacing.s)
-                // Section stepper
-                HStack(spacing: 6) {
-                    Text("Satz")
-                    Stepper(value: $section, in: 1...9, step: 1) {
-                        Text("\(section)").monospaced()
-                    }
-                }
-                .onChange(of: section) { _, v in
-                    FountainAudioEngine.shared.setParam(name: "act.section", value: Double(v))
-                }
-                Divider().padding(.horizontal, EngraverTokens.Spacing.s)
-                // Tempo
-                HStack(spacing: EngraverTokens.Spacing.s) {
-                    Text("BPM")
-                    Slider(value: $bpm, in: 60...180, step: 1).frame(width: EngraverTokens.Metrics.toolbarControlWidth)
-                    Text("\(Int(bpm))").monospaced()
-                }
-                .onChange(of: bpm) { _, v in
-                    FountainAudioEngine.shared.setParam(name: "tempo.bpm", value: v)
-                }
-                Divider().padding(.horizontal, EngraverTokens.Spacing.s)
-                Button(action: { muted.toggle(); if muted { forceSilence() } }) { Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill") }
-                Button(action: { panicAllNotes() }) { Image(systemName: "exclamationmark.triangle") }
-                Button(action: { testPing() }) { Image(systemName: "waveform") }
-                Divider().padding(.horizontal, EngraverTokens.Spacing.s)
+                Text("Fountain Editor").font(.caption)
             }
         }
         .onAppear {
@@ -431,7 +381,10 @@ struct QuietFrameView: View {
     }
 }
 
-extension Notification.Name { static let OpenBLEPanel = Notification.Name("OpenBLEPanel") }
+extension Notification.Name {
+    static let OpenBLEPanel = Notification.Name("OpenBLEPanel")
+    static let SaveFountainScript = Notification.Name("SaveFountainScript")
+}
 
 // SDLKit engine is the default; no AVFoundation fallback.
 

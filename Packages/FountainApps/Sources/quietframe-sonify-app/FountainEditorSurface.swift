@@ -11,35 +11,31 @@ struct FountainEditorSurface: View {
     var body: some View {
         HStack(spacing: 0) {
             // Outline (acts/scenes)
-            VStack(alignment: .leading, spacing: 6) {
-                Text("ACTS / SCENES").font(.caption).foregroundStyle(.secondary)
-                List {
-                    ForEach(model.acts) { act in
-                        Section(header: Text("ACT \(act.index): \(act.title)")) {
-                            ForEach(act.scenes) { s in
-                                Text("Scene \(s.index): \(s.title)")
-                                    .font(.callout)
-                            }
+            List {
+                ForEach(model.acts) { act in
+                    Section(header: Text("ACT \(act.index): \(act.title)")) {
+                        ForEach(act.scenes) { s in
+                            Text("Scene \(s.index): \(s.title)")
+                                .font(.callout)
                         }
                     }
                 }
-                .listStyle(.sidebar)
             }
-            .padding(.top, 8)
             .frame(width: sidebarWidth)
-            .background(Color(NSColor.underPageBackgroundColor))
+            .listStyle(.sidebar)
 
-            // Page area
+            // Page area (clean white)
             ZStack(alignment: .bottom) {
-                QuietFrameShape()
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(Color.white)
-                    .overlay(QuietFrameShape().stroke(Color.secondary.opacity(0.35), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
+                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.secondary.opacity(0.35), lineWidth: 1))
                     .frame(width: frameSize.width, height: frameSize.height)
 
                 // Editor content with margins
                 TextEditor(text: Binding(get: { model.text }, set: { model.onChangeText($0) }))
                     .font(.system(size: 13, design: .monospaced))
+                    .scrollContentBackground(.hidden)
+                    .background(Color.white)
                     .padding(.horizontal, pageInset)
                     .padding(.vertical, pageInset)
                     .frame(width: frameSize.width, height: frameSize.height, alignment: .topLeading)
@@ -49,17 +45,13 @@ struct FountainEditorSurface: View {
             }
             .frame(width: frameSize.width, height: frameSize.height)
 
-            // Right drawer placeholder for future instruments/library
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Drawer").font(.caption).foregroundStyle(.secondary)
-                Text("Placements / Library (stub)").foregroundStyle(.secondary)
-                Spacer()
-            }
-            .frame(width: 260)
-            .background(Color(NSColor.underPageBackgroundColor))
+            // Right drawer removed for minimal first slice
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear { editorFocused = true }
+        .onReceive(NotificationCenter.default.publisher(for: .SaveFountainScript)) { _ in
+            Task { await model.save() }
+        }
     }
 }
 
@@ -80,4 +72,3 @@ private struct StatusBar: View {
         .background(.ultraThinMaterial)
     }
 }
-

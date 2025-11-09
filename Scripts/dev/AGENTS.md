@@ -11,6 +11,7 @@ Included tools
 - `dev-status` — Shows ports, up/down state, and known PIDs.
 - `dev-servers-up.sh` — Prebuilds then starts with checks (one‑shot convenience).
 - `editor-min` — Minimal, targeted build/run for the editor server (no smoke).
+- `editor-vrt` — Gates manifest to only `quietframe-editor-app`, `editor-snapshots`, and `EditorAppUITests`.
 - `gateway-min` — Minimal, targeted build/run for Gateway.
 - `pbvrt-min` — Minimal, targeted build/run for PBVRT.
 - `planner-min` — Minimal, targeted build/run for Planner.
@@ -66,6 +67,12 @@ Wrappers index (service‑minimal)
 - bootstrap: `Scripts/dev/bootstrap-min`
 - tools-factory: `Scripts/dev/tools-factory-min`
 - tool-server: `Scripts/dev/tool-server-min`
+
+Snapshot gate (editor‑vrt)
+- Gate env: `FK_EDITOR_VRT_ONLY=1`.
+- Build only editor UI + snapshots: `Scripts/dev/editor-vrt build`.
+- Write baselines via tests: `Scripts/dev/editor-vrt baselines`.
+- Validate snapshots: `Scripts/dev/editor-vrt validate`.
 
 Pattern
 - Core owns OpenAPI generation (`<service>-service` library target) with filters; server depends on core and never declares the generator plugin.

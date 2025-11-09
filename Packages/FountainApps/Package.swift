@@ -10,9 +10,13 @@ let FK_DISABLE_QFCELLS = ProcessInfo.processInfo.environment["FK_DISABLE_QFCELLS
 let FK_SKIP_NOISY = ProcessInfo.processInfo.environment["FK_SKIP_NOISY_TARGETS"] == "1" || ProcessInfo.processInfo.environment["FK_EDITOR_MINIMAL"] == "1"
 
 let EDITOR_MINIMAL = ProcessInfo.processInfo.environment["FK_EDITOR_MINIMAL"] == "1" || ProcessInfo.processInfo.environment["FK_SKIP_NOISY_TARGETS"] == "1"
+let EDITOR_VRT_ONLY = ProcessInfo.processInfo.environment["FK_EDITOR_VRT_ONLY"] == "1"
 
 // Products list with optional minimal gating for editor-only scenarios
-let PRODUCTS: [Product] = EDITOR_MINIMAL ? [
+let PRODUCTS: [Product] = EDITOR_VRT_ONLY ? [
+    .executable(name: "quietframe-editor-app", targets: ["quietframe-editor-app"]),
+    .executable(name: "editor-snapshots", targets: ["editor-snapshots"])
+] : (EDITOR_MINIMAL ? [
     .executable(name: "fountain-editor-service-server", targets: ["fountain-editor-service-server"]),
     .library(name: "FountainEditorCoreKit", targets: ["fountain-editor-service-core"]),
     .executable(name: "service-minimal-seed", targets: ["service-minimal-seed"])
@@ -124,9 +128,12 @@ let PRODUCTS: [Product] = EDITOR_MINIMAL ? [
         .executable(name: "metalviewkit-runtime-server", targets: ["metalviewkit-runtime-server"])
         
     ])
+)
 
 // Dependencies list with minimal mode avoiding heavy stacks
-let DEPENDENCIES: [Package.Dependency] = EDITOR_MINIMAL ? [
+let DEPENDENCIES: [Package.Dependency] = EDITOR_VRT_ONLY ? [
+    .package(path: "../FountainCore")
+] : (EDITOR_MINIMAL ? [
     .package(path: "../FountainCore"),
     .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
     .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0")
@@ -178,9 +185,35 @@ let DEPENDENCIES: [Package.Dependency] = EDITOR_MINIMAL ? [
         // MIDI2 Instrument Bridge (sampler) — pin to released tag
         .package(url: "https://github.com/Fountain-Coach/midi2sampler.git", exact: "0.1.1")
     ]
-
+) 
+    
 // Targets list; in minimal mode, only editor core + server
-let TARGETS: [Target] = EDITOR_MINIMAL ? [
+let TARGETS: [Target] = EDITOR_VRT_ONLY ? [
+    .executableTarget(
+        name: "quietframe-editor-app",
+        dependencies: [
+            .product(name: "FountainStoreClient", package: "FountainCore")
+        ],
+        path: "Sources/quietframe-editor-app"
+    ),
+    .executableTarget(
+        name: "editor-snapshots",
+        dependencies: [
+            "quietframe-editor-app"
+        ],
+        path: "Sources/editor-snapshots"
+    ),
+    .testTarget(
+        name: "EditorAppUITests",
+        dependencies: [
+            "quietframe-editor-app"
+        ],
+        path: "Tests/EditorAppUITests",
+        resources: [
+            .process("Baselines")
+        ]
+    )
+] : (EDITOR_MINIMAL ? [
     .target(
         name: "fountain-editor-service-core",
         dependencies: [
@@ -1583,6 +1616,7 @@ let TARGETS: [Target] = EDITOR_MINIMAL ? [
             ]
         )
     ] )
+)
 
 let package = Package(
     name: "FountainApps",

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Focused PB‑VRT lane for the editor UI.
+# Gates the manifest to only the editor app, snapshots CLI and EditorAppUITests.
+#
+# Usage:
+#   Scripts/dev/editor-vrt [build|baselines|validate|cli]
+#     build     : build quietframe-editor-app + editor-snapshots
+#     baselines : write/update PNG baselines via tests (preferred)
+#     validate  : run snapshots validation tests (fail on drift)
+#     cli       : run editor-snapshots CLI (requires GUI-capable shell session)
+
+ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+PKG_PATH="$ROOT_DIR/Packages/FountainApps"
+export FK_EDITOR_VRT_ONLY=1
+export FOUNTAIN_SKIP_LAUNCHER_SIG=1
+
+cmd="${1:-build}"
+case "$cmd" in
+  build)
+    swift build --package-path "$PKG_PATH" -c debug --target quietframe-editor-app --target editor-snapshots
+    ;;
+  baselines)
+    UPDATE_BASELINES=1 swift test --package-path "$PKG_PATH" -c debug --filter EditorAppUITests
+    ;;
+  validate)
+    swift test --package-path "$PKG_PATH" -c debug --filter EditorAppUITests
+    ;;
+  cli)
+    UPDATE_BASELINES=1 swift run --package-path "$PKG_PATH" -c debug editor-snapshots
+    ;;
+  *)
+    echo "Usage: $0 [build|baselines|validate|cli]" >&2; exit 2
+    ;;
+ esac

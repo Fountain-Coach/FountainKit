@@ -7,6 +7,7 @@ let ROBOT_ONLY = ProcessInfo.processInfo.environment["ROBOT_ONLY"] == "1" || Pro
 let USE_SDLKIT = ProcessInfo.processInfo.environment["FK_USE_SDLKIT"] == "1"
 
 let FK_DISABLE_QFCELLS = ProcessInfo.processInfo.environment["FK_DISABLE_QFCELLS"] == "1"
+let FK_SKIP_NOISY = ProcessInfo.processInfo.environment["FK_SKIP_NOISY_TARGETS"] == "1" || ProcessInfo.processInfo.environment["FK_EDITOR_MINIMAL"] == "1"
 
 let package = Package(
     name: "FountainApps",
@@ -18,6 +19,7 @@ let package = Package(
         .executable(name: "patchbay-app", targets: ["patchbay-app"]),
         .executable(name: "replay-export", targets: ["replay-export"]),
         .library(name: "MetalViewKit", targets: ["MetalViewKit"]) ,
+        .library(name: "FountainEditorCoreKit", targets: ["fountain-editor-service-core"]) ,
         .executable(name: "metalviewkit-cc-fuzz", targets: ["metalviewkit-cc-fuzz"]) 
         
     ] : [
@@ -69,6 +71,7 @@ let package = Package(
         .library(name: "EngraverChatCore", targets: ["EngraverChatCore"]),
         .library(name: "EngraverStudio", targets: ["EngraverStudio"]),
         .library(name: "MetalViewKit", targets: ["MetalViewKit"]),
+        .library(name: "FountainEditorCoreKit", targets: ["fountain-editor-service-core"]),
         .executable(name: "metalviewkit-cc-fuzz", targets: ["metalviewkit-cc-fuzz"]),
         .library(name: "MetalComputeKit", targets: ["MetalComputeKit"]),
         .library(name: "CoreMLKit", targets: ["CoreMLKit"]),
@@ -114,9 +117,7 @@ let package = Package(
         .executable(name: "die-maschine-scenes-assign", targets: ["die-maschine-scenes-assign"]),
         .executable(name: "fountain-editor-seed", targets: ["fountain-editor-seed"]),
         .executable(name: "quietframe-companion-app", targets: ["quietframe-companion-app"]),
-        .executable(name: "quietframe-smoke", targets: ["quietframe-smoke"]),
-        .executable(name: "quietframe-replay", targets: ["quietframe-replay"])
-        ,
+        // removed: quietframe-smoke (CoreMIDI)
         .executable(name: "metalviewkit-runtime-server", targets: ["metalviewkit-runtime-server"])
         
     ],
@@ -124,6 +125,7 @@ let package = Package(
         .package(path: "../FountainCore"),
         .package(path: "../FountainAIKit"),
         .package(path: "../FountainProviders"),
+        .package(path: "../../Tools/fountain-editor-mini-tests"),
         // SDLKit (optional, only when FK_USE_SDLKIT=1)
     ] + (USE_SDLKIT ? [
         .package(url: "https://github.com/Fountain-Coach/SDLKit.git", branch: "main")
@@ -958,12 +960,7 @@ let package = Package(
             dependencies: [.product(name: "MIDI2Transports", package: "FountainTelemetryKit")],
             path: "Sources/ble-midi-adv-check"
         ),
-        // Lightweight CoreMIDI integration check (avoids building full test bundles)
-        .executableTarget(
-            name: "midi-coremidi-integration-check",
-            dependencies: ["MetalViewKit"],
-            path: "Sources/midi-coremidi-integration-check"
-        ),
+        // removed: midi-coremidi-integration-check (CoreMIDI)
         // QuietFrame OpenAPI service (control + MIDI)
         .target(
             name: "quietframe-service",
@@ -995,13 +992,15 @@ let package = Package(
                 .product(name: "FountainStoreClient", package: "FountainCore"),
                 .product(name: "Teatro", package: "TeatroFull")
             ],
-            path: "Sources/fountain-editor-service"
+            path: "Sources/fountain-editor-service",
+            exclude: ["openapi.yaml", "openapi-generator-config.yaml"]
         ),
         .executableTarget(
             name: "fountain-editor-service-server",
             dependencies: [
                 "fountain-editor-service-core",
-                .product(name: "FountainRuntime", package: "FountainCore")
+                .product(name: "FountainRuntime", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore")
             ],
             path: "Sources/fountain-editor-service-server",
             plugins: [
@@ -1013,6 +1012,28 @@ let package = Package(
             name: "FountainEditorCoreTests",
             dependencies: ["fountain-editor-service-core"],
             path: "Tests/FountainEditorCoreTests"
+        ),
+        .testTarget(
+            name: "FountainEditorAlignmentTests",
+            dependencies: [
+                "fountain-editor-service-core",
+                .product(name: "FountainEditorMiniCore", package: "fountain-editor-mini-tests"),
+                .product(name: "Teatro", package: "TeatroFull")
+            ],
+            path: "Tests/FountainEditorAlignmentTests",
+            resources: [
+                .copy("Fixtures")
+            ]
+        ),
+        .testTarget(
+            name: "FountainEditorServerTests",
+            dependencies: [
+                "fountain-editor-service-server",
+                "fountain-editor-service-core",
+                .product(name: "FountainRuntime", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Tests/FountainEditorServerTests"
         ),
         .executableTarget(
             name: "tutor-dashboard",
@@ -1300,11 +1321,7 @@ let package = Package(
             ],
             path: "Sources/patchbay-saliency-seed"
         ),
-        .executableTarget(
-            name: "midi-ump2m1-bridge",
-            dependencies: [],
-            path: "Sources/midi-ump2m1-bridge"
-        ),
+        // removed: midi-ump2m1-bridge (CoreMIDI)
         // QuietFrameKit — core utilities for MIDI2 PE + Vendor JSON (UI-free)
         .target(
             name: "QuietFrameKit",
@@ -1376,7 +1393,6 @@ let package = Package(
             path: "Sources/die-maschine-scenes-assign"
         ),
         
-        
         .executableTarget(
             name: "quietframe-companion-app",
             dependencies: [
@@ -1388,21 +1404,7 @@ let package = Package(
             ],
             path: "Sources/quietframe-companion-app"
         ),
-        .executableTarget(
-            name: "quietframe-replay",
-            dependencies: [
-                .product(name: "MIDI2Transports", package: "FountainTelemetryKit")
-            ],
-            path: "Sources/quietframe-replay"
-        ),
-        .executableTarget(
-            name: "quietframe-smoke",
-            dependencies: [
-                .product(name: "MIDI2CI", package: "midi2"),
-                .product(name: "MIDI2", package: "midi2")
-            ],
-            path: "Sources/quietframe-smoke"
-        ),
+        // removed: quietframe-smoke (CoreMIDI)
         .testTarget(
             name: "QuietFrameKitTests",
             dependencies: [

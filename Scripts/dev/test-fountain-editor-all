@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+
+export FK_EDITOR_MINIMAL=1
+export FK_SKIP_NOISY_TARGETS=1
+export FOUNTAIN_SKIP_LAUNCHER_SIG=1
+
+echo "[editor] Running mini tests…"
+swift test --package-path "$ROOT_DIR/Tools/fountain-editor-mini-tests" -c debug --parallel
+
+echo "[editor] Running alignment tests…"
+swift test --package-path "$ROOT_DIR/Tools/fountain-editor-align-tests" -c debug --parallel
+
+echo "[editor] Running server smoke…"
+"$ROOT_DIR"/Scripts/dev/test-fountain-editor-server
+
+echo "[editor] All editor tests passed."

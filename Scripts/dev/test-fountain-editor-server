@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Focused server verification for Fountain Editor
+# - Builds only the server target
+# - Runs in-process smoke (ETag flow)
+
+ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+PKG_PATH="$ROOT_DIR/Packages/FountainApps"
+
+echo "[focus] Building fountain-editor-service-server…"
+export FK_SKIP_NOISY_TARGETS=1
+export FK_EDITOR_MINIMAL=1
+swift build --package-path "$PKG_PATH" -c debug --target fountain-editor-service-server
+
+echo "[focus] Running server smoke (ETag semantics)…"
+Scripts/dev/smoke-fountain-editor-server
+status=$?
+
+if [[ $status -ne 0 ]]; then
+  echo "[focus] Server smoke failed (status=$status)" >&2
+  exit $status
+fi
+
+echo "[focus] Server smoke passed."

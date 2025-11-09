@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# In-process smoke for Fountain Editor server (ETag flow).
+# Boots handlers via HTTPKernel (no network) by toggling FK_EDITOR_SMOKE=1.
+
+ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+PKG_PATH="$ROOT_DIR/Packages/FountainApps"
+
+export FK_EDITOR_SMOKE=1
+export FOUNTAIN_SKIP_LAUNCHER_SIG=1
+export FK_SKIP_NOISY_TARGETS=1
+export FK_EDITOR_MINIMAL=1
+
+echo "[smoke] Building server target…"
+swift build --package-path "$PKG_PATH" -c debug --target fountain-editor-service-server >/dev/null
+
+BIN="$PKG_PATH/.build/arm64-apple-macosx/debug/fountain-editor-service-server"
+if [[ ! -x "$BIN" ]]; then
+  echo "[smoke] ERROR: built binary not found: $BIN" >&2
+  exit 2
+fi
+
+echo "[smoke] Running ETag flow (no rebuild)…"
+set +e
+FK_EDITOR_SMOKE=1 FOUNTAIN_SKIP_LAUNCHER_SIG=1 "$BIN"
+status=$?
+set -e
+
+if [[ $status -eq 0 ]]; then
+  echo "[smoke] OK"
+else
+  echo "[smoke] FAILED (status=$status)" >&2
+fi
+exit $status

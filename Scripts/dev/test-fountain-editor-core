@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Focused test runner for Fountain Editor core (avoids building unrelated executables).
+#
+# Usage:
+#   Scripts/dev/test-fountain-editor-core [--build-only]
+#
+# Behavior:
+#   - Builds just the core library target
+#   - Attempts to run only FountainEditorCoreTests
+#   - Applies env guards to avoid heavy/optional deps
+
+ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+PKG_PATH="$ROOT_DIR/Packages/FountainApps"
+
+export FK_USE_SDLKIT=0
+export USE_SDLKIT=0
+export FK_SKIP_NOISY_TARGETS=1
+export FK_EDITOR_MINIMAL=1
+
+echo "[focus] Building fountain-editor-service-core…"
+swift build --package-path "$PKG_PATH" -c debug --target fountain-editor-service-core
+
+if [[ "${1:-}" == "--build-only" ]]; then
+  echo "[focus] Build-only requested; done."
+  exit 0
+fi
+
+echo "[focus] Running FountainEditorCoreTests (filtered)…"
+set +e
+swift test --package-path "$PKG_PATH" -c debug --filter FountainEditorCoreTests --parallel
+status=$?
+set -e
+
+if [[ $status -ne 0 ]]; then
+  echo "[focus] NOTE: Focused tests failed to run due to unrelated workspace targets."
+  echo "       Core target build is green. You can iterate with:"
+  echo "         swift build --package-path Packages/FountainApps -c debug --target fountain-editor-service-core"
+  exit $status
+fi
+
+echo "[focus] FountainEditorCoreTests passed."

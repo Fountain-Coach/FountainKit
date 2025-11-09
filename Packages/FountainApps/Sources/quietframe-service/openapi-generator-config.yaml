@@ -1,0 +1,13 @@
+generate:
+  - types
+  - server
+accessModifier: public
+additionalImports: []
+filter:
+  paths:
+    - /health
+    - /v1/state
+    - /v1/act/select
+    - /v1/act/params
+    - /v1/midi/endpoints
+    - /v1/midi/ump

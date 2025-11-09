@@ -76,8 +76,21 @@ struct QuietFrameView: View {
                     Color(NSColor.windowBackgroundColor)
                     VStack {
                         Spacer()
-                        // Fountain Editor integrated as the QuietFrame surface
-                        FountainEditorSurface(frameSize: frameSize)
+                        // Landing: white page for saliency tests (center)
+                        HStack(alignment: .center, spacing: 18) {
+                            WhiteInteractionPage(frameSize: frameSize) { pt in
+                                updateSaliency(point: pt ?? .zero)
+                            }
+                            // Right pane: compact representation of the Fountain Editor instrument
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Fountain Editor (preview)").font(.caption).foregroundStyle(.secondary)
+                                FountainEditorSurface(frameSize: CGSize(width: 512, height: 768))
+                                    .frame(width: 512, height: 768)
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.25), lineWidth: 1))
+                            }
+                            .frame(width: 540)
+                        }
                         Spacer()
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -378,6 +391,42 @@ struct QuietFrameView: View {
     private func smoothstep(_ edge0: Double, _ edge1: Double, _ x: Double) -> Double {
         let t = max(0.0, min(1.0, (x - edge0) / max(0.000001, edge1 - edge0)))
         return t * t * (3 - 2 * t)
+    }
+}
+
+// MARK: - White page with pointer-driven saliency interaction
+private struct WhiteInteractionPage: View {
+    let frameSize: CGSize
+    let onPoint: (CGPoint?) -> Void
+    @State private var isInside: Bool = false
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.white)
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.secondary.opacity(0.35), lineWidth: 1))
+                .frame(width: frameSize.width, height: frameSize.height)
+                .overlay(
+                    GeometryReader { gp in
+                        Color.clear
+                            .gesture(DragGesture(minimumDistance: 0)
+                                .onChanged { value in
+                                    let p = CGPoint(x: max(0, min(frameSize.width, value.location.x)),
+                                                    y: max(0, min(frameSize.height, value.location.y)))
+                                    onPoint(p)
+                                    isInside = true
+                                }
+                                .onEnded { _ in
+                                    onPoint(nil); isInside = false
+                                }
+                            )
+                    }
+                )
+            if !isInside {
+                Text("Move pointer over page to audition").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: frameSize.width, height: frameSize.height)
     }
 }
 

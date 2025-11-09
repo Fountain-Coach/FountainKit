@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Minimal Bootstrap-only build helper
+# Usage: Scripts/dev/bootstrap-min [build|run]
+
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 PKG_PATH="$ROOT_DIR/Packages/FountainApps"
 
@@ -8,9 +11,19 @@ export FK_MIN_TARGET=bootstrap
 export FK_SKIP_NOISY_TARGETS=1
 export FOUNTAIN_SKIP_LAUNCHER_SIG=1
 
-case "${1:-build}" in
-  build) echo "[bootstrap-min] Building bootstrap-server…"; swift build --package-path "$PKG_PATH" -c debug --target bootstrap-server;;
-  run)   echo "[bootstrap-min] Running bootstrap-server…"; swift run --package-path "$PKG_PATH" -c debug bootstrap-server;;
-  *)     echo "Usage: $0 [build|run]" >&2; exit 2;;
+cmd="${1:-build}"
+case "$cmd" in
+  build)
+    echo "[bootstrap-min] Building bootstrap-server (minimal)…"
+    swift build --package-path "$PKG_PATH" -c debug --target bootstrap-server
+    ;;
+  run)
+    echo "[bootstrap-min] Running bootstrap-server (minimal)…"
+    swift run --package-path "$PKG_PATH" -c debug bootstrap-server
+    ;;
+  *)
+    echo "Usage: $0 [build|run]" >&2
+    exit 2
+    ;;
 esac
 

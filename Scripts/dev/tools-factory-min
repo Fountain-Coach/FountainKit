@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Minimal Tools-Factory-only build helper
+# Usage: Scripts/dev/tools-factory-min [build|run]
+
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 PKG_PATH="$ROOT_DIR/Packages/FountainApps"
 
@@ -8,9 +11,19 @@ export FK_MIN_TARGET=tools-factory
 export FK_SKIP_NOISY_TARGETS=1
 export FOUNTAIN_SKIP_LAUNCHER_SIG=1
 
-case "${1:-build}" in
-  build) echo "[tools-factory-min] Building tools-factory-server…"; swift build --package-path "$PKG_PATH" -c debug --target tools-factory-server;;
-  run)   echo "[tools-factory-min] Running tools-factory-server…"; swift run --package-path "$PKG_PATH" -c debug tools-factory-server;;
-  *)     echo "Usage: $0 [build|run]" >&2; exit 2;;
+cmd="${1:-build}"
+case "$cmd" in
+  build)
+    echo "[tools-factory-min] Building tools-factory-server (minimal)…"
+    swift build --package-path "$PKG_PATH" -c debug --target tools-factory-server
+    ;;
+  run)
+    echo "[tools-factory-min] Running tools-factory-server (minimal)…"
+    swift run --package-path "$PKG_PATH" -c debug tools-factory-server
+    ;;
+  *)
+    echo "Usage: $0 [build|run]" >&2
+    exit 2
+    ;;
 esac
 

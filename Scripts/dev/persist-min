@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Minimal Persist-only build helper
+# Usage: Scripts/dev/persist-min [build|run]
+
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 PKG_PATH="$ROOT_DIR/Packages/FountainApps"
 
@@ -8,9 +11,19 @@ export FK_MIN_TARGET=persist
 export FK_SKIP_NOISY_TARGETS=1
 export FOUNTAIN_SKIP_LAUNCHER_SIG=1
 
-case "${1:-build}" in
-  build) echo "[persist-min] Building persist-server…"; swift build --package-path "$PKG_PATH" -c debug --target persist-server;;
-  run)   echo "[persist-min] Running persist-server…"; swift run --package-path "$PKG_PATH" -c debug persist-server;;
-  *)     echo "Usage: $0 [build|run]" >&2; exit 2;;
+cmd="${1:-build}"
+case "$cmd" in
+  build)
+    echo "[persist-min] Building persist-server (minimal)…"
+    swift build --package-path "$PKG_PATH" -c debug --target persist-server
+    ;;
+  run)
+    echo "[persist-min] Running persist-server (minimal)…"
+    swift run --package-path "$PKG_PATH" -c debug persist-server
+    ;;
+  *)
+    echo "Usage: $0 [build|run]" >&2
+    exit 2
+    ;;
 esac
 

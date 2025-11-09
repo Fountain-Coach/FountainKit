@@ -34,6 +34,22 @@ private func structureFromTeatro(text: String, rules: RuleSet) -> (acts: [[Strin
         default: continue
         }
     }
+    // Fallback: if no scenes were detected but text contains level-2 headings, synthesize scenes from lines.
+    if acts.isEmpty || acts.allSatisfy({ $0.isEmpty }) {
+        var actIndex2 = 0
+        var sceneIndex2 = 0
+        var current2: [String] = []
+        func pushAct2() { if actIndex2 > 0 { acts.append(current2) }; actIndex2 += 1; sceneIndex2 = 0; current2 = [] }
+        func pushScene2() { sceneIndex2 += 1; current2.append("act\(actIndex2).scene\(sceneIndex2)") }
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        for raw in lines {
+            let s = raw.trimmingCharacters(in: .whitespaces)
+            if s.hasPrefix("#") && !s.hasPrefix("##") { if actIndex2 == 0 { pushAct2() } else { pushAct2() } ; continue }
+            if s.hasPrefix("## ") { if actIndex2 == 0 { pushAct2() } ; pushScene2() }
+        }
+        if actIndex2 == 0 { pushAct2() }
+        acts.append(current2)
+    }
         if actIndex == 0 { pushAct() }
         acts.append(current)
         let etag = FountainEditorMiniCore.computeETag(for: text)

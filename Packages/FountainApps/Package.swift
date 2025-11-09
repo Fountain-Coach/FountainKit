@@ -212,6 +212,16 @@ let TARGETS: [Target] = EDITOR_VRT_ONLY ? [
         resources: [
             .process("Baselines")
         ]
+    ),
+    .testTarget(
+        name: "QuietFrameEditorUITests",
+        dependencies: [
+            "quietframe-sonify-app"
+        ],
+        path: "Tests/QuietFrameEditorUITests",
+        resources: [
+            .process("Baselines")
+        ]
     )
 ] : (EDITOR_MINIMAL ? [
     .target(
@@ -1611,6 +1621,16 @@ let TARGETS: [Target] = EDITOR_VRT_ONLY ? [
                 "quietframe-editor-app"
             ],
             path: "Tests/EditorAppUITests",
+            resources: [
+                .process("Baselines")
+            ]
+        ),
+        .testTarget(
+            name: "QuietFrameEditorUITests",
+            dependencies: [
+                "quietframe-sonify-app"
+            ],
+            path: "Tests/QuietFrameEditorUITests",
             resources: [
                 .process("Baselines")
             ]

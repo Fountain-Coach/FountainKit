@@ -1,4 +1,5 @@
 import SwiftUI
+import Foundation
 
 struct FountainEditorSurface: View {
     let frameSize: CGSize
@@ -7,6 +8,9 @@ struct FountainEditorSurface: View {
 
     private let sidebarWidth: CGFloat = 240
     private let pageInset: CGFloat = 48
+    @State private var measuredSidebarWidth: CGFloat = 0
+    @State private var measuredPageWidth: CGFloat = 0
+    @State private var measuredPageHeight: CGFloat = 0
 
     var body: some View {
         HStack(spacing: 0) {
@@ -22,6 +26,11 @@ struct FountainEditorSurface: View {
                 }
             }
             .frame(width: sidebarWidth)
+            .background(GeometryReader { gp in
+                Color.clear
+                    .onAppear { measuredSidebarWidth = gp.size.width }
+                    .onChange(of: gp.size) { _, newV in measuredSidebarWidth = newV.width }
+            })
             .listStyle(.sidebar)
 
             // Page area (clean white)
@@ -44,6 +53,11 @@ struct FountainEditorSurface: View {
                 StatusBar(model: model)
             }
             .frame(width: frameSize.width, height: frameSize.height)
+            .background(GeometryReader { gp in
+                Color.clear
+                    .onAppear { measuredPageWidth = gp.size.width; measuredPageHeight = gp.size.height }
+                    .onChange(of: gp.size) { _, newV in measuredPageWidth = newV.width; measuredPageHeight = newV.height }
+            })
 
             // Right drawer removed for minimal first slice
         }
@@ -51,6 +65,24 @@ struct FountainEditorSurface: View {
         .onAppear { editorFocused = true }
         .onReceive(NotificationCenter.default.publisher(for: .SaveFountainScript)) { _ in
             Task { await model.save() }
+        }
+        .onAppear { scheduleGeometryDump() }
+    }
+
+    private func scheduleGeometryDump() {
+        let env = ProcessInfo.processInfo.environment
+        guard let path = env["QF_EDITOR_GEOMETRY_DUMP"], !path.isEmpty else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            let dict: [String: Any] = [
+                "sidebarWidth": measuredSidebarWidth,
+                "pageWidth": measuredPageWidth,
+                "pageHeight": measuredPageHeight
+            ]
+            if let data = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted]),
+               let url = URL(string: "file://" + path) {
+                try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try? data.write(to: url)
+            }
         }
     }
 }

@@ -11,6 +11,15 @@
       }
     },
     {
+      "identity" : "flow",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/AudioKit/Flow.git",
+      "state" : {
+        "revision" : "c2195aff3772a405655c08f22eb2aafbd77c27af",
+        "version" : "1.0.4"
+      }
+    },
+    {
       "identity" : "fountain-store",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Fountain-Coach/Fountain-Store.git",
@@ -20,12 +29,66 @@
       }
     },
     {
+      "identity" : "midi2",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Fountain-Coach/midi2",
+      "state" : {
+        "revision" : "138895967519bbe50c8f9c3751f2aae2723cd5ba",
+        "version" : "0.6.1"
+      }
+    },
+    {
+      "identity" : "midi2sampler",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Fountain-Coach/midi2sampler.git",
+      "state" : {
+        "revision" : "64aaed8613a1f8eff0fc8bdb76656688848b0f87",
+        "version" : "0.1.1"
+      }
+    },
+    {
+      "identity" : "openapikit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/mattpolzin/OpenAPIKit",
+      "state" : {
+        "revision" : "343b2c1793058fcc53c1bd7e2907f8e3a4d640fb",
+        "version" : "3.9.0"
+      }
+    },
+    {
+      "identity" : "ruleskit-spm",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Fountain-Coach/RulesKit-SPM.git",
+      "state" : {
+        "revision" : "8ed5dd11fec737518716e10c6f8eb98268236319",
+        "version" : "0.1.0"
+      }
+    },
+    {
+      "identity" : "scorekit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Fountain-Coach/ScoreKit.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "73c1f2d0926bbce57b872ffc5d948b2f2ecd3f40"
+      }
+    },
+    {
       "identity" : "swift-algorithms",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-algorithms.git",
       "state" : {
         "revision" : "87e50f483c54e6efd60e885f7f5aa946cee68023",
         "version" : "1.2.1"
+      }
+    },
+    {
+      "identity" : "swift-argument-parser",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-argument-parser",
+      "state" : {
+        "revision" : "cdd0ef3755280949551dc26dee5de9ddeda89f54",
+        "version" : "1.6.2"
       }
     },
     {
@@ -173,6 +236,15 @@
       }
     },
     {
+      "identity" : "swift-openapi-generator",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-openapi-generator.git",
+      "state" : {
+        "revision" : "d74223cc5595a8165181c4d9579243c932e5cd07",
+        "version" : "1.10.3"
+      }
+    },
+    {
       "identity" : "swift-openapi-runtime",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-openapi-runtime.git",
@@ -224,6 +296,33 @@
       "state" : {
         "revision" : "395a77f0aa927f0ff73941d7ac35f2b46d47c9db",
         "version" : "1.6.3"
+      }
+    },
+    {
+      "identity" : "swift-tools-support-core",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-tools-support-core",
+      "state" : {
+        "revision" : "e8fbc8b05a155f311b862178d92d043afb216fe3",
+        "version" : "0.7.3"
+      }
+    },
+    {
+      "identity" : "swiftcbor",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/unrelentingtech/SwiftCBOR",
+      "state" : {
+        "revision" : "04ccff117f6549121d5721ec84fdf0162122b90e",
+        "version" : "0.5.0"
+      }
+    },
+    {
+      "identity" : "swiftcurseskit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Fountain-Coach/swiftcurseskit.git",
+      "state" : {
+        "revision" : "97ba8e113c318415be006e345c233022c5de8a4f",
+        "version" : "0.2.0"
       }
     },
     {

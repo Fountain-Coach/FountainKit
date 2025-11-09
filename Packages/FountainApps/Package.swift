@@ -14,7 +14,8 @@ let EDITOR_MINIMAL = ProcessInfo.processInfo.environment["FK_EDITOR_MINIMAL"] ==
 // Products list with optional minimal gating for editor-only scenarios
 let PRODUCTS: [Product] = EDITOR_MINIMAL ? [
     .executable(name: "fountain-editor-service-server", targets: ["fountain-editor-service-server"]),
-    .library(name: "FountainEditorCoreKit", targets: ["fountain-editor-service-core"])
+    .library(name: "FountainEditorCoreKit", targets: ["fountain-editor-service-core"]),
+    .executable(name: "service-minimal-seed", targets: ["service-minimal-seed"])
 ] : (ROBOT_ONLY ? [
         // Robot-only: expose just what PatchBay tests need
         .executable(name: "patchbay-app", targets: ["patchbay-app"]),
@@ -39,6 +40,7 @@ let PRODUCTS: [Product] = EDITOR_MINIMAL ? [
         .executable(name: "pbvrt-server", targets: ["pbvrt-server"]),
         // removed: add-instruments-seed (context menu removed from baseline)
         .executable(name: "store-dump", targets: ["store-dump"]),
+        .executable(name: "service-minimal-seed", targets: ["service-minimal-seed"]),
         .executable(name: "FountainLauncherUI", targets: ["FountainLauncherUI"]),
         .executable(name: "local-agent-manager", targets: ["local-agent-manager"]),
         .executable(name: "mock-localagent-server", targets: ["mock-localagent-server"]),
@@ -198,6 +200,13 @@ let TARGETS: [Target] = EDITOR_MINIMAL ? [
             .product(name: "LauncherSignature", package: "FountainCore")
         ],
         path: "Sources/fountain-editor-service-server"
+    ),
+    .executableTarget(
+        name: "service-minimal-seed",
+        dependencies: [
+            .product(name: "FountainStoreClient", package: "FountainCore")
+        ],
+        path: "Sources/service-minimal-seed"
     )
 ] : (ROBOT_ONLY ? [
         .target(
@@ -711,6 +720,13 @@ let TARGETS: [Target] = EDITOR_MINIMAL ? [
                 .product(name: "LauncherSignature", package: "FountainCore")
             ],
             path: "Sources/fountain-editor-seed"
+        ),
+        .executableTarget(
+            name: "service-minimal-seed",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/service-minimal-seed"
         ),
         .executableTarget(
             name: "baseline-robot-seed",

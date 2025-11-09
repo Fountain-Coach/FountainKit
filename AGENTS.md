@@ -224,6 +224,45 @@ Review checklist (deps)
 - Move shared models into `FountainCore` and configure generators to omit duplicate schema emission.
 - Regenerate by running `swift build` (root or package scoped). Do **not** hand-edit generated Swift files.
 
+## Targeted Builds — Service‑Minimal Pattern (No Manifest Gating)
+
+Context
+- Compile times for servers grew beyond acceptable budgets when building the full workspace. We standardize on per‑service, targeted builds without changing the global manifest shape.
+
+Pattern (per service)
+- Core owns generation: move `OpenAPIGenerator` plugin and the `openapi.yaml` symlink into `<service>-service` (a library target). Configure `openapi-generator-config.yaml` to `filter.paths` for that service.
+- Thin server: `<service>-service-server` depends on the core + `FountainRuntime` and `LauncherSignature`. Do not declare the generator plugin in the executable.
+- Targeted build/run: use `swift build --package-path Packages/FountainApps -c debug --target <service>-service-server` and `FOUNTAIN_SKIP_LAUNCHER_SIG=1 swift run --package-path Packages/FountainApps <service>-service-server`.
+- No smoke in main: servers start real HTTP only; smoke/e2e lives in scripts/tests.
+
+Adoption status
+- Adopted: `fountain-editor` (core at `Packages/FountainApps/Sources/fountain-editor-service`, server at `Packages/FountainApps/Sources/fountain-editor-service-server`).
+- Planned next: `gateway-server`, `pbvrt-server`, `quietframe-service-server`.
+- Planned (batch): `planner-server`, `function-caller-server`, `persist-server`, `baseline-awareness-server`, `bootstrap-server`, `tools-factory-server`, `tool-server`.
+
+Why this works
+- Faster: generator runs once per service (core); the server target compiles quickly with a small graph.
+- Non‑destructive: manifest remains stable; specs stay curated under `Packages/FountainSpecCuration/openapi` (symlinked into cores). OpenAPI curability is preserved.
+- Deterministic: one place per service for spec/config; servers are simple and testable.
+
+Where
+- Editor core: `Packages/FountainApps/Sources/fountain-editor-service` (owns spec + generator config).
+- Editor server: `Packages/FountainApps/Sources/fountain-editor-service-server` (handlers + main).
+- Seeder for this pattern’s prompt: `Packages/FountainApps/Sources/service-minimal-seed`; wrapper script: `Scripts/apps/service-minimal-seed`.
+
+Maintenance
+- When adopting the pattern in a service:
+  - Create `<service>-service` core target, move spec/config there, and add `filter.paths`.
+  - Remove generator plugin from `<service>-service-server`; depend on the core.
+  - Add or update a thin wrapper script under `Scripts/dev/<service>-min` with `build|run` only.
+  - Add focused handler tests; avoid workspace‑wide builds during TDD by using `--target`/`--filter`.
+
+Prompt persistence (authoritative)
+- The “Service‑Minimal Targeted Builds” Teatro prompt is persisted in FountainStore.
+- Corpus: `service-minimal`; page: `prompt:service-minimal`.
+- Seeder: run `Scripts/apps/service-minimal-seed` to (re)seed; fetch with `CORPUS_ID=service-minimal SEGMENT_ID='prompt:service-minimal:teatro' swift run --package-path Packages/FountainApps store-dump`.
+- Facts: `SEGMENT_ID='prompt:service-minimal:facts'` contains services and invariants for auditing.
+
 ## Coding standards
 - Target Swift 6.1; mark public APIs as `Sendable` when feasible.
 - Use dependency injection across package seams—libraries must not reach into executable-only code.

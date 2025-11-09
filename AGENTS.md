@@ -236,9 +236,12 @@ Pattern (per service)
 - No smoke in main: servers start real HTTP only; smoke/e2e lives in scripts/tests.
 
 Adoption status
-- Adopted: `fountain-editor` (core at `Packages/FountainApps/Sources/fountain-editor-service`, server at `Packages/FountainApps/Sources/fountain-editor-service-server`).
-- Planned next: `gateway-server`, `pbvrt-server`, `quietframe-service-server`.
-- Planned (batch): `planner-server`, `function-caller-server`, `persist-server`, `baseline-awareness-server`, `bootstrap-server`, `tools-factory-server`, `tool-server`.
+- Adopted: `fountain-editor`, `gateway-server`, `pbvrt-server`, `quietframe-service-server`.
+  - Editor core: `Packages/FountainApps/Sources/fountain-editor-service`, server: `Packages/FountainApps/Sources/fountain-editor-service-server`.
+  - Gateway core: `Packages/FountainApps/Sources/gateway-service`, server: `Packages/FountainApps/Sources/gateway-server`.
+  - PB‑VRT core: `Packages/FountainApps/Sources/pbvrt-service`, server: `Packages/FountainApps/Sources/pbvrt-server`.
+  - QuietFrame core: `Packages/FountainApps/Sources/quietframe-service`, server: `Packages/FountainApps/Sources/quietframe-service-server`.
+- Already compliant via ServiceKit cores: `planner-server`, `function-caller-server`, `persist-server`, `baseline-awareness-server`, `bootstrap-server`, `tools-factory-server`, `tool-server` (their OpenAPI generation lives in `Packages/FountainServiceKit-*`).
 
 Why this works
 - Faster: generator runs once per service (core); the server target compiles quickly with a small graph.

@@ -7,6 +7,26 @@ import OpenAPIRuntime
 import Darwin
 
 let env = ProcessInfo.processInfo.environment
+let SMOKE_TIMEOUT: Double = {
+    if let s = env["SMOKE_TIMEOUT_SECS"], let v = Double(s), v > 0 { return v }
+    if let s = env["FK_SMOKE_TIMEOUT"], let v = Double(s), v > 0 { return v }
+    return 5.0
+}()
+
+struct TimeoutError: Error {}
+
+func withTimeout<T>(_ seconds: Double, operation: @escaping () async throws -> T) async throws -> T {
+    try await withThrowingTaskGroup(of: T.self) { group in
+        group.addTask { try await operation() }
+        group.addTask {
+            try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            throw TimeoutError()
+        }
+        let result = try await group.next()!
+        group.cancelAll()
+        return result
+    }
+}
 
 // Smoke mode FIRST: bypass any signature checks or long inits.
 if env["FK_EDITOR_SMOKE"] == "1" {
@@ -35,14 +55,14 @@ if env["FK_EDITOR_SMOKE"] == "1" {
                 "Content-Type": "text/plain",
                 "Content-Length": String(body.count)
             ], body: body)
-            let resp = try await kernel.handle(req)
+            let resp = try await withTimeout(SMOKE_TIMEOUT) { try await kernel.handle(req) }
             if resp.status != 204 { fputs("[smoke] expected 204 create, got \(resp.status)\n", stderr); return 3 }
         } catch { fputs("[smoke] PUT create error: \(error)\n", stderr); return 3 }
         // GET with ETag
         let etag1: String
         do {
             FileHandle.standardError.write(Data("[smoke] GET script…\n".utf8))
-            let getResp = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/script"))
+            let getResp = try await withTimeout(SMOKE_TIMEOUT) { try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/script")) }
             if getResp.status != 200 { fputs("[smoke] expected 200 GET, got \(getResp.status)\n", stderr); return 4 }
             etag1 = getResp.headers["ETag"] ?? ""
             if etag1.count != 8 { fputs("[smoke] bad ETag length\n", stderr); return 4 }
@@ -56,7 +76,7 @@ if env["FK_EDITOR_SMOKE"] == "1" {
                 "Content-Type": "text/plain",
                 "Content-Length": String(body.count)
             ], body: body)
-            let resp = try await kernel.handle(req)
+            let resp = try await withTimeout(SMOKE_TIMEOUT) { try await kernel.handle(req) }
             if resp.status != 412 { fputs("[smoke] expected 412 mismatch, got \(resp.status)\n", stderr); return 5 }
         } catch { fputs("[smoke] PUT mismatch error: \(error)\n", stderr); return 5 }
         // Correct If-Match -> 204 and ETag changes
@@ -68,21 +88,20 @@ if env["FK_EDITOR_SMOKE"] == "1" {
                 "Content-Type": "text/plain",
                 "Content-Length": String(body.count)
             ], body: body)
-            let resp = try await kernel.handle(req)
+            let resp = try await withTimeout(SMOKE_TIMEOUT) { try await kernel.handle(req) }
             if resp.status != 204 { fputs("[smoke] expected 204 update, got \(resp.status)\n", stderr); return 6 }
-            let getResp = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/script"))
+            let getResp = try await withTimeout(SMOKE_TIMEOUT) { try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/script")) }
             let etag2 = getResp.headers["ETag"] ?? ""
             if etag2 == etag1 || etag2.count != 8 { fputs("[smoke] ETag did not change\n", stderr); return 6 }
         } catch { fputs("[smoke] PUT update error: \(error)\n", stderr); return 6 }
         print("[smoke] fountain-editor-server ETag flow OK")
         return 0
     }
-    let group = DispatchGroup()
-    var status: Int32 = 1
-    group.enter()
-    Task { status = await runSmoke(); group.leave() }
-    group.wait()
-    Darwin.exit(status)
+    Task {
+        let status = await runSmoke()
+        Darwin.exit(status)
+    }
+    dispatchMain()
 }
 
 // Only verify launcher signature for normal server mode (not smoke).

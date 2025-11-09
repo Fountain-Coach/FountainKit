@@ -3,14 +3,22 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: Scripts/dev/codex-danger [codex-subcommand] [args...]
+Usage: Scripts/dev/codex-danger [--danger|--safe] [codex-args...]
 
-Starts Codex with a danger profile (no sandboxing, no approvals) and
-injects a GitHub token from `gh auth token` if available.
+Starts Codex with a danger profile (no sandboxing, no approvals) when a
+sentinel is present, and injects a GitHub token from `gh auth token` if available.
 
 Examples:
-  Scripts/dev/codex-danger chat .
-  Scripts/dev/codex-danger run --package .
+  Scripts/dev/codex-danger            # interactive at repo root (safe unless sentinel)
+  Scripts/dev/codex-danger --version  # version check
+  Scripts/dev/codex-danger exec -c 'echo hi'
+
+Danger activation (opt-in):
+  - Create sentinel at repo root: `.codex-allow-danger` (git-ignored)
+  - Or set env `FK_CODEX_DANGER=1`
+  - Or pass `--danger` flag (one-shot)
+
+Override: pass `--safe` to force safe mode regardless of sentinel
 
 Flags:
   --relogin   Force a fresh GitHub login (logs out, then logs in via browser)
@@ -18,12 +26,16 @@ EOF
 }
 
 REL=0
+WANT_DANGER=""
+WANT_SAFE=""
 if [[ $# -gt 0 ]]; then
   NEW_ARGS=()
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -h|--help) usage; exit 0 ;;
       --relogin) REL=1; shift; continue ;;
+      --danger)  WANT_DANGER=1; shift; continue ;;
+      --safe)    WANT_SAFE=1; shift; continue ;;
       *) NEW_ARGS+=("$1"); shift ;;
     esac
   done
@@ -112,15 +124,64 @@ else
 fi
 
 # If no remaining args (e.g., only --relogin was passed), default to chat .
-if [[ $# -eq 0 ]]; then
-  set -- chat .
-fi
+## No default subcommand; interactive CLI starts when no args are provided.
+## Older docs used `chat .`, which is no longer valid on codex-cli >=0.55.
+## We rely on CODEX_CONFIG + current working directory instead.
 
 # Prefer env var, but only set it if the config actually exists.
 export CODEX_CONFIG="${CODEX_CONFIG:-$CONFIG_PATH}"
-case " $* " in
-  *" --config "*) ;;
-  *) set -- --config "$CONFIG_PATH" "$@" ;;
-esac
 
-exec codex "$@"
+# Resolve the Codex binary explicitly to avoid recursive wrappers
+CODEX_BIN="/opt/homebrew/bin/codex"
+if [[ ! -x "$CODEX_BIN" ]]; then
+  CODEX_BIN="codex"
+fi
+
+# Build final argv with danger/safe profile unless caller overrides
+ARGS=("$@")
+HAVE_SANDBOX=0
+HAVE_APPROVALS=0
+HAVE_CD=0
+for a in "${ARGS[@]:-}"; do
+  case "$a" in
+    -s|--sandbox) HAVE_SANDBOX=1 ;;
+    -a|--ask-for-approval) HAVE_APPROVALS=1 ;;
+    --dangerously-bypass-approvals-and-sandbox)
+      HAVE_SANDBOX=1; HAVE_APPROVALS=1 ;;
+    -C|--cd) HAVE_CD=1 ;;
+  esac
+done
+
+# Determine danger vs safe
+DANGER=0
+if [[ -n "${WANT_SAFE}" ]]; then
+  DANGER=0
+elif [[ -n "${WANT_DANGER}" ]]; then
+  DANGER=1
+elif [[ "${FK_CODEX_DANGER:-}" == "1" ]]; then
+  DANGER=1
+elif [[ -f "$REPO_ROOT/.codex-allow-danger" || -f "$REPO_ROOT/.fountain/allow-codex-danger" ]]; then
+  DANGER=1
+fi
+
+# Always set working directory unless caller already did
+if [[ $HAVE_CD -eq 0 ]]; then
+  ARGS=("-C" "$REPO_ROOT" "${ARGS[@]}")
+fi
+
+if [[ $DANGER -eq 1 ]]; then
+  # Enforce danger unless caller already passed sandbox/approvals
+  if [[ $HAVE_SANDBOX -eq 0 ]]; then
+    ARGS=("-s" "danger-full-access" "${ARGS[@]}")
+  fi
+  if [[ $HAVE_APPROVALS -eq 0 ]]; then
+    ARGS=("-a" "never" "${ARGS[@]}")
+  fi
+else
+  # Safe default: workspace-write + on-failure approvals
+  if [[ $HAVE_SANDBOX -eq 0 && $HAVE_APPROVALS -eq 0 ]]; then
+    ARGS=("--full-auto" "${ARGS[@]}")
+  fi
+fi
+
+exec "$CODEX_BIN" "${ARGS[@]}"

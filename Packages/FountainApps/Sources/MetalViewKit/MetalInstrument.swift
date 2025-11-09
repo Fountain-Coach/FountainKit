@@ -102,6 +102,7 @@ public final class MetalInstrument: @unchecked Sendable {
 
     private func handleUMP(_ words: [UInt32]) {
         guard let w1 = words.first else { return }
+        NotificationCenter.default.post(name: Notification.Name("BLETransportEvent"), object: nil, userInfo: ["event":"rx"])    
         let mt = UInt8((w1 >> 28) & 0xF)
         switch mt {
         case 0x4: // Channel Voice 2.0

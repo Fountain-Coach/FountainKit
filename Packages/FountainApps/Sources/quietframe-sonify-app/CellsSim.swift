@@ -92,7 +92,7 @@ import FountainAudioEngine
             FountainAudioEngine.shared.noteOn(note: note, velocity: vel)
             MidiMonitorStore.shared.add(String(format: "Cells NoteOn n=%d v=%d", note, vel))
             let (w0, w1) = Self.makeCV2NoteOnWords(group: 0, channel: 0, note: note, velocity7: vel)
-            journalUMPEvent(kind: "noteOn", note: note, velocity: vel, group: 0, channel: 0, w0: w0, w1: w1)
+            self.journalUMPEvent(kind: "noteOn", note: note, velocity: vel, group: 0, channel: 0, w0: w0, w1: w1)
             SidecarBridge.shared.sendNoteEvent(["event":"noteOn","note":Int(note),"velocity":Int(vel),"channel":0,"group":0,"source":"cells"])            
             events.append(["type":"noteOn","note":Int(note),"velocity":Int(vel),"ump":[String(format: "0x%08X", w0), String(format: "0x%08X", w1)]])
             // Include a scheduled NoteOff marker in this tick's batch for visibility
@@ -104,7 +104,7 @@ import FountainAudioEngine
                 FountainAudioEngine.shared.noteOff(note: note)
                 MidiMonitorStore.shared.add(String(format: "Cells NoteOff n=%d", note))
                 let (w0off, w1off) = Self.makeCV2NoteOffWords(group: 0, channel: 0, note: note, velocity7: 0)
-                journalUMPEvent(kind: "noteOff", note: note, velocity: 0, group: 0, channel: 0, w0: w0off, w1: w1off)
+                self.journalUMPEvent(kind: "noteOff", note: note, velocity: 0, group: 0, channel: 0, w0: w0off, w1: w1off)
                 SidecarBridge.shared.sendNoteEvent(["event":"noteOff","note":Int(note),"channel":0,"group":0,"source":"cells"])            
                 // We intentionally do not append to events here to keep per-tick cap stable; the NoteOff is visible via Sidecar.
             }

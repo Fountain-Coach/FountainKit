@@ -1,5 +1,4 @@
 import XCTest
-import FountainEditorCoreKit
 import FountainEditorMiniCore
 import Teatro
 
@@ -23,4 +22,3 @@ final class FountainEditorRuleToggleTests: XCTestCase {
         XCTAssertEqual(miniExt.acts[0].scenes.count, countExt)
     }
 }
-

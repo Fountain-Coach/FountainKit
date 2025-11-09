@@ -38,6 +38,11 @@ let package = Package(
             name: "MIDI2Transports",
             dependencies: []
         ),
+        .testTarget(
+            name: "MIDI2TransportsTests",
+            dependencies: ["MIDI2Transports"],
+            path: "Tests/MIDI2TransportsTests"
+        ),
         .target(
             name: "SSEOverMIDI",
             dependencies: [

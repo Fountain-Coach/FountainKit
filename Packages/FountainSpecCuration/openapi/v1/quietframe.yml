@@ -1,0 +1,106 @@
+openapi: 3.1.0
+info:
+  title: QuietFrame Service API
+  version: 1.0.0
+  description: |
+    OpenAPI-first surface for QuietFrame runtime control and MIDI bridging.
+    Keep this file authoritative; consuming targets mirror it under
+    `Packages/FountainApps/Sources/quietframe-service/openapi.yaml`.
+servers:
+  - url: http://localhost:7088
+tags:
+  - name: Health
+  - name: State
+  - name: Acts
+  - name: MIDI
+paths:
+  /health:
+    get:
+      tags: [Health]
+      operationId: getHealth
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [ok] }
+  /v1/state:
+    get:
+      tags: [State]
+      operationId: getState
+      responses:
+        '200':
+          description: Runtime state snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: { type: number }
+  /v1/act/select:
+    post:
+      tags: [Acts]
+      operationId: postActSelect
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [act]
+              properties:
+                act: { type: integer, minimum: 1, maximum: 9 }
+      responses:
+        '204': { description: Selected }
+  /v1/act/params:
+    post:
+      tags: [Acts]
+      operationId: postActParams
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: { type: number }
+      responses:
+        '204': { description: Applied }
+  /v1/midi/endpoints:
+    get:
+      tags: [MIDI]
+      operationId: listMidiEndpoints
+      responses:
+        '200':
+          description: Endpoints
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sources:
+                    type: array
+                    items: { type: string }
+                  destinations:
+                    type: array
+                    items: { type: string }
+  /v1/midi/ump:
+    post:
+      tags: [MIDI]
+      operationId: postMidiUMP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [words]
+              properties:
+                targetDisplayName: { type: string, description: "Substring match for endpoint display name" }
+                words:
+                  type: array
+                  items: { type: integer, format: uint32, minimum: 0, maximum: 4294967295 }
+      responses:
+        '204': { description: Sent }
+

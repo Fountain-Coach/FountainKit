@@ -11,9 +11,11 @@ public final class MIDI2SystemInstrumentTransport: MetalInstrumentTransport, @un
     public enum Backend: Sendable {
         case automatic
         case loopback
-        case coreMIDI
         case alsa
         case rtpFixedPort(UInt16)
+        case rtpConnect(host: String, port: UInt16)
+        case ble(String?) // optional target name substring
+        case blePeripheral(String?) // optional advertised name override
     }
 
     private let backend: Backend
@@ -39,18 +41,28 @@ public final class MIDI2SystemInstrumentTransport: MetalInstrumentTransport, @un
         case .loopback:
             return LoopbackTransport()
         case .rtpFixedPort(let port):
-            #if canImport(Network)
+#if canImport(Network)
             return RTPMidiSession(localName: descriptor.displayName, mtu: 1400, enableDiscovery: false, enableCINegotiation: true, listenPort: port)
+#else
+            return LoopbackTransport()
+#endif
+        case .rtpConnect(let host, let port):
+#if canImport(Network)
+            let t = RTPMidiSession(localName: descriptor.displayName, mtu: 1400, enableDiscovery: false, enableCINegotiation: true, listenPort: nil)
+            return ConnectOnOpenRTP(underlying: t, host: host, port: port)
+#else
+            return LoopbackTransport()
+#endif
+        case .ble(let nameSubstr):
+            #if canImport(CoreBluetooth)
+            if #available(macOS 12.0, *) {
+                return BLEMidiTransport(targetNameContains: nameSubstr)
+            } else {
+                return LoopbackTransport()
+            }
             #else
             return LoopbackTransport()
             #endif
-        case .coreMIDI:
-            #if canImport(CoreMIDI)
-            if #available(macOS 13.0, *) {
-                return CoreMIDITransport(name: descriptor.displayName, destinationName: nil, enableVirtualEndpoints: true)
-            }
-            #endif
-            return LoopbackTransport()
         case .alsa:
             #if os(Linux)
             return ALSATransport(useLoopback: true)
@@ -58,13 +70,18 @@ public final class MIDI2SystemInstrumentTransport: MetalInstrumentTransport, @un
             return LoopbackTransport()
             #endif
         case .automatic:
-            #if canImport(CoreMIDI)
-            if #available(macOS 13.0, *) {
-                return CoreMIDITransport(name: descriptor.displayName, destinationName: nil, enableVirtualEndpoints: true)
-            }
+            #if canImport(Network)
+            return RTPMidiSession(localName: descriptor.displayName, mtu: 1400, enableDiscovery: false, enableCINegotiation: true, listenPort: nil)
+            #else
+            return LoopbackTransport()
             #endif
-            #if os(Linux)
-            return ALSATransport(useLoopback: true)
+        case .blePeripheral(let name):
+            #if canImport(CoreBluetooth)
+            if #available(macOS 12.0, *) {
+                return BLEMidiPeripheralTransport(advertisedName: name ?? descriptor.displayName)
+            } else {
+                return LoopbackTransport()
+            }
             #else
             return LoopbackTransport()
             #endif
@@ -125,6 +142,22 @@ private final class MIDI2SystemInstrumentSession: MetalInstrumentTransportSessio
         }
     }
 }
+
+#if canImport(MIDI2Transports)
+private final class ConnectOnOpenRTP: MIDITransport, @unchecked Sendable {
+    private let underlying: RTPMidiSession
+    private let host: String
+    private let port: UInt16
+    init(underlying: RTPMidiSession, host: String, port: UInt16) { self.underlying = underlying; self.host = host; self.port = port }
+    var onReceiveUMP: (([UInt32]) -> Void)? {
+        get { underlying.onReceiveUMP }
+        set { underlying.onReceiveUMP = newValue }
+    }
+    func open() throws { try underlying.open(); try underlying.connect(host: host, port: port) }
+    func close() throws { try underlying.close() }
+    func send(umpWords: [UInt32]) throws { try underlying.send(umpWords: umpWords) }
+}
+#endif
 
 #else
 

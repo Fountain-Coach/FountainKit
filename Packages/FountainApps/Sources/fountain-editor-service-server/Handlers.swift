@@ -96,8 +96,10 @@ final class FountainEditorHandlers: APIProtocol, @unchecked Sendable {
             text = try await String(collecting: b, upTo: 1<<20)
         }
         let ifm = input.headers.If_hyphen_Match
-        // Require If-Match; return 400 when absent
-        guard ifm != nil else { return .undocumented(statusCode: 400, .init()) }
+        // Require If-Match; treat empty as missing
+        if ifm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return .undocumented(statusCode: 400, .init())
+        }
         let result = await core.putScript(corpusId: cid, body: text, ifMatch: ifm)
         if result.saved {
             return .noContent(.init())
@@ -652,7 +654,7 @@ extension FountainEditorHandlers {
             // Truncate original scene content after splitIdx
             if splitIdx < endIdx { lines.removeSubrange(splitIdx..<endIdx) }
             // Insert new block right after the (possibly shortened) original block
-            var insertAt = splitIdx
+            let insertAt = splitIdx
             // If we removed a range, indices shifted; insertAt now points to former splitIdx location (correct)
             lines.insert(contentsOf: newBlock, at: insertAt)
             text = lines.joined(separator: "\n")

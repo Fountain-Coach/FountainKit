@@ -348,6 +348,7 @@ fileprivate final class AtomicF {
     public func setAmplitude(_ a: Double) {}
     public func setParam(name: String, value: Double) {}
     public func snapshot() -> [String: Any] { [:] }
+    public static func installAudioTap(_ tap: ((UnsafePointer<Float>, UnsafePointer<Float>, Int, Double) -> Void)?) {}
 }
 #endif
 
@@ -355,9 +356,18 @@ fileprivate final class AtomicF {
 fileprivate func clamp01(_ x: Double) -> Double { max(0.0, min(1.0, x)) }
 
 // MARK: - Public performance API (SDLKit path)
+#if canImport(SDLKitAudio)
 public extension FountainAudioEngine {
     func noteOn(note: UInt8, velocity: UInt8) { eventLock.lock(); pendingEvents.append(.noteOn(note, velocity)); eventLock.unlock() }
     func noteOn(hz: Double, midiNote: UInt8, velocity: UInt8) { eventLock.lock(); pendingEvents.append(.noteOnHz(Float(hz), midiNote, velocity)); eventLock.unlock() }
     func noteOff(note: UInt8) { eventLock.lock(); pendingEvents.append(.noteOff(note)); eventLock.unlock() }
     func pitchBend(value14: UInt16) { eventLock.lock(); pendingEvents.append(.pitchBend(value14)); eventLock.unlock() }
 }
+#else
+public extension FountainAudioEngine {
+    func noteOn(note: UInt8, velocity: UInt8) {}
+    func noteOn(hz: Double, midiNote: UInt8, velocity: UInt8) {}
+    func noteOff(note: UInt8) {}
+    func pitchBend(value14: UInt16) {}
+}
+#endif

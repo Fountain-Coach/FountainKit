@@ -6,7 +6,6 @@ extension Notification.Name {
 import AppKit
 import Metal
 import MetalKit
-import CoreMIDI
 
 public extension Notification.Name {
     static let MetalCanvasMIDIActivity = Notification.Name("MetalCanvasMIDIActivity")

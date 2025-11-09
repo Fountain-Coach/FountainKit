@@ -305,19 +305,7 @@ let TARGETS: [Target] = EDITOR_MINIMAL ? [
             dependencies: [],
             path: "Sources/pbvrt-present"
         ),
-        .executableTarget(
-            name: "pbvrt-server",
-            dependencies: [
-                .product(name: "FountainRuntime", package: "FountainCore"),
-                .product(name: "FountainStoreClient", package: "FountainCore"),
-                .product(name: "LauncherSignature", package: "FountainCore"),
-                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
-                "pbvrt-service",
-                "CoreMLKit"
-            ],
-            path: "Sources/pbvrt-server",
-            plugins: []
-        ),
+        
         .executableTarget(
             name: "flow-instrument-seed",
             dependencies: [
@@ -460,6 +448,28 @@ let TARGETS: [Target] = EDITOR_MINIMAL ? [
             name: "QCMockServiceCore",
             dependencies: ["QCMockCore"],
             path: "Sources/QCMockServiceCore"
+        ),
+        // Service cores owning OpenAPI generation
+        .target(
+            name: "gateway-service",
+            dependencies: [
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
+            ],
+            path: "Sources/gateway-service",
+            plugins: [
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
+        .target(
+            name: "pbvrt-service",
+            dependencies: [
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/pbvrt-service",
+            plugins: [
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
         ),
         .executableTarget(
             name: "gateway-server",
@@ -1542,7 +1552,7 @@ let TARGETS: [Target] = EDITOR_MINIMAL ? [
             ],
             path: "Tests/MVKRuntimeServerTests"
         )
-    ]
+    ] )
 
 let package = Package(
     name: "FountainApps",

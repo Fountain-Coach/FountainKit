@@ -34,6 +34,8 @@ struct QuietFrameSonifySeed {
         await seedActII(store, corpusId: corpusId)
         // Seed integrated MIDI Bridge prompt (instrument within the app)
         await seedBridge(store, corpusId: corpusId)
+        await seedUIBlueprint(store, corpusId: corpusId)
+        await seedRouting(store, corpusId: corpusId)
         print("Seeded QuietFrame Sonify prompts + dramaturgy + bridge → corpus=\(corpusId) pages=[\(pageId), \(mrtId), prompt:quietframe-bridge, docs:quietframe:act1, reviews:quietframe:act2:cell-collider]")
     }
 
@@ -43,7 +45,7 @@ struct QuietFrameSonifySeed {
     What
     - A single-window macOS instrument renders a radial saliency field and sonifies presence.
     - The audio engine (SDLKit) is augmented by an ML analysis pipeline that evaluates stereo output and emits a polyphonic MIDI 2.0 note stream; these notes are re‑sonified to make recognition audible.
-    - The instrument exposes a formal MIDI 2.0 CI/PE surface (authoritative). An OpenAPI Params mirror may be used for development and tests. HUD includes saliency, mute, panic, test ping, and act controls (section/BPM/key/scale).
+    - The instrument exposes a formal MIDI 2.0 CI/PE surface (authoritative). An OpenAPI Params mirror may be used for development and tests. GUI follows Engraver baseline: a top toolbar (ScoreKit/RulesKit metrics) with Act/Section/BPM and essential controls. No floating overlay HUD.
     
     Why
     - Act I dramaturgy: “QuietFrame Note — On Saliency and Presence” and “Die Maschine träumt von Xenakis”. Attention becomes resonance. ML transcription externalizes what the machine “heard” as notes; sonification returns that awareness to the listener. PB‑VRT frames anchor repeatability.
@@ -62,6 +64,12 @@ struct QuietFrameSonifySeed {
     - Polyphonic re‑sonify: voice manager (poly cap), ADSR (A/R), velocity→amp, PB support; per‑note updates in callback.
     - MIDI 2.0 policy: CI discovery required; PE Get/Set + Notify for all state changes. Channel Voice 2.0 reserved for performance (Note On/Off from analysis, Pitch Bend). OpenAPI Params mirror is a dev convenience and must remain CI‑equivalent.
     - Journaling (PB‑VRT): log tNs, saliency snapshot, UMP batches (CC/Note), PE bundles (Set/Notify), engine snapshot. Quiet Frame invariants: mapping (±2%), envelope timing (±5%), latency ≤50 ms, sustained chord RMS stability.
+
+    Bluetooth MIDI (HUD)
+    - HUD shows a Bluetooth icon. Tap brings up a panel with two roles, mirroring AUM:
+      • Central — Find & connect with devices. Shows a live list (name, RSSI) with connect/disconnect; optional target filter. Facts: ble.mode=central, ble.scan, ble.devices[], ble.connected, ble.targetName, rx/tx counters. Ops: ble.scan.start/stop, ble.connect(nameSubstr), ble.disconnect.
+      • Peripheral — Advertise this device. Controls for Advertise on/off and advertised name (default "QuietFrame#<instanceId>"). Facts: ble.mode=peripheral, ble.advertising, ble.advertised.name, ble.connectedPeers. Ops: ble.advertise.start(name), ble.advertise.stop.
+    - Transport policy: CoreMIDI is prohibited. BLE and RTP MIDI 2.0 run via our midi2 stack; Loopback used for sidecar/tests. SysEx7 (MIDI‑CI/PE) is fully supported and chunked appropriately for BLE MTU.
     
     Where
     - Code: MetalViewKit (instrument/renderer), FountainAudioEngine (engine), analysis/* (ML pipeline).
@@ -86,6 +94,11 @@ struct QuietFrameSonifySeed {
     - amplitude = min(0.25, s×0.20) ± 0.02.
     - audio.test.ping: ok=true; rms≥0.05.
     - threshold gate hysteresis = 0.03.
+
+    BLE HUD
+    - Default mode: off. On tapping Bluetooth icon, switching to Central shows device list within 3–10 seconds; manual scan toggle available.
+    - Switching to Peripheral starts advertising with name "QuietFrame#<instanceId>" and reports ble.advertising=true.
+    - No CoreMIDI surfaces are present.
     """
 
     static func factsJSON() -> String? {
@@ -206,6 +219,22 @@ struct QuietFrameSonifySeed {
                 "window": 1024,
                 "latencyGoalMs": 50
             ]
+            ,
+            "ble": [
+                "hud": true,
+                "defaultMode": "off",
+                "modes": ["central","peripheral"],
+                "ops": [
+                    "ble.mode.set",
+                    "ble.scan.start","ble.scan.stop","ble.connect","ble.disconnect",
+                    "ble.advertise.start","ble.advertise.stop"
+                ],
+                "facts": [
+                    "ble.mode","ble.scan","ble.target.name","ble.devices","ble.connected",
+                    "ble.advertising","ble.advertised.name","ble.connectedPeers",
+                    "ble.rx.count","ble.tx.count","ble.rssi"
+                ]
+            ]
         ]
         if let data = try? JSONSerialization.data(withJSONObject: facts, options: [.prettyPrinted, .sortedKeys]), let s = String(data: data, encoding: .utf8) { return s }
         return nil
@@ -269,6 +298,14 @@ struct QuietFrameSonifySeed {
         let facts: [String: Any] = [
             "app": "quietframe-act2",
             "midi": ["ciRequired": true, "peNamespace": "cells", "cv2": ["group": 0, "channel": 0]],
+            "ui": ["prompt.version": 2, "layout": "engraver.toolbar.top"],
+            "acts.map": [
+                ["code": 1, "short": "I",   "label": "Genesis des Rauschens"],
+                ["code": 2, "short": "II",  "label": "Topologie des Schalls"],
+                ["code": 3, "short": "III", "label": "Formalismus träumt"],
+                ["code": 4, "short": "IV",  "label": "Die Stimme der Architektur"],
+                ["code": 5, "short": "V",   "label": "Das Schweigen"]
+            ],
             "cells": [
                 "grid": ["width": 64, "height": 40, "wrap": true],
                 "rule": ["name": "life"],
@@ -285,82 +322,128 @@ struct QuietFrameSonifySeed {
         }
     }
 
-    // MARK: - Integrated MIDI Bridge prompt (UMP→MIDI 1.0; CoreMIDI)
+    // MARK: - UI Blueprint (doc)
+    static func seedUIBlueprint(_ store: FountainStoreClient, corpusId: String) async {
+        let page = "docs:quietframe:ui-blueprint"
+        _ = try? await store.addPage(.init(corpusId: corpusId, pageId: page, url: "store://docs/quietframe/ui-blueprint", host: "store", title: "UI Blueprint — Engraver Toolbar"))
+        let doc = """
+        UI Blueprint — QuietFrame (Engraver Toolbar, v2)
+
+        Layout
+        - Top toolbar, Engraver baseline (ScoreKit spacing, RulesKit alignment).
+        - Items: Akt picker (I–V) → title label (acts.map) | Divider | Satz (section) stepper | Divider | BPM slider + readout | Divider | Mute/Panic/Test icons.
+        - BLE indicator remains on the right (Central, TX/RX blink + counters).
+
+        Routing Overlay (v3)
+        - Central overlay instrument for routing: Sources | Destinations | Routes | Monitor.
+        - Actions: connect/disconnect; future: learn CC/channel, remap, mirror UMP↔︎MIDI 1.0.
+        - North star: AUM’s MIDI 1.0 surface clarity; we preserve UMP semantics internally.
+
+        Tokens (EngraverTokens)
+        - Spacing: xs=4, s=6, m=10, l=14, xl=20
+        - Metrics: toolbarControlWidth=120, toolbarCornerRadius=6
+
+        Facts
+        - ui.prompt.version=3
+        - ui.layout=engraver.toolbar.top+routing.overlay.center
+        - acts.map: [ {code, short, label} ] — see prompt:quietframe-act2:facts
+        """
+        _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(page):doc", pageId: page, kind: "doc", text: doc))
+    }
+
+    // MARK: - Routing (AUM‑inspired matrix, v4)
+    static func seedRouting(_ store: FountainStoreClient, corpusId: String) async {
+        let page = "prompt:quietframe-routing"
+        _ = try? await store.addPage(.init(corpusId: corpusId, pageId: page, url: "store://prompt/quietframe/routing", host: "store", title: "QuietFrame — MIDI Routing Matrix (AUM‑inspired, Central)"))
+        let teatro = """
+        What
+        - AUM‑style square matrix: rows = sources, columns = destinations, cells = routes. Shows at fixed aspect (1:1), centered, summoned by “Routing…” (⌘R). Non‑blocking; canvas stays interactive when closed.
+        - Internal truth is UMP; per‑route we optionally down‑map to MIDI‑1 (channel mask) and filter message classes (CV2/M1/PE/Utility).
+
+        Why
+        - Fast topology edits with a glanceable grid that scales (dozens of endpoints). Matches AUM operator muscle memory; preserves MIDI 2.0 semantics.
+
+        Visual Traits (AUM‑inspired)
+        - Square matrix; 1 px crisp grid lines; diagonal hatch for invalid cells.
+        - Row labels: left band, icons (BLE/RTP/local) + status dot; horizontal text.
+        - Column labels: top band, rotated 90°, icons + type badge.
+        - Cell states: off (outline), on (filled + inner highlight + tiny right‑arrow glyph), hover/focus (keyline ring + tooltip), filtered (tiny badges CV2/M1/PE), invalid (hatch, disabled cursor).
+        - Micro‑animations: toggle flicker (30–60 ms), Inspector scale+fade (120 ms), arrow draw (25 ms).
+
+        Behavior
+        - Click toggles route. Option‑click/right‑click opens Inspector.
+        - Shift‑drag sweeps cells to toggle in bulk.
+        - Keyboard: arrows move focus; Space toggles; Enter opens Inspector; Esc closes panel.
+        - Panel opened by toolbar/menu; remembers size/position.
+
+        Inspector (per cell)
+        - channelMask (1–16, All), group (0–15), filters {cv2, m1, pe, utility}.
+        - Caption: <source> → <destination>. Apply/Remove route.
+
+        Persistence
+        - Save/Load routes as a routing blueprint doc; no CoreMIDI, BLE/RTP only via midi2 transport.
+        """
+        _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(page):teatro", pageId: page, kind: "teatro.prompt", text: teatro))
+        let facts: [String: Any] = [
+            "ui": ["prompt.version": 4, "layout": "engraver.toolbar.top+routing.panel.matrix.square"],
+            "matrix": ["square": true, "gridPx": 1, "rowLabelIcons": true, "colTopRotated": true, "hatchInvalid": true],
+            "defaults": [
+                "group": 0,
+                "channelMask": "all",
+                "filters": ["cv2": 1, "m1": 1, "pe": 1, "utility": 1]
+            ],
+            "tokens": [
+                "spacing": ["xs": 4, "s": 6, "m": 10, "l": 14, "xl": 20],
+                "colors": ["grid": "#FFFFFF22", "tileOn": "#3A82FF", "tileHover": "#FFFFFF12", "hatch": "#FFFFFF10"]
+            ],
+            "iconMap": ["ble": "wave.3", "rtp": "dot.radiowaves.left.and.right", "local": "square.stack.3d.down.right"],
+            "sources": [], "destinations": [], "routes": []
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: facts, options: [.prettyPrinted, .sortedKeys]), let text = String(data: data, encoding: .utf8) {
+            _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(page):facts", pageId: page, kind: "facts", text: text))
+        }
+        let blueprint = """
+        Routing Blueprint (v4)
+        - routes: Array of { row:Int, col:Int, channelMask:[Int]|"all", group:Int, filters:{cv2:0/1,m1:0/1,pe:0/1,utility:0/1} }
+        - sources/destinations are discovered at runtime (BLE central, RTP, local instrument).
+        """
+        _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(page):blueprint", pageId: page, kind: "doc", text: blueprint))
+    }
+    // MARK: - BLE MIDI (Central‑only)
     static func seedBridge(_ store: FountainStoreClient, corpusId: String) async {
         let page = "prompt:quietframe-bridge"
         _ = try? await store.addPage(.init(corpusId: corpusId, pageId: page, url: "store://prompt/quietframe-bridge", host: "store", title: "QuietFrame — MIDI Bridge (Integrated)"))
         let teatro = """
-        Scene: QuietFrame — Integriertes MIDI‑Bridge‑Instrument (aktbewusste Identität)
+        Scene: QuietFrame — BLE‑MIDI (Central only)
 
-        Was
-        - Die QuietFrame‑App enthält ein integriertes Bridge‑Instrument, das Channel Voice 2.0 (UMP) nach MIDI 1.0 wandelt und eine virtuelle CoreMIDI‑1.0‑Quelle veröffentlicht.
-        - Die App und die Bridge werben Namen, die den aktuellen Akt der Partitur kodieren. Ein Akt‑Wechsel aktualisiert die Namen, sodass Hosts (z. B. AUM auf dem iPad als Bluetooth‑Central) den Akt sehen.
-        - Keine externen Skripte; CI/PE steuert Identität und Bridge‑Verhalten.
+        What
+        - QuietFrame acts as a BLE‑MIDI Central and auto‑connects to a BLE‑MIDI Peripheral (e.g., AUM on iPad). No CoreMIDI anywhere.
+        - UMP is the internal format; the BLE path maps UMP↔︎MIDI 1.0 as needed.
 
-        Warum
-        - Reibungslose Interop mit heutigen DAWs und iOS‑Hosts; der Akt ist sofort ersichtlich. Der Operator muss nichts manuell starten.
+        Why
+        - Deterministic, crash‑free transport on Swift 6. Simpler UX: always Central.
 
-        Wie
-        - Partitur‑Akten (Quelle: Public/Die_Maschine_traeumt_von_Xenakis_FINAL.md):
-          • Akt I — „Genesis des Rauschens“
-          • Akt II — „Topologie des Schalls“
-          • Akt III — „Formalismus träumt“
-          • Akt IV — „Die Stimme der Architektur“
-          • Akt V — „Das Schweigen“
-        - Identität (Namen):
-          • UMP (virtuell, Protokoll 2.0): „QuietFrame — Akt {N}: {Label} (UMP)“
-          • Bridge‑Quelle (MIDI 1.0): „QuietFrame — Akt {N}: {Label} (M1)“
-          • Bei mehreren Fenstern wird ein Suffix ergänzt: „… (UMP) #2“, „… (M1) #2“
-        - Akt‑Wechsel: Schreiben von `midi.identity.act` (1..5) re‑advertisiert alle Endpunkte mit neuem Namen; Ziel: ≤1.0 s bis Sichtbarkeit in CoreMIDI. UMP‑Signalfluss bleibt unberührt.
-        - Bridge‑Wandlung: NoteOn/Off → 0x9/0x8; CC 32‑bit → 7‑bit (Rundung); PB 32‑bit → 14‑bit. Kanal erhalten.
-        - Mirroring (optional): Ausgabe an CoreMIDI‑Destination per Teilstring (z. B. „AUM“, „Session 1“, Gerätename). Auto‑Auswahl bevorzugt [„AUM“, „Bluetooth“, „BLE“, „Session“, „iPad“, „Network“].
-        - Discovery: Lese‑Liste der verfügbaren CoreMIDI‑Destinationen.
+        How
+        - Auto‑scan on launch; connect to the first match (or an optional filter substring).
+        - Discrete HUD hint (indicator dot) blinks when sending.
 
-        CI/PE
-        - `midi.identity.*`
-          • baseName (string; „QuietFrame“)
-          • act (int 1..5) – schreibt/liest den aktuellen Akt
-          • instanceId (string, ro)
-          • acts.map (Array {code, short, label}, ro)
-          • advertised.ump (string, ro), advertised.m1 (string, ro)
-        - `midi.bridge.*`
-          • enable (0/1), autoDest (0/1), dest.name (string), dest.list (string JSON[], ro)
-          • mode = „coremidi“ (ro)
-          • status.connected (0/1, ro), status.dest (string, ro), stats.*
+        CI/PE (subset)
+        - `ble.target.name` (string; optional filter)
+        - `ble.status.connected` (0/1, ro); `ble.status.device` (string, ro); `ble.status.rssi` (int, ro if available)
+        - `ble.tx.count` (int, ro), `ble.lastSendNs` (string, ro)
 
-        HUD
-        - Niedrige HUD‑Zeile mit Bridge‑Status (an/aus, Ziel, Counter). Tippen toggelt enable; Popover listet Ziele und „Auto“.
-
-        Evidenz
-        - Journal bleibt UMP‑erst (Quelle der Wahrheit); Bridge fügt ≤5 ms Latenz p95 hinzu; keine Blockade des UMP‑Pfades.
+        Evidence
+        - Journal remains UMP‑first. BLE adds ≤10 ms p95 under typical loads.
         """
         _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(page):teatro", pageId: page, kind: "teatro.prompt", text: teatro))
         let facts: [String: Any] = [
-            "midi.identity": [
-                "baseName": "QuietFrame",
-                "act": 1,
-                "instanceId": "qf-1",
-                "acts.map": [
-                    ["code": 1, "short": "I",   "label": "Genesis des Rauschens"],
-                    ["code": 2, "short": "II",  "label": "Topologie des Schalls"],
-                    ["code": 3, "short": "III", "label": "Formalismus träumt"],
-                    ["code": 4, "short": "IV",  "label": "Die Stimme der Architektur"],
-                    ["code": 5, "short": "V",   "label": "Das Schweigen"]
-                ],
-                "advertised": [
-                    "ump": "QuietFrame — Akt I: Genesis des Rauschens (UMP)",
-                    "m1":  "QuietFrame — Akt I: Genesis des Rauschens (M1)"
-                ]
+            "ble": [
+                "target.name": "",
+                "status": ["connected": 0, "device": "", "rssi": 0],
+                "tx": ["count": 0, "lastSendNs": "0"]
             ],
-            "midi.bridge": [
-                "enable": true,
-                "autoDest": true,
-                "destPref": ["AUM","Bluetooth","BLE","Session","iPad","Network"],
-                "destName": "",
-                "mode": "coremidi",
-                "status": ["connected": 0, "dest": ""],
-                "stats": ["events": 0, "dropped": 0, "lastError": "", "lastChangeNs": "0"]
-            ]
+            "midi": ["format": "ump", "cv2": ["group": 0, "channel": 0]],
+            "ui": ["prompt.version": 3, "layout": "engraver.toolbar.top+routing.overlay.center"]
         ]
         if let data = try? JSONSerialization.data(withJSONObject: facts, options: [.prettyPrinted, .sortedKeys]), let text = String(data: data, encoding: .utf8) {
             _ = try? await store.addSegment(.init(corpusId: corpusId, segmentId: "\(page):facts", pageId: page, kind: "facts", text: text))

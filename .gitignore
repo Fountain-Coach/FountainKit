@@ -37,3 +37,4 @@ Workspace/the-four-stars/
 
 # Codex CLI local configs (do not commit)
 /codex*.toml
+.codex-allow-danger

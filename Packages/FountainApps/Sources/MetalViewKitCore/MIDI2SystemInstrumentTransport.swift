@@ -14,6 +14,7 @@ public final class MIDI2SystemInstrumentTransport: MetalInstrumentTransport, @un
         case coreMIDI
         case alsa
         case rtpFixedPort(UInt16)
+        case rtpConnect(host: String, port: UInt16)
     }
 
     private let backend: Backend
@@ -44,12 +45,14 @@ public final class MIDI2SystemInstrumentTransport: MetalInstrumentTransport, @un
             #else
             return LoopbackTransport()
             #endif
-        case .coreMIDI:
-            #if canImport(CoreMIDI)
-            if #available(macOS 13.0, *) {
-                return CoreMIDITransport(name: descriptor.displayName, destinationName: nil, enableVirtualEndpoints: true)
-            }
+        case .rtpConnect(let host, let port):
+            #if canImport(Network)
+            let t = RTPMidiSession(localName: descriptor.displayName, mtu: 1400, enableDiscovery: false, enableCINegotiation: true, listenPort: nil)
+            return ConnectOnOpenRTP(underlying: t, host: host, port: port)
+            #else
+            return LoopbackTransport()
             #endif
+        case .coreMIDI:
             return LoopbackTransport()
         case .alsa:
             #if os(Linux)
@@ -58,19 +61,30 @@ public final class MIDI2SystemInstrumentTransport: MetalInstrumentTransport, @un
             return LoopbackTransport()
             #endif
         case .automatic:
-            #if canImport(CoreMIDI)
-            if #available(macOS 13.0, *) {
-                return CoreMIDITransport(name: descriptor.displayName, destinationName: nil, enableVirtualEndpoints: true)
-            }
-            #endif
-            #if os(Linux)
-            return ALSATransport(useLoopback: true)
+            #if canImport(Network)
+            return RTPMidiSession(localName: descriptor.displayName, mtu: 1400, enableDiscovery: false, enableCINegotiation: true, listenPort: nil)
             #else
             return LoopbackTransport()
             #endif
         }
     }
 }
+
+#if canImport(MIDI2Transports)
+private final class ConnectOnOpenRTP: MIDITransport, @unchecked Sendable {
+    private let underlying: RTPMidiSession
+    private let host: String
+    private let port: UInt16
+    init(underlying: RTPMidiSession, host: String, port: UInt16) { self.underlying = underlying; self.host = host; self.port = port }
+    var onReceiveUMP: (([UInt32]) -> Void)? {
+        get { underlying.onReceiveUMP }
+        set { underlying.onReceiveUMP = newValue }
+    }
+    func open() throws { try underlying.open(); try underlying.connect(host: host, port: port) }
+    func close() throws { try underlying.close() }
+    func send(umpWords: [UInt32]) throws { try underlying.send(umpWords: umpWords) }
+}
+#endif
 
 private final class MIDI2SystemInstrumentSession: MetalInstrumentTransportSession, @unchecked Sendable {
     private var transport: any MIDITransport

@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Focused PB‑VRT lane for the blank page app.
+# Gates manifest to only blank-page-app and its tests.
+
+ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+PKG_PATH="$ROOT_DIR/Packages/FountainApps"
+
+export FK_BLANK_VRT_ONLY=1
+
+cmd="${1:-baselines}"
+case "$cmd" in
+  build)
+    swift build --package-path "$PKG_PATH" -c debug --target blank-page-app
+    ;;
+  baselines)
+    UPDATE_BASELINES=1 swift test --package-path "$PKG_PATH" -c debug --filter BlankSnapshotTests
+    ;;
+  validate)
+    swift test --package-path "$PKG_PATH" -c debug --filter BlankSnapshotTests
+    ;;
+  *)
+    echo "Usage: $0 [build|baselines|validate]" >&2; exit 2
+    ;;
+esac
+

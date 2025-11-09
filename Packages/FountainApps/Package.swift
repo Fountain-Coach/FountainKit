@@ -11,9 +11,12 @@ let FK_SKIP_NOISY = ProcessInfo.processInfo.environment["FK_SKIP_NOISY_TARGETS"]
 
 let EDITOR_MINIMAL = ProcessInfo.processInfo.environment["FK_EDITOR_MINIMAL"] == "1" || ProcessInfo.processInfo.environment["FK_SKIP_NOISY_TARGETS"] == "1"
 let EDITOR_VRT_ONLY = ProcessInfo.processInfo.environment["FK_EDITOR_VRT_ONLY"] == "1"
+let BLANK_VRT_ONLY = ProcessInfo.processInfo.environment["FK_BLANK_VRT_ONLY"] == "1"
 
 // Products list with optional minimal gating for editor-only scenarios
-let PRODUCTS: [Product] = EDITOR_VRT_ONLY ? [
+let PRODUCTS: [Product] = BLANK_VRT_ONLY ? [
+    .executable(name: "blank-page-app", targets: ["blank-page-app"])
+] : (EDITOR_VRT_ONLY ? [
     .executable(name: "quietframe-editor-app", targets: ["quietframe-editor-app"]),
     .executable(name: "editor-snapshots", targets: ["editor-snapshots"])
 ] : (EDITOR_MINIMAL ? [
@@ -131,7 +134,9 @@ let PRODUCTS: [Product] = EDITOR_VRT_ONLY ? [
 )
 
 // Dependencies list with minimal mode avoiding heavy stacks
-let DEPENDENCIES: [Package.Dependency] = EDITOR_VRT_ONLY ? [
+let DEPENDENCIES: [Package.Dependency] = BLANK_VRT_ONLY ? [
+    // no external deps
+] : (EDITOR_VRT_ONLY ? [
     .package(path: "../FountainCore")
 ] : (EDITOR_MINIMAL ? [
     .package(path: "../FountainCore"),
@@ -188,7 +193,24 @@ let DEPENDENCIES: [Package.Dependency] = EDITOR_VRT_ONLY ? [
 ) 
     
 // Targets list; in minimal mode, only editor core + server
-let TARGETS: [Target] = EDITOR_VRT_ONLY ? [
+let TARGETS: [Target] = BLANK_VRT_ONLY ? [
+    .executableTarget(
+        name: "blank-page-app",
+        dependencies: [
+        ],
+        path: "Sources/blank-page-app"
+    ),
+    .testTarget(
+        name: "BlankAppUITests",
+        dependencies: [
+            "blank-page-app"
+        ],
+        path: "Tests/BlankAppUITests",
+        resources: [
+            .process("Baselines")
+        ]
+    )
+] : (EDITOR_VRT_ONLY ? [
     .executableTarget(
         name: "quietframe-editor-app",
         dependencies: [

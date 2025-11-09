@@ -1109,13 +1109,10 @@ let TARGETS: [Target] = EDITOR_MINIMAL ? [
                 .product(name: "FountainStoreClient", package: "FountainCore"),
                 .product(name: "LauncherSignature", package: "FountainCore"),
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                "pbvrt-service",
                 "CoreMLKit"
             ],
-            path: "Sources/pbvrt-server",
-            plugins: [
-                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
-                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
-            ]
+            path: "Sources/pbvrt-server"
         ),
         .executableTarget(
             name: "pbvrt-embed-ci",

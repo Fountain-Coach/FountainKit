@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# QuietFrame — Fountain Editor (default instrument) one-click launcher
+#
+# Purpose
+# - Launch the real QuietFrame app (quietframe-sonify-app) with the Fountain Editor
+#   instrument as the default surface.
+# - Do a safe clean of the package’s build state to avoid stale artifacts.
+# - Keep sidecars and extras off; this is a lightweight editor run.
+#
+# Usage
+#   Scripts/apps/quietframe-editor-default            # clean + build + run
+#   Scripts/apps/quietframe-editor-default --no-clean # faster iter (skip clean)
+#   Scripts/apps/quietframe-editor-default --release  # build in release
+#   Scripts/apps/quietframe-editor-default --seed     # seed QuietFrame Teatro prompt
+#
+# Environment
+#   CORPUS_ID=quietframe (default) — corpus used by the integrated editor model
+#   FOUNTAINSTORE_DIR (optional) — override store root
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PKG_PATH="$ROOT/Packages/FountainApps"
+
+cfg="debug"
+do_clean=1
+do_seed=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --no-clean) do_clean=0 ;;
+    --release) cfg="release" ;;
+    --seed) do_seed=1 ;;
+    -h|--help|help)
+      sed -n '1,80p' "$0" | sed -n '2,40p' | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "[qf-editor] unknown arg: $1" 1>&2; exit 2 ;;
+  esac; shift
+done
+
+echo "[qf-editor] Starting QuietFrame with Fountain Editor (cfg=$cfg)"
+
+if [[ "$do_clean" == "1" ]]; then
+  echo "[qf-editor] swift package reset/clean…"
+  (cd "$PKG_PATH" && swift package reset || true && swift package clean || true)
+fi
+
+if [[ "$do_seed" == "1" ]]; then
+  echo "[qf-editor] Seeding QuietFrame Teatro prompt…"
+  "$ROOT/Scripts/apps/quietframe-teatro-seed" || echo "[qf-editor] seed warning (continuing)"
+fi
+
+echo "[qf-editor] Building quietframe-sonify-app…"
+swift build --package-path "$PKG_PATH" -c "$cfg" --target quietframe-sonify-app
+
+BIN_DIR="$(swift build --package-path "$PKG_PATH" -c "$cfg" --show-bin-path 2>/dev/null || true)"
+APP_BUNDLE="$BIN_DIR/quietframe-sonify-app.app"
+BIN_PATH="$BIN_DIR/quietframe-sonify-app"
+
+export SWIFTPM_ENABLE_SANDBOX=0
+export CORPUS_ID="${CORPUS_ID:-quietframe}"
+
+if [[ -d "$APP_BUNDLE" ]]; then
+  INNER_BIN="$APP_BUNDLE/Contents/MacOS/quietframe-sonify-app"
+  echo "[qf-editor] Launching app bundle…"
+  exec "$INNER_BIN"
+elif [[ -x "$BIN_PATH" ]]; then
+  echo "[qf-editor] Launching binary…"
+  exec "$BIN_PATH"
+else
+  echo "[qf-editor] Fallback to swift run…"
+  exec swift run --package-path "$PKG_PATH" -c "$cfg" quietframe-sonify-app
+fi
+

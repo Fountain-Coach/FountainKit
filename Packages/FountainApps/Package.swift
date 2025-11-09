@@ -1241,6 +1241,13 @@ let package = Package(
             path: "Sources/engraving-app"
         ),
         .executableTarget(
+            name: "quietframe-editor-app",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/quietframe-editor-app"
+        ),
+        .executableTarget(
             name: "memchat-app",
             dependencies: [
                 .product(name: "LauncherSignature", package: "FountainCore"),

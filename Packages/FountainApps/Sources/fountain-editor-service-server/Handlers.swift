@@ -60,9 +60,11 @@ final class FountainEditorServerCore: @unchecked Sendable {
 final class FountainEditorHandlers: APIProtocol, @unchecked Sendable {
     let core: FountainEditorServerCore
     let placements: PlacementsStore
+    let instruments: InstrumentsStore
     init(store: FountainStoreClient) {
         self.core = FountainEditorServerCore(store: store)
         self.placements = PlacementsStore(store: store)
+        self.instruments = InstrumentsStore(store: store)
     }
 
     // GET /editor/health
@@ -154,10 +156,43 @@ final class FountainEditorHandlers: APIProtocol, @unchecked Sendable {
     }
 
     // Stubs for endpoints not yet implemented
-    func get_sol_editor_sol__lcub_corpusId_rcub__sol_instruments(_ input: Operations.get_sol_editor_sol__lcub_corpusId_rcub__sol_instruments.Input) async throws -> Operations.get_sol_editor_sol__lcub_corpusId_rcub__sol_instruments.Output { .ok(.init(body: .json([]))) }
-    func post_sol_editor_sol__lcub_corpusId_rcub__sol_instruments(_ input: Operations.post_sol_editor_sol__lcub_corpusId_rcub__sol_instruments.Input) async throws -> Operations.post_sol_editor_sol__lcub_corpusId_rcub__sol_instruments.Output { .created(.init(body: .json(.init(instrumentId: UUID().uuidString, name: "stub", profile: .midi2sampler, programBase: nil, defaultMapping: nil, tags: nil, notes: nil)))) }
-    func get_sol_editor_sol__lcub_corpusId_rcub__sol_instruments_sol__lcub_instrumentId_rcub_(_ input: Operations.get_sol_editor_sol__lcub_corpusId_rcub__sol_instruments_sol__lcub_instrumentId_rcub_.Input) async throws -> Operations.get_sol_editor_sol__lcub_corpusId_rcub__sol_instruments_sol__lcub_instrumentId_rcub_.Output { .undocumented(statusCode: 404, .init()) }
-    func patch_sol_editor_sol__lcub_corpusId_rcub__sol_instruments_sol__lcub_instrumentId_rcub_(_ input: Operations.patch_sol_editor_sol__lcub_corpusId_rcub__sol_instruments_sol__lcub_instrumentId_rcub_.Input) async throws -> Operations.patch_sol_editor_sol__lcub_corpusId_rcub__sol_instruments_sol__lcub_instrumentId_rcub_.Output { .noContent(.init()) }
+    func get_sol_editor_sol__lcub_corpusId_rcub__sol_instruments(_ input: Operations.get_sol_editor_sol__lcub_corpusId_rcub__sol_instruments.Input) async throws -> Operations.get_sol_editor_sol__lcub_corpusId_rcub__sol_instruments.Output {
+        let cid = input.path.corpusId
+        let q = input.query.q
+        let list = await instruments.list(corpusId: cid, query: q)
+        return .ok(.init(body: .json(list)))
+    }
+    func post_sol_editor_sol__lcub_corpusId_rcub__sol_instruments(_ input: Operations.post_sol_editor_sol__lcub_corpusId_rcub__sol_instruments.Input) async throws -> Operations.post_sol_editor_sol__lcub_corpusId_rcub__sol_instruments.Output {
+        let cid = input.path.corpusId
+        guard case .json(let create) = input.body else {
+            return .undocumented(statusCode: 415, .init())
+        }
+        // Validate mapping if provided
+        if let m = create.defaultMapping {
+            try FountainEditorValidation.validateMapping(channels: m.channels?.map { Int($0) }, group: m.group.map { Int($0) }, filters: m.filters?.map { $0.rawValue })
+        }
+        let inst = await instruments.create(corpusId: cid, create: create)
+        return .created(.init(body: .json(inst)))
+    }
+    func get_sol_editor_sol__lcub_corpusId_rcub__sol_instruments_sol__lcub_instrumentId_rcub_(_ input: Operations.get_sol_editor_sol__lcub_corpusId_rcub__sol_instruments_sol__lcub_instrumentId_rcub_.Input) async throws -> Operations.get_sol_editor_sol__lcub_corpusId_rcub__sol_instruments_sol__lcub_instrumentId_rcub_.Output {
+        let cid = input.path.corpusId
+        let iid = input.path.instrumentId
+        if let inst = await instruments.get(corpusId: cid, instrumentId: iid) {
+            return .ok(.init(body: .json(inst)))
+        }
+        return .undocumented(statusCode: 404, .init())
+    }
+    func patch_sol_editor_sol__lcub_corpusId_rcub__sol_instruments_sol__lcub_instrumentId_rcub_(_ input: Operations.patch_sol_editor_sol__lcub_corpusId_rcub__sol_instruments_sol__lcub_instrumentId_rcub_.Input) async throws -> Operations.patch_sol_editor_sol__lcub_corpusId_rcub__sol_instruments_sol__lcub_instrumentId_rcub_.Output {
+        let cid = input.path.corpusId
+        let iid = input.path.instrumentId
+        guard case .json(let upd) = input.body else { return .undocumented(statusCode: 415, .init()) }
+        // Validate mapping if provided
+        if let m = upd.defaultMapping {
+            try FountainEditorValidation.validateMapping(channels: m.channels?.map { Int($0) }, group: m.group.map { Int($0) }, filters: m.filters?.map { $0.rawValue })
+        }
+        let ok = await instruments.update(corpusId: cid, instrumentId: iid, update: upd)
+        return ok ? .noContent(.init()) : .undocumented(statusCode: 404, .init())
+    }
 
     func get_sol_editor_sol__lcub_corpusId_rcub__sol_placements(_ input: Operations.get_sol_editor_sol__lcub_corpusId_rcub__sol_placements.Input) async throws -> Operations.get_sol_editor_sol__lcub_corpusId_rcub__sol_placements.Output {
         let cid = input.path.corpusId
@@ -305,5 +340,89 @@ actor PlacementsStore {
         idx.removeValue(forKey: id)
         await saveIndex(corpusId, idx)
         return list.count != before
+    }
+}
+
+// MARK: - Instruments persistence
+actor InstrumentsStore {
+    private let store: FountainStoreClient
+    init(store: FountainStoreClient) { self.store = store }
+    private func pageId(_ corpusId: String) -> String { "editor:instruments:\(corpusId)" }
+    private func listSegmentId(_ corpusId: String) -> String { "\(pageId(corpusId)):editor.instruments" }
+
+    private func ensurePage(_ corpusId: String) async {
+        let pid = pageId(corpusId)
+        let page = Page(corpusId: corpusId, pageId: pid, url: "store://\(pid)", host: "store", title: "Instruments \(corpusId)")
+        _ = try? await store.addPage(page)
+    }
+
+    struct Model: Codable, Sendable {
+        var instrumentId: String
+        var name: String
+        var profile: Components.Schemas.Instrument.profilePayload
+        var programBase: Int?
+        var defaultMapping: Components.Schemas.Mapping?
+        var tags: [String]?
+        var notes: String?
+    }
+
+    private func loadList(_ corpusId: String) async -> [Model] {
+        let pid = pageId(corpusId)
+        let segId = listSegmentId(corpusId)
+        if let data = try? await store.getDoc(corpusId: corpusId, collection: "segments", id: segId),
+           let seg = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let text = seg["text"] as? String,
+           let json = text.data(using: .utf8),
+           let arr = try? JSONDecoder().decode([Model].self, from: json) {
+            return arr
+        }
+        // Ensure page exists at first access
+        await ensurePage(corpusId)
+        return []
+    }
+
+    private func saveList(_ corpusId: String, _ list: [Model]) async {
+        await ensurePage(corpusId)
+        let pid = pageId(corpusId)
+        let seg = Segment(corpusId: corpusId, segmentId: listSegmentId(corpusId), pageId: pid, kind: "editor.instruments", text: (try? String(data: JSONEncoder().encode(list), encoding: .utf8)) ?? "[]")
+        _ = try? await store.addSegment(seg)
+    }
+
+    func list(corpusId: String, query: String?) async -> [Components.Schemas.Instrument] {
+        let q = query?.lowercased()
+        let items = await loadList(corpusId)
+        let filtered = q.map { needle in items.filter { $0.name.lowercased().contains(needle) || ($0.tags ?? []).contains { $0.lowercased().contains(needle) } } } ?? items
+        return filtered.map { Components.Schemas.Instrument(instrumentId: $0.instrumentId, name: $0.name, profile: $0.profile, programBase: $0.programBase.map { Int32($0) }, defaultMapping: $0.defaultMapping, tags: $0.tags, notes: $0.notes) }
+    }
+
+    func create(corpusId: String, create: Components.Schemas.InstrumentCreate) async -> Components.Schemas.Instrument {
+        var list = await loadList(corpusId)
+        let id = UUID().uuidString
+        let model = Model(instrumentId: id, name: create.name, profile: .midi2sampler, programBase: create.programBase.map { Int($0) }, defaultMapping: create.defaultMapping, tags: create.tags, notes: create.notes)
+        list.append(model)
+        await saveList(corpusId, list)
+        return Components.Schemas.Instrument(instrumentId: id, name: model.name, profile: model.profile, programBase: model.programBase.map { Int32($0) }, defaultMapping: model.defaultMapping, tags: model.tags, notes: model.notes)
+    }
+
+    func get(corpusId: String, instrumentId: String) async -> Components.Schemas.Instrument? {
+        let list = await loadList(corpusId)
+        if let m = list.first(where: { $0.instrumentId == instrumentId }) {
+            return Components.Schemas.Instrument(instrumentId: m.instrumentId, name: m.name, profile: m.profile, programBase: m.programBase.map { Int32($0) }, defaultMapping: m.defaultMapping, tags: m.tags, notes: m.notes)
+        }
+        return nil
+    }
+
+    func update(corpusId: String, instrumentId: String, update: Components.Schemas.InstrumentUpdate) async -> Bool {
+        var list = await loadList(corpusId)
+        guard let idx = list.firstIndex(where: { $0.instrumentId == instrumentId }) else { return false }
+        var m = list[idx]
+        if let name = update.name { m.name = name }
+        if let pb = update.programBase { m.programBase = Int(pb) }
+        if let map = update.defaultMapping { m.defaultMapping = map }
+        if let tags = update.tags { m.tags = tags }
+        if let notes = update.notes { m.notes = notes }
+        list[idx] = m
+        await saveList(corpusId, list)
+        return true
     }
 }

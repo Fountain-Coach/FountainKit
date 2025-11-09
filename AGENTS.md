@@ -122,6 +122,8 @@ Process per file: capture intent in a brief opening paragraph; collapse long lis
 - Canonical scripts live under `Scripts/<area>/` with a scoped AGENTS.md per area. Root paths are thin wrappers only.
 - See `Scripts/AGENTS.md:1` for full conventions, areas, and lifecycle tools. Dev lifecycle and Codex details are in `Scripts/dev/AGENTS.md:1`.
 
+- Targeted wrappers index: fast single‑service builds/runs are documented under `Scripts/AGENTS.md` (section “Targeted Wrappers (Service‑Minimal)”). Use `Scripts/dev/<service>-min [build|run]` to compile only that server.
+
 - Launcher: `Scripts/dev/codex-danger:1`; installer wrapper: `Scripts/dev/install-codex:1`.
 - Local config (optional): `codex.danger.toml:1` (ignored by git).
 

@@ -3,6 +3,7 @@ import SwiftUI
 import AppKit
 @testable import quietframe_editor_app
 
+@MainActor
 final class EditorSnapshotTests: XCTestCase {
     struct Size { let w: CGFloat; let h: CGFloat; let name: String }
     let sizes = [Size(w: 1440, h: 900, name: "1440x900"), Size(w: 1280, h: 800, name: "1280x800")]
@@ -10,14 +11,10 @@ final class EditorSnapshotTests: XCTestCase {
     func testSnapshots_editorLanding() throws {
         for s in sizes {
             autoreleasepool {
-                let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: s.w, height: s.h),
-                                   styleMask: [.titled, .closable], backing: .buffered, defer: false)
                 // Seed deterministic text to avoid server dependency
                 setenv("EDITOR_SEED_TEXT", "# Act 1\n\n## Scene One\n\nINT. SCENE ONE — DAY\n\nText.", 1)
                 let hosting = NSHostingView(rootView: EditorLandingView())
-                hosting.frame = win.contentView!.bounds
-                hosting.autoresizingMask = [.width, .height]
-                win.contentView!.addSubview(hosting)
+                hosting.frame = NSRect(x: 0, y: 0, width: s.w, height: s.h)
                 // Allow initial load task to run a tick
                 RunLoop.current.run(until: Date().addingTimeInterval(0.2))
 
@@ -43,7 +40,6 @@ final class EditorSnapshotTests: XCTestCase {
                     try? SnapshotUtils.writePNG(img, to: out)
                     XCTFail("Baseline missing for \(s.name); wrote candidate to \(out.path)")
                 }
-                win.close()
             }
         }
     }

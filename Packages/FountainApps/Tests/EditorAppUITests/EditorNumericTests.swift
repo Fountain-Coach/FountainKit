@@ -3,8 +3,13 @@ import AppKit
 import SwiftUI
 @testable import quietframe_editor_app
 
+@MainActor
 final class EditorNumericTests: XCTestCase {
     func testNumericInvariants_outlineAndGutter() throws {
+        // Skip in headless runs unless explicitly enabled
+        if ProcessInfo.processInfo.environment["EDITOR_NUMERIC_ENABLE"] != "1" {
+            throw XCTSkip("Numeric invariants disabled in headless runs")
+        }
         let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
             .appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
@@ -28,4 +33,3 @@ final class EditorNumericTests: XCTestCase {
         XCTAssertEqual(Int(gutter.rounded()), 14, "gutter width")
     }
 }
-

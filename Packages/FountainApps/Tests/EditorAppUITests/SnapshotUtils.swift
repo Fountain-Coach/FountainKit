@@ -1,6 +1,7 @@
 import XCTest
 import AppKit
 
+@MainActor
 enum SnapshotUtils {
     struct DiffResult { let rmse: Double; let heatmap: NSImage }
 
@@ -67,4 +68,3 @@ enum SnapshotUtils {
         rep.colorAt(x: x, y: y) ?? .black
     }
 }
-

@@ -71,6 +71,30 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         XCTAssertEqual(got2?["programBase"] as? Int, 1)
     }
 
+    func testProposals_create_withPersonaAndRationale_echoedBack() async throws {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let (kernel, _) = await makeKernelAndStore(tmp: tmp)
+
+        let cid = "fountain-editor"
+        let pObj: [String: Any] = [
+            "op": "composeBlock",
+            "params": ["text": "Hello"],
+            "authorPersona": "Planner",
+            "rationale": "Append a greeting"
+        ]
+        let pBody = try JSONSerialization.data(withJSONObject: pObj)
+        let pReq = HTTPRequest(method: "POST", path: "/editor/\(cid)/proposals", headers: [
+            "Content-Type": "application/json",
+            "Content-Length": String(pBody.count)
+        ], body: pBody)
+        let pResp = try await kernel.handle(pReq)
+        XCTAssertEqual(pResp.status, 201)
+        let created = try JSONSerialization.jsonObject(with: pResp.body ?? Data()) as? [String: Any]
+        XCTAssertEqual(created?["authorPersona"] as? String, "Planner")
+        XCTAssertEqual(created?["rationale"] as? String, "Append a greeting")
+    }
+
     func testProposals_composeBlock_apply_advancesETag() async throws {
         let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)

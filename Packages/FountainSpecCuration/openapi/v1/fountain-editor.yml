@@ -38,7 +38,13 @@ paths:
     put:
       summary: Save Fountain script (ETag required)
       tags: [editor]
-      parameters: [ { $ref: '#/components/parameters/CorpusId' } ]
+      parameters:
+        - { $ref: '#/components/parameters/CorpusId' }
+        - name: If-Match
+          in: header
+          required: true
+          description: Strong ETag of current script or "*" to create when absent
+          schema: { type: string }
       requestBody:
         required: true
         content:
@@ -46,7 +52,7 @@ paths:
             schema: { type: string }
       responses:
         '204': { description: Saved }
-        '409': { description: ETag mismatch }
+        '412': { description: ETag mismatch (Precondition Failed) }
       security: []
 
   /editor/{corpusId}/structure:
@@ -134,7 +140,49 @@ paths:
       summary: Create proposal (e.g., rewriteRange, insertScene)
       tags: [proposals]
       parameters: [ { $ref: '#/components/parameters/CorpusId' } ]
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ProposalCreate' } } } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProposalCreate' }
+            examples:
+              insertScene:
+                summary: Insert a new scene with title and slug after anchor
+                value:
+                  op: insertScene
+                  anchor: act1.scene1
+                  params: { title: "Inserted", slug: "INT. INSERTED — DAY" }
+              renameScene:
+                summary: Rename a scene heading
+                value:
+                  op: renameScene
+                  anchor: act1.scene2
+                  params: { title: "New Title" }
+              rewriteRange:
+                summary: Replace substring by offsets
+                value:
+                  op: rewriteRange
+                  params: { start: 6, end: 11, text: "Editor" }
+              moveScene:
+                summary: Move a scene after another scene
+                value:
+                  op: moveScene
+                  anchor: act1.scene1
+                  params: { targetAnchor: act1.scene2, position: after }
+              splitScene:
+                summary: Split a scene at content line offset
+                value:
+                  op: splitScene
+                  anchor: act1.scene1
+                  params: { newTitle: Beta, atLine: 2 }
+              applyPatch:
+                summary: Apply two range edits
+                value:
+                  op: applyPatch
+                  params:
+                    edits:
+                      - { start: 11, end: 17, text: "" }
+                      - { start: 6, end: 11, text: Editor }
       responses:
         '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Proposal' } } } }
 
@@ -265,8 +313,26 @@ components:
       type: object
       properties:
         op: { type: string, enum: [composeBlock, rewriteRange, insertScene, renameScene, moveScene, splitScene, applyPatch] }
-        params: { type: object, additionalProperties: true }
+        params:
+          type: object
+          additionalProperties: true
+          description: |
+            Operation-specific parameters.
+            Recognized keys per op:
+            - composeBlock: { text: string }
+            - insertScene: { title?: string, slug?: string }
+            - renameScene: { title: string }
+            - rewriteRange: { start: int, end: int, text: string }
+            - moveScene: { sourceAnchor?: string, targetAnchor: string, position?: "after"|"before" }
+            - splitScene: { newTitle?: string, atLine?: int }
+            - applyPatch: { edits: [{ start: int, end: int, text: string }] }
         anchor: { $ref: '#/components/schemas/AnchorId' }
+        authorPersona:
+          type: string
+          description: Optional author persona name or id associated with this proposal.
+        rationale:
+          type: string
+          description: Short human-readable rationale for the proposal.
       required: [op]
     Proposal:
       type: object
@@ -277,7 +343,20 @@ components:
         params: { type: object }
         anchor: { $ref: '#/components/schemas/AnchorId' }
         status: { type: string, enum: [pending, accepted, rejected] }
+        authorPersona:
+          type: string
+          description: Optional author persona name or id associated with this proposal.
+        rationale:
+          type: string
+          description: Short human-readable rationale for the proposal.
       required: [proposalId, createdAt, op, status]
+    ProposalEdit:
+      type: object
+      properties:
+        start: { type: integer, minimum: 0 }
+        end: { type: integer, minimum: 0 }
+        text: { type: string }
+      required: [start, end]
     ProposalDecision:
       type: object
       properties: { decision: { type: string, enum: [accept, reject] } }
@@ -297,4 +376,3 @@ components:
         createdAt: { type: string, format: date-time }
         lastMessageAt: { type: string, format: date-time }
       required: [sessionId, corpusId, createdAt]
-

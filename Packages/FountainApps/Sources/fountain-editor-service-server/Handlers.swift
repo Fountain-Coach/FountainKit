@@ -699,6 +699,8 @@ actor ProposalsStore {
         var anchor: String?
         var status: Components.Schemas.Proposal.statusPayload
         var paramsJSON: String?
+        var authorPersona: String?
+        var rationale: String?
     }
 
     private func ensurePage(_ corpusId: String) async {
@@ -734,10 +736,28 @@ actor ProposalsStore {
         var list = await loadList(corpusId)
         var paramsStr: String? = nil
         if let p = body.params, let data = try? JSONEncoder().encode(p) { paramsStr = String(data: data, encoding: .utf8) }
-        let model = Model(proposalId: UUID().uuidString, createdAt: Date(), op: body.op.rawValue, anchor: body.anchor, status: .pending, paramsJSON: paramsStr)
+        let model = Model(
+            proposalId: UUID().uuidString,
+            createdAt: Date(),
+            op: body.op.rawValue,
+            anchor: body.anchor,
+            status: .pending,
+            paramsJSON: paramsStr,
+            authorPersona: body.authorPersona,
+            rationale: body.rationale
+        )
         list.append(model)
         await saveList(corpusId, list)
-        return Components.Schemas.Proposal(proposalId: model.proposalId, createdAt: model.createdAt, op: model.op, params: body.params?.additionalProperties, anchor: model.anchor, status: model.status)
+        return Components.Schemas.Proposal(
+            proposalId: model.proposalId,
+            createdAt: model.createdAt,
+            op: model.op,
+            params: body.params?.additionalProperties,
+            anchor: model.anchor,
+            status: model.status,
+            authorPersona: model.authorPersona,
+            rationale: model.rationale
+        )
     }
 
     func decide(corpusId: String, proposalId: String, decision: Components.Schemas.ProposalDecision) async -> Components.Schemas.ProposalResult {

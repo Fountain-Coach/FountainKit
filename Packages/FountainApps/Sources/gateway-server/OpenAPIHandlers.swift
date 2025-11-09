@@ -1,5 +1,6 @@
 import Foundation
 import OpenAPIRuntime
+import gateway_service
 import HTTPTypes
 import FountainRuntime
 #if canImport(ChatKitGatewayPlugin)

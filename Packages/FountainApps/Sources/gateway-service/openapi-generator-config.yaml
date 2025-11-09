@@ -1,0 +1,20 @@
+generate:
+  - types
+  - server
+accessModifier: public
+filter:
+  paths:
+    - /health
+    - /metrics
+    - /auth/token
+    - /certificates
+    - /certificates/renew
+    - /chatkit/session
+    - /chatkit/session/refresh
+    - /chatkit/messages
+    - /chatkit/upload
+    - /chatkit/attachments/{attachmentId}
+    - /chatkit/threads
+    - /chatkit/threads/{threadId}
+    - /routes
+    - /routes/{routeId}

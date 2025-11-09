@@ -1,5 +1,6 @@
 import Foundation
 import OpenAPIRuntime
+import pbvrt_service
 import FountainStoreClient
 import Vision
 import AVFoundation

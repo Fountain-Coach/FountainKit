@@ -10,11 +10,18 @@ let FK_DISABLE_QFCELLS = ProcessInfo.processInfo.environment["FK_DISABLE_QFCELLS
 let FK_SKIP_NOISY = ProcessInfo.processInfo.environment["FK_SKIP_NOISY_TARGETS"] == "1" || ProcessInfo.processInfo.environment["FK_EDITOR_MINIMAL"] == "1"
 
 let EDITOR_MINIMAL = ProcessInfo.processInfo.environment["FK_EDITOR_MINIMAL"] == "1" || ProcessInfo.processInfo.environment["FK_SKIP_NOISY_TARGETS"] == "1"
+let MIN_TARGET = ProcessInfo.processInfo.environment["FK_MIN_TARGET"]?.lowercased()
+let GATEWAY_MINIMAL = MIN_TARGET == "gateway"
+let PBVRT_MINIMAL = MIN_TARGET == "pbvrt"
 
 // Products list with optional minimal gating for editor-only scenarios
-let PRODUCTS: [Product] = EDITOR_MINIMAL ? [
+let PRODUCTS: [Product] = (EDITOR_MINIMAL || MIN_TARGET == "editor") ? [
     .executable(name: "fountain-editor-service-server", targets: ["fountain-editor-service-server"]),
     .library(name: "FountainEditorCoreKit", targets: ["fountain-editor-service-core"])
+] : (GATEWAY_MINIMAL ? [
+    .executable(name: "gateway-server", targets: ["gateway-server"])
+] : (PBVRT_MINIMAL ? [
+    .executable(name: "pbvrt-server", targets: ["pbvrt-server"])
 ] : (ROBOT_ONLY ? [
         // Robot-only: expose just what PatchBay tests need
         .executable(name: "patchbay-app", targets: ["patchbay-app"]),
@@ -124,7 +131,19 @@ let PRODUCTS: [Product] = EDITOR_MINIMAL ? [
     ])
 
 // Dependencies list with minimal mode avoiding heavy stacks
-let DEPENDENCIES: [Package.Dependency] = EDITOR_MINIMAL ? [
+let DEPENDENCIES: [Package.Dependency] = (EDITOR_MINIMAL || MIN_TARGET == "editor") ? [
+    .package(path: "../FountainCore"),
+    .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
+    .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0")
+] : (GATEWAY_MINIMAL ? [
+    .package(path: "../FountainCore"),
+    .package(path: "../FountainGatewayKit"),
+    .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
+    .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0"),
+    .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
+    .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
+    .package(url: "https://github.com/apple/swift-certificates.git", from: "1.0.0")
+] : (PBVRT_MINIMAL ? [
     .package(path: "../FountainCore"),
     .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
     .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0")
@@ -178,7 +197,7 @@ let DEPENDENCIES: [Package.Dependency] = EDITOR_MINIMAL ? [
     ]
 
 // Targets list; in minimal mode, only editor core + server
-let TARGETS: [Target] = EDITOR_MINIMAL ? [
+let TARGETS: [Target] = (EDITOR_MINIMAL || MIN_TARGET == "editor") ? [
     .target(
         name: "fountain-editor-service-core",
         dependencies: [
@@ -198,6 +217,66 @@ let TARGETS: [Target] = EDITOR_MINIMAL ? [
             .product(name: "LauncherSignature", package: "FountainCore")
         ],
         path: "Sources/fountain-editor-service-server"
+    )
+] : (GATEWAY_MINIMAL ? [
+    .target(
+        name: "gateway-service",
+        dependencies: [
+            .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
+        ],
+        path: "Sources/gateway-service",
+        plugins: [
+            .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+        ]
+    ),
+    .executableTarget(
+        name: "gateway-server",
+        dependencies: [
+            "gateway-service",
+            .product(name: "FountainRuntime", package: "FountainCore"),
+            .product(name: "PublishingFrontend", package: "FountainGatewayKit"),
+            .product(name: "LLMGatewayPlugin", package: "FountainGatewayKit"),
+            .product(name: "PolicyGatewayPlugin", package: "FountainGatewayKit"),
+            .product(name: "AuthGatewayPlugin", package: "FountainGatewayKit"),
+            .product(name: "CuratorGatewayPlugin", package: "FountainGatewayKit"),
+            .product(name: "RateLimiterGatewayPlugin", package: "FountainGatewayKit"),
+            .product(name: "BudgetBreakerGatewayPlugin", package: "FountainGatewayKit"),
+            .product(name: "PayloadInspectionGatewayPlugin", package: "FountainGatewayKit"),
+            .product(name: "DestructiveGuardianGatewayPlugin", package: "FountainGatewayKit"),
+            .product(name: "RoleHealthCheckGatewayPlugin", package: "FountainGatewayKit"),
+            .product(name: "SecuritySentinelGatewayPlugin", package: "FountainGatewayKit"),
+            .product(name: "ChatKitGatewayPlugin", package: "FountainGatewayKit"),
+            .product(name: "GatewayPersonaOrchestrator", package: "FountainGatewayKit"),
+            .product(name: "LauncherSignature", package: "FountainCore"),
+            .product(name: "FountainStoreClient", package: "FountainCore"),
+            "Yams",
+            .product(name: "Crypto", package: "swift-crypto"),
+            .product(name: "X509", package: "swift-certificates")
+        ],
+        path: "Sources/gateway-server"
+    )
+] : (PBVRT_MINIMAL ? [
+    .target(
+        name: "pbvrt-service",
+        dependencies: [
+            .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
+        ],
+        path: "Sources/pbvrt-service",
+        plugins: [
+            .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+        ]
+    ),
+    .executableTarget(
+        name: "pbvrt-server",
+        dependencies: [
+            "pbvrt-service",
+            .product(name: "FountainRuntime", package: "FountainCore"),
+            .product(name: "FountainStoreClient", package: "FountainCore"),
+            .product(name: "LauncherSignature", package: "FountainCore"),
+            .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+            "CoreMLKit"
+        ],
+        path: "Sources/pbvrt-server"
     )
 ] : (ROBOT_ONLY ? [
         .target(
@@ -283,9 +362,20 @@ let TARGETS: [Target] = EDITOR_MINIMAL ? [
             dependencies: [],
             path: "Sources/pbvrt-present"
         ),
+        .target(
+            name: "pbvrt-service",
+            dependencies: [
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
+            ],
+            path: "Sources/pbvrt-service",
+            plugins: [
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
         .executableTarget(
             name: "pbvrt-server",
             dependencies: [
+                "pbvrt-service",
                 .product(name: "FountainRuntime", package: "FountainCore"),
                 .product(name: "FountainStoreClient", package: "FountainCore"),
                 .product(name: "LauncherSignature", package: "FountainCore"),
@@ -293,10 +383,7 @@ let TARGETS: [Target] = EDITOR_MINIMAL ? [
                 "CoreMLKit"
             ],
             path: "Sources/pbvrt-server",
-            plugins: [
-                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
-                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
-            ]
+            plugins: []
         ),
         .executableTarget(
             name: "flow-instrument-seed",
@@ -441,9 +528,20 @@ let TARGETS: [Target] = EDITOR_MINIMAL ? [
             dependencies: ["QCMockCore"],
             path: "Sources/QCMockServiceCore"
         ),
+        .target(
+            name: "gateway-service",
+            dependencies: [
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
+            ],
+            path: "Sources/gateway-service",
+            plugins: [
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
         .executableTarget(
             name: "gateway-server",
             dependencies: [
+                "gateway-service",
                 .product(name: "FountainRuntime", package: "FountainCore"),
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "PublishingFrontend", package: "FountainGatewayKit"),
@@ -465,11 +563,7 @@ let TARGETS: [Target] = EDITOR_MINIMAL ? [
                 .product(name: "X509", package: "swift-certificates"),
                 "Yams"
             ],
-            exclude: ["README.md"],
-            plugins: [
-                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
-                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
-            ]
+            exclude: ["README.md"]
         ),
         .executableTarget(
             name: "midi-service-server",

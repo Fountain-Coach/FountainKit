@@ -611,6 +611,69 @@ extension FountainEditorHandlers {
             }
             lines.insert(contentsOf: insertBlock, at: insertIndex)
             text = lines.joined(separator: "\n")
+        case "splitScene":
+            // Split a scene into two. Params: anchor (optional, defaults model.anchor), newTitle (default: "Split"), atLine (Int >=0) offset from the first content line after heading.
+            let targetAnchor = model.anchor ?? (params["anchor"] as? String)
+            guard let anchor = targetAnchor, !anchor.isEmpty else { return (false, nil, "missing anchor") }
+            let newTitle = (params["newTitle"] as? String) ?? "Split"
+            let atLine = (params["atLine"] as? Int) ?? 0
+            let structure = FountainEditorCore.parseStructure(text: text)
+            guard let scene = structure.acts.flatMap({ $0.scenes }).first(where: { $0.anchor == anchor }) else {
+                return (false, nil, "anchor not found")
+            }
+            var lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+            // locate heading
+            var headingIndex: Int? = nil
+            for i in 0..<lines.count {
+                if lines[i].trimmingCharacters(in: .whitespaces) == "## \(scene.title)" { headingIndex = i; break }
+            }
+            guard let startIdx = headingIndex else { return (false, nil, "heading not found") }
+            // compute end of block
+            var endIdx = startIdx + 1
+            while endIdx < lines.count {
+                if lines[endIdx].trimmingCharacters(in: .whitespaces).hasPrefix("## ") { break }
+                endIdx += 1
+            }
+            let contentStart = startIdx + 1
+            let contentLines = max(0, endIdx - contentStart)
+            let splitOffset = max(0, min(atLine, contentLines))
+            let splitIdx = contentStart + splitOffset
+            // New scene block: blank line + heading + slug, then the tail content
+            let slug = "INT. \(newTitle.uppercased()) — DAY"
+            var newBlock: [String] = []
+            if splitIdx < lines.count, !(lines[splitIdx].isEmpty) { newBlock.append("") }
+            newBlock.append("## \(newTitle)")
+            newBlock.append("")
+            newBlock.append(slug)
+            // Tail content from splitIdx ..< endIdx
+            if splitIdx < endIdx {
+                newBlock.append(contentsOf: lines[splitIdx..<endIdx])
+            }
+            // Truncate original scene content after splitIdx
+            if splitIdx < endIdx { lines.removeSubrange(splitIdx..<endIdx) }
+            // Insert new block right after the (possibly shortened) original block
+            var insertAt = splitIdx
+            // If we removed a range, indices shifted; insertAt now points to former splitIdx location (correct)
+            lines.insert(contentsOf: newBlock, at: insertAt)
+            text = lines.joined(separator: "\n")
+        case "applyPatch":
+            // Apply multiple range edits: params.edits = [{start:Int,end:Int,text:String}, ...]
+            guard let editsAny = params["edits"] as? [Any], !editsAny.isEmpty else { return (false, nil, "missing edits") }
+            struct Edit { let start: Int; let end: Int; let text: String }
+            var edits: [Edit] = []
+            for e in editsAny {
+                guard let m = e as? [String: Any], let s = m["start"] as? Int, let en = m["end"] as? Int else { return (false, nil, "invalid edit") }
+                let t = (m["text"] as? String) ?? ""
+                if s < 0 || en < s || en > text.count { return (false, nil, "invalid range") }
+                edits.append(Edit(start: s, end: en, text: t))
+            }
+            // Apply in descending order to avoid offset shifts
+            edits.sort { $0.start > $1.start }
+            for e in edits {
+                let sIdx = text.index(text.startIndex, offsetBy: e.start)
+                let eIdx = text.index(text.startIndex, offsetBy: e.end)
+                text.replaceSubrange(sIdx..<eIdx, with: e.text)
+            }
         default:
             return (false, nil, "unsupported op \(op)")
         }

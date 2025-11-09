@@ -343,4 +343,111 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         XCTAssertNotNil(idxB)
         XCTAssertTrue(idxB! < idxA!)
     }
+
+    func testProposals_splitScene_splitsAtLine() async throws {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let (kernel, _) = await makeKernelAndStore(tmp: tmp)
+
+        let cid = "fountain-editor"
+
+        // Seed one scene with two content lines
+        let script = "## Alpha\n\nINT. ALPHA — DAY\n\nFirst\nSecond\n"
+        let putCreate = HTTPRequest(method: "PUT", path: "/editor/\(cid)/script", headers: [
+            "If-Match": "*",
+            "Content-Type": "text/plain",
+            "Content-Length": String(script.utf8.count)
+        ], body: Data(script.utf8))
+        _ = try await kernel.handle(putCreate)
+
+        // Split after first content line
+        let pObj: [String: Any] = [
+            "op": "splitScene",
+            "params": ["newTitle": "Beta", "atLine": 2],
+            "anchor": "act1.scene1"
+        ]
+        let pBody = try JSONSerialization.data(withJSONObject: pObj)
+        let pReq = HTTPRequest(method: "POST", path: "/editor/\(cid)/proposals", headers: [
+            "Content-Type": "application/json",
+            "Content-Length": String(pBody.count)
+        ], body: pBody)
+        let pResp = try await kernel.handle(pReq)
+        XCTAssertEqual(pResp.status, 201)
+        let created = try JSONSerialization.jsonObject(with: pResp.body ?? Data()) as? [String: Any]
+        let proposalId = created?["proposalId"] as? String
+        XCTAssertNotNil(proposalId)
+
+        // Accept decision
+        let dObj: [String: Any] = ["decision": "accept"]
+        let dBody = try JSONSerialization.data(withJSONObject: dObj)
+        let dReq = HTTPRequest(method: "POST", path: "/editor/\(cid)/proposals/\(proposalId!)", headers: [
+            "Content-Type": "application/json",
+            "Content-Length": String(dBody.count)
+        ], body: dBody)
+        let dResp = try await kernel.handle(dReq)
+        XCTAssertEqual(dResp.status, 200)
+
+        // Verify headings and content distribution
+        let getResp2 = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/script"))
+        XCTAssertEqual(getResp2.status, 200)
+        let text = String(decoding: getResp2.body ?? Data(), as: UTF8.self)
+        // Alpha then Beta
+        let idxAlpha = text.range(of: "## Alpha")?.lowerBound
+        let idxBeta = text.range(of: "## Beta")?.lowerBound
+        XCTAssertNotNil(idxAlpha); XCTAssertNotNil(idxBeta); XCTAssertTrue(idxAlpha! < idxBeta!)
+        // First should remain with Alpha; Second should be under Beta
+        // Check by relative ordering
+        let idxFirst = text.range(of: "First")?.lowerBound
+        let idxSecond = text.range(of: "Second")?.lowerBound
+        XCTAssertNotNil(idxFirst); XCTAssertNotNil(idxSecond)
+        XCTAssertTrue(idxFirst! < idxBeta!)
+        XCTAssertTrue(idxSecond! > idxBeta!)
+    }
+
+    func testProposals_applyPatch_multipleRangeEdits() async throws {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let (kernel, _) = await makeKernelAndStore(tmp: tmp)
+
+        let cid = "fountain-editor"
+        let script = "Hello World Again"
+        let putCreate = HTTPRequest(method: "PUT", path: "/editor/\(cid)/script", headers: [
+            "If-Match": "*",
+            "Content-Type": "text/plain",
+            "Content-Length": String(script.utf8.count)
+        ], body: Data(script.utf8))
+        _ = try await kernel.handle(putCreate)
+
+        // Apply two edits: delete " Again" and replace World->Editor
+        let edits: [[String: Any]] = [
+            ["start": 11, "end": 17, "text": ""],
+            ["start": 6, "end": 11, "text": "Editor"]
+        ]
+        let pObj: [String: Any] = ["op": "applyPatch", "params": ["edits": edits]]
+        let pBody = try JSONSerialization.data(withJSONObject: pObj)
+        let pReq = HTTPRequest(method: "POST", path: "/editor/\(cid)/proposals", headers: [
+            "Content-Type": "application/json",
+            "Content-Length": String(pBody.count)
+        ], body: pBody)
+        let pResp = try await kernel.handle(pReq)
+        XCTAssertEqual(pResp.status, 201)
+        let created = try JSONSerialization.jsonObject(with: pResp.body ?? Data()) as? [String: Any]
+        let proposalId = created?["proposalId"] as? String
+        XCTAssertNotNil(proposalId)
+
+        // Accept decision
+        let dObj: [String: Any] = ["decision": "accept"]
+        let dBody = try JSONSerialization.data(withJSONObject: dObj)
+        let dReq = HTTPRequest(method: "POST", path: "/editor/\(cid)/proposals/\(proposalId!)", headers: [
+            "Content-Type": "application/json",
+            "Content-Length": String(dBody.count)
+        ], body: dBody)
+        let dResp = try await kernel.handle(dReq)
+        XCTAssertEqual(dResp.status, 200)
+
+        let getResp2 = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/script"))
+        XCTAssertEqual(getResp2.status, 200)
+        let textOut = String(decoding: getResp2.body ?? Data(), as: UTF8.self)
+        XCTAssertEqual(textOut, "Hello Editor")
+    }
 }

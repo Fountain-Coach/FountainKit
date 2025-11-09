@@ -556,4 +556,50 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         let pResp = try await kernel.handle(HTTPRequest(method: "PATCH", path: "/editor/sessions/\(sid!)", headers: ["Content-Type": "application/json", "Content-Length": String(pBody.count)], body: pBody))
         XCTAssertEqual(pResp.status, 204)
     }
+
+    func testHealth_structure_preview_sessionsList() async throws {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let (kernel, _) = await makeKernelAndStore(tmp: tmp)
+
+        // Health
+        let h = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/health"))
+        XCTAssertEqual(h.status, 200)
+
+        // Seed script
+        let cid = "fountain-editor"
+        let text = "## S1\n\nINT. S1 — DAY\n"
+        _ = try await kernel.handle(HTTPRequest(method: "PUT", path: "/editor/\(cid)/script", headers: ["If-Match": "*", "Content-Type": "text/plain", "Content-Length": String(text.utf8.count)], body: Data(text.utf8)))
+
+        // Structure
+        let st = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/structure"))
+        XCTAssertEqual(st.status, 200)
+
+        // Preview parse
+        let pv = try await kernel.handle(HTTPRequest(method: "POST", path: "/editor/preview/parse", headers: ["Content-Type": "text/plain", "Content-Length": "6"], body: Data("Hello!".utf8)))
+        XCTAssertEqual(pv.status, 200)
+
+        // Sessions list (empty array acceptable)
+        let sl = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/sessions"))
+        XCTAssertEqual(sl.status, 200)
+    }
+
+    func testTyped404s_proposalAndSession() async throws {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let (kernel, _) = await makeKernelAndStore(tmp: tmp)
+        let cid = "fountain-editor"
+
+        // Proposal not found
+        let p = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/proposals/00000000-0000-0000-0000-000000000000"))
+        XCTAssertEqual(p.status, 404)
+        if let b = p.body { XCTAssertNotNil(try JSONSerialization.jsonObject(with: b) as? [String: Any]) }
+
+        // Session not found
+        let now = ISO8601DateFormatter().string(from: Date())
+        let sBody = try JSONSerialization.data(withJSONObject: ["lastMessageAt": now])
+        let s = try await kernel.handle(HTTPRequest(method: "PATCH", path: "/editor/sessions/00000000-0000-0000-0000-000000000000", headers: ["Content-Type": "application/json", "Content-Length": String(sBody.count)], body: sBody))
+        XCTAssertEqual(s.status, 404)
+        if let b = s.body { XCTAssertNotNil(try JSONSerialization.jsonObject(with: b) as? [String: Any]) }
+    }
 }

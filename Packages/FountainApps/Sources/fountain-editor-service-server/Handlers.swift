@@ -308,7 +308,8 @@ final class FountainEditorHandlers: APIProtocol, @unchecked Sendable {
             )
             return .ok(.init(body: .json(obj)))
         }
-        return .undocumented(statusCode: 404, .init())
+        let err = Components.Schemas._Error(message: "proposal not found")
+        return .notFound(.init(body: .json(err)))
     }
     func get_sol_editor_sol_sessions(_ input: Operations.get_sol_editor_sol_sessions.Input) async throws -> Operations.get_sol_editor_sol_sessions.Output {
         let list = await sessions.list()
@@ -324,7 +325,9 @@ final class FountainEditorHandlers: APIProtocol, @unchecked Sendable {
     func patch_sol_editor_sol_sessions_sol__lcub_sessionId_rcub_(_ input: Operations.patch_sol_editor_sol_sessions_sol__lcub_sessionId_rcub_.Input) async throws -> Operations.patch_sol_editor_sol_sessions_sol__lcub_sessionId_rcub_.Output {
         guard case .json(let body) = input.body else { return .undocumented(statusCode: 415, .init()) }
         let ok = await sessions.update(sessionId: input.path.sessionId, lastMessageAt: body.lastMessageAt)
-        return ok ? .noContent(.init()) : .undocumented(statusCode: 404, .init())
+        if ok { return .noContent(.init()) }
+        let err = Components.Schemas._Error(message: "session not found")
+        return .notFound(.init(body: .json(err)))
     }
 }
 

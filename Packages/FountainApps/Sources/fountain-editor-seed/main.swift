@@ -43,7 +43,7 @@ struct FountainEditorSeed {
         Testing & CI
         - Parser + anchors unit; persistence + proposals integration; instruments audition; PB‑VRT numeric + snapshots. Any failure blocks merges.
         """
-        _ = try? await client.addSegment(.init(corpusId: corpusId, segmentId: "\(pageId):teatro", pageId: pageId, kind: "teatro.prompt", text: teatro))
+        try await client.addSegment(.init(corpusId: corpusId, segmentId: "\(pageId):teatro", pageId: pageId, kind: "teatro.prompt", text: teatro))
 
         // Facts JSON (validator-safe). Use a Swift dictionary and encode to JSON to avoid escaping issues.
         var facts: [String: Any] = [:]
@@ -167,10 +167,25 @@ struct FountainEditorSeed {
 
         if let data = try? JSONSerialization.data(withJSONObject: facts, options: [.prettyPrinted, .sortedKeys]),
            let text = String(data: data, encoding: .utf8) {
-            _ = try? await client.addSegment(.init(corpusId: corpusId, segmentId: "\(pageId):facts", pageId: pageId, kind: "facts", text: text))
+            try await client.addSegment(.init(corpusId: corpusId, segmentId: "\(pageId):facts", pageId: pageId, kind: "facts", text: text))
         }
 
-        print("Seeded Fountain Editor Instrument → corpus=\(corpusId) page=\(pageId)")
+        // Verify persistence by reading the segments back
+        func readText(_ segId: String) async throws -> String? {
+            if let raw = try await client.getDoc(corpusId: corpusId, collection: "segments", id: segId),
+               let obj = try JSONSerialization.jsonObject(with: raw) as? [String: Any] {
+                return obj["text"] as? String
+            }
+            return nil
+        }
+        let teatroSeg = "\(pageId):teatro"
+        let factsSeg = "\(pageId):facts"
+        let teatroText = try await readText(teatroSeg) ?? ""
+        let factsText = try await readText(factsSeg) ?? ""
+        guard !teatroText.isEmpty, !factsText.isEmpty else {
+            FileHandle.standardError.write(Data("[seed] verification failed: missing prompt or facts for corpus=\(corpusId) page=\(pageId)\n".utf8))
+            exit(2)
+        }
+        print("Seeded Fountain Editor Instrument → corpus=\(corpusId) page=\(pageId) segments=[\(teatroSeg), \(factsSeg)]")
     }
 }
-

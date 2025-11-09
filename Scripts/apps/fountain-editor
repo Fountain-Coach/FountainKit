@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Seed the Fountain Editor Teatro prompt + facts into FountainStore.
+# Usage:
+#   Scripts/apps/fountain-editor [<corpusId>] [--store <dir>]
+# Defaults:
+#   corpusId = fountain-editor
+#   store    = .fountain/store
+
+ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+corpus="fountain-editor"
+store_dir="$ROOT_DIR/.fountain/store"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --store)
+      store_dir="$2"; shift 2 ;;
+    --*)
+      echo "Unknown flag: $1" >&2; exit 1 ;;
+    *)
+      corpus="$1"; shift ;;
+  esac
+done
+
+mkdir -p "$store_dir"
+echo "[seed] Seeding Fountain Editor prompt to corpus=$corpus store=$store_dir"
+(
+  export CORPUS_ID="$corpus"
+  export FOUNTAINSTORE_DIR="$store_dir"
+  swift run --package-path "$ROOT_DIR/Packages/FountainApps" -c debug fountain-editor-seed
+)
+
+echo "[seed] Dumping teatro.prompt and facts (store-dump)…"
+(
+  export CORPUS_ID="$corpus"
+  export SEGMENT_ID="prompt:fountain-editor:teatro"
+  swift run --package-path "$ROOT_DIR/Packages/FountainApps" -c debug store-dump || true
+  export SEGMENT_ID="prompt:fountain-editor:facts"
+  swift run --package-path "$ROOT_DIR/Packages/FountainApps" -c debug store-dump || true
+)
+
+echo "[next] To run the editor server smoke:"
+echo "       Scripts/dev/test-fountain-editor-server"
+echo "[next] To build the server:"
+echo "       swift build --package-path Packages/FountainApps -c debug --target fountain-editor-service-server"
+

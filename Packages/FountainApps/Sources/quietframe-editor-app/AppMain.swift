@@ -153,6 +153,7 @@ struct EditorLandingView: View {
     @State private var totalSize: CGSize = .zero
     @State private var outlineWidth: CGFloat = 0
     @State private var editorWidth: CGFloat = 0
+    @State private var drawerWidth: CGFloat = 0
     @State private var geometryDumped = false
 
     var body: some View {
@@ -161,18 +162,31 @@ struct EditorLandingView: View {
                 header
                 Divider()
                 HStack(spacing: 0) {
-                    editorPane
-                        .background(GeometryReader { gp in
-                            Color.clear.onAppear { editorWidth = gp.size.width }
-                                .onChange(of: gp.size) { _, n in editorWidth = n.width }
-                        })
-                    Divider().frame(width: gutterWidth)
+                    // Outline (left)
                     outlinePane
                         .background(GeometryReader { gp in
                             Color.clear.onAppear { outlineWidth = gp.size.width }
                                 .onChange(of: gp.size) { _, n in outlineWidth = n.width }
                         })
+                    // Gutter between outline and editor
+                    Divider().frame(width: gutterWidth)
+                    // Editor (center)
+                    editorPane
+                        .background(GeometryReader { gp in
+                            Color.clear.onAppear { editorWidth = gp.size.width }
+                                .onChange(of: gp.size) { _, n in editorWidth = n.width }
+                        })
+                    // Gutter between editor and drawer (visual only)
+                    Divider().frame(width: gutterWidth)
+                    // Drawer (right)
+                    drawerPane
+                        .background(GeometryReader { gp in
+                            Color.clear.onAppear { drawerWidth = gp.size.width }
+                                .onChange(of: gp.size) { _, n in drawerWidth = n.width }
+                        })
                 }
+                Divider()
+                statusBar
             }
             .onAppear { totalSize = proxy.size; scheduleGeometryDump() }
             .onChange(of: proxy.size) { _, n in totalSize = n; scheduleGeometryDump() }
@@ -236,7 +250,65 @@ struct EditorLandingView: View {
             }
         }
         .padding(10)
-        .frame(minWidth: 320)
+        .frame(minWidth: 220)
+    }
+
+    private var drawerPane: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Instruments").font(.headline)
+            TabView {
+                // Library tab (placeholder; wired later to server data)
+                VStack(alignment: .leading) {
+                    if model.library.isEmpty {
+                        Text("No library items.").foregroundStyle(.secondary)
+                    } else {
+                        List(model.library, id: \.instrumentId) { item in
+                            VStack(alignment: .leading) {
+                                Text(item.name)
+                                Text(item.profile).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        .listStyle(.sidebar)
+                    }
+                }
+                .tabItem { Label("Library", systemImage: "books.vertical") }
+                // Placements tab (placeholder)
+                VStack(alignment: .leading) {
+                    if model.placements.isEmpty {
+                        Text("No placements.").foregroundStyle(.secondary)
+                    } else {
+                        List(model.placements, id: \.placementId) { p in
+                            HStack {
+                                Text(p.anchor).monospaced().foregroundStyle(.secondary)
+                                Text(p.instrumentId)
+                            }
+                        }
+                        .listStyle(.sidebar)
+                    }
+                }
+                .tabItem { Label("Placements", systemImage: "cube") }
+            }
+            .tabViewStyle(.automatic)
+        }
+        .padding(10)
+        .frame(minWidth: 260)
+    }
+
+    private var statusBar: some View {
+        HStack(spacing: 12) {
+            Text("Corpus: \(model.corpusId)")
+            Divider().frame(height: 12)
+            Text("ETag: \(model.etag.isEmpty ? "—" : model.etag)").monospaced()
+            Divider().frame(height: 12)
+            Text("Words: \(model.wordCount)")
+            Divider().frame(height: 12)
+            Text("Pages: \(model.pageCount)")
+            Spacer()
+            Text(model.status).foregroundStyle(.secondary)
+        }
+        .font(.caption)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
     }
 
     private func scheduleGeometryDump() {
@@ -290,5 +362,20 @@ extension EditorModel {
         if actIdx == 0 { actIdx = 1 }
         acts.append(Act(index: actIdx, title: "ACT \(actIdx)", scenes: scenes))
         return acts
+    }
+}
+
+// MARK: - Drawer data shims (placeholder models)
+extension EditorModel {
+    struct LibraryItem: Identifiable { let instrumentId: String; let name: String; let profile: String; var id: String { instrumentId } }
+    struct PlacementItem: Identifiable { let placementId: String; let anchor: String; let instrumentId: String; var id: String { placementId } }
+
+    var library: [LibraryItem] { [] }
+    var placements: [PlacementItem] { [] }
+    var wordCount: Int { text.split { $0.isWhitespace || $0.isNewline }.count }
+    var pageCount: Int {
+        // Rough approximation: 55 lines/page, recompute by line count
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false).count
+        return max(1, Int(ceil(Double(lines) / 55.0)))
     }
 }

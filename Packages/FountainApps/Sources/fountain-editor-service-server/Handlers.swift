@@ -98,7 +98,8 @@ final class FountainEditorHandlers: APIProtocol, @unchecked Sendable {
         let ifm = input.headers.If_hyphen_Match
         // Require If-Match; treat empty as missing
         if ifm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return .undocumented(statusCode: 400, .init())
+            let err = Components.Schemas._Error(message: "If-Match header required")
+            return .badRequest(.init(body: .json(err)))
         }
         let result = await core.putScript(corpusId: cid, body: text, ifMatch: ifm)
         if result.saved {
@@ -252,6 +253,15 @@ final class FountainEditorHandlers: APIProtocol, @unchecked Sendable {
         let p = await proposals.create(corpusId: cid, body: body)
         return .created(.init(body: .json(p)))
     }
+    func get_sol_editor_sol__lcub_corpusId_rcub__sol_proposals(_ input: Operations.get_sol_editor_sol__lcub_corpusId_rcub__sol_proposals.Input) async throws -> Operations.get_sol_editor_sol__lcub_corpusId_rcub__sol_proposals.Output {
+        let cid = input.path.corpusId
+        let q = input.query
+        let orderDesc = (q.order ?? .desc) == .desc
+        let offset = Int(q.offset ?? 0)
+        let limit = Int(q.limit ?? 50)
+        let list = await proposals.list(corpusId: cid, orderDesc: orderDesc, offset: max(0, offset), limit: max(1, min(100, limit)))
+        return .ok(.init(body: .json(list)))
+    }
     func post_sol_editor_sol__lcub_corpusId_rcub__sol_proposals_sol__lcub_proposalId_rcub_(_ input: Operations.post_sol_editor_sol__lcub_corpusId_rcub__sol_proposals_sol__lcub_proposalId_rcub_.Input) async throws -> Operations.post_sol_editor_sol__lcub_corpusId_rcub__sol_proposals_sol__lcub_proposalId_rcub_.Output {
         let cid = input.path.corpusId
         let pid = input.path.proposalId
@@ -276,9 +286,45 @@ final class FountainEditorHandlers: APIProtocol, @unchecked Sendable {
             return .ok(.init(body: .json(Components.Schemas.ProposalResult(scriptETag: nil, applied: false, message: "rejected"))))
         }
     }
+    func get_sol_editor_sol__lcub_corpusId_rcub__sol_proposals_sol__lcub_proposalId_rcub_(_ input: Operations.get_sol_editor_sol__lcub_corpusId_rcub__sol_proposals_sol__lcub_proposalId_rcub_.Input) async throws -> Operations.get_sol_editor_sol__lcub_corpusId_rcub__sol_proposals_sol__lcub_proposalId_rcub_.Output {
+        let cid = input.path.corpusId
+        let pid = input.path.proposalId
+        if let m = await proposals.getModel(corpusId: cid, proposalId: pid) {
+            let paramsContainer: OpenAPIRuntime.OpenAPIObjectContainer? = {
+                if let s = m.paramsJSON, let data = s.data(using: .utf8) {
+                    return try? JSONDecoder().decode(OpenAPIRuntime.OpenAPIObjectContainer.self, from: data)
+                }
+                return nil
+            }()
+            let obj = Components.Schemas.Proposal(
+                proposalId: m.proposalId,
+                createdAt: m.createdAt,
+                op: m.op,
+                params: paramsContainer,
+                anchor: m.anchor,
+                status: m.status,
+                authorPersona: m.authorPersona,
+                rationale: m.rationale
+            )
+            return .ok(.init(body: .json(obj)))
+        }
+        return .undocumented(statusCode: 404, .init())
+    }
     func get_sol_editor_sol_sessions(_ input: Operations.get_sol_editor_sol_sessions.Input) async throws -> Operations.get_sol_editor_sol_sessions.Output {
         let list = await sessions.list()
         return .ok(.init(body: .json(list)))
+    }
+    func post_sol_editor_sol_sessions(_ input: Operations.post_sol_editor_sol_sessions.Input) async throws -> Operations.post_sol_editor_sol_sessions.Output {
+        let createCorpusId: String? = {
+            if case .json(let obj) = input.body { return obj.corpusId } else { return nil }
+        }()
+        let s = await sessions.create(corpusId: createCorpusId)
+        return .created(.init(body: .json(s)))
+    }
+    func patch_sol_editor_sol_sessions_sol__lcub_sessionId_rcub_(_ input: Operations.patch_sol_editor_sol_sessions_sol__lcub_sessionId_rcub_.Input) async throws -> Operations.patch_sol_editor_sol_sessions_sol__lcub_sessionId_rcub_.Output {
+        guard case .json(let body) = input.body else { return .undocumented(statusCode: 415, .init()) }
+        let ok = await sessions.update(sessionId: input.path.sessionId, lastMessageAt: body.lastMessageAt)
+        return ok ? .noContent(.init()) : .undocumented(statusCode: 404, .init())
     }
 }
 
@@ -779,6 +825,29 @@ actor ProposalsStore {
         let list = await loadList(corpusId)
         return list.first(where: { $0.proposalId == proposalId })
     }
+    func list(corpusId: String, orderDesc: Bool = true, offset: Int = 0, limit: Int = 50) async -> [Components.Schemas.Proposal] {
+        var list = await loadList(corpusId)
+        list.sort { a, b in orderDesc ? (a.createdAt > b.createdAt) : (a.createdAt < b.createdAt) }
+        let slice = Array(list.dropFirst(min(offset, max(0, list.count))).prefix(limit))
+        return slice.map { m in
+            let params: OpenAPIRuntime.OpenAPIObjectContainer? = {
+                if let s = m.paramsJSON, let data = s.data(using: .utf8) {
+                    return try? JSONDecoder().decode(OpenAPIRuntime.OpenAPIObjectContainer.self, from: data)
+                }
+                return nil
+            }()
+            return Components.Schemas.Proposal(
+                proposalId: m.proposalId,
+                createdAt: m.createdAt,
+                op: m.op,
+                params: params,
+                anchor: m.anchor,
+                status: m.status,
+                authorPersona: m.authorPersona,
+                rationale: m.rationale
+            )
+        }
+    }
 
     func setStatus(corpusId: String, proposalId: String, status: Components.Schemas.Proposal.statusPayload) async -> Bool {
         var list = await loadList(corpusId)
@@ -815,4 +884,32 @@ actor SessionsStore {
     }
 
     func list() async -> [Components.Schemas.ChatSession] { await load() }
+    private func save(_ arr: [Components.Schemas.ChatSession]) async {
+        let cid = "fountain-editor"
+        let pid = pageId()
+        _ = try? await store.addPage(Page(corpusId: cid, pageId: pid, url: "store://\(pid)", host: "store", title: "Editor Sessions"))
+        let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601
+        let text = (try? String(data: enc.encode(arr), encoding: .utf8)) ?? "[]"
+        let seg = Segment(corpusId: cid, segmentId: segmentId(), pageId: pid, kind: "editor.sessions", text: text)
+        _ = try? await store.addSegment(seg)
+    }
+    func create(corpusId: String?) async -> Components.Schemas.ChatSession {
+        var arr = await load()
+        let now = Date()
+        let s = Components.Schemas.ChatSession(sessionId: UUID().uuidString, corpusId: corpusId ?? "fountain-editor", createdAt: now, lastMessageAt: now)
+        arr.append(s)
+        await save(arr)
+        return s
+    }
+    func update(sessionId: String, lastMessageAt: Date?) async -> Bool {
+        var arr = await load()
+        if let idx = arr.firstIndex(where: { $0.sessionId == sessionId }) {
+            var s = arr[idx]
+            if let ts = lastMessageAt { s.lastMessageAt = ts }
+            arr[idx] = s
+            await save(arr)
+            return true
+        }
+        return false
+    }
 }

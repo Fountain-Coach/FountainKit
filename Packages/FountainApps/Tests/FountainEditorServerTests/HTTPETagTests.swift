@@ -83,6 +83,9 @@ final class FountainEditorHTTPETagTests: XCTestCase {
         ], body: body)
         let resp = try await kernel.handle(req)
         XCTAssertEqual(resp.status, 400)
+        if let body = resp.body {
+            let obj = try JSONSerialization.jsonObject(with: body) as? [String: Any]
+            XCTAssertEqual(obj?["message"] as? String, "If-Match header required")
+        }
     }
 }
-

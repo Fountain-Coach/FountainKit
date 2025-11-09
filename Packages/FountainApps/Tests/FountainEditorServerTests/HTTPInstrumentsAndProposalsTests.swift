@@ -95,6 +95,67 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         XCTAssertEqual(created?["rationale"] as? String, "Append a greeting")
     }
 
+    func testProposals_list_and_get_byId() async throws {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let (kernel, _) = await makeKernelAndStore(tmp: tmp)
+
+        let cid = "fountain-editor"
+        // Create two proposals
+        for t in ["One", "Two"] {
+            let pObj: [String: Any] = ["op": "composeBlock", "params": ["text": t]]
+            let pBody = try JSONSerialization.data(withJSONObject: pObj)
+            let pReq = HTTPRequest(method: "POST", path: "/editor/\(cid)/proposals", headers: [
+                "Content-Type": "application/json",
+                "Content-Length": String(pBody.count)
+            ], body: pBody)
+            _ = try await kernel.handle(pReq)
+        }
+
+        // List default order desc -> 2 items
+        let listResp = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/proposals"))
+        XCTAssertEqual(listResp.status, 200)
+        let list = try JSONSerialization.jsonObject(with: listResp.body ?? Data()) as? [[String: Any]]
+        XCTAssertEqual(list?.count, 2)
+        guard let firstId = list?.first?["proposalId"] as? String else { XCTFail("missing id"); return }
+
+        // Get by id
+        let getResp = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/proposals/\(firstId)"))
+        XCTAssertEqual(getResp.status, 200)
+        let detail = try JSONSerialization.jsonObject(with: getResp.body ?? Data()) as? [String: Any]
+        XCTAssertEqual(detail?["proposalId"] as? String, firstId)
+
+        // Limit and offset
+        let listLimit1 = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/proposals?limit=1"))
+        XCTAssertEqual(listLimit1.status, 200)
+        let arr1 = try JSONSerialization.jsonObject(with: listLimit1.body ?? Data()) as? [[String: Any]]
+        XCTAssertEqual(arr1?.count, 1)
+        let listOffset1 = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/proposals?offset=1&limit=1"))
+        XCTAssertEqual(listOffset1.status, 200)
+        let arr2 = try JSONSerialization.jsonObject(with: listOffset1.body ?? Data()) as? [[String: Any]]
+        XCTAssertEqual(arr2?.count, 1)
+    }
+
+    func testProposals_applyPatch_invalidRange_appliedFalse() async throws {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let (kernel, _) = await makeKernelAndStore(tmp: tmp)
+        let cid = "fountain-editor"
+        let script = "Hello"
+        _ = try await kernel.handle(HTTPRequest(method: "PUT", path: "/editor/\(cid)/script", headers: ["If-Match": "*", "Content-Type": "text/plain", "Content-Length": "5"], body: Data(script.utf8)))
+        // invalid end > count
+        let pObj: [String: Any] = ["op": "applyPatch", "params": ["edits": [["start": 0, "end": 99, "text": "X"]]]]
+        let pBody = try JSONSerialization.data(withJSONObject: pObj)
+        let pResp = try await kernel.handle(HTTPRequest(method: "POST", path: "/editor/\(cid)/proposals", headers: ["Content-Type": "application/json", "Content-Length": String(pBody.count)], body: pBody))
+        let created = try JSONSerialization.jsonObject(with: pResp.body ?? Data()) as? [String: Any]
+        let proposalId = created?["proposalId"] as? String
+        let dBody = try JSONSerialization.data(withJSONObject: ["decision": "accept"])
+        let dResp = try await kernel.handle(HTTPRequest(method: "POST", path: "/editor/\(cid)/proposals/\(proposalId!)", headers: ["Content-Type": "application/json", "Content-Length": String(dBody.count)], body: dBody))
+        XCTAssertEqual(dResp.status, 200)
+        let result = try JSONSerialization.jsonObject(with: dResp.body ?? Data()) as? [String: Any]
+        XCTAssertEqual(result?["applied"] as? Bool, false)
+    }
+
     func testProposals_composeBlock_apply_advancesETag() async throws {
         let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
@@ -473,5 +534,26 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         XCTAssertEqual(getResp2.status, 200)
         let textOut = String(decoding: getResp2.body ?? Data(), as: UTF8.self)
         XCTAssertEqual(textOut, "Hello Editor")
+    }
+
+    func testSessions_create_and_patch() async throws {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let (kernel, _) = await makeKernelAndStore(tmp: tmp)
+
+        // Create
+        let cObj: [String: Any] = ["corpusId": "fountain-editor"]
+        let cBody = try JSONSerialization.data(withJSONObject: cObj)
+        let cResp = try await kernel.handle(HTTPRequest(method: "POST", path: "/editor/sessions", headers: ["Content-Type": "application/json", "Content-Length": String(cBody.count)], body: cBody))
+        XCTAssertEqual(cResp.status, 201)
+        let created = try JSONSerialization.jsonObject(with: cResp.body ?? Data()) as? [String: Any]
+        let sid = created?["sessionId"] as? String
+        XCTAssertNotNil(sid)
+
+        // Patch (no body change)
+        let now = ISO8601DateFormatter().string(from: Date())
+        let pBody = try JSONSerialization.data(withJSONObject: ["lastMessageAt": now])
+        let pResp = try await kernel.handle(HTTPRequest(method: "PATCH", path: "/editor/sessions/\(sid!)", headers: ["Content-Type": "application/json", "Content-Length": String(pBody.count)], body: pBody))
+        XCTAssertEqual(pResp.status, 204)
     }
 }

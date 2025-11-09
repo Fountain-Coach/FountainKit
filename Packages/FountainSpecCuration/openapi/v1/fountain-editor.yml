@@ -52,6 +52,7 @@ paths:
             schema: { type: string }
       responses:
         '204': { description: Saved }
+        '400': { description: Bad Request, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         '412': { description: ETag mismatch (Precondition Failed) }
       security: []
 
@@ -136,6 +137,25 @@ paths:
       responses: { '204': { description: Removed } }
 
   /editor/{corpusId}/proposals:
+    get:
+      summary: List proposals
+      tags: [proposals]
+      parameters:
+        - { $ref: '#/components/parameters/CorpusId' }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: offset
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: order
+          in: query
+          required: false
+          schema: { type: string, enum: [asc, desc], default: desc }
+      responses:
+        '200': { description: Proposals, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Proposal' } } } } }
     post:
       summary: Create proposal (e.g., rewriteRange, insertScene)
       tags: [proposals]
@@ -187,6 +207,13 @@ paths:
         '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Proposal' } } } }
 
   /editor/{corpusId}/proposals/{proposalId}:
+    get:
+      summary: Get proposal by id
+      tags: [proposals]
+      parameters: [ { $ref: '#/components/parameters/CorpusId' }, { $ref: '#/components/parameters/ProposalId' } ]
+      responses:
+        '200': { description: Proposal, content: { application/json: { schema: { $ref: '#/components/schemas/Proposal' } } } }
+        '404': { description: Not found }
     post:
       summary: Apply decision (accept/reject)
       tags: [proposals]
@@ -201,6 +228,35 @@ paths:
       tags: [sessions]
       responses:
         '200': { description: Sessions, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ChatSession' } } } } }
+    post:
+      summary: Create session
+      tags: [sessions]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                corpusId: { type: string }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/ChatSession' } } } }
+
+  /editor/sessions/{sessionId}:
+    patch:
+      summary: Update session (timestamps)
+      tags: [sessions]
+      parameters: [ { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lastMessageAt: { type: string, format: date-time }
+      responses:
+        '204': { description: Updated }
 
 components:
   parameters:
@@ -209,6 +265,11 @@ components:
     PlacementId: { name: placementId, in: path, required: true, schema: { type: string, format: uuid } }
     ProposalId: { name: proposalId, in: path, required: true, schema: { type: string, format: uuid } }
   schemas:
+    Error:
+      type: object
+      properties:
+        message: { type: string }
+      required: [message]
     Health:
       type: object
       properties:

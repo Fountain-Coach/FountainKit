@@ -16,3 +16,4 @@ filter:
     - /editor/{corpusId}/proposals
     - /editor/{corpusId}/proposals/{proposalId}
     - /editor/sessions
+    - /editor/sessions/{sessionId}

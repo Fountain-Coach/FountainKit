@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+PKG_PATH="$ROOT_DIR/Packages/FountainApps"
+
+export FK_MIN_TARGET=baseline-awareness
+export FK_SKIP_NOISY_TARGETS=1
+export FOUNTAIN_SKIP_LAUNCHER_SIG=1
+
+case "${1:-build}" in
+  build) echo "[awareness-min] Building baseline-awareness-server…"; swift build --package-path "$PKG_PATH" -c debug --target baseline-awareness-server;;
+  run)   echo "[awareness-min] Running baseline-awareness-server…"; swift run --package-path "$PKG_PATH" -c debug baseline-awareness-server;;
+  *)     echo "Usage: $0 [build|run]" >&2; exit 2;;
+esac
+

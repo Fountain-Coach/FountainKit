@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Minimal editor-only build helper
+# - Exports minimal env to gate the manifest (FK_EDITOR_MINIMAL=1)
+# - Builds only the fountain-editor-service-server target
+#
+# Usage:
+#   Scripts/dev/editor-min [build|run|smoke]
+#     build (default): build the server target in debug
+#     run            : run the server (may trigger a build if missing)
+#     smoke          : run the in-process ETag smoke (no network)
+
+ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+PKG_PATH="$ROOT_DIR/Packages/FountainApps"
+
+# Gate the manifest to the minimal dependency/target set
+export FK_EDITOR_MINIMAL=1
+export FK_SKIP_NOISY_TARGETS=1
+export FOUNTAIN_SKIP_LAUNCHER_SIG=1
+
+cmd="${1:-build}"
+
+case "${cmd}" in
+  build)
+    echo "[editor-min] Building fountain-editor-service-server (minimal)…"
+    swift build --package-path "$PKG_PATH" -c debug --target fountain-editor-service-server
+    ;;
+  run)
+    echo "[editor-min] Running fountain-editor-service-server (minimal)…"
+    swift run --package-path "$PKG_PATH" -c debug fountain-editor-service-server
+    ;;
+  smoke)
+    echo "[editor-min] Running smoke for editor server (ETag flow)…"
+    "$ROOT_DIR"/Scripts/dev/smoke-fountain-editor-server
+    ;;
+  *)
+    echo "Usage: $0 [build|run|smoke]" >&2
+    exit 2
+    ;;
+esac
+

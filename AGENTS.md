@@ -125,6 +125,38 @@ Process per file: capture intent in a brief opening paragraph; collapse long lis
 - Launcher: `Scripts/dev/codex-danger:1`; installer wrapper: `Scripts/dev/install-codex:1`.
 - Local config (optional): `codex.danger.toml:1` (ignored by git).
 
+## Targeted Builds — Editor‑Minimal Pattern
+We optimize compile time by gating the package manifest and deduplicating OpenAPI generation. The editor server compiles in isolation with a tiny dependency graph and a single generator pass.
+
+What
+- Editor‑minimal mode builds only `fountain-editor-service-core` and `fountain-editor-service-server`.
+- OpenAPI generator runs in the core target; the server target has no plugin and no duplicate `openapi.*`.
+- Generator is filtered to editor routes only.
+
+Why
+- Dramatically reduces cold build time and churn from unrelated targets.
+- Keeps iteration focused on the editor service (ETag flow, placements, structure).
+
+How
+- Use the helper: `Scripts/dev/editor-min [build|run|smoke]`.
+- Env gates (set automatically by the helper):
+  - `FK_EDITOR_MINIMAL=1` and `FK_SKIP_NOISY_TARGETS=1` → minimal products/deps/targets in `Packages/FountainApps/Package.swift`.
+  - `FOUNTAIN_SKIP_LAUNCHER_SIG=1` → skip launcher signature during local dev.
+- Single‑source OpenAPI:
+  - Spec: `Packages/FountainApps/Sources/fountain-editor-service/openapi.yaml`.
+  - Config: `Packages/FountainApps/Sources/fountain-editor-service/openapi-generator-config.yaml` (with `filter.paths` for editor routes).
+  - Core owns `OpenAPIGenerator` plugin; server does not.
+
+Commands
+- Minimal build: `Scripts/dev/editor-min build`
+- Run server: `Scripts/dev/editor-min run`
+- In‑process smoke (no network): `Scripts/dev/editor-min smoke`
+
+Where
+- Manifest gating and targets live in `Packages/FountainApps/Package.swift:1`.
+- Editor server sources: `Packages/FountainApps/Sources/fountain-editor-service-server/*`.
+- Core + handlers/types: `Packages/FountainApps/Sources/fountain-editor-service/*`.
+
 ## OpenAPI-first development
 - Every HTTP surface must have an authoritative OpenAPI document in `Packages/FountainSpecCuration/openapi`. Update specs *before* writing server or client code.
 - Specs are versioned (`openapi/v{major}/service-name.yml`) and curated via the FountainAI OpenAPI Curator. Keep the curator output as the single source of truth and follow `Packages/FountainSpecCuration/openapi/AGENTS.md` for directory rules.

@@ -10,12 +10,21 @@ Included tools
 - `dev-down` — Stops background services; `--force` also kills listeners on dev ports.
 - `dev-status` — Shows ports, up/down state, and known PIDs.
 - `dev-servers-up.sh` — Prebuilds then starts with checks (one‑shot convenience).
+- `editor-min` — Minimal, targeted build/run/smoke for the editor server.
 - `seed-secrets-keychain.sh` — Seeds `GATEWAY_BEARER` and `OPENAI_API_KEY` into macOS Keychain.
-- `codex-danger` — Launches Codex with a non‑sandboxed, non‑interactive profile; pulls a GitHub token from `gh auth token` at runtime (no secrets committed).
+- `codex-danger` — Sentinel‑gated Codex launcher. Safe by default; danger mode (`-s danger-full-access -a never`) activates only when a sentinel is present, `FK_CODEX_DANGER=1`, or `--danger` is passed. Reuses `gh auth token` at runtime (no secrets committed).
 - `install-codex` — One‑time installer that writes a `Codex` launcher into `~/.local/bin` (or given `--bin-dir`) so you can run `Codex` from anywhere.
 
 Tips
 - Use `Codex --relogin` to force a fresh GitHub session (the wrapper logs out and then runs `gh auth login --web`).
+
+Danger activation (opt‑in)
+- Create `.codex-allow-danger` at repo root (git‑ignored), or set `FK_CODEX_DANGER=1`, or pass `--danger` once.
+- Force safe mode regardless of sentinel: `--safe`.
+
+Quick usage
+- Safe (default): `codex` or `Scripts/dev/codex-danger` → `/status` shows workspace‑write + approvals on‑failure.
+- Danger (opt‑in): add sentinel, then `codex` or `Scripts/dev/codex-danger` → `/status` shows danger‑full‑access + approvals never.
 
 Conventions
 - No `.env` in repo; secrets come from Keychain. Always set `LAUNCHER_SIGNATURE` (default provided).
@@ -24,3 +33,9 @@ Conventions
 
 Baseline default
 - Dev‑up launches the Baseline‑PatchBay UI by default (product `baseline-patchbay`). Any change to this baseline app must be paired with a matching MRTS Teatro prompt. On boot, the baseline prints both prompts (creation + MRTS). Persist the MRTS via `baseline-robot-seed`; run the invariants with `Scripts/ci/baseline-robot.sh`.
+
+Targeted builds (editor‑minimal)
+Use `Scripts/dev/editor-min` to gate the manifest for focused builds of the editor service only. The script exports `FK_EDITOR_MINIMAL=1`, `FK_SKIP_NOISY_TARGETS=1`, and `FOUNTAIN_SKIP_LAUNCHER_SIG=1`, then:
+- `build` compiles just `fountain-editor-service-server`.
+- `run` launches the server in debug.
+- `smoke` executes an in‑process ETag flow (no network) for fast validation.

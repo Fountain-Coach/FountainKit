@@ -190,7 +190,7 @@ public final class GatewayServer {
             // Build OpenAPI transport with fallback for non-OpenAPI endpoints and proxying
             let fallback = HTTPKernel { [zoneManager, self] request in
             if request.path == "/openapi.yaml" {
-                let url = URL(fileURLWithPath: "Sources/gateway-server/openapi.yaml")
+                let url = URL(fileURLWithPath: "Packages/FountainApps/Sources/gateway-service/openapi.yaml")
                 if let data = try? Data(contentsOf: url) {
                     return HTTPResponse(status: 200, headers: ["Content-Type": "application/yaml"], body: data)
                 }

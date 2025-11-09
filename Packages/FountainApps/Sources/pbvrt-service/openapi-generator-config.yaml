@@ -1,5 +1,26 @@
 generate:
   - types
   - server
-accessModifier: internal
-additionalImports: []
+accessModifier: public
+filter:
+  paths:
+    - /prompts
+    - /prompts/{id}
+    - /baselines
+    - /baselines/{id}
+    - /baselines/{id}/capture
+    - /compare
+    - /probes/embedding/compare
+    - /probes/saliency/compare
+    - /probes/align
+    - /probes/ocr/recognize
+    - /probes/contours
+    - /probes/barcodes
+    - /probes/audio/embedding/compare
+    - /probes/audio/spectrogram/compare
+    - /probes/audio/onsets
+    - /probes/audio/pitch
+    - /probes/audio/loudness
+    - /probes/audio/alignment
+    - /probes/audio/transcribe
+

@@ -1,5 +1,5 @@
 [
-  { "name": "Gateway Server", "path": "Packages/FountainApps/Sources/gateway-server/openapi.yaml" },
+  { "name": "Gateway Server", "path": "Packages/FountainApps/Sources/gateway-service/openapi.yaml" },
   { "name": "AudioTalk Service", "path": "Packages/FountainServiceKit-AudioTalk/Sources/AudioTalkService/openapi.yaml" },
   { "name": "ToolsFactory Service", "path": "Packages/FountainServiceKit-ToolsFactory/Sources/ToolsFactoryService/openapi.yaml" },
   { "name": "FunctionCaller Service", "path": "Packages/FountainServiceKit-FunctionCaller/Sources/FunctionCallerService/openapi.yaml" },

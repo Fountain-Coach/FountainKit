@@ -13,6 +13,13 @@ Included tools
 - `editor-min` — Minimal, targeted build/run/smoke for the editor server.
 - `gateway-min` — Minimal, targeted build/run for Gateway.
 - `pbvrt-min` — Minimal, targeted build/run for PBVRT.
+- `planner-min` — Minimal, targeted build/run for Planner.
+- `function-caller-min` — Minimal, targeted build/run for Function‑Caller.
+- `persist-min` — Minimal, targeted build/run for Persist.
+- `baseline-awareness-min` — Minimal, targeted build/run for Awareness.
+- `bootstrap-min` — Minimal, targeted build/run for Bootstrap.
+- `tools-factory-min` — Minimal, targeted build/run for Tools‑Factory.
+- `tool-server-min` — Minimal, targeted build/run for Tool‑Server.
 - `seed-secrets-keychain.sh` — Seeds `GATEWAY_BEARER` and `OPENAI_API_KEY` into macOS Keychain.
 - `codex-danger` — Sentinel‑gated Codex launcher. Safe by default; danger mode (`-s danger-full-access -a never`) activates only when a sentinel is present, `FK_CODEX_DANGER=1`, or `--danger` is passed. Reuses `gh auth token` at runtime (no secrets committed).
 - `install-codex` — One‑time installer that writes a `Codex` launcher into `~/.local/bin` (or given `--bin-dir`) so you can run `Codex` from anywhere.
@@ -45,3 +52,6 @@ Use `Scripts/dev/editor-min` to gate the manifest for focused builds of the edit
 Targeted builds (gateway/pbvrt)
 - `Scripts/dev/gateway-min` exports `FK_MIN_TARGET=gateway`, `FK_SKIP_NOISY_TARGETS=1`, `FOUNTAIN_SKIP_LAUNCHER_SIG=1` and builds/runs only `gateway-server`.
 - `Scripts/dev/pbvrt-min` exports `FK_MIN_TARGET=pbvrt`, `FK_SKIP_NOISY_TARGETS=1`, `FOUNTAIN_SKIP_LAUNCHER_SIG=1` and builds/runs only `pbvrt-server`.
+
+Targeted builds (planner/function-caller/persist/awareness/bootstrap/tools)
+- Each `*-min` wrapper exports `FK_MIN_TARGET=<service>` and gates the manifest to include only the target server and its minimal deps.

@@ -147,9 +147,11 @@ final class EditorModel: ObservableObject {
 }
 
 struct EditorLandingView: View {
+    static let outlineMinWidthPx: CGFloat = 220
+    static let gutterWidthPx: CGFloat = 14
     @StateObject private var model = EditorModel()
     @State private var lastPreviewTask: Task<Void, Never>? = nil
-    private let gutterWidth: CGFloat = 14
+    private let gutterWidth: CGFloat = EditorLandingView.gutterWidthPx
     @State private var totalSize: CGSize = .zero
     @State private var outlineWidth: CGFloat = 0
     @State private var editorWidth: CGFloat = 0
@@ -169,7 +171,7 @@ struct EditorLandingView: View {
                                 .onChange(of: gp.size) { _, n in outlineWidth = n.width }
                         })
                     // Gutter between outline and editor
-                    Divider().frame(width: gutterWidth)
+                    Divider().frame(width: EditorLandingView.gutterWidthPx)
                     // Editor (center)
                     editorPane
                         .background(GeometryReader { gp in
@@ -177,7 +179,7 @@ struct EditorLandingView: View {
                                 .onChange(of: gp.size) { _, n in editorWidth = n.width }
                         })
                     // Gutter between editor and drawer (visual only)
-                    Divider().frame(width: gutterWidth)
+                    Divider().frame(width: EditorLandingView.gutterWidthPx)
                     // Drawer (right)
                     drawerPane
                         .background(GeometryReader { gp in
@@ -250,7 +252,7 @@ struct EditorLandingView: View {
             }
         }
         .padding(10)
-        .frame(minWidth: 220)
+        .frame(minWidth: EditorLandingView.outlineMinWidthPx)
     }
 
     private var drawerPane: some View {

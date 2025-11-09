@@ -61,10 +61,14 @@ final class FountainEditorHandlers: APIProtocol, @unchecked Sendable {
     let core: FountainEditorServerCore
     let placements: PlacementsStore
     let instruments: InstrumentsStore
+    let proposals: ProposalsStore
+    let sessions: SessionsStore
     init(store: FountainStoreClient) {
         self.core = FountainEditorServerCore(store: store)
         self.placements = PlacementsStore(store: store)
         self.instruments = InstrumentsStore(store: store)
+        self.proposals = ProposalsStore(store: store)
+        self.sessions = SessionsStore(store: store)
     }
 
     // GET /editor/health
@@ -92,6 +96,8 @@ final class FountainEditorHandlers: APIProtocol, @unchecked Sendable {
             text = try await String(collecting: b, upTo: 1<<20)
         }
         let ifm = input.headers.If_hyphen_Match
+        // Require If-Match; return 400 when absent
+        guard ifm != nil else { return .undocumented(statusCode: 400, .init()) }
         let result = await core.putScript(corpusId: cid, body: text, ifMatch: ifm)
         if result.saved {
             return .noContent(.init())
@@ -238,9 +244,40 @@ final class FountainEditorHandlers: APIProtocol, @unchecked Sendable {
         return ok ? .noContent(.init()) : .undocumented(statusCode: 404, .init())
     }
 
-    func post_sol_editor_sol__lcub_corpusId_rcub__sol_proposals(_ input: Operations.post_sol_editor_sol__lcub_corpusId_rcub__sol_proposals.Input) async throws -> Operations.post_sol_editor_sol__lcub_corpusId_rcub__sol_proposals.Output { .created(.init(body: .json(.init(proposalId: UUID().uuidString, createdAt: Date(), op: "", params: nil, anchor: nil, status: .pending)))) }
-    func post_sol_editor_sol__lcub_corpusId_rcub__sol_proposals_sol__lcub_proposalId_rcub_(_ input: Operations.post_sol_editor_sol__lcub_corpusId_rcub__sol_proposals_sol__lcub_proposalId_rcub_.Input) async throws -> Operations.post_sol_editor_sol__lcub_corpusId_rcub__sol_proposals_sol__lcub_proposalId_rcub_.Output { .ok(.init(body: .json(.init(scriptETag: nil, applied: false, message: "not implemented")))) }
-    func get_sol_editor_sol_sessions(_ input: Operations.get_sol_editor_sol_sessions.Input) async throws -> Operations.get_sol_editor_sol_sessions.Output { .ok(.init(body: .json([]))) }
+    func post_sol_editor_sol__lcub_corpusId_rcub__sol_proposals(_ input: Operations.post_sol_editor_sol__lcub_corpusId_rcub__sol_proposals.Input) async throws -> Operations.post_sol_editor_sol__lcub_corpusId_rcub__sol_proposals.Output {
+        let cid = input.path.corpusId
+        guard case .json(let body) = input.body else { return .undocumented(statusCode: 415, .init()) }
+        let p = await proposals.create(corpusId: cid, body: body)
+        return .created(.init(body: .json(p)))
+    }
+    func post_sol_editor_sol__lcub_corpusId_rcub__sol_proposals_sol__lcub_proposalId_rcub_(_ input: Operations.post_sol_editor_sol__lcub_corpusId_rcub__sol_proposals_sol__lcub_proposalId_rcub_.Input) async throws -> Operations.post_sol_editor_sol__lcub_corpusId_rcub__sol_proposals_sol__lcub_proposalId_rcub_.Output {
+        let cid = input.path.corpusId
+        let pid = input.path.proposalId
+        guard case .json(let decision) = input.body else { return .undocumented(statusCode: 415, .init()) }
+        if decision.decision == .accept {
+            // Try to apply supported ops
+            if let model = await proposals.getModel(corpusId: cid, proposalId: pid) {
+                let applied = await applyProposal(corpusId: cid, model: model)
+                if applied.applied {
+                    _ = await proposals.setStatus(corpusId: cid, proposalId: pid, status: .accepted)
+                    return .ok(.init(body: .json(Components.Schemas.ProposalResult(scriptETag: applied.newETag, applied: true, message: applied.message))))
+                } else {
+                    _ = await proposals.setStatus(corpusId: cid, proposalId: pid, status: .rejected)
+                    return .ok(.init(body: .json(Components.Schemas.ProposalResult(scriptETag: nil, applied: false, message: applied.message))))
+                }
+            } else {
+                return .ok(.init(body: .json(Components.Schemas.ProposalResult(scriptETag: nil, applied: false, message: "proposal not found"))))
+            }
+        } else {
+            // Reject
+            let _ = await proposals.setStatus(corpusId: cid, proposalId: pid, status: .rejected)
+            return .ok(.init(body: .json(Components.Schemas.ProposalResult(scriptETag: nil, applied: false, message: "rejected"))))
+        }
+    }
+    func get_sol_editor_sol_sessions(_ input: Operations.get_sol_editor_sol_sessions.Input) async throws -> Operations.get_sol_editor_sol_sessions.Output {
+        let list = await sessions.list()
+        return .ok(.init(body: .json(list)))
+    }
 }
 
 // MARK: - Placements persistence in FountainStore
@@ -367,7 +404,6 @@ actor InstrumentsStore {
     }
 
     private func loadList(_ corpusId: String) async -> [Model] {
-        let pid = pageId(corpusId)
         let segId = listSegmentId(corpusId)
         if let data = try? await store.getDoc(corpusId: corpusId, collection: "segments", id: segId),
            let seg = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -392,7 +428,7 @@ actor InstrumentsStore {
         let q = query?.lowercased()
         let items = await loadList(corpusId)
         let filtered = q.map { needle in items.filter { $0.name.lowercased().contains(needle) || ($0.tags ?? []).contains { $0.lowercased().contains(needle) } } } ?? items
-        return filtered.map { Components.Schemas.Instrument(instrumentId: $0.instrumentId, name: $0.name, profile: $0.profile, programBase: $0.programBase.map { Int32($0) }, defaultMapping: $0.defaultMapping, tags: $0.tags, notes: $0.notes) }
+        return filtered.map { Components.Schemas.Instrument(instrumentId: $0.instrumentId, name: $0.name, profile: $0.profile, programBase: $0.programBase, defaultMapping: $0.defaultMapping, tags: $0.tags, notes: $0.notes) }
     }
 
     func create(corpusId: String, create: Components.Schemas.InstrumentCreate) async -> Components.Schemas.Instrument {
@@ -401,13 +437,13 @@ actor InstrumentsStore {
         let model = Model(instrumentId: id, name: create.name, profile: .midi2sampler, programBase: create.programBase.map { Int($0) }, defaultMapping: create.defaultMapping, tags: create.tags, notes: create.notes)
         list.append(model)
         await saveList(corpusId, list)
-        return Components.Schemas.Instrument(instrumentId: id, name: model.name, profile: model.profile, programBase: model.programBase.map { Int32($0) }, defaultMapping: model.defaultMapping, tags: model.tags, notes: model.notes)
+        return Components.Schemas.Instrument(instrumentId: id, name: model.name, profile: model.profile, programBase: model.programBase, defaultMapping: model.defaultMapping, tags: model.tags, notes: model.notes)
     }
 
     func get(corpusId: String, instrumentId: String) async -> Components.Schemas.Instrument? {
         let list = await loadList(corpusId)
         if let m = list.first(where: { $0.instrumentId == instrumentId }) {
-            return Components.Schemas.Instrument(instrumentId: m.instrumentId, name: m.name, profile: m.profile, programBase: m.programBase.map { Int32($0) }, defaultMapping: m.defaultMapping, tags: m.tags, notes: m.notes)
+            return Components.Schemas.Instrument(instrumentId: m.instrumentId, name: m.name, profile: m.profile, programBase: m.programBase, defaultMapping: m.defaultMapping, tags: m.tags, notes: m.notes)
         }
         return nil
     }
@@ -425,4 +461,177 @@ actor InstrumentsStore {
         await saveList(corpusId, list)
         return true
     }
+}
+
+// MARK: - Proposal application helpers
+extension FountainEditorHandlers {
+    private func decodeParamsJSON(_ s: String?) -> [String: Any] {
+        guard let s, let data = s.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
+        return obj
+    }
+
+    /// Applies a proposal if supported. Returns (applied, newETag, message).
+    fileprivate func applyProposal(corpusId: String, model: ProposalsStore.Model) async -> (applied: Bool, newETag: String?, message: String) {
+        let params = decodeParamsJSON(model.paramsJSON)
+        let op = model.op
+        // Load current script
+        let cur = await core.getScript(corpusId: corpusId)
+        let currentETag = cur?.etag
+        var text = cur?.text ?? ""
+        switch op {
+        case "composeBlock":
+            guard let block = params["text"] as? String, !block.isEmpty else { return (false, nil, "missing text") }
+            if !text.isEmpty { text += "\n\n" }
+            text += block
+        case "insertScene":
+            // Anchor-aware insertion: if an anchor is provided and we can locate
+            // the corresponding scene heading, insert the new scene block right after it.
+            // Fallback: append at end.
+            let title = (params["title"] as? String) ?? "NEW SCENE"
+            let slug = (params["slug"] as? String) ?? "INT. \(title.uppercased()) — DAY"
+            let block = "\n\n## \(title)\n\n\(slug)\n"
+            if let anchor = model.anchor, !anchor.isEmpty {
+                // Try to find the scene title from current structure by anchor
+                let structure = FountainEditorCore.parseStructure(text: text)
+                if let scene = structure.acts.flatMap({ $0.scenes }).first(where: { $0.anchor == anchor }) {
+                    // Insert right after line matching the scene heading
+                    let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+                    var out: [String] = []
+                    var inserted = false
+                    for i in 0..<lines.count {
+                        out.append(lines[i])
+                        if !inserted && lines[i].trimmingCharacters(in: .whitespaces) == "## \(scene.title)" {
+                            out.append(contentsOf: block.split(separator: "\n", omittingEmptySubsequences: false).map(String.init))
+                            inserted = true
+                        }
+                    }
+                    if inserted {
+                        text = out.joined(separator: "\n")
+                        break
+                    }
+                    // If we failed to match heading, fall through to append
+                }
+            }
+            // Append at end
+            text += block
+        default:
+            return (false, nil, "unsupported op \(op)")
+        }
+        // Save via ETag gate
+        let ifMatch = currentETag ?? "*"
+        let res = await core.putScript(corpusId: corpusId, body: text, ifMatch: ifMatch)
+        if res.saved { return (true, res.newETag, "applied \(op)") }
+        return (false, nil, "precondition failed (ETag)")
+    }
+}
+
+// MARK: - Proposals persistence
+actor ProposalsStore {
+    private let store: FountainStoreClient
+    init(store: FountainStoreClient) { self.store = store }
+    private func pageId(_ corpusId: String) -> String { "editor:proposals:\(corpusId)" }
+    private func listSegmentId(_ corpusId: String) -> String { "\(pageId(corpusId)):editor.proposals" }
+
+    struct Model: Codable {
+        var proposalId: String
+        var createdAt: Date
+        var op: String
+        var anchor: String?
+        var status: Components.Schemas.Proposal.statusPayload
+        var paramsJSON: String?
+    }
+
+    private func ensurePage(_ corpusId: String) async {
+        let pid = pageId(corpusId)
+        let page = Page(corpusId: corpusId, pageId: pid, url: "store://\(pid)", host: "store", title: "Proposals \(corpusId)")
+        _ = try? await store.addPage(page)
+    }
+
+    private func loadList(_ corpusId: String) async -> [Model] {
+        let segId = listSegmentId(corpusId)
+        if let data = try? await store.getDoc(corpusId: corpusId, collection: "segments", id: segId),
+           let seg = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let text = seg["text"] as? String,
+           let json = text.data(using: .utf8) {
+            let dec = JSONDecoder()
+            dec.dateDecodingStrategy = .iso8601
+            if let arr = try? dec.decode([Model].self, from: json) { return arr }
+        }
+        await ensurePage(corpusId)
+        return []
+    }
+
+    private func saveList(_ corpusId: String, _ list: [Model]) async {
+        await ensurePage(corpusId)
+        let pid = pageId(corpusId)
+        let enc = JSONEncoder(); enc.dateEncodingStrategy = .iso8601
+        let text = (try? String(data: enc.encode(list), encoding: .utf8)) ?? "[]"
+        let seg = Segment(corpusId: corpusId, segmentId: listSegmentId(corpusId), pageId: pid, kind: "editor.proposals", text: text)
+        _ = try? await store.addSegment(seg)
+    }
+
+    func create(corpusId: String, body: Components.Schemas.ProposalCreate) async -> Components.Schemas.Proposal {
+        var list = await loadList(corpusId)
+        var paramsStr: String? = nil
+        if let p = body.params, let data = try? JSONEncoder().encode(p) { paramsStr = String(data: data, encoding: .utf8) }
+        let model = Model(proposalId: UUID().uuidString, createdAt: Date(), op: body.op.rawValue, anchor: body.anchor, status: .pending, paramsJSON: paramsStr)
+        list.append(model)
+        await saveList(corpusId, list)
+        return Components.Schemas.Proposal(proposalId: model.proposalId, createdAt: model.createdAt, op: model.op, params: body.params?.additionalProperties, anchor: model.anchor, status: model.status)
+    }
+
+    func decide(corpusId: String, proposalId: String, decision: Components.Schemas.ProposalDecision) async -> Components.Schemas.ProposalResult {
+        var list = await loadList(corpusId)
+        if let idx = list.firstIndex(where: { $0.proposalId == proposalId }) {
+            var m = list[idx]
+            m.status = (decision.decision == .accept) ? .accepted : .rejected
+            list[idx] = m
+            await saveList(corpusId, list)
+            // Not applying patches yet; return applied=false and no ETag change
+            return Components.Schemas.ProposalResult(scriptETag: nil, applied: false, message: "decision recorded: \(decision.decision.rawValue)")
+        }
+        return Components.Schemas.ProposalResult(scriptETag: nil, applied: false, message: "proposal not found")
+    }
+
+    func getModel(corpusId: String, proposalId: String) async -> Model? {
+        let list = await loadList(corpusId)
+        return list.first(where: { $0.proposalId == proposalId })
+    }
+
+    func setStatus(corpusId: String, proposalId: String, status: Components.Schemas.Proposal.statusPayload) async -> Bool {
+        var list = await loadList(corpusId)
+        if let idx = list.firstIndex(where: { $0.proposalId == proposalId }) {
+            var m = list[idx]
+            m.status = status
+            list[idx] = m
+            await saveList(corpusId, list)
+            return true
+        }
+        return false
+    }
+}
+
+
+// MARK: - Sessions list (global)
+actor SessionsStore {
+    private let store: FountainStoreClient
+    init(store: FountainStoreClient) { self.store = store }
+    private func pageId() -> String { "editor:sessions" }
+    private func segmentId() -> String { "\(pageId()):editor.sessions" }
+
+    private func load() async -> [Components.Schemas.ChatSession] {
+        let cid = "fountain-editor"
+        let seg = segmentId()
+        if let data = try? await store.getDoc(corpusId: cid, collection: "segments", id: seg),
+           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let text = obj["text"] as? String,
+           let json = text.data(using: .utf8),
+           let arr = try? JSONDecoder().decode([Components.Schemas.ChatSession].self, from: json) {
+            return arr
+        }
+        return []
+    }
+
+    func list() async -> [Components.Schemas.ChatSession] { await load() }
 }

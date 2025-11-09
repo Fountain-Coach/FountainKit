@@ -132,5 +132,61 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         XCTAssertTrue(text2.contains("Hello"))
         XCTAssertTrue(text2.contains("World"))
     }
-}
 
+    func testProposals_insertScene_anchor_insertsAfterHeading() async throws {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let (kernel, _) = await makeKernelAndStore(tmp: tmp)
+
+        let cid = "fountain-editor"
+
+        // Seed script with a first scene heading
+        let script = "## Scene One\n\nINT. SCENE ONE — DAY\n\nSome text."
+        let putCreate = HTTPRequest(method: "PUT", path: "/editor/\(cid)/script", headers: [
+            "If-Match": "*",
+            "Content-Type": "text/plain",
+            "Content-Length": String(script.utf8.count)
+        ], body: Data(script.utf8))
+        _ = try await kernel.handle(putCreate)
+
+        // Insert a new scene after act1.scene1
+        let pObj: [String: Any] = [
+            "op": "insertScene",
+            "params": [
+                "title": "Inserted",
+                "slug": "INT. INSERTED — DAY"
+            ],
+            "anchor": "act1.scene1"
+        ]
+        let pBody = try JSONSerialization.data(withJSONObject: pObj)
+        let pReq = HTTPRequest(method: "POST", path: "/editor/\(cid)/proposals", headers: [
+            "Content-Type": "application/json",
+            "Content-Length": String(pBody.count)
+        ], body: pBody)
+        let pResp = try await kernel.handle(pReq)
+        XCTAssertEqual(pResp.status, 201)
+        let created = try JSONSerialization.jsonObject(with: pResp.body ?? Data()) as? [String: Any]
+        let proposalId = created?["proposalId"] as? String
+        XCTAssertNotNil(proposalId)
+
+        // Accept decision
+        let dObj: [String: Any] = ["decision": "accept"]
+        let dBody = try JSONSerialization.data(withJSONObject: dObj)
+        let dReq = HTTPRequest(method: "POST", path: "/editor/\(cid)/proposals/\(proposalId!)", headers: [
+            "Content-Type": "application/json",
+            "Content-Length": String(dBody.count)
+        ], body: dBody)
+        let dResp = try await kernel.handle(dReq)
+        XCTAssertEqual(dResp.status, 200)
+
+        // Verify new heading appears after the first scene heading
+        let getResp2 = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/script"))
+        XCTAssertEqual(getResp2.status, 200)
+        let text = String(decoding: getResp2.body ?? Data(), as: UTF8.self)
+        let idx1 = text.range(of: "## Scene One")?.lowerBound
+        let idx2 = text.range(of: "## Inserted")?.lowerBound
+        XCTAssertNotNil(idx1)
+        XCTAssertNotNil(idx2)
+        XCTAssertTrue(idx1! < idx2!)
+    }
+}

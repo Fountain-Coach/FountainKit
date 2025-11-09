@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Seeds the Service‑Minimal Build Pattern prompt into FountainStore and prints a quick fetch hint.
+
+ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+PKG_PATH="$ROOT_DIR/Packages/FountainApps"
+
+: "${CORPUS_ID:=build-profiles}"
+
+echo "[seed] Seeding Service‑Minimal Build Pattern into corpus='${CORPUS_ID}'…"
+FOUNTAIN_SKIP_LAUNCHER_SIG=1 swift run --package-path "$PKG_PATH" -c debug service-minimal-seed
+
+echo "[seed] Quick fetch (teatro.prompt):"
+echo "  CORPUS_ID=${CORPUS_ID} SEGMENT_ID='prompt:service-minimal:teatro' swift run --package-path $PKG_PATH store-dump"
+echo "[seed] Quick fetch (facts):"
+echo "  CORPUS_ID=${CORPUS_ID} SEGMENT_ID='prompt:service-minimal:facts' swift run --package-path $PKG_PATH store-dump"
+

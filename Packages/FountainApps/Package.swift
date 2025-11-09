@@ -209,6 +209,14 @@ let TARGETS: [Target] = EDITOR_MINIMAL ? [
             path: "Sources/MetalViewKit",
             exclude: ["AGENTS.md"]
         ),
+        .executableTarget(
+            name: "service-minimal-seed",
+            dependencies: [
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/service-minimal-seed"
+        ),
         
         .target(
             name: "CoreMLKit",

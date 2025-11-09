@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# quietframe-editor — one-click, safe launcher for the .fountain editor UI
+#
+# Guarantees a clean, reproducible start by default:
+# - Cleans the FountainApps build directory and the module cache
+# - Gates the manifest to only editor UI + tests (FK_EDITOR_VRT_ONLY=1)
+# - Runs the UI in seeded mode by default (no server dependency)
+#
+# Usage:
+#   Scripts/apps/quietframe-editor            # clean + build + run (seeded)
+#   Scripts/apps/quietframe-editor --server   # clean + build + run (HTTP server mode)
+#   Scripts/apps/quietframe-editor --no-clean # skip cleaning for faster iter
+#   Scripts/apps/quietframe-editor --release  # build in release
+#   Scripts/apps/quietframe-editor --seed-prompt   # seed Fountain Editor Teatro prompt before run
+#
+# Env:
+#   CORPUS_ID          Corpus to use in server mode (default: fountain-editor)
+#   EDITOR_URL         Editor server URL (default: http://127.0.0.1:8080)
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PKG_PATH="$ROOT/Packages/FountainApps"
+CACHE="$ROOT/.fountain/clang-module-cache"
+mkdir -p "$CACHE"
+
+cfg="debug"
+do_clean=1
+mode="seeded"   # seeded | server
+seed_prompt=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --server) mode="server" ;;
+    --no-clean) do_clean=0 ;;
+    --release) cfg="release" ;;
+    --seed-prompt) seed_prompt=1 ;;
+    -h|--help|help)
+      sed -n '1,80p' "$0" | sed -n '2,40p' | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "[quietframe-editor] unknown arg: $1" 1>&2; exit 2 ;;
+  esac; shift
+done
+
+echo "[editor] One-click start (mode=$mode cfg=$cfg)"
+
+if [[ "$do_clean" == "1" ]]; then
+  echo "[editor] Cleaning previous build artifacts…"
+  rm -rf "$PKG_PATH/.build" "$CACHE" || true
+  (cd "$PKG_PATH" && swift package clean) || true
+fi
+
+export CLANG_MODULE_CACHE_PATH="$CACHE"
+export SWIFTPM_ENABLE_SANDBOX=0
+export FK_EDITOR_VRT_ONLY=1
+export FOUNTAIN_SKIP_LAUNCHER_SIG=1
+
+if [[ "$seed_prompt" == "1" ]]; then
+  echo "[editor] Seeding Fountain Editor Teatro prompt…"
+  swift run --package-path "$PKG_PATH" -c "$cfg" fountain-editor-seed || {
+    echo "[editor] WARN: prompt seed failed (continuing)" 1>&2; }
+fi
+
+echo "[editor] Building quietframe-editor-app…"
+swift build --package-path "$PKG_PATH" -c "$cfg" --target quietframe-editor-app
+
+echo "[editor] Launching UI…"
+if [[ "$mode" == "seeded" ]]; then
+  EDITOR_SEED_TEXT=$'# Act 1\n\n## Scene One\n\nINT. SCENE ONE — DAY\n\nText.' \
+  swift run --package-path "$PKG_PATH" -c "$cfg" quietframe-editor-app
+else
+  CORPUS_ID="${CORPUS_ID:-fountain-editor}" \
+  EDITOR_URL="${EDITOR_URL:-http://127.0.0.1:8080}" \
+  swift run --package-path "$PKG_PATH" -c "$cfg" quietframe-editor-app
+fi
+

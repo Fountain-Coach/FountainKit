@@ -189,4 +189,104 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         XCTAssertNotNil(idx2)
         XCTAssertTrue(idx1! < idx2!)
     }
+
+    func testProposals_renameScene_changesHeading() async throws {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let (kernel, _) = await makeKernelAndStore(tmp: tmp)
+
+        let cid = "fountain-editor"
+
+        // Seed script with a first scene heading
+        let script = "## Scene One\n\nINT. SCENE ONE — DAY\n\nSome text."
+        let putCreate = HTTPRequest(method: "PUT", path: "/editor/\(cid)/script", headers: [
+            "If-Match": "*",
+            "Content-Type": "text/plain",
+            "Content-Length": String(script.utf8.count)
+        ], body: Data(script.utf8))
+        _ = try await kernel.handle(putCreate)
+
+        // Rename act1.scene1 to "New Title"
+        let pObj: [String: Any] = [
+            "op": "renameScene",
+            "params": ["title": "New Title"],
+            "anchor": "act1.scene1"
+        ]
+        let pBody = try JSONSerialization.data(withJSONObject: pObj)
+        let pReq = HTTPRequest(method: "POST", path: "/editor/\(cid)/proposals", headers: [
+            "Content-Type": "application/json",
+            "Content-Length": String(pBody.count)
+        ], body: pBody)
+        let pResp = try await kernel.handle(pReq)
+        XCTAssertEqual(pResp.status, 201)
+        let created = try JSONSerialization.jsonObject(with: pResp.body ?? Data()) as? [String: Any]
+        let proposalId = created?["proposalId"] as? String
+        XCTAssertNotNil(proposalId)
+
+        // Accept decision
+        let dObj: [String: Any] = ["decision": "accept"]
+        let dBody = try JSONSerialization.data(withJSONObject: dObj)
+        let dReq = HTTPRequest(method: "POST", path: "/editor/\(cid)/proposals/\(proposalId!)", headers: [
+            "Content-Type": "application/json",
+            "Content-Length": String(dBody.count)
+        ], body: dBody)
+        let dResp = try await kernel.handle(dReq)
+        XCTAssertEqual(dResp.status, 200)
+
+        // Verify heading changed
+        let getResp2 = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/script"))
+        XCTAssertEqual(getResp2.status, 200)
+        let text = String(decoding: getResp2.body ?? Data(), as: UTF8.self)
+        XCTAssertTrue(text.contains("## New Title"))
+        XCTAssertFalse(text.contains("## Scene One"))
+    }
+
+    func testProposals_rewriteRange_replacesSubstring() async throws {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let (kernel, _) = await makeKernelAndStore(tmp: tmp)
+
+        let cid = "fountain-editor"
+
+        // Seed plain text
+        let script = "Hello world"
+        let putCreate = HTTPRequest(method: "PUT", path: "/editor/\(cid)/script", headers: [
+            "If-Match": "*",
+            "Content-Type": "text/plain",
+            "Content-Length": String(script.utf8.count)
+        ], body: Data(script.utf8))
+        _ = try await kernel.handle(putCreate)
+
+        // Replace "world" with "Editor"
+        let pObj: [String: Any] = [
+            "op": "rewriteRange",
+            "params": ["start": 6, "end": 11, "text": "Editor"]
+        ]
+        let pBody = try JSONSerialization.data(withJSONObject: pObj)
+        let pReq = HTTPRequest(method: "POST", path: "/editor/\(cid)/proposals", headers: [
+            "Content-Type": "application/json",
+            "Content-Length": String(pBody.count)
+        ], body: pBody)
+        let pResp = try await kernel.handle(pReq)
+        XCTAssertEqual(pResp.status, 201)
+        let created = try JSONSerialization.jsonObject(with: pResp.body ?? Data()) as? [String: Any]
+        let proposalId = created?["proposalId"] as? String
+        XCTAssertNotNil(proposalId)
+
+        // Accept decision
+        let dObj: [String: Any] = ["decision": "accept"]
+        let dBody = try JSONSerialization.data(withJSONObject: dObj)
+        let dReq = HTTPRequest(method: "POST", path: "/editor/\(cid)/proposals/\(proposalId!)", headers: [
+            "Content-Type": "application/json",
+            "Content-Length": String(dBody.count)
+        ], body: dBody)
+        let dResp = try await kernel.handle(dReq)
+        XCTAssertEqual(dResp.status, 200)
+
+        // Verify text changed
+        let getResp2 = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/script"))
+        XCTAssertEqual(getResp2.status, 200)
+        let text = String(decoding: getResp2.body ?? Data(), as: UTF8.self)
+        XCTAssertEqual(text, "Hello Editor")
+    }
 }

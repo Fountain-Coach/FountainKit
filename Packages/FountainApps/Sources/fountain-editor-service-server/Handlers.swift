@@ -515,6 +515,39 @@ extension FountainEditorHandlers {
             }
             // Append at end
             text += block
+        case "renameScene":
+            // Rename the scene heading for the given anchor (or params.anchor) to params.title
+            let newTitle = (params["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let title = newTitle, !title.isEmpty else { return (false, nil, "missing title") }
+            let targetAnchor = model.anchor ?? (params["anchor"] as? String)
+            guard let anchor = targetAnchor, !anchor.isEmpty else { return (false, nil, "missing anchor") }
+            let structure = FountainEditorCore.parseStructure(text: text)
+            guard let scene = structure.acts.flatMap({ $0.scenes }).first(where: { $0.anchor == anchor }) else {
+                return (false, nil, "anchor not found")
+            }
+            var lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+            var changed = false
+            for i in 0..<lines.count {
+                if lines[i].trimmingCharacters(in: .whitespaces) == "## \(scene.title)" {
+                    // Preserve original leading whitespace if any
+                    let prefixLen = lines[i].prefix { $0.isWhitespace }.count
+                    let prefix = String(lines[i].prefix(prefixLen))
+                    lines[i] = prefix + "## \(title)"
+                    changed = true
+                    break
+                }
+            }
+            if !changed { return (false, nil, "heading not found") }
+            text = lines.joined(separator: "\n")
+        case "rewriteRange":
+            // Replace a substring of the script by character offsets [start, end) with provided text
+            guard let start = params["start"] as? Int, let end = params["end"] as? Int, start >= 0, end >= start, end <= text.count else {
+                return (false, nil, "invalid range")
+            }
+            let replacement = (params["text"] as? String) ?? ""
+            let sIdx = text.index(text.startIndex, offsetBy: start)
+            let eIdx = text.index(text.startIndex, offsetBy: end)
+            text.replaceSubrange(sIdx..<eIdx, with: replacement)
         default:
             return (false, nil, "unsupported op \(op)")
         }

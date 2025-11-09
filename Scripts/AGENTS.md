@@ -19,6 +19,39 @@ Areas (canonical)
  - `Scripts/apps/baseline-patchbay-web` — seeds prompts and starts the external web mirror (Vite).
  - `Scripts/apps/midi-service` — starts the MIDI 2.0 HTTP bridge for UMP send/record and headless instruments.
 
+## Targeted Wrappers (Service‑Minimal)
+
+What
+- Minimal build/run wrappers to compile just one server target with small graphs. They set `FK_SKIP_NOISY_TARGETS=1` and skip launcher signature checks for fast local loops. Servers run as real HTTP only (no smoke in mains).
+
+Why
+- Speeds up iteration when full‑workspace builds take minutes. Each wrapper narrows SwiftPM planning/compilation to a single executable target.
+
+How
+- Usage: `Scripts/dev/<service>-min [build|run]`. Examples:
+  - `Scripts/dev/gateway-min [build|run]`
+  - `Scripts/dev/pbvrt-min [build|run]`
+  - `Scripts/dev/quietframe-min [build|run]`
+  - `Scripts/dev/planner-min [build|run]`
+  - `Scripts/dev/function-caller-min [build|run]`
+  - `Scripts/dev/persist-min [build|run]`
+  - `Scripts/dev/baseline-awareness-min [build|run]`
+  - `Scripts/dev/bootstrap-min [build|run]`
+  - `Scripts/dev/tools-factory-min [build|run]`
+  - `Scripts/dev/tool-server-min [build|run]`
+- Environment (set by wrappers): `FK_SKIP_NOISY_TARGETS=1`, `FOUNTAIN_SKIP_LAUNCHER_SIG=1`.
+
+Where
+- Wrappers live in `Scripts/dev/*-min`. Server targets live under `Packages/FountainApps/Sources/<service>-server` and depend on cores that own OpenAPI generation.
+
+Codex danger (sentinel‑gated)
+- Launcher: `Scripts/dev/codex-danger`.
+- Profiles:
+  - Safe (default): `--full-auto` (workspace‑write; approvals on‑failure).
+  - Danger (opt‑in): `-s danger-full-access -a never`.
+- Activate danger: create `.codex-allow-danger` at repo root (git‑ignored), or set `FK_CODEX_DANGER=1`, or pass `--danger`. Force safe with `--safe`.
+- GitHub auth: reuses `gh auth token` when available; `--relogin` forces a fresh login.
+
 Baseline policy
 - `Scripts/apps/baseline-patchbay` launches the Baseline‑PatchBay UI. This baseline is authoritative for viewport/math invariants; any change to the baseline app must be paired with a matching MRTS Teatro prompt printed on boot and persisted via `baseline-robot-seed`. Run the invariants subset with `Scripts/ci/baseline-robot.sh`.
 

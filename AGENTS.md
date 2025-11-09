@@ -152,6 +152,14 @@ Commands
 - Run server: `Scripts/dev/editor-min run`
 - In‑process smoke (no network): `Scripts/dev/editor-min smoke`
 
+Persistence (Teatro prompt)
+- The canonical build‑pattern prompt is persisted in FountainStore — do not copy into files.
+- Corpus: `build-profiles`; Page: `prompt:service-minimal`.
+- Seeder: `Scripts/apps/service-minimal-seed` (writes `teatro.prompt` and `facts`).
+- Quick fetch:
+  - `CORPUS_ID=build-profiles SEGMENT_ID='prompt:service-minimal:teatro' swift run --package-path Packages/FountainApps store-dump`
+  - `CORPUS_ID=build-profiles SEGMENT_ID='prompt:service-minimal:facts' swift run --package-path Packages/FountainApps store-dump`
+
 Where
 - Manifest gating and targets live in `Packages/FountainApps/Package.swift:1`.
 - Editor server sources: `Packages/FountainApps/Sources/fountain-editor-service-server/*`.

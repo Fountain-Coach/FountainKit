@@ -149,16 +149,33 @@ final class EditorModel: ObservableObject {
 struct EditorLandingView: View {
     @StateObject private var model = EditorModel()
     @State private var lastPreviewTask: Task<Void, Never>? = nil
+    private let gutterWidth: CGFloat = 14
+    @State private var totalSize: CGSize = .zero
+    @State private var outlineWidth: CGFloat = 0
+    @State private var editorWidth: CGFloat = 0
+    @State private var geometryDumped = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
-            HStack(spacing: 0) {
-                editorPane
+        GeometryReader { proxy in
+            VStack(spacing: 0) {
+                header
                 Divider()
-                outlinePane
+                HStack(spacing: 0) {
+                    editorPane
+                        .background(GeometryReader { gp in
+                            Color.clear.onAppear { editorWidth = gp.size.width }
+                                .onChange(of: gp.size) { _, n in editorWidth = n.width }
+                        })
+                    Divider().frame(width: gutterWidth)
+                    outlinePane
+                        .background(GeometryReader { gp in
+                            Color.clear.onAppear { outlineWidth = gp.size.width }
+                                .onChange(of: gp.size) { _, n in outlineWidth = n.width }
+                        })
+                }
             }
+            .onAppear { totalSize = proxy.size; scheduleGeometryDump() }
+            .onChange(of: proxy.size) { _, n in totalSize = n; scheduleGeometryDump() }
         }
         .task { await model.load() }
         .frame(minWidth: 900, minHeight: 600)
@@ -220,6 +237,26 @@ struct EditorLandingView: View {
         }
         .padding(10)
         .frame(minWidth: 320)
+    }
+
+    private func scheduleGeometryDump() {
+        guard !geometryDumped else { return }
+        if let path = ProcessInfo.processInfo.environment["EDITOR_GEOMETRY_DUMP"], !path.isEmpty {
+            geometryDumped = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                let dict: [String: Any] = [
+                    "total": ["w": totalSize.width, "h": totalSize.height],
+                    "outlineWidth": outlineWidth,
+                    "editorWidth": editorWidth,
+                    "gutterWidth": gutterWidth
+                ]
+                if let data = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted]),
+                   let url = URL(string: "file://" + path) {
+                    try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    try? data.write(to: url)
+                }
+            }
+        }
     }
 }
 

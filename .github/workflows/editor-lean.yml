@@ -1,0 +1,38 @@
+name: Editor Lean Suite
+
+on:
+  pull_request:
+    paths:
+      - 'Tools/fountain-editor-mini-tests/**'
+      - 'Tools/fountain-editor-align-tests/**'
+      - 'Packages/FountainApps/Sources/fountain-editor-service/**'
+      - 'Packages/FountainApps/Sources/fountain-editor-service-server/**'
+      - 'Packages/FountainApps/Tests/FountainEditor*Tests/**'
+      - 'Scripts/dev/test-fountain-editor-*'
+      - '.github/workflows/editor-lean.yml'
+  push:
+    branches: [ main ]
+    paths:
+      - 'Tools/fountain-editor-mini-tests/**'
+      - 'Tools/fountain-editor-align-tests/**'
+      - 'Packages/FountainApps/Sources/fountain-editor-service/**'
+      - 'Packages/FountainApps/Sources/fountain-editor-service-server/**'
+      - 'Packages/FountainApps/Tests/FountainEditor*Tests/**'
+      - 'Scripts/dev/test-fountain-editor-*'
+      - '.github/workflows/editor-lean.yml'
+
+jobs:
+  editor-tests:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Xcode version
+        run: xcodebuild -version
+      - name: Run lean editor suite (mini + alignment + server smoke)
+        env:
+          FK_EDITOR_MINIMAL: '1'
+          FK_SKIP_NOISY_TARGETS: '1'
+          FOUNTAIN_SKIP_LAUNCHER_SIG: '1'
+        run: |
+          bash Scripts/dev/test-fountain-editor-all

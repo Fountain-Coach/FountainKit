@@ -1,0 +1,24 @@
+name: No CoreMIDI Lint
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify no CoreMIDI usage in repo (excluding vendored/externals)
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "[lint] scanning for CoreMIDI usage…"
+          if rg -n "\\bimport\\s+CoreMIDI\\b|\\bMIDI(Client|Source|Destination|Port|Send|Received)" -S \
+               -g '!External/**' -g '!Public/**' -g '!**/.build/**' ; then
+            echo "[lint] ERROR: CoreMIDI usage detected in repository code (outside vendored/external)." >&2
+            exit 1
+          fi
+          echo "[lint] OK: no CoreMIDI usage found."

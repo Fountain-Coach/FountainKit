@@ -4,6 +4,9 @@ FountainKit is the Swift Package Manager workspace that powers FountainAI for th
 
 See ONBOARDING.md for a 10‑minute quickstart with dev scripts.
 
+Related reading
+- docs/blog/bye-bye-coremidi.md: Why we removed CoreMIDI, what replaces it (Loopback + MIDI 2.0 RTP/BLE), and how this improves determinism and CI.
+
 Quick dev helpers:
 - `Scripts/dev-up` – start core services (use `--check` for readiness)
 - `Scripts/dev-down` – stop services (use `--force` to clear ports)

@@ -116,6 +116,61 @@ final class EditorCoreTests: XCTestCase {
         XCTAssertEqual(extended.acts[0].scenes.count, 2)
     }
 
+    func testToggle_acceptNumberedSlugs_onlyWhenEnabled() {
+        let text = """
+        1. INT. ROOM - DAY
+        text
+        INT. HALL - NIGHT
+        """
+        var opts = FountainEditorMiniCore.ParserOptions.strict
+        opts.acceptNumberedSlugs = false
+        let a = FountainEditorMiniCore.parseStructure(text: text, options: opts)
+        XCTAssertEqual(a.acts.first?.scenes.count, 1)
+        opts.acceptNumberedSlugs = true
+        let b = FountainEditorMiniCore.parseStructure(text: text, options: opts)
+        XCTAssertEqual(b.acts.first?.scenes.count, 2)
+    }
+
+    func testToggle_acceptSlugVariants_controlsIEScenes() {
+        let text = """
+        I/E. PORCH - EVENING
+        INT. DEN - NIGHT
+        """
+        var opts = FountainEditorMiniCore.ParserOptions.strict
+        opts.acceptSlugVariants = false
+        let a = FountainEditorMiniCore.parseStructure(text: text, options: opts)
+        XCTAssertEqual(a.acts.first?.scenes.count, 1)
+        opts.acceptSlugVariants = true
+        let b = FountainEditorMiniCore.parseStructure(text: text, options: opts)
+        XCTAssertEqual(b.acts.first?.scenes.count, 2)
+    }
+
+    func testToggle_acceptSections_falseTreatsSectionsAsText() {
+        let text = """
+        # Act 1
+        ## Scene 1
+        INT. ROOM - DAY
+        """
+        var opts = FountainEditorMiniCore.ParserOptions.extended
+        opts.acceptSections = false
+        // With sections off, we should still detect the slug scene
+        let s = FountainEditorMiniCore.parseStructure(text: text, options: opts)
+        XCTAssertEqual(s.acts.first?.scenes.count, 1)
+        XCTAssertEqual(s.acts.first?.scenes.first?.anchor, "act1.scene1")
+    }
+
+    func testToggle_gateSlugsWhenSectionsPresent_falseAllowsMixed() {
+        let text = """
+        # Act 1
+        INT. SLUG SCENE - DAY
+        ## Section Scene
+        """
+        var opts = FountainEditorMiniCore.ParserOptions.extended
+        opts.gateSlugsWhenSectionsPresent = false
+        let s = FountainEditorMiniCore.parseStructure(text: text, options: opts)
+        XCTAssertEqual(s.acts.first?.scenes.count, 2)
+    }
+
     func testActsImplicitWhenSectionsPresent_noActSplit() {
         let text = """
         INT. ONE

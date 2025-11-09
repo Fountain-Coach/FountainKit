@@ -289,4 +289,58 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         let text = String(decoding: getResp2.body ?? Data(), as: UTF8.self)
         XCTAssertEqual(text, "Hello Editor")
     }
+
+    func testProposals_moveScene_after_movesBlock() async throws {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let (kernel, _) = await makeKernelAndStore(tmp: tmp)
+
+        let cid = "fountain-editor"
+
+        // Seed two scenes
+        let script = "## A\n\nINT. A — DAY\n\nfoo\n\n## B\n\nINT. B — DAY\n\nbar\n"
+        let putCreate = HTTPRequest(method: "PUT", path: "/editor/\(cid)/script", headers: [
+            "If-Match": "*",
+            "Content-Type": "text/plain",
+            "Content-Length": String(script.utf8.count)
+        ], body: Data(script.utf8))
+        _ = try await kernel.handle(putCreate)
+
+        // Move A after B
+        let pObj: [String: Any] = [
+            "op": "moveScene",
+            "params": ["targetAnchor": "act1.scene2", "position": "after"],
+            "anchor": "act1.scene1"
+        ]
+        let pBody = try JSONSerialization.data(withJSONObject: pObj)
+        let pReq = HTTPRequest(method: "POST", path: "/editor/\(cid)/proposals", headers: [
+            "Content-Type": "application/json",
+            "Content-Length": String(pBody.count)
+        ], body: pBody)
+        let pResp = try await kernel.handle(pReq)
+        XCTAssertEqual(pResp.status, 201)
+        let created = try JSONSerialization.jsonObject(with: pResp.body ?? Data()) as? [String: Any]
+        let proposalId = created?["proposalId"] as? String
+        XCTAssertNotNil(proposalId)
+
+        // Accept decision
+        let dObj: [String: Any] = ["decision": "accept"]
+        let dBody = try JSONSerialization.data(withJSONObject: dObj)
+        let dReq = HTTPRequest(method: "POST", path: "/editor/\(cid)/proposals/\(proposalId!)", headers: [
+            "Content-Type": "application/json",
+            "Content-Length": String(dBody.count)
+        ], body: dBody)
+        let dResp = try await kernel.handle(dReq)
+        XCTAssertEqual(dResp.status, 200)
+
+        // Verify order: B before A
+        let getResp2 = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/script"))
+        XCTAssertEqual(getResp2.status, 200)
+        let text = String(decoding: getResp2.body ?? Data(), as: UTF8.self)
+        let idxA = text.range(of: "## A")?.lowerBound
+        let idxB = text.range(of: "## B")?.lowerBound
+        XCTAssertNotNil(idxA)
+        XCTAssertNotNil(idxB)
+        XCTAssertTrue(idxB! < idxA!)
+    }
 }

@@ -548,6 +548,69 @@ extension FountainEditorHandlers {
             let sIdx = text.index(text.startIndex, offsetBy: start)
             let eIdx = text.index(text.startIndex, offsetBy: end)
             text.replaceSubrange(sIdx..<eIdx, with: replacement)
+        case "moveScene":
+            // Move a scene block (heading + body until next heading) relative to another scene.
+            // Params: sourceAnchor (optional; defaults to model.anchor), targetAnchor (required), position: "after" (default) | "before".
+            let sourceAnchor = model.anchor ?? (params["sourceAnchor"] as? String)
+            guard let src = sourceAnchor, !src.isEmpty else { return (false, nil, "missing sourceAnchor") }
+            guard let target = (params["targetAnchor"] as? String), !target.isEmpty else { return (false, nil, "missing targetAnchor") }
+            let position = ((params["position"] as? String)?.lowercased() == "before") ? "before" : "after"
+            if src == target { return (false, nil, "source==target") }
+
+            let structure = FountainEditorCore.parseStructure(text: text)
+            guard let srcScene = structure.acts.flatMap({ $0.scenes }).first(where: { $0.anchor == src }),
+                  let dstScene = structure.acts.flatMap({ $0.scenes }).first(where: { $0.anchor == target }) else {
+                return (false, nil, "anchor not found")
+            }
+            var lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+            // Map headings to indices
+            var headingIdx: [String: Int] = [:] // title -> first line index of heading
+            for i in 0..<lines.count {
+                let t = lines[i].trimmingCharacters(in: .whitespaces)
+                if t.hasPrefix("## ") {
+                    let title = String(t.dropFirst(3))
+                    headingIdx[title] = i
+                }
+            }
+            guard let srcStart = headingIdx[srcScene.title], let dstStartInitial = headingIdx[dstScene.title] else {
+                return (false, nil, "heading not found")
+            }
+            // Compute end indexes (exclusive) as next heading or EOF
+            func blockEnd(start: Int) -> Int {
+                var j = start + 1
+                while j < lines.count {
+                    if lines[j].trimmingCharacters(in: .whitespaces).hasPrefix("## ") { break }
+                    j += 1
+                }
+                return j
+            }
+            let srcEnd = blockEnd(start: srcStart)
+            // Extract source block
+            let block = Array(lines[srcStart..<srcEnd])
+            // Remove it
+            lines.removeSubrange(srcStart..<srcEnd)
+            // Recompute destination start after removal
+            var dstStart = dstStartInitial
+            if srcStart < dstStart { dstStart -= (srcEnd - srcStart) }
+            // Compute insertion index
+            let insertIndex: Int = {
+                if position == "before" { return dstStart }
+                // after => after the destination block
+                let dstEnd = blockEnd(start: dstStart)
+                return dstEnd
+            }()
+            // Insert a separating blank line if needed
+            var insertBlock = block
+            if insertIndex > 0, insertIndex <= lines.count {
+                // Ensure preceding line ends with a blank separation for readability
+                if lines.indices.contains(insertIndex - 1) {
+                    if !lines[max(0, insertIndex - 1)].isEmpty, (insertBlock.first?.isEmpty ?? false) == false {
+                        insertBlock.insert("", at: 0)
+                    }
+                }
+            }
+            lines.insert(contentsOf: insertBlock, at: insertIndex)
+            text = lines.joined(separator: "\n")
         default:
             return (false, nil, "unsupported op \(op)")
         }

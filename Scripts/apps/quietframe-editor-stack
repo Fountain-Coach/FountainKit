@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# quietframe-editor-stack — one-click: control plane up + QuietFrame editor UI
+#
+# Usage:
+#   Scripts/apps/quietframe-editor-stack            # dev-up --check then launch UI
+#   Scripts/apps/quietframe-editor-stack --all      # include optional extras in dev-up
+#   Scripts/apps/quietframe-editor-stack --no-clean # skip UI clean build
+#   Scripts/apps/quietframe-editor-stack --release  # UI release build
+#
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ALL=0
+NO_CLEAN=0
+CFG="debug"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --all) ALL=1 ;;
+    --no-clean) NO_CLEAN=1 ;;
+    --release) CFG="release" ;;
+    -h|--help|help) sed -n '1,80p' "$0" | sed -n '2,40p' | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "[qf-stack] unknown arg: $1" 1>&2; exit 2 ;;
+  esac; shift
+done
+
+echo "[qf-stack] Bringing up control plane (dev-up --check)…"
+if [[ $ALL -eq 1 ]]; then
+  "$ROOT/Scripts/dev/dev-up" --all --check || { echo "[qf-stack] dev-up failed" 1>&2; exit 2; }
+else
+  "$ROOT/Scripts/dev/dev-up" --check || { echo "[qf-stack] dev-up failed" 1>&2; exit 2; }
+fi
+
+echo "[qf-stack] Launching QuietFrame app with Fountain Editor…"
+if [[ $NO_CLEAN -eq 1 ]]; then
+  exec "$ROOT/Scripts/apps/quietframe-editor-default" --no-clean ${CFG:+--${CFG}}
+else
+  exec "$ROOT/Scripts/apps/quietframe-editor-default" ${CFG:+--${CFG}}
+fi
+

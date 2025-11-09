@@ -1196,6 +1196,12 @@ let TARGETS: [Target] = EDITOR_MINIMAL ? [
             ]
         ),
         .executableTarget(
+            name: "store-list",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ]
+        ),
+        .executableTarget(
             name: "FountainLauncherUI",
             dependencies: [
                 .product(name: "SecretStore", package: "swift-secretstore")
@@ -1550,6 +1556,13 @@ let TARGETS: [Target] = EDITOR_MINIMAL ? [
             ],
             path: "Sources/metalviewkit-cc-fuzz"
         ),
+        .executableTarget(
+            name: "editor-snapshots",
+            dependencies: [
+                "quietframe-editor-app"
+            ],
+            path: "Sources/editor-snapshots"
+        ),
         .testTarget(
             name: "MVKRuntimeServerTests",
             dependencies: [
@@ -1558,6 +1571,16 @@ let TARGETS: [Target] = EDITOR_MINIMAL ? [
                 .product(name: "FountainRuntime", package: "FountainCore")
             ],
             path: "Tests/MVKRuntimeServerTests"
+        ),
+        .testTarget(
+            name: "EditorAppUITests",
+            dependencies: [
+                "quietframe-editor-app"
+            ],
+            path: "Tests/EditorAppUITests",
+            resources: [
+                .process("Baselines")
+            ]
         )
     ] )
 

@@ -67,6 +67,15 @@ final class EditorModel: ObservableObject {
 
     @MainActor
     func load() async {
+        let env = ProcessInfo.processInfo.environment
+        if let seed = env["EDITOR_SEED_TEXT"], !seed.isEmpty {
+            // Offline seeded mode for snapshots/tests
+            self.text = seed
+            self.etag = EditorModel.computeETag(seed)
+            self.outline = EditorModel.parseStructure(seed)
+            self.status = "Ready"
+            return
+        }
         status = "Loading…"
         do {
             try await fetchScript()
@@ -211,5 +220,38 @@ struct EditorLandingView: View {
         }
         .padding(10)
         .frame(minWidth: 320)
+    }
+}
+
+// MARK: - Minimal local parser + ETag for offline seeded snapshots
+extension EditorModel {
+    static func computeETag(_ text: String) -> String {
+        var hash: UInt32 = 0
+        for b in text.utf8 { hash = (hash &* 16777619) ^ UInt32(b) }
+        return String(format: "%08X", hash)
+    }
+    static func parseStructure(_ text: String) -> [Act] {
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var acts: [Act] = []
+        var actIdx = 0
+        var scenes: [Scene] = []
+        var sceneIdx = 0
+        func startAct() {
+            if actIdx > 0 { acts.append(Act(index: actIdx, title: "ACT \(actIdx)", scenes: scenes)); scenes = []; sceneIdx = 0 }
+            actIdx += 1
+        }
+        for raw in lines {
+            let s = raw.trimmingCharacters(in: .whitespaces)
+            if s.hasPrefix("# ") && !s.hasPrefix("## ") { startAct(); continue }
+            if s.hasPrefix("## ") {
+                if actIdx == 0 { startAct() }
+                sceneIdx += 1
+                let title = String(s.dropFirst(3))
+                scenes.append(Scene(index: sceneIdx, title: title, beats: []))
+            }
+        }
+        if actIdx == 0 { actIdx = 1 }
+        acts.append(Act(index: actIdx, title: "ACT \(actIdx)", scenes: scenes))
+        return acts
     }
 }

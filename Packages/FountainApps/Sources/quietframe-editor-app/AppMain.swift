@@ -1,12 +1,52 @@
 import SwiftUI
+import Foundation
+import FountainStoreClient
 
 @main
 struct QuietFrameEditorApp: App {
+    init() {
+        // Print Teatro prompt on boot (no seeding here; read-only)
+        Task { await TeatroPrinter.printOnBoot() }
+    }
     var body: some Scene {
         WindowGroup("QuietFrame — Fountain Editor") {
             EditorLandingView()
         }
         .windowStyle(.automatic)
+    }
+}
+
+enum TeatroPrinter {
+    static func printOnBoot() async {
+        do {
+            let env = ProcessInfo.processInfo.environment
+            let corpusId = env["QUIETFRAME_CORPUS_ID"] ?? "quietframe"
+            let store = resolveStore()
+            // Fetch teatro.prompt segment text
+            if let data = try await store.getDoc(corpusId: corpusId, collection: "segments", id: "prompt:\(corpusId):teatro"),
+               let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let text = obj["text"] as? String {
+                print("\n=== Teatro Prompt (\(corpusId)) ===\n\(text)\n=== end prompt ===\n")
+            }
+        } catch {
+            // Best effort: do not crash app if store not available
+        }
+    }
+
+    private static func resolveStore() -> FountainStoreClient {
+        let env = ProcessInfo.processInfo.environment
+        if let dir = env["FOUNTAINSTORE_DIR"], !dir.isEmpty {
+            let url: URL
+            if dir.hasPrefix("~") {
+                url = URL(fileURLWithPath: FileManager.default.homeDirectoryForCurrentUser.path + String(dir.dropFirst()), isDirectory: true)
+            } else { url = URL(fileURLWithPath: dir, isDirectory: true) }
+            if let disk = try? DiskFountainStoreClient(rootDirectory: url) { return FountainStoreClient(client: disk) }
+        }
+        let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+        if let disk = try? DiskFountainStoreClient(rootDirectory: cwd.appendingPathComponent(".fountain/store", isDirectory: true)) {
+            return FountainStoreClient(client: disk)
+        }
+        return FountainStoreClient(client: EmbeddedFountainStoreClient())
     }
 }
 

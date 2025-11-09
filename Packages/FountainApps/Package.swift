@@ -1502,6 +1502,13 @@ let TARGETS: [Target] = EDITOR_MINIMAL ? [
             ],
             path: "Sources/quietframe-companion-seed"
         ),
+        .executableTarget(
+            name: "quietframe-teatro-seed",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/quietframe-teatro-seed"
+        ),
         // MVK Runtime Server split: library (kit) + thin executable
         .target(
             name: "MetalViewKitRuntimeServerKit",

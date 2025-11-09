@@ -1,24 +1,31 @@
 import Foundation
 import AppKit
 import SwiftUI
-@testable import quietframe_editor_app
 
 @main
 struct EditorSnapshotsMain {
     static func main() throws {
+        // Ensure AppKit is initialized for headless rendering
+        let app = NSApplication.shared
+        app.setActivationPolicy(.accessory)
         let args = CommandLine.arguments.dropFirst()
         let update = args.contains("--update")
         let sizes = [(1440,900,"1440x900"),(1280,800,"1280x800")]
-        setenv("EDITOR_SEED_TEXT", "# Act 1\n\n## Scene One\n\nINT. SCENE ONE — DAY\n\nText.", 1)
+        // Deterministic seeded text; keep in sync with tests
+        let seed = ProcessInfo.processInfo.environment["EDITOR_SEED_TEXT"] ?? "# Act 1\n\n## Scene One\n\nINT. SCENE ONE — DAY\n\nText."
         var failures = 0
         for (w,h,name) in sizes {
-            let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: w, height: h), styleMask: [.titled], backing: .buffered, defer: false)
-            let hosting = NSHostingView(rootView: EditorLandingView())
-            hosting.frame = win.contentView!.bounds
-            hosting.autoresizingMask = [.width,.height]
-            win.contentView!.addSubview(hosting)
-            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
-            let img = SnapshotUtils.renderImage(of: hosting, size: CGSize(width: w, height: h))
+            var img: NSImage!
+            DispatchQueue.main.sync {
+                let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: w, height: h), styleMask: [.titled], backing: .buffered, defer: false)
+                let hosting = NSHostingView(rootView: EditorSnapshotView(seedText: seed))
+                hosting.frame = win.contentView!.bounds
+                hosting.autoresizingMask = [.width,.height]
+                win.contentView!.addSubview(hosting)
+                RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+                img = SnapshotUtils.renderImage(of: hosting, size: CGSize(width: w, height: h))
+                win.close()
+            }
             let baseDir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("Packages/FountainApps/Tests/EditorAppUITests/Baselines/\(name)", isDirectory: true)
             let baselineURL = baseDir.appendingPathComponent("editor.png")
             if update || !FileManager.default.fileExists(atPath: baselineURL.path) {
@@ -42,9 +49,7 @@ struct EditorSnapshotsMain {
                     failures += 1
                 }
             }
-            win.close()
         }
         if failures > 0 { exit(1) }
     }
 }
-

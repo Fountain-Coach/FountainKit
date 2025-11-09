@@ -23,7 +23,11 @@ final class EditorSnapshotTests: XCTestCase {
 
                 let img = SnapshotUtils.renderImage(of: hosting, size: CGSize(width: s.w, height: s.h))
                 let baselineURL = baselineDir().appendingPathComponent("\(s.name)/editor.png")
-                if let baseline = SnapshotUtils.loadPNG(baselineURL) {
+                let update = (ProcessInfo.processInfo.environment["UPDATE_BASELINES"] == "1")
+                if update {
+                    try? SnapshotUtils.writePNG(img, to: baselineURL)
+                    // In update mode, do not fail; treat as success
+                } else if let baseline = SnapshotUtils.loadPNG(baselineURL) {
                     if let diff = SnapshotUtils.diffRMSE(img, baseline) {
                         if diff.rmse > 0.01 {
                             let artifacts = artifactsDir().appendingPathComponent("editor/\(Int(Date().timeIntervalSince1970))")
@@ -33,7 +37,7 @@ final class EditorSnapshotTests: XCTestCase {
                             XCTFail("Snapshot drift (\(s.name)) rmse=\(diff.rmse). Artifacts at \(artifacts.path)")
                         }
                     }
-                } else {
+                } else if !update {
                     // First run: write candidate and fail to force review/commit
                     let out = baselineURL
                     try? SnapshotUtils.writePNG(img, to: out)

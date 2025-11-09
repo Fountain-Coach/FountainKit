@@ -10,7 +10,7 @@ Included tools
 - `dev-down` — Stops background services; `--force` also kills listeners on dev ports.
 - `dev-status` — Shows ports, up/down state, and known PIDs.
 - `dev-servers-up.sh` — Prebuilds then starts with checks (one‑shot convenience).
-- `editor-min` — Minimal, targeted build/run/smoke for the editor server.
+- `editor-min` — Minimal, targeted build/run for the editor server (no smoke).
 - `gateway-min` — Minimal, targeted build/run for Gateway.
 - `pbvrt-min` — Minimal, targeted build/run for PBVRT.
 - `planner-min` — Minimal, targeted build/run for Planner.
@@ -44,14 +44,29 @@ Baseline default
 - Dev‑up launches the Baseline‑PatchBay UI by default (product `baseline-patchbay`). Any change to this baseline app must be paired with a matching MRTS Teatro prompt. On boot, the baseline prints both prompts (creation + MRTS). Persist the MRTS via `baseline-robot-seed`; run the invariants with `Scripts/ci/baseline-robot.sh`.
 
 Targeted builds (editor‑minimal)
-Use `Scripts/dev/editor-min` to gate the manifest for focused builds of the editor service only. The script exports `FK_EDITOR_MINIMAL=1`, `FK_SKIP_NOISY_TARGETS=1`, and `FOUNTAIN_SKIP_LAUNCHER_SIG=1`, then:
-- `build` compiles just `fountain-editor-service-server`.
+Use `Scripts/dev/editor-min` to focus builds on the editor service only. The wrapper exports `FK_EDITOR_MINIMAL=1`, `FK_SKIP_NOISY_TARGETS=1`, and `FOUNTAIN_SKIP_LAUNCHER_SIG=1`, then:
+- `build` compiles only `fountain-editor-service-server`.
 - `run` launches the server in debug.
-- `smoke` executes an in‑process ETag flow (no network) for fast validation.
+
+Note: There is no `smoke` subcommand — server mains are real HTTP servers; in‑process smoke codepaths are prohibited to avoid hangs.
 
 Targeted builds (gateway/pbvrt)
 - `Scripts/dev/gateway-min` exports `FK_MIN_TARGET=gateway`, `FK_SKIP_NOISY_TARGETS=1`, `FOUNTAIN_SKIP_LAUNCHER_SIG=1` and builds/runs only `gateway-server`.
 - `Scripts/dev/pbvrt-min` exports `FK_MIN_TARGET=pbvrt`, `FK_SKIP_NOISY_TARGETS=1`, `FOUNTAIN_SKIP_LAUNCHER_SIG=1` and builds/runs only `pbvrt-server`.
 
-Targeted builds (planner/function-caller/persist/awareness/bootstrap/tools)
-- Each `*-min` wrapper exports `FK_MIN_TARGET=<service>` and gates the manifest to include only the target server and its minimal deps.
+Wrappers index (service‑minimal)
+- editor: `Scripts/dev/editor-min`
+- gateway: `Scripts/dev/gateway-min`
+- pbvrt: `Scripts/dev/pbvrt-min`
+- quietframe: `Scripts/dev/quietframe-min`
+- planner: `Scripts/dev/planner-min`
+- function-caller: `Scripts/dev/function-caller-min`
+- persist: `Scripts/dev/persist-min`
+- baseline-awareness: `Scripts/dev/baseline-awareness-min`
+- bootstrap: `Scripts/dev/bootstrap-min`
+- tools-factory: `Scripts/dev/tools-factory-min`
+- tool-server: `Scripts/dev/tool-server-min`
+
+Pattern
+- Core owns OpenAPI generation (`<service>-service` library target) with filters; server depends on core and never declares the generator plugin.
+- Manifest remains stable; wrappers set env to narrow build scope. No in‑app smoke or test codepaths in servers.

@@ -127,6 +127,43 @@ Process per file: capture intent in a brief opening paragraph; collapse long lis
 - Launcher: `Scripts/dev/codex-danger:1`; installer wrapper: `Scripts/dev/install-codex:1`.
 - Local config (optional): `codex.danger.toml:1` (ignored by git).
 
+### Service‑Minimal — Targeted Builds (Authoritative Pattern)
+
+What
+- Keep the manifest stable; avoid monorepo‑wide gating. Build exactly one service with a small transitive graph.
+- Move OpenAPI generation into a `<service>-service` library target (core). The server executable depends on this core and never declares the generator plug‑in.
+- Filter the generator via `openapi-generator-config.yaml` to only emit that service’s routes.
+- Thin servers only wire transports and register generated handlers; no smoke or test codepaths in mains.
+
+Why
+- Faster compiles (generator runs once per service in a library; executables are thin) and fewer cache invalidations.
+- Non‑destructive: OpenAPI remains curated under `Packages/FountainSpecCuration/openapi`, manifests stay stable, and other services are unaffected.
+- Deterministic: per‑service wrappers ensure targeted builds without pulling the whole workspace.
+
+How
+- Core example: `Packages/FountainApps/Sources/fountain-editor-service` (owns `openapi.yaml` symlink + generator config; exports API protocol).
+- Server example: `Packages/FountainApps/Sources/fountain-editor-service-server` (depends on core + FountainRuntime; no plugin/spec).
+- Build one: `swift build --package-path Packages/FountainApps -c debug --target <service>-service-server`.
+- Wrappers: `Scripts/dev/*-min` export `FK_SKIP_NOISY_TARGETS=1` and a service selector (e.g., `FK_EDITOR_MINIMAL=1`). No `smoke` for any server.
+
+Wrappers Index
+- editor: `Scripts/dev/editor-min` (build|run)
+- gateway: `Scripts/dev/gateway-min` (build|run)
+- pbvrt: `Scripts/dev/pbvrt-min` (build|run)
+- quietframe: `Scripts/dev/quietframe-min` (build|run)
+- planner: `Scripts/dev/planner-min` (build|run)
+- function-caller: `Scripts/dev/function-caller-min` (build|run)
+- persist: `Scripts/dev/persist-min` (build|run)
+- baseline-awareness: `Scripts/dev/baseline-awareness-min` (build|run)
+- bootstrap: `Scripts/dev/bootstrap-min` (build|run)
+- tools-factory: `Scripts/dev/tools-factory-min` (build|run)
+- tool-server: `Scripts/dev/tool-server-min` (build|run)
+
+Persistence (Teatro prompt)
+- The pattern is seeded into FountainStore under corpus `service-minimal` via `Scripts/apps/service-minimal-seed`.
+- Segments: `prompt:service-minimal:teatro` (prompt) and `prompt:service-minimal:facts` (JSON facts). Apps/scripts must read these at runtime; no ad‑hoc copies.
+
+
 ## Targeted Builds — Editor‑Minimal Pattern
 We optimize compile time by gating the package manifest and deduplicating OpenAPI generation. The editor server compiles in isolation with a tiny dependency graph and a single generator pass.
 

@@ -6,10 +6,9 @@ set -euo pipefail
 # - Builds only the fountain-editor-service-server target
 #
 # Usage:
-#   Scripts/dev/editor-min [build|run|smoke]
+#   Scripts/dev/editor-min [build|run]
 #     build (default): build the server target in debug
 #     run            : run the server (may trigger a build if missing)
-#     smoke          : run the in-process ETag smoke (no network)
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 PKG_PATH="$ROOT_DIR/Packages/FountainApps"
@@ -30,13 +29,8 @@ case "${cmd}" in
     echo "[editor-min] Running fountain-editor-service-server (minimal)…"
     swift run --package-path "$PKG_PATH" -c debug fountain-editor-service-server
     ;;
-  smoke)
-    echo "[editor-min] Running smoke for editor server (ETag flow)…"
-    "$ROOT_DIR"/Scripts/dev/smoke-fountain-editor-server
-    ;;
   *)
-    echo "Usage: $0 [build|run|smoke]" >&2
+    echo "Usage: $0 [build|run]" >&2
     exit 2
     ;;
 esac
-

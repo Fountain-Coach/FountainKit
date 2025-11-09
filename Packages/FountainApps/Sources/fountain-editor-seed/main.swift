@@ -43,7 +43,12 @@ struct FountainEditorSeed {
         Testing & CI
         - Parser + anchors unit; persistence + proposals integration; instruments audition; PB‑VRT numeric + snapshots. Any failure blocks merges.
         """
-        try await client.addSegment(.init(corpusId: corpusId, segmentId: "\(pageId):teatro", pageId: pageId, kind: "teatro.prompt", text: teatro))
+        do {
+            try await client.addSegment(.init(corpusId: corpusId, segmentId: "\(pageId):teatro", pageId: pageId, kind: "teatro.prompt", text: teatro))
+        } catch {
+            FileHandle.standardError.write(Data("[seed] write failed: teatro segment: \(error)\n".utf8))
+            exit(2)
+        }
 
         // Facts JSON (validator-safe). Use a Swift dictionary and encode to JSON to avoid escaping issues.
         var facts: [String: Any] = [:]
@@ -167,7 +172,12 @@ struct FountainEditorSeed {
 
         if let data = try? JSONSerialization.data(withJSONObject: facts, options: [.prettyPrinted, .sortedKeys]),
            let text = String(data: data, encoding: .utf8) {
-            try await client.addSegment(.init(corpusId: corpusId, segmentId: "\(pageId):facts", pageId: pageId, kind: "facts", text: text))
+            do {
+                try await client.addSegment(.init(corpusId: corpusId, segmentId: "\(pageId):facts", pageId: pageId, kind: "facts", text: text))
+            } catch {
+                FileHandle.standardError.write(Data("[seed] write failed: facts segment: \(error)\n".utf8))
+                exit(2)
+            }
         }
 
         // Verify persistence by reading the segments back
@@ -180,8 +190,15 @@ struct FountainEditorSeed {
         }
         let teatroSeg = "\(pageId):teatro"
         let factsSeg = "\(pageId):facts"
-        let teatroText = try await readText(teatroSeg) ?? ""
-        let factsText = try await readText(factsSeg) ?? ""
+        let teatroText: String
+        let factsText: String
+        do {
+            teatroText = try await readText(teatroSeg) ?? ""
+            factsText = try await readText(factsSeg) ?? ""
+        } catch {
+            FileHandle.standardError.write(Data("[seed] verification read failed: \(error)\n".utf8))
+            exit(2)
+        }
         guard !teatroText.isEmpty, !factsText.isEmpty else {
             FileHandle.standardError.write(Data("[seed] verification failed: missing prompt or facts for corpus=\(corpusId) page=\(pageId)\n".utf8))
             exit(2)

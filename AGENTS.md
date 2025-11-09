@@ -266,6 +266,13 @@ Thank you for helping FountainKit stay modular and healthy!
 Summary
 - CoreMIDI is prohibited across this repository. It is not concurrency‑safe and is incompatible with our Swift 6 concurrency model. No target may `import CoreMIDI` or call CoreMIDI C APIs directly.
 
+Rationale (why this is a hard rule)
+- Concurrency safety: CoreMIDI’s C API relies on callbacks with undefined threading semantics and non‑Sendable types. Under Swift 6’s strict concurrency model, these APIs cannot be made safe without pervasive `@unchecked Sendable` and thread hops that would hide races and deadlocks. We require predictable actor isolation and value semantics for all transports.
+- UI stability: Historical failures included hangs in the UI thread when `midiserver` was unavailable or stalled (e.g., blocking inside `MIDIDestinationCreateInternal`). This violates our self‑healing UX and causes flaky demos/tests.
+- Determinism and testability: Our MIDI robot and snapshot suites must run headless on CI. CoreMIDI is macOS‑only and daemon‑dependent; it is not reproducible on Linux or in sandboxed runners. Loopback and RTP/BLE achieve deterministic flows across platforms with recorded UMP.
+- Portability: FountainKit targets macOS and Linux. CoreMIDI prevents Linux builds and complicates cross‑platform packaging. MIDI 2.0 transports (RTP/BLE) and Loopback keep the surface portable.
+- Observability: Our stack records UMP to NDJSON and can replay end‑to‑end. CoreMIDI obscures the timing model and introduces host‑specific quirks that are harder to diagnose than our `midi2` abstractions.
+
 Allowed transports (authoritative)
 - Loopback (in‑process) — `LoopbackMetalInstrumentTransport` for tests and sidecar IPC.
 - RTP MIDI 2.0 — provided by the `midi2` workspace (`github.com/Fountain-Coach/midi2`) and consumed via `MIDI2SystemInstrumentTransport(backend: .rtpFixedPort(..))` or equivalent.
@@ -278,6 +285,11 @@ Enforcement (must pass CI)
 
 Migration notes
 - Existing CoreMIDI helpers are considered legacy and must not be used by apps. Replace with `midi2` RTP/BLE or Loopback. If a stop‑gap is unavoidable, isolate behind a separate repository; do not re‑introduce CoreMIDI usage here.
+
+FAQ
+- “Can we keep CoreMIDI behind a flag for power users?” No. The flag surface leaks types and build‑graph edges into CI and local builds, undermining determinism. If strictly necessary for a separate product, move it to a separate repository.
+- “How do we talk to external MIDI‑1 devices?” Use our MIDI 2.0 model with explicit downgrade/filters at the edges (BLE RTP peers or the sampler bridge). The internal model remains UMP‑first with journaled timing.
+- “What replaces virtual endpoints?” Loopback transport with explicit identity; our tests and tools target identity strings and UMP, not CoreMIDI virtuals.
 
 ---
 

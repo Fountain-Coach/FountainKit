@@ -40,7 +40,7 @@ public enum FountainEditorMiniCore {
         let numbered = options.acceptNumberedSlugs ? "(?:\\d+\\.\\s*)?" : ""
         let pattern = "^" + numbered + "(" + tokenAlt + ")\\b"
         let sceneRegex = try! NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
-        let hasExplicitSceneHeadings = lines.contains { $0.trimmingCharacters(in: .whitespaces).hasPrefix("## ") }
+        let hasExplicitSceneHeadings = options.acceptSections && lines.contains { $0.trimmingCharacters(in: .whitespaces).hasPrefix("## ") }
         for raw in lines {
             let s = raw.trimmingCharacters(in: .whitespaces)
             if s.hasPrefix("#") && !s.hasPrefix("##") {

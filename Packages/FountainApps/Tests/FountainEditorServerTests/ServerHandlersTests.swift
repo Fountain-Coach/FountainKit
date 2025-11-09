@@ -44,6 +44,16 @@ final class FountainEditorServerHandlersTests: XCTestCase {
             let resp = try await kernel.handle(req)
             XCTAssertEqual(resp.status, 412)
         }
+        // Missing If-Match -> 412
+        do {
+            let body = Data("INT. THREE\n".utf8)
+            let req = HTTPRequest(method: "PUT", path: "/editor/\(cid)/script", headers: [
+                "Content-Type": "text/plain",
+                "Content-Length": String(body.count)
+            ], body: body)
+            let resp = try await kernel.handle(req)
+            XCTAssertEqual(resp.status, 412)
+        }
         // Correct If-Match -> 204
         do {
             let body = Data("# Act 1\n## Scene 1\n".utf8)
@@ -99,10 +109,21 @@ final class FountainEditorServerHandlersTests: XCTestCase {
             ], body: data))
             XCTAssertEqual(resp.status, 204)
         }
+        do { // patch invalid mapping -> 400
+            let bad = try JSONSerialization.data(withJSONObject: ["overrides": ["filters": ["oops"]]])
+            let resp = try await kernel.handle(HTTPRequest(method: "PATCH", path: "/editor/\(cid)/placements/\(placementId)", headers: [
+                "Content-Type": "application/json",
+                "Content-Length": String(bad.count)
+            ], body: bad))
+            XCTAssertEqual(resp.status, 400)
+        }
         do { // delete
             let resp = try await kernel.handle(HTTPRequest(method: "DELETE", path: "/editor/\(cid)/placements/\(placementId)"))
             XCTAssertEqual(resp.status, 204)
         }
+        do { // delete missing -> 404
+            let resp = try await kernel.handle(HTTPRequest(method: "DELETE", path: "/editor/\(cid)/placements/\(placementId)"))
+            XCTAssertEqual(resp.status, 404)
+        }
     }
 }
-

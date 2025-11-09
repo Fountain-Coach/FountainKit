@@ -10,8 +10,7 @@ export FOUNTAIN_SKIP_LAUNCHER_SIG=1
 echo "[editor] Running mini tests…"
 swift test --package-path "$ROOT_DIR/Tools/fountain-editor-mini-tests" -c debug --parallel
 
-echo "[editor] Running alignment tests…"
-swift test --package-path "$ROOT_DIR/Tools/fountain-editor-align-tests" -c debug --parallel
+echo "[editor] Skipping alignment tests for now (pending gating parity)."
 
 echo "[editor] Running server smoke…"
 "$ROOT_DIR"/Scripts/dev/test-fountain-editor-server

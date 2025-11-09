@@ -171,8 +171,12 @@ final class FountainEditorHandlers: APIProtocol, @unchecked Sendable {
     func post_sol_editor_sol__lcub_corpusId_rcub__sol_placements(_ input: Operations.post_sol_editor_sol__lcub_corpusId_rcub__sol_placements.Input) async throws -> Operations.post_sol_editor_sol__lcub_corpusId_rcub__sol_placements.Output {
         let cid = input.path.corpusId
         guard case let .json(req) = input.body else { return .undocumented(statusCode: 400, .init()) }
-        if let m = req.overrides {
-            try FountainEditorValidation.validateMapping(channels: m.channels?.map { Int($0) }, group: m.group.map { Int($0) }, filters: m.filters?.map { $0.rawValue })
+        do {
+            if let m = req.overrides {
+                try FountainEditorValidation.validateMapping(channels: m.channels?.map { Int($0) }, group: m.group.map { Int($0) }, filters: m.filters?.map { $0.rawValue })
+            }
+        } catch {
+            return .undocumented(statusCode: 400, .init())
         }
         let p = await placements.add(corpusId: cid, anchor: req.anchor, instrumentId: req.instrumentId, order: req.order.map { Int($0) }, bus: req.bus)
         let out = Components.Schemas.Placement(placementId: p.id.uuidString, anchor: p.anchor, instrumentId: p.instrumentId, order: p.order, bus: p.bus, overrides: nil, notes: req.notes)
@@ -182,8 +186,12 @@ final class FountainEditorHandlers: APIProtocol, @unchecked Sendable {
         let cid = input.path.corpusId
         let pid = input.path.placementId
         guard case let .json(req) = input.body else { return .undocumented(statusCode: 400, .init()) }
-        if let m = req.overrides {
-            try FountainEditorValidation.validateMapping(channels: m.channels?.map { Int($0) }, group: m.group.map { Int($0) }, filters: m.filters?.map { $0.rawValue })
+        do {
+            if let m = req.overrides {
+                try FountainEditorValidation.validateMapping(channels: m.channels?.map { Int($0) }, group: m.group.map { Int($0) }, filters: m.filters?.map { $0.rawValue })
+            }
+        } catch {
+            return .undocumented(statusCode: 400, .init())
         }
         let ok = await placements.update(corpusId: cid, id: pid, order: req.order.map { Int($0) }, bus: req.bus)
         return ok ? .noContent(.init()) : .undocumented(statusCode: 404, .init())

@@ -1,15 +1,10 @@
 import XCTest
-import FountainEditorCoreKit
 import FountainEditorMiniCore
 import Teatro
+import class Foundation.Bundle
 
-final class FountainEditorAlignmentTests: XCTestCase {
-    private func fixture(_ name: String) -> String {
-        let path = "Tools/fountain-editor-align-tests/Tests/FountainEditorAlignmentTests/Fixtures/" + name
-        return (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""
-    }
-    // Map Teatro nodes to acts/scenes anchors like production does.
-    private func structureFromTeatro(text: String, rules: RuleSet) -> (acts: [[String]], etag: String) {
+// Map Teatro nodes to acts/scenes anchors like production does.
+private func structureFromTeatro(text: String, rules: RuleSet) -> (acts: [[String]], etag: String) {
         let parser = FountainParser(rules: rules)
         let nodes = parser.parse(text)
         var acts: [[String]] = []
@@ -26,22 +21,33 @@ final class FountainEditorAlignmentTests: XCTestCase {
             sceneIndex += 1
             current.append("act\(actIndex).scene\(sceneIndex)")
         }
-        for n in nodes {
-            switch n.type {
-            case .section(let level):
-                if level == 1 { pushAct() }
-                else if level == 2 { if actIndex == 0 { pushAct() }; pushScene() }
-            case .sceneHeading:
-                if actIndex == 0 { pushAct() }
-                pushScene()
-            default: continue
-            }
+    let hasExplicitSceneHeadings = nodes.contains { if case .section(let level) = $0.type { return level == 2 } else { return false } }
+    for n in nodes {
+        switch n.type {
+        case .section(let level):
+            if level == 1 { pushAct() }
+            else if level == 2 { if actIndex == 0 { pushAct() }; pushScene() }
+        case .sceneHeading:
+            if hasExplicitSceneHeadings { break }
+            if actIndex == 0 { pushAct() }
+            pushScene()
+        default: continue
         }
+    }
         if actIndex == 0 { pushAct() }
         acts.append(current)
-        let etag = FountainEditorCore.computeETag(for: text)
+        let etag = FountainEditorMiniCore.computeETag(for: text)
         return (acts, etag)
-    }
+}
+
+private func fixture(_ name: String) -> String {
+    if let url = Bundle.module.url(forResource: name, withExtension: nil),
+       let s = try? String(contentsOf: url, encoding: .utf8) { return s }
+    let path = "Tools/fountain-editor-align-tests/Tests/FountainEditorAlignmentTests/Fixtures/" + name
+    return (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""
+}
+
+final class FountainEditorAlignmentTests: XCTestCase {
 
     func testAlignment_extendedDefaults() {
         let text = """
@@ -91,7 +97,7 @@ final class FountainEditorFixtureMatrixTests: XCTestCase {
         return s.acts.flatMap { act in act.scenes.map { $0.anchor } }
     }
     private func anchorsTeatro(_ text: String, rules: RuleSet) -> [String] {
-        let parsed = FountainEditorAlignmentTests().structureFromTeatro(text: text, rules: rules)
+        let parsed = structureFromTeatro(text: text, rules: rules)
         return parsed.acts.flatMap { $0 }
     }
 
@@ -142,5 +148,20 @@ final class FountainEditorFixtureMatrixTests: XCTestCase {
         let full = anchorsTeatro(text, rules: rules)
         XCTAssertEqual(mini, full)
     }
-}
 
+    func testDualDialogueLyricsCentered_noScenes() {
+        let text = fixture("dual_dialogue_lyrics_centered.fountain")
+        let mini = anchorsMini(text, extended: true)
+        let full = anchorsTeatro(text, rules: RuleSet())
+        XCTAssertEqual(mini.count, 0)
+        XCTAssertEqual(full.count, 0)
+    }
+
+    func testSynopsesBoneyardNotes_noScenes() {
+        let text = fixture("synopses_boneyard_notes.fountain")
+        let mini = anchorsMini(text, extended: true)
+        let full = anchorsTeatro(text, rules: RuleSet())
+        XCTAssertEqual(mini.count, 0)
+        XCTAssertEqual(full.count, 0)
+    }
+}

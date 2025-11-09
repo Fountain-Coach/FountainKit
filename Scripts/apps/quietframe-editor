@@ -44,9 +44,9 @@ done
 echo "[editor] One-click start (mode=$mode cfg=$cfg)"
 
 if [[ "$do_clean" == "1" ]]; then
-  echo "[editor] Cleaning previous build artifacts…"
-  rm -rf "$PKG_PATH/.build" "$CACHE" || true
-  (cd "$PKG_PATH" && swift package clean) || true
+  echo "[editor] Cleaning previous build artifacts (swift package reset + clean)…"
+  (cd "$PKG_PATH" && swift package reset || true && swift package clean || true)
+  rm -rf "$CACHE" || true
 fi
 
 export CLANG_MODULE_CACHE_PATH="$CACHE"
@@ -63,13 +63,36 @@ fi
 echo "[editor] Building quietframe-editor-app…"
 swift build --package-path "$PKG_PATH" -c "$cfg" --target quietframe-editor-app
 
-echo "[editor] Launching UI…"
-if [[ "$mode" == "seeded" ]]; then
-  EDITOR_SEED_TEXT=$'# Act 1\n\n## Scene One\n\nINT. SCENE ONE — DAY\n\nText.' \
-  swift run --package-path "$PKG_PATH" -c "$cfg" quietframe-editor-app
+# Resolve built binary (bundle or Mach-O) and exec directly to ensure UI starts.
+BIN_DIR="$(swift build --package-path "$PKG_PATH" -c "$cfg" --show-bin-path 2>/dev/null || true)"
+APP_BUNDLE="$BIN_DIR/quietframe-editor-app.app"
+BIN_PATH="$BIN_DIR/quietframe-editor-app"
+if [[ -d "$APP_BUNDLE" ]]; then
+  INNER_BIN="$APP_BUNDLE/Contents/MacOS/quietframe-editor-app"
+  echo "[editor] Using app bundle: $INNER_BIN"
+  if [[ "$mode" == "seeded" ]]; then
+    EDITOR_SEED_TEXT=$'# Act 1\n\n## Scene One\n\nINT. SCENE ONE — DAY\n\nText.' \
+    exec "$INNER_BIN"
+  else
+    CORPUS_ID="${CORPUS_ID:-fountain-editor}" EDITOR_URL="${EDITOR_URL:-http://127.0.0.1:8080}" \
+    exec "$INNER_BIN"
+  fi
+elif [[ -x "$BIN_PATH" ]]; then
+  echo "[editor] Using binary: $BIN_PATH"
+  if [[ "$mode" == "seeded" ]]; then
+    EDITOR_SEED_TEXT=$'# Act 1\n\n## Scene One\n\nINT. SCENE ONE — DAY\n\nText.' \
+    exec "$BIN_PATH"
+  else
+    CORPUS_ID="${CORPUS_ID:-fountain-editor}" EDITOR_URL="${EDITOR_URL:-http://127.0.0.1:8080}" \
+    exec "$BIN_PATH"
+  fi
 else
-  CORPUS_ID="${CORPUS_ID:-fountain-editor}" \
-  EDITOR_URL="${EDITOR_URL:-http://127.0.0.1:8080}" \
-  swift run --package-path "$PKG_PATH" -c "$cfg" quietframe-editor-app
+  echo "[editor] Built binary not resolved, falling back to swift run…"
+  if [[ "$mode" == "seeded" ]]; then
+    EDITOR_SEED_TEXT=$'# Act 1\n\n## Scene One\n\nINT. SCENE ONE — DAY\n\nText.' \
+    exec swift run --package-path "$PKG_PATH" -c "$cfg" quietframe-editor-app
+  else
+    CORPUS_ID="${CORPUS_ID:-fountain-editor}" EDITOR_URL="${EDITOR_URL:-http://127.0.0.1:8080}" \
+    exec swift run --package-path "$PKG_PATH" -c "$cfg" quietframe-editor-app
+  fi
 fi
-

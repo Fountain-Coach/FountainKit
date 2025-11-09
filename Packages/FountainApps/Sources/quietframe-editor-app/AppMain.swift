@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import Foundation
 import FountainStoreClient
 
@@ -7,6 +8,11 @@ struct QuietFrameEditorApp: App {
     init() {
         // Print Teatro prompt on boot (no seeding here; read-only)
         Task { await TeatroPrinter.printOnBoot() }
+        // Ensure app is foreground and visible when launched from swift run
+        NSApplication.shared.setActivationPolicy(.regular)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            NSApplication.shared.activate(ignoringOtherApps: true)
+        }
     }
     var body: some Scene {
         WindowGroup("QuietFrame — Fountain Editor") {

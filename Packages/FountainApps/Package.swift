@@ -9,12 +9,13 @@ let USE_SDLKIT = ProcessInfo.processInfo.environment["FK_USE_SDLKIT"] == "1"
 let FK_DISABLE_QFCELLS = ProcessInfo.processInfo.environment["FK_DISABLE_QFCELLS"] == "1"
 let FK_SKIP_NOISY = ProcessInfo.processInfo.environment["FK_SKIP_NOISY_TARGETS"] == "1" || ProcessInfo.processInfo.environment["FK_EDITOR_MINIMAL"] == "1"
 
-let package = Package(
-    name: "FountainApps",
-    platforms: [
-        .macOS(.v14)
-    ],
-    products: ROBOT_ONLY ? [
+let EDITOR_MINIMAL = ProcessInfo.processInfo.environment["FK_EDITOR_MINIMAL"] == "1" || ProcessInfo.processInfo.environment["FK_SKIP_NOISY_TARGETS"] == "1"
+
+// Products list with optional minimal gating for editor-only scenarios
+let PRODUCTS: [Product] = EDITOR_MINIMAL ? [
+    .executable(name: "fountain-editor-service-server", targets: ["fountain-editor-service-server"]),
+    .library(name: "FountainEditorCoreKit", targets: ["fountain-editor-service-core"])
+] : (ROBOT_ONLY ? [
         // Robot-only: expose just what PatchBay tests need
         .executable(name: "patchbay-app", targets: ["patchbay-app"]),
         .executable(name: "replay-export", targets: ["replay-export"]),
@@ -120,8 +121,14 @@ let package = Package(
         // removed: quietframe-smoke (CoreMIDI)
         .executable(name: "metalviewkit-runtime-server", targets: ["metalviewkit-runtime-server"])
         
-    ],
-    dependencies: [
+    ])
+
+// Dependencies list with minimal mode avoiding heavy stacks
+let DEPENDENCIES: [Package.Dependency] = EDITOR_MINIMAL ? [
+    .package(path: "../FountainCore"),
+    .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
+    .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0")
+] : [
         .package(path: "../FountainCore"),
         .package(path: "../FountainAIKit"),
         .package(path: "../FountainProviders"),
@@ -168,8 +175,31 @@ let package = Package(
         .package(url: "https://github.com/Fountain-Coach/midi2.git", from: "0.3.1"),
         // MIDI2 Instrument Bridge (sampler) — pin to released tag
         .package(url: "https://github.com/Fountain-Coach/midi2sampler.git", exact: "0.1.1")
-    ],
-    targets: ROBOT_ONLY ? [
+    ]
+
+// Targets list; in minimal mode, only editor core + server
+let TARGETS: [Target] = EDITOR_MINIMAL ? [
+    .target(
+        name: "fountain-editor-service-core",
+        dependencies: [
+            .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+            .product(name: "FountainStoreClient", package: "FountainCore")
+        ],
+        path: "Sources/fountain-editor-service",
+        plugins: [
+            .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+        ]
+    ),
+    .executableTarget(
+        name: "fountain-editor-service-server",
+        dependencies: [
+            "fountain-editor-service-core",
+            .product(name: "FountainRuntime", package: "FountainCore"),
+            .product(name: "LauncherSignature", package: "FountainCore")
+        ],
+        path: "Sources/fountain-editor-service-server"
+    )
+] : (ROBOT_ONLY ? [
         .target(
             name: "MetalViewKit",
             dependencies: [
@@ -989,11 +1019,12 @@ let package = Package(
             name: "fountain-editor-service-core",
             dependencies: [
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
-                .product(name: "FountainStoreClient", package: "FountainCore"),
-                .product(name: "Teatro", package: "TeatroFull")
+                .product(name: "FountainStoreClient", package: "FountainCore")
             ],
             path: "Sources/fountain-editor-service",
-            exclude: ["openapi.yaml", "openapi-generator-config.yaml"]
+            plugins: [
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
         ),
         .executableTarget(
             name: "fountain-editor-service-server",
@@ -1002,11 +1033,7 @@ let package = Package(
                 .product(name: "FountainRuntime", package: "FountainCore"),
                 .product(name: "LauncherSignature", package: "FountainCore")
             ],
-            path: "Sources/fountain-editor-service-server",
-            plugins: [
-                .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
-                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
-            ]
+            path: "Sources/fountain-editor-service-server"
         ),
         .testTarget(
             name: "FountainEditorCoreTests",
@@ -1487,4 +1514,13 @@ let package = Package(
             path: "Tests/MVKRuntimeServerTests"
         )
     ]
+
+let package = Package(
+    name: "FountainApps",
+    platforms: [
+        .macOS(.v14)
+    ],
+    products: PRODUCTS,
+    dependencies: DEPENDENCIES,
+    targets: TARGETS
 )

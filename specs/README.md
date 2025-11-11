@@ -26,19 +26,19 @@ They describe the same thing at two levels:
 
 If you want to validate an agent descriptor file (e.g., `agents/spectralizer.yaml`), you can use:
 
-**Using `ajv` (Node.js)**
+Preferred: convert YAML → JSON, then validate with `ajv`.
+
+Using `yq` + `npx ajv-cli` (no global installs):
 ```bash
-npm install -g ajv-cli
-ajv validate -s specs/schemas/agent-descriptor.schema.json -d agents/spectralizer.yaml
+yq -o=json agents/spectralizer.yaml | npx --yes ajv-cli validate -s specs/schemas/agent-descriptor.schema.json -d -
 ```
 
-**Using `jsonschema` (Python)**
+Alternatively, use the bundled Swift validator executable:
 ```bash
-pip install jsonschema
-python -m jsonschema -i agents/spectralizer.yaml specs/schemas/agent-descriptor.schema.json
+swift run --package-path Packages/FountainApps agent-validate agents/spectralizer.yaml
 ```
 
-If validation passes quietly, your descriptor conforms. Otherwise, the error output will tell you what to fix.
+If validation passes quietly, the descriptor conforms. Otherwise, the error output will tell you what to fix.
 
 ---
 
@@ -59,7 +59,7 @@ fountainai/
 │   ├── AGENTS.md
 │   └── schemas/
 │       └── agent-descriptor.schema.json
-└── agents/
+└── agents/  # optional working staging area only (not canonical)
     ├── spectralizer.yaml
     ├── planner.yaml
     └── ...

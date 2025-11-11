@@ -2,6 +2,7 @@ import Foundation
 import NIO
 import NIOHTTP1
 import FountainRuntime
+import FountainStoreClient
 import OpenAPIRuntime
 import Crypto
 import X509
@@ -189,6 +190,24 @@ public final class GatewayServer {
 
             // Build OpenAPI transport with fallback for non-OpenAPI endpoints and proxying
             let fallback = HTTPKernel { [zoneManager, self] request in
+            // Well-known agent descriptor (Store-backed)
+            if request.method == "GET", request.path.split(separator: "?", maxSplits: 1).first == "/.well-known/agent-descriptor" {
+                let env = ProcessInfo.processInfo.environment
+                let corpus = env["AGENT_CORPUS_ID"] ?? env["CORPUS_ID"] ?? "agents"
+                guard let agentId = env["AGENT_ID"] ?? env["GATEWAY_AGENT_ID"] else {
+                    let msg = ["error": "missing AGENT_ID or GATEWAY_AGENT_ID"]
+                    let body = try? JSONSerialization.data(withJSONObject: msg)
+                    return HTTPResponse(status: 404, headers: ["Content-Type": "application/json"], body: body ?? Data())
+                }
+                let key = "agent:\(agentId)"
+                let store = GatewayServer.resolveStore()
+                if let data = try? await store.getDoc(corpusId: corpus, collection: "agent-descriptors", id: key) {
+                    return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: data)
+                }
+                let msg = ["error": "descriptor not found", "agentId": agentId, "corpus": corpus]
+                let body = try? JSONSerialization.data(withJSONObject: msg)
+                return HTTPResponse(status: 404, headers: ["Content-Type": "application/json"], body: body ?? Data())
+            }
             if request.path == "/openapi.yaml" {
                 let url = URL(fileURLWithPath: "Packages/FountainApps/Sources/gateway-service/openapi.yaml")
                 if let data = try? Data(contentsOf: url) {
@@ -312,6 +331,23 @@ public final class GatewayServer {
                 }
             }
         }
+    }
+
+    // MARK: - Store resolver (local disk → embedded)
+    private static func resolveStore() -> FountainStoreClient {
+        let env = ProcessInfo.processInfo.environment
+        if let dir = env["FOUNTAINSTORE_DIR"], !dir.isEmpty {
+            let url: URL
+            if dir.hasPrefix("~") {
+                url = URL(fileURLWithPath: FileManager.default.homeDirectoryForCurrentUser.path + String(dir.dropFirst()), isDirectory: true)
+            } else { url = URL(fileURLWithPath: dir, isDirectory: true) }
+            if let disk = try? DiskFountainStoreClient(rootDirectory: url) { return FountainStoreClient(client: disk) }
+        }
+        let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+        if let disk = try? DiskFountainStoreClient(rootDirectory: cwd.appendingPathComponent(".fountain/store", isDirectory: true)) {
+            return FountainStoreClient(client: disk)
+        }
+        return FountainStoreClient(client: EmbeddedFountainStoreClient())
     }
 
 #if canImport(ChatKitGatewayPlugin)

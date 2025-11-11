@@ -36,6 +36,8 @@ let PRODUCTS: [Product] = BLANK_VRT_ONLY ? [
         .executable(name: "gateway-ci-smoke", targets: ["gateway-ci-smoke"]),
         .executable(name: "tools-factory-server", targets: ["tools-factory-server"]),
         .executable(name: "tool-server", targets: ["tool-server"]),
+        .executable(name: "agent-validate", targets: ["agent-validate"]),
+        .executable(name: "agent-descriptor-seed", targets: ["agent-descriptor-seed"]),
         .executable(name: "planner-server", targets: ["planner-server"]),
         .executable(name: "function-caller-server", targets: ["function-caller-server"]),
         .executable(name: "persist-server", targets: ["persist-server"]),
@@ -131,7 +133,6 @@ let PRODUCTS: [Product] = BLANK_VRT_ONLY ? [
         .executable(name: "metalviewkit-runtime-server", targets: ["metalviewkit-runtime-server"])
         
     ])
-)
 
 // Dependencies list with minimal mode avoiding heavy stacks
 let DEPENDENCIES: [Package.Dependency] = BLANK_VRT_ONLY ? [
@@ -190,7 +191,7 @@ let DEPENDENCIES: [Package.Dependency] = BLANK_VRT_ONLY ? [
         // MIDI2 Instrument Bridge (sampler) — pin to released tag
         .package(url: "https://github.com/Fountain-Coach/midi2sampler.git", exact: "0.1.1")
     ]
-) 
+))
     
 // Targets list; in minimal mode, only editor core + server
 let TARGETS: [Target] = BLANK_VRT_ONLY ? [
@@ -607,6 +608,21 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
                 .product(name: "ArgumentParser", package: "swift-argument-parser")
             ],
             path: "Sources/ml-yamnet2midi"
+        ),
+        .executableTarget(
+            name: "agent-validate",
+            dependencies: [
+                "Yams"
+            ],
+            path: "Sources/agent-validate"
+        ),
+        .executableTarget(
+            name: "agent-descriptor-seed",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                "Yams"
+            ],
+            path: "Sources/agent-descriptor-seed"
         ),
         .executableTarget(
             name: "metalcompute-demo",
@@ -1658,7 +1674,6 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             ]
         )
     ] )
-)
 
 let package = Package(
     name: "FountainApps",

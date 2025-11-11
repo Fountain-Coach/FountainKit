@@ -87,6 +87,15 @@ On schema changes, bridges emit a `ProfileChanged` or `x-agent-version.bump` eve
 
 ---
 
+### Transport Policy (Hard Rule)
+
+- CoreMIDI is prohibited across the repository for concurrency, determinism, CI portability, and Linux compatibility reasons. Do not import or depend on CoreMIDI.  
+- Allowed transports for agent interoperability and audition:  
+  - Loopback (in‑process) via midi2 Loopback transport  
+  - RTP MIDI 2.0 via the `midi2` workspace  
+  - BLE MIDI 2.0 via the `midi2` workspace  
+- Defaults must not rely on CoreMIDI. When referring to “virtual instruments/endpoints,” read as midi2 Loopback/RTP/BLE constructs only.
+
 #### Soft Rules (Defaults)
 
 - Default endpoint roots: `/properties`, `/perform`, `/events`, `/profiles`  
@@ -212,4 +221,3 @@ FountainAI Core Architecture Group
 https://fountain.coach/specs/AGENTS.md
 Contract Version: 1.0.0
 ```
-

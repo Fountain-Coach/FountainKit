@@ -23,8 +23,7 @@ To transition the FountainAI ecosystem from a **distributed microservice topolog
 ### 🎹 Target State — “To”
 A **unified runtime** (the *Fountain Host*) that:
 - Loads all former microservices as **local modules or plugins**.
-- Exposes them as **virtual MIDI-2 Function Blocks** via  
-  Capability Inquiry (CI) + Property Exchange (PE).
+- Exposes them as **midi2 Function Blocks** (Loopback/RTP/BLE; CoreMIDI prohibited) via Capability Inquiry (CI) + Property Exchange (PE).
 - Optionally exposes **one consolidated OpenAPI gateway** for external orchestration.
 - Provides a single semantic bus for both **real-time** and **declarative** control.
 
@@ -50,7 +49,7 @@ A **unified runtime** (the *Fountain Host*) that:
 #### Phase 3 – Construct the Fountain Host
 - Implement a single runtime that:
   - Loads translated agents as modules.
-  - Publishes one **virtual MIDI device** with multiple **Function Blocks**.
+  - Publishes one midi2 endpoint (Loopback locally; RTP/BLE for network) with multiple Function Blocks. CoreMIDI is not used.
   - Routes internal calls as function invocations (no HTTP).
 - Integrate optional gateway for:
   - external API access

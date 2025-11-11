@@ -1,0 +1,35 @@
+name: Specs Validate
+
+on:
+  push:
+    paths:
+      - 'specs/**'
+      - 'Packages/FountainApps/Sources/agent-validate/**'
+      - 'Packages/FountainApps/Sources/agent-descriptor-seed/**'
+      - '.github/workflows/specs-validate.yml'
+  pull_request:
+    paths:
+      - 'specs/**'
+      - 'Packages/FountainApps/Sources/agent-validate/**'
+      - 'Packages/FountainApps/Sources/agent-descriptor-seed/**'
+
+jobs:
+  build-and-check:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache SPM
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build
+            ~/.swiftpm
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+      - name: Build validator and seeder
+        run: |
+          swift build --package-path Packages/FountainApps -c debug --target agent-validate
+          swift build --package-path Packages/FountainApps -c debug --target agent-descriptor-seed
+      - name: Lint CoreMIDI ban
+        run: |
+          ! rg -n "\bimport\s+CoreMIDI\b|\bMIDI(Client|Source|Destination|Port|Send|Received)" -S || (echo "Found CoreMIDI usage" && exit 1)
+

@@ -1,5 +1,6 @@
 import Foundation
 import Yams
+import Crypto
 
 @main
 struct AgentValidate {
@@ -93,15 +94,9 @@ struct AgentValidate {
     }
 
     static func sha256Hex(_ data: Data) -> String {
-        #if canImport(CryptoKit)
-        import CryptoKit
-        let digest = SHA256.hash(data: data)
+        let digest = Crypto.SHA256.hash(data: data)
         return digest.map { String(format: "%02x", $0) }.joined()
-        #else
-        return String(data.hashValue)
-        #endif
     }
 
     static func err(_ msg: String) -> NSError { NSError(domain: "agent-validate", code: 2, userInfo: [NSLocalizedDescriptionKey: msg]) }
 }
-

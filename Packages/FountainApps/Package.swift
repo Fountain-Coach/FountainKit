@@ -132,7 +132,7 @@ let PRODUCTS: [Product] = BLANK_VRT_ONLY ? [
         // removed: quietframe-smoke (CoreMIDI)
         .executable(name: "metalviewkit-runtime-server", targets: ["metalviewkit-runtime-server"])
         
-    ])
+    ])))
 
 // Dependencies list with minimal mode avoiding heavy stacks
 let DEPENDENCIES: [Package.Dependency] = BLANK_VRT_ONLY ? [
@@ -612,7 +612,8 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
         .executableTarget(
             name: "agent-validate",
             dependencies: [
-                "Yams"
+                "Yams",
+                .product(name: "Crypto", package: "swift-crypto")
             ],
             path: "Sources/agent-validate"
         ),
@@ -620,7 +621,8 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             name: "agent-descriptor-seed",
             dependencies: [
                 .product(name: "FountainStoreClient", package: "FountainCore"),
-                "Yams"
+                "Yams",
+                .product(name: "Crypto", package: "swift-crypto")
             ],
             path: "Sources/agent-descriptor-seed"
         ),
@@ -1673,7 +1675,7 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
                 .process("Baselines")
             ]
         )
-    ] )
+    ] )))
 
 let package = Package(
     name: "FountainApps",

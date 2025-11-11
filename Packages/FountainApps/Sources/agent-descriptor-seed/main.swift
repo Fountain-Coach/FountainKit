@@ -1,6 +1,7 @@
 import Foundation
 import FountainStoreClient
 import Yams
+import Crypto
 
 @main
 struct AgentDescriptorSeed {
@@ -36,10 +37,13 @@ struct AgentDescriptorSeed {
         // Compute key and upsert
         let key = "agent:\(agentId)"
         // Optional signature if missing
-        if desc["x-agent-signature"] == nil, let sig = try? canonicalJSON(desc).map(sha256Hex) {
+        if desc["x-agent-signature"] == nil, let canonical = try? canonicalJSON(desc) {
+            let sig = sha256Hex(canonical)
             desc["x-agent-signature"] = sig
         }
-        let payload = try JSONSerialization.data(withJSONObject: desc, options: [])
+        guard let payload = try? JSONSerialization.data(withJSONObject: desc, options: []) else {
+            fputs("seed: failed to encode descriptor\n", stderr); exit(2)
+        }
         do {
             try await store.putDoc(corpusId: corpusId, collection: "agent-descriptors", id: key, body: payload)
         } catch {
@@ -77,13 +81,7 @@ struct AgentDescriptorSeed {
     }
 
     static func sha256Hex(_ data: Data) -> String {
-        #if canImport(CryptoKit)
-        import CryptoKit
-        let digest = SHA256.hash(data: data)
+        let digest = Crypto.SHA256.hash(data: data)
         return digest.map { String(format: "%02x", $0) }.joined()
-        #else
-        return String(data.hashValue)
-        #endif
     }
 }
-

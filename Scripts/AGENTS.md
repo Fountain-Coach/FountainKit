@@ -134,3 +134,34 @@ Where
 - Gateway OpenAPI spec: `Packages/FountainSpecCuration/openapi/v1/gateway.yml:1`
 - Wrapper: `Scripts/dev/gateway-min:1`
 - Sample descriptor: `agents/sample-spectralizer.yaml:1`
+
+## Planner PE Bridge — Quick Start (Loopback)
+
+What
+- Experimental PE bridge that listens for SysEx7 UMP JSON envelopes on loopback and calls the Planner OpenAPI `/planner/plan`, then responds with a `planner.plan.result` envelope.
+
+How
+- Run bridge: `Scripts/dev/planner-pe-bridge run` (envs: `PLANNER_BASE_URL`, `PLANNER_PLAN_PATH`)
+- Send request (prototype JSON-over-UMP): encode UTF-8 JSON with fields `propertyId: "planner.plan.request"` and `body` payload; transmit as SysEx7 UMP over loopback.
+- Receive result: bridge emits a SysEx7 UMP with `propertyId: "planner.plan.result"`, `status`, and `body`.
+
+Notes
+- CoreMIDI is prohibited; loopback transport only. This is a prototype pending full PE encoder/decoder.
+
+## Function Caller + Persist PE Bridges — Quick Start (Loopback)
+
+What
+- Experimental PE bridges translating SysEx7 JSON envelopes to Function Caller and Persist HTTP endpoints and back.
+
+How
+- Function Caller: `Scripts/dev/function-caller-pe-bridge run` (envs: `FC_BASE_URL`, `FC_TOOLS_PATH`, `FC_CALL_PATH`)
+- Persist: `Scripts/dev/persist-pe-bridge run` (envs: `PERSIST_BASE_URL`, `PERSIST_GET_PATH`, `PERSIST_PUT_PATH`)
+
+Envelopes
+- Function tools: `{ "propertyId": "function.tools.request", "body": {"tags":["…"] } }` → result property `function.tools.result`.
+- Function call: `{ "propertyId": "function.call.request", "body": {"tool_id":"…", "input": {…}} }` → result `function.call.result`.
+- Persist get: `{ "propertyId": "persist.get.request", "body": {"collection":"…","id":"…"} }` → result `persist.get.result`.
+- Persist put: `{ "propertyId": "persist.put.request", "body": {"collection":"…","id":"…","body":{…}} }` → result `persist.put.result`.
+
+Notes
+- Prototype JSON-over-SysEx7 over loopback only. Replace with proper PE encoder/decoder as the facts mature.

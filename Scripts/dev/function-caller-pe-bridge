@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Minimal MIDI 2.0 PE bridge for Function Caller (loopback only)
+# Usage: Scripts/dev/function-caller-pe-bridge [build|run]
+
+ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+PKG_PATH="$ROOT_DIR/Packages/FountainApps"
+
+cmd="${1:-run}"
+case "$cmd" in
+  build)
+    swift build --package-path "$PKG_PATH" -c debug --target function-caller-pe-bridge
+    ;;
+  run)
+    : "${FC_BASE_URL:=http://127.0.0.1:8030}"
+    : "${FC_TOOLS_PATH:=/function-caller/tools}"
+    : "${FC_CALL_PATH:=/function-caller/call}"
+    echo "[function-caller-pe-bridge] base=$FC_BASE_URL"
+    swift run --package-path "$PKG_PATH" -c debug function-caller-pe-bridge
+    ;;
+  *)
+    echo "Usage: $0 [build|run]" >&2
+    exit 2
+    ;;
+esac
+

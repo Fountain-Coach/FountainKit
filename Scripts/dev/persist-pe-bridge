@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Minimal MIDI 2.0 PE bridge for Persist (loopback only)
+# Usage: Scripts/dev/persist-pe-bridge [build|run]
+
+ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+PKG_PATH="$ROOT_DIR/Packages/FountainApps"
+
+cmd="${1:-run}"
+case "$cmd" in
+  build)
+    swift build --package-path "$PKG_PATH" -c debug --target persist-pe-bridge
+    ;;
+  run)
+    : "${PERSIST_BASE_URL:=http://127.0.0.1:8040}"
+    : "${PERSIST_GET_PATH:=/persist/{collection}/{id}}"
+    : "${PERSIST_PUT_PATH:=/persist/{collection}/{id}}"
+    echo "[persist-pe-bridge] base=$PERSIST_BASE_URL"
+    swift run --package-path "$PKG_PATH" -c debug persist-pe-bridge
+    ;;
+  *)
+    echo "Usage: $0 [build|run]" >&2
+    exit 2
+    ;;
+esac
+

@@ -291,6 +291,20 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             ],
             path: "Sources/planner-pe-bridge"
         ),
+        .executableTarget(
+            name: "function-caller-pe-bridge",
+            dependencies: [
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit")
+            ],
+            path: "Sources/function-caller-pe-bridge"
+        ),
+        .executableTarget(
+            name: "persist-pe-bridge",
+            dependencies: [
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit")
+            ],
+            path: "Sources/persist-pe-bridge"
+        ),
         .target(
             name: "pbvrt-service",
             dependencies: [
@@ -586,6 +600,20 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
                 .product(name: "MIDI2Transports", package: "FountainTelemetryKit")
             ],
             path: "Sources/planner-pe-bridge"
+        ),
+        .executableTarget(
+            name: "function-caller-pe-bridge",
+            dependencies: [
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit")
+            ],
+            path: "Sources/function-caller-pe-bridge"
+        ),
+        .executableTarget(
+            name: "persist-pe-bridge",
+            dependencies: [
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit")
+            ],
+            path: "Sources/persist-pe-bridge"
         ),
         .executableTarget(
             name: "ml-sampler-smoke",

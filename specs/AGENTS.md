@@ -35,7 +35,7 @@ The goal is simple:
 Every FountainAI agent—hardware or software—MUST advertise a minimal identity block:
 
 ```yaml
-x-agent-id: "fountain.ai/agent/{namespace}/{name}"
+x-agent-id: "fountain.coach/agent/{namespace}/{name}"
 x-agent-kind: "microservice" | "instrument"
 x-agent-version: "semver"
 x-agent-capabilities: ["capabilityId", "..."]
@@ -175,7 +175,7 @@ The contract guarantees that the LLM can reason safely over heterogeneous domain
 
 | Item | Rule |
 |------|------|
-| **Contract Version** | `fountain.ai/interoperability/v1` |
+| **Contract Version** | `fountain.coach/interoperability/v1` |
 | **Spec Versions** | OpenAPI ≥ 3.1.0, MIDI-CI ≥ 1.2 |
 | **Compliance Tests** | `fountain-validator run --agent <id>` must pass before release |
 | **Drift Policy** | Breaking schema change → new major; additive → minor |
@@ -186,7 +186,7 @@ The contract guarantees that the LLM can reason safely over heterogeneous domain
 ## Example Descriptor (Hybrid Agent)
 
 ```yaml 
-x-agent-id: "fountain.ai/agent/sound/spectralizer"
+x-agent-id: "fountain.coach/agent/sound/spectralizer"
 x-agent-kind: "hybrid"
 x-agent-version: "1.3.0"
 info:

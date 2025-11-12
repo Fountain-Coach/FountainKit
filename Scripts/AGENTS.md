@@ -117,7 +117,7 @@ How
 - Validate a descriptor (YAML or JSON): `Scripts/tools/agent-validate agents/sample-spectralizer.yaml`
 - Seed into FountainStore: `swift run --package-path Packages/FountainApps agent-descriptor-seed agents/sample-spectralizer.yaml`
 - Run the gateway locally (signature skipped):
-  - `FOUNTAIN_SKIP_LAUNCHER_SIG=1 GATEWAY_AGENT_ID='fountain.ai/agent/sample/spectralizer' Scripts/dev/gateway-min run`
+  - `FOUNTAIN_SKIP_LAUNCHER_SIG=1 GATEWAY_AGENT_ID='fountain.coach/agent/sample/spectralizer' Scripts/dev/gateway-min run`
 - Probe endpoints:
   - Descriptor: `curl -s http://127.0.0.1:8010/.well-known/agent-descriptor | jq .`
   - Health/metrics: `curl -s http://127.0.0.1:8010/health`, `curl -s http://127.0.0.1:8010/metrics`

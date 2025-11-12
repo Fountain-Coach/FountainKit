@@ -9,7 +9,7 @@
     "x-agent-id": {
       "type": "string",
       "description": "Stable, unique identifier.",
-      "pattern": "^fountain\\.ai/agent/[a-z0-9._-]+/[a-z0-9._-]+$"
+      "pattern": "^fountain\\.coach/agent/[a-z0-9._-]+/[a-z0-9._-]+$"
     },
     "x-agent-kind": {
       "type": "string",

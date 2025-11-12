@@ -1,4 +1,4 @@
-x-agent-id: "fountain.ai/agent/planner/service"
+x-agent-id: "fountain.coach/agent/planner/service"
 x-agent-kind: "microservice"
 x-agent-version: "1.0.0"
 x-agent-capabilities:
@@ -11,4 +11,3 @@ info:
   title: "Planner Service"
   version: "1.0.0"
   description: "LLM planning and composition microservice exposed via OpenAPI."
-

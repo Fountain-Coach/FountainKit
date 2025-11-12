@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://fountain.ai/patchbay/flow.schema.json",
+  "$id": "https://fountain.coach/patchbay/flow.schema.json",
   "title": "PatchBay Flow Graph",
   "type": "object",
   "required": ["nodes", "edges"],
@@ -56,4 +56,3 @@
     }
   }
 }
-

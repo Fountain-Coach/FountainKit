@@ -1,4 +1,4 @@
-x-agent-id: "fountain.ai/agent/persist/service"
+x-agent-id: "fountain.coach/agent/persist/service"
 x-agent-kind: "microservice"
 x-agent-version: "1.0.0"
 x-agent-capabilities:
@@ -11,4 +11,3 @@ info:
   title: "Persist Service"
   version: "1.0.0"
   description: "Document persistence and query microservice exposed via OpenAPI."
-

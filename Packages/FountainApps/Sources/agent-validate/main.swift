@@ -42,7 +42,7 @@ struct AgentValidate {
         }
         // x-agent-id
         let id = try reqString("x-agent-id")
-        let idRe = try! NSRegularExpression(pattern: "^fountain\\.ai/agent/[a-z0-9._-]+/[a-z0-9._-]+$")
+        let idRe = try! NSRegularExpression(pattern: "^fountain\\.coach/agent/[a-z0-9._-]+/[a-z0-9._-]+$")
         guard idRe.firstMatch(in: id, range: NSRange(location: 0, length: id.utf16.count)) != nil else { throw err("invalid x-agent-id") }
         // kind
         let kind = try reqString("x-agent-kind")

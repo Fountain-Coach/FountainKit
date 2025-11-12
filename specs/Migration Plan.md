@@ -123,7 +123,7 @@ These remain behind a single thin **Gateway Service** accessed by the Fountain H
 ---
 
 ### 📜 Compliance & Versioning
-- Contract: `fountain.ai/interoperability/v1`
+- Contract: `fountain.coach/interoperability/v1`
 - Versioning: Semantic Versioning 2.0.0
 - Conformance tools:
   - Validate descriptors: `Scripts/tools/agent-validate <descriptor.(yaml|json)>`

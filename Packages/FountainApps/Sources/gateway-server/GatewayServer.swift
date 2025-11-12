@@ -220,10 +220,16 @@ public final class GatewayServer {
                 let safeId = agentId.replacingOccurrences(of: "/", with: "|")
                 let key = "facts:agent:\(safeId)"
                 let store = GatewayServer.resolveStore()
+                // Try safe key, then legacy (unsanitized) for backward compatibility
                 if let data = try? await store.getDoc(corpusId: corpus, collection: "agent-facts", id: key) {
                     return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: data)
                 }
-                let msg = ["error": "facts not found", "agentId": agentId, "factsId": key, "corpus": corpus]
+                let legacyKey = "facts:agent:\(agentId)"
+                if let data = try? await store.getDoc(corpusId: corpus, collection: "agent-facts", id: legacyKey) {
+                    return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: data)
+                }
+                // Debug payload with attempted keys
+                let msg = ["error": "facts not found", "agentId": agentId, "factsId": key, "legacyFactsId": legacyKey, "corpus": corpus]
                 let body = try? JSONSerialization.data(withJSONObject: msg)
                 return HTTPResponse(status: 404, headers: ["Content-Type": "application/json"], body: body ?? Data())
             }

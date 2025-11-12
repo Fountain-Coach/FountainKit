@@ -1,10 +1,10 @@
-# Migration Plan  
-## From Multi-Service OpenAPI Infrastructure to Unified MIDI-2.0 Instrument Runtime  
+# Migration Plan
+## From Multi‑Service OpenAPI Infrastructure to a Unified MIDI‑2.0 Instrument Runtime
 
 ---
 
 ### 🎯 Objective
-To transition the FountainAI ecosystem from a **distributed microservice topology** (many OpenAPI servers) to a **single-host runtime** that presents all functionality as **MIDI-2.0–defined instruments** with complete OpenAPI equivalence.
+Transition from a distributed microservice topology (many OpenAPI servers) to a single‑host runtime that presents functionality as MIDI‑2.0–defined instruments while retaining full OpenAPI equivalence.
 
 ---
 
@@ -27,9 +27,18 @@ A **unified runtime** (the *Fountain Host*) that:
 - Optionally exposes **one consolidated OpenAPI gateway** for external orchestration.
 - Provides a single semantic bus for both **real-time** and **declarative** control.
 
+Transport policy alignment (hard rule)
+- CoreMIDI is prohibited across the repository.
+- Allowed transports: midi2 Loopback (in‑process), RTP MIDI 2.0, and BLE MIDI 2.0 via the `midi2` workspace.
+
 ---
 
 ### 🔁 Migration Phases
+
+#### Phase 0 – Service‑Minimal bridge (optional but recommended)
+- Adopt per‑service targeted builds to keep iteration fast while migrating internals.
+- Move OpenAPI generation into each `<service>-service` core; keep thin servers that depend on the core.
+- Use wrappers like `Scripts/dev/<service>-min [build|run]` to avoid pulling the full workspace.
 
 #### Phase 1 – Inventory & Classification
 - List every existing service and endpoint.
@@ -45,6 +54,11 @@ A **unified runtime** (the *Fountain Host*) that:
   - Replace HTTP operations with PE `GetProperty` / `SetProperty` / `Profile-Specific` messages.
 - Preserve event semantics:
   - WebSocket/SSE → UMP streams or PE Notify.
+
+Provenance and storage (authoritative)
+- Descriptors and facts are persisted in FountainStore, not ad‑hoc files.
+- Use a seeder to write under page `agent:<id>` with segment `descriptor.json` (and optional `facts`).
+- Applications and the gateway read from FountainStore at runtime and expose a unified descriptor endpoint.
 
 #### Phase 3 – Construct the Fountain Host
 - Implement a single runtime that:
@@ -64,7 +78,9 @@ A **unified runtime** (the *Fountain Host*) that:
 #### Phase 5 – Validation & Parity Testing
 - Use conformance tests to verify:
   - identical JSON → PE round-trip behavior
-  - timing fidelity (≤ 5 ms for musical, ≤ 500 ms for config)
+  - timing fidelity:
+    - host‑local Loopback: ≤ 5 ms for musical, ≤ 500 ms for config
+    - network (RTP/BLE): typical ≤ 25 ms musical, ≤ 750 ms config (document actual SLOs per deployment)
   - schema equivalence and version parity
 - Log validation digests and compare against previous builds.
 
@@ -107,10 +123,19 @@ These remain behind a single thin **Gateway Service** accessed by the Fountain H
 ---
 
 ### 📜 Compliance & Versioning
-- **Contract:** `fountain.ai/interoperability/v1`  
-- **Versioning:** Semantic Versioning 2.0.0  
-- **Conformance Tool:** `fountain-validator run --agent <id>`  
-- **Drift Policy:** breaking → major ; additive → minor  
+- Contract: `fountain.ai/interoperability/v1`
+- Versioning: Semantic Versioning 2.0.0
+- Conformance tools:
+  - Validate descriptors: `Scripts/tools/agent-validate <descriptor.(yaml|json)>`
+  - Seed into FountainStore: `swift run --package-path Packages/FountainApps agent-descriptor-seed <descriptor.(yaml|json)>`
+- Drift policy: breaking → major; additive → minor
+
+Where (anchors in repo)
+- Descriptor schema: `specs/schemas/agent-descriptor.schema.json:1`
+- Human contract: `specs/AGENTS.md:1`
+- Validator CLI: `Packages/FountainApps/Sources/agent-validate/main.swift:1` and `Scripts/tools/agent-validate:1`
+- Descriptor seeder: `Packages/FountainApps/Sources/agent-descriptor-seed/main.swift:1`
+- Gateway descriptor endpoint: `Packages/FountainApps/Sources/gateway-server/GatewayServer.swift:194`
 
 ---
 

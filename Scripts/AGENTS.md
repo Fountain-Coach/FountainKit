@@ -119,7 +119,8 @@ How
 - Run the gateway locally (signature skipped):
   - `FOUNTAIN_SKIP_LAUNCHER_SIG=1 GATEWAY_AGENT_ID='fountain.coach/agent/sample/spectralizer' Scripts/dev/gateway-min run`
 - Probe endpoints:
-  - Descriptor: `curl -s http://127.0.0.1:8010/.well-known/agent-descriptor | jq .`
+- Descriptor: `curl -s http://127.0.0.1:8010/.well-known/agent-descriptor | jq .`
+- Facts (PE mappings): `curl -s http://127.0.0.1:8010/.well-known/agent-facts | jq .`
   - Health/metrics: `curl -s http://127.0.0.1:8010/health`, `curl -s http://127.0.0.1:8010/metrics`
 
 Environment

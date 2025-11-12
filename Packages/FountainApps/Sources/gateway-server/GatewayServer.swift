@@ -262,10 +262,16 @@ public final class GatewayServer {
                 }
             }
 
+            #if canImport(gateway_service)
             let transport = NIOOpenAPIServerTransport(fallback: fallback)
             let api = GatewayOpenAPI(host: self)
             try? api.registerHandlers(on: transport)
             let openapiKernel = transport.asKernel()
+            #else
+            // When OpenAPI generated module is unavailable (e.g., minimal builds),
+            // serve only the fallback routes including well-known descriptor.
+            let openapiKernel = fallback
+            #endif
 
             // Handle CORS preflight early for browser-based clients
             if request.method == "OPTIONS" {

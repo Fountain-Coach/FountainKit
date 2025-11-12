@@ -1,6 +1,8 @@
 import Foundation
 import OpenAPIRuntime
+#if canImport(gateway_service)
 import gateway_service
+#endif
 import HTTPTypes
 import FountainRuntime
 #if canImport(ChatKitGatewayPlugin)
@@ -8,6 +10,7 @@ import ChatKitGatewayPlugin
 #endif
 
 // Generated handlers bridge to GatewayServer logic.
+#if canImport(gateway_service)
 public struct GatewayOpenAPI: APIProtocol, @unchecked Sendable {
     let host: GatewayServer
     public init(host: GatewayServer) { self.host = host }
@@ -358,6 +361,7 @@ public struct GatewayOpenAPI: APIProtocol, @unchecked Sendable {
         return .undocumented(statusCode: resp.status, OpenAPIRuntime.UndocumentedPayload())
     }
 }
+#endif
 
 private extension GatewayOpenAPI {
     static var iso8601WithFractional: ISO8601DateFormatter {

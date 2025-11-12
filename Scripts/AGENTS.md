@@ -119,7 +119,9 @@ How
 - Run the gateway locally (signature skipped):
   - `FOUNTAIN_SKIP_LAUNCHER_SIG=1 GATEWAY_AGENT_ID='fountain.coach/agent/sample/spectralizer' Scripts/dev/gateway-min run`
 - Probe endpoints:
-- Descriptor: `curl -s http://127.0.0.1:8010/.well-known/agent-descriptor | jq .`
+  - Descriptor: `curl -s http://127.0.0.1:8010/.well-known/agent-descriptor | jq .`
+  - Facts (PE mappings): `curl -s http://127.0.0.1:8010/.well-known/agent-facts | jq .`
+  - Quick smoke (curl-based): `bash Scripts/ci/gateway-well-known-smoke.sh` (set `GATEWAY_BASE_URL`, optionally `GATEWAY_ALLOW_MISSING_FACTS=1`)
 - Facts (PE mappings): `curl -s http://127.0.0.1:8010/.well-known/agent-facts | jq .`
   - Health/metrics: `curl -s http://127.0.0.1:8010/health`, `curl -s http://127.0.0.1:8010/metrics`
 
@@ -166,3 +168,8 @@ Envelopes
 
 Notes
 - Prototype JSON-over-SysEx7 over loopback only. Replace with proper PE encoder/decoder as the facts mature.
+
+## SysEx7 JSON Tools (Loopback)
+
+- Sender: `swift run --package-path Packages/FountainApps sysx-json-sender <file.json>` or set `JSON_TEXT='{"propertyId":"…","body":{…}}'`
+- Receiver: `swift run --package-path Packages/FountainApps sysx-json-receiver` (prints decoded JSON envelopes)

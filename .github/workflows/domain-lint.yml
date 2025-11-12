@@ -1,4 +1,4 @@
-name: Domain Lint
+name: Domain Lint (forbid fountain.ai)
 
 on:
   push:
@@ -11,6 +11,5 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install ripgrep
         run: brew install ripgrep
-      - name: Lint for fountain.ai
+      - name: Lint for forbidden fountain.ai
         run: bash Scripts/ci/lint-domain.sh
-

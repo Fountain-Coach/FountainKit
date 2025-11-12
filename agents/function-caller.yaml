@@ -1,0 +1,14 @@
+x-agent-id: "fountain.ai/agent/function-caller/service"
+x-agent-kind: "microservice"
+x-agent-version: "1.0.0"
+x-agent-capabilities:
+  - call-function
+  - list-tools
+  - describe-tool
+x-agent-protocols:
+  - openapi-3.1
+info:
+  title: "Function Caller Service"
+  version: "1.0.0"
+  description: "Tool execution and function calling microservice exposed via OpenAPI."
+

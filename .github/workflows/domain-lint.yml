@@ -1,0 +1,16 @@
+name: Domain Lint
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-domain:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ripgrep
+        run: brew install ripgrep
+      - name: Lint for fountain.ai
+        run: bash Scripts/ci/lint-domain.sh
+

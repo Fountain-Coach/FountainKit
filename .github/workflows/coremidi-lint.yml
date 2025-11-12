@@ -1,0 +1,16 @@
+name: CoreMIDI Lint
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-coremidi:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ripgrep
+        run: brew install ripgrep
+      - name: Lint for CoreMIDI
+        run: bash Scripts/ci/lint-coremidi.sh
+

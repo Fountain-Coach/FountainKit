@@ -84,6 +84,16 @@ Provenance and storage (authoritative)
   - schema equivalence and version parity
 - Log validation digests and compare against previous builds.
 
+Acceptance criteria (facts → runtime)
+- Facts location: Planner/Function Caller/Persist mappings live under FountainStore collection `agent-facts` at id `facts:agent:<agentId>` where `<agentId>` is safe ("/" replaced by "|").
+- Mapping format: each property has `id` and `mapsTo.openapi` with `method`, `path`, optional `body: json`.
+- Round‑trip: for each property that maps to OpenAPI, a sample JSON payload must:
+  - validate against the OpenAPI schema;
+  - successfully invoke the HTTP endpoint;
+  - be reflected back through a corresponding readable property (or an event) when applicable.
+- Observability: Gateway serves `/.well-known/agent-descriptor` and `/.well-known/agent-facts` backed by FountainStore.
+- Latency budgets: host‑local loopback requests meet the timing targets above.
+
 #### Phase 6 – Decommission Servers
 - Retire standalone containers once:
   - CI/PE descriptors match original OpenAPI definitions.

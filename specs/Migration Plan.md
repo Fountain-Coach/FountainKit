@@ -144,3 +144,8 @@ Where (anchors in repo)
 This migration replaces a fleet of networked OpenAPI servers with a **monophonic yet poly-functional host**:  
 > a single process where all FountainAI capabilities play together as MIDI-2 instruments,  
 > retaining full OpenAPI semantics while eliminating the operational cost of running many servers.
+
+---
+
+Status & Tracker
+- Current tracker: `specs/Migration-Tracker.md:1` (owners, deliverables, status). Keep this file current as the source of truth for migration progress.

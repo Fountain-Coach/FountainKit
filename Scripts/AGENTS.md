@@ -103,3 +103,34 @@ PB‑VRT local runners
 - Compare candidate to baseline with thresholds: `bash Scripts/apps/pbvrt-compare-run --baseline-id $(cat baseline.id) --candidate candidate.png`.
 - Generate audio WAVs (Csound or Python fallback): `bash Scripts/apps/pbvrt-audio-generate --out baseline.wav --freq 440`.
 - Seed the PB‑VRT test rig prompt (Teatro): `FOUNTAIN_SKIP_LAUNCHER_SIG=1 swift run --package-path Packages/FountainApps pbvrt-rig-seed` (corpus via `CORPUS_ID`, default `patchbay`).
+
+## Gateway — Quick Start
+
+What
+- `gateway-server` is the HTTP entrypoint that wires plugins (auth, policies, ChatKit, publishing) and serves a store‑backed agent descriptor at `/.well-known/agent-descriptor`.
+- When the generated OpenAPI module is present (`gateway-service`), typed routes are registered; otherwise, fallback routes still serve the descriptor and control endpoints.
+
+Why
+- Keep descriptor provenance in FountainStore and expose a deterministic, typed surface for tools and CI. Enable fast local loops without depending on generated code.
+
+How
+- Validate a descriptor (YAML or JSON): `Scripts/tools/agent-validate agents/sample-spectralizer.yaml`
+- Seed into FountainStore: `swift run --package-path Packages/FountainApps agent-descriptor-seed agents/sample-spectralizer.yaml`
+- Run the gateway locally (signature skipped):
+  - `FOUNTAIN_SKIP_LAUNCHER_SIG=1 GATEWAY_AGENT_ID='fountain.ai/agent/sample/spectralizer' Scripts/dev/gateway-min run`
+- Probe endpoints:
+  - Descriptor: `curl -s http://127.0.0.1:8010/.well-known/agent-descriptor | jq .`
+  - Health/metrics: `curl -s http://127.0.0.1:8010/health`, `curl -s http://127.0.0.1:8010/metrics`
+
+Environment
+- `GATEWAY_AGENT_ID` or `AGENT_ID` — required; the agent to serve.
+- `AGENT_CORPUS_ID` or `CORPUS_ID` — corpus name (default `agents`).
+- `FOUNTAINSTORE_DIR` — store root (default `.fountain/store`).
+- `FOUNTAIN_SKIP_LAUNCHER_SIG=1` — skips launcher signature in local dev only.
+
+Where
+- Descriptor endpoint: `Packages/FountainApps/Sources/gateway-server/GatewayServer.swift:194`
+- OpenAPI generator config (gateway): `Packages/FountainApps/Sources/gateway-service/openapi-generator-config.yaml:1`
+- Gateway OpenAPI spec: `Packages/FountainSpecCuration/openapi/v1/gateway.yml:1`
+- Wrapper: `Scripts/dev/gateway-min:1`
+- Sample descriptor: `agents/sample-spectralizer.yaml:1`

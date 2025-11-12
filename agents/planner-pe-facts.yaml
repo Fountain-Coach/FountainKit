@@ -1,0 +1,33 @@
+protocol: midi-ci-pe
+functionBlocks:
+  - name: Planner
+    group: 0
+    properties:
+      - id: planner.plan.request
+        writable: true
+        type: json
+        schema:
+          type: object
+          properties:
+            goal: { type: string }
+            constraints: { type: array, items: { type: string } }
+            context: { type: object }
+          required: [goal]
+        mapsTo:
+          openapi:
+            method: POST
+            path: /planner/plan
+            body: json
+      - id: planner.plan.result
+        readable: true
+        type: json
+        schema:
+          type: object
+        source:
+          openapi:
+            operation: createPlan
+            response: 200
+    notify:
+      - on: planner.plan.result
+        transport: ump
+        latencyBudgetMs: 5

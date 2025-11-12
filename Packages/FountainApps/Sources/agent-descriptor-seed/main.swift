@@ -49,6 +49,28 @@ struct AgentDescriptorSeed {
         } catch {
             fputs("seed: write failed: \(error)\n", stderr); exit(3)
         }
+        // Optional facts payload (YAML/JSON) for PE mappings or metadata
+        if let factsPath = env["AGENT_FACTS_FILE"], !factsPath.isEmpty {
+            do {
+                let factsURL = URL(fileURLWithPath: factsPath)
+                let factsData = try Data(contentsOf: factsURL)
+                let factsObj: Any
+                if factsPath.hasSuffix(".yaml") || factsPath.hasSuffix(".yml") {
+                    factsObj = try Yams.load(yaml: String(decoding: factsData, as: UTF8.self)) as Any
+                } else {
+                    factsObj = try JSONSerialization.jsonObject(with: factsData)
+                }
+                guard let factsDict = factsObj as? [String: Any] else {
+                    throw NSError(domain: "agent-descriptor-seed", code: 4, userInfo: [NSLocalizedDescriptionKey: "facts is not an object"])
+                }
+                let factsPayload = try JSONSerialization.data(withJSONObject: factsDict)
+                let factsId = "facts:agent:\(agentId)"
+                try await store.putDoc(corpusId: corpusId, collection: "agent-facts", id: factsId, body: factsPayload)
+                print("facts seeded: corpus=\(corpusId) id=\(factsId)")
+            } catch {
+                fputs("seed: facts write failed: \(error)\n", stderr)
+            }
+        }
         // Update registry index
         do {
             let indexId = "registry:index"

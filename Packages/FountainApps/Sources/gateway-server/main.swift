@@ -12,10 +12,11 @@ import LauncherSignature
 import GatewayPersonaOrchestrator
 import FountainStoreClient
 
-verifyLauncherSignature()
+// Optional: allow skipping signature check for local dev
+let env = ProcessInfo.processInfo.environment
+if env["FOUNTAIN_SKIP_LAUNCHER_SIG"] != "1" { verifyLauncherSignature() }
 // Role guard plugin in this target
 // Loaded from config if present
-let env = ProcessInfo.processInfo.environment
 let configStore = ConfigurationStore.fromEnvironment(env)
 
 let publishingConfig = try? loadPublishingConfig(store: configStore, environment: env)

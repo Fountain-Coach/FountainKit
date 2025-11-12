@@ -1,10 +1,10 @@
-# Migration Plan
+# Migration Plan (Authoritative)
 ## From Multi‑Service OpenAPI Infrastructure to a Unified MIDI‑2.0 Instrument Runtime
 
 ---
 
 ### 🎯 Objective
-Transition from a distributed microservice topology (many OpenAPI servers) to a single‑host runtime that presents functionality as MIDI‑2.0–defined instruments while retaining full OpenAPI equivalence.
+Single maintained plan for migrating FountainKit from many OpenAPI services to a single‑host runtime that presents functionality as MIDI‑2.0–defined instruments while retaining full OpenAPI equivalence.
 
 ---
 
@@ -147,5 +147,5 @@ This migration replaces a fleet of networked OpenAPI servers with a **monophonic
 
 ---
 
-Status & Tracker
-- Current tracker: `specs/Migration-Tracker.md:1` (owners, deliverables, status). Keep this file current as the source of truth for migration progress.
+Status & Ownership
+- This document is the only maintained plan. Keep it current; link it from defining docs (see `specs/AGENTS.md`).

@@ -19,6 +19,12 @@ The goal is simple:
 
 ---
 
+Plan — single source of truth
+- Migration to the unified runtime is tracked in one maintained plan: `specs/Migration Plan.md:1` (authoritative).
+- Use this plan for priorities, scope and acceptance criteria; treat all other docs in `specs/` as references, not plans.
+
+---
+
 ## Conceptual Model
 
 | Layer | Description | Example Entities |

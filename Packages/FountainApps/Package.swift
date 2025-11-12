@@ -284,6 +284,13 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             path: "Sources/MetalViewKit",
             exclude: ["AGENTS.md"]
         ),
+        .executableTarget(
+            name: "planner-pe-bridge",
+            dependencies: [
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit")
+            ],
+            path: "Sources/planner-pe-bridge"
+        ),
         .target(
             name: "pbvrt-service",
             dependencies: [
@@ -572,6 +579,13 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
                 .product(name: "MIDIService", package: "FountainServiceKit-MIDI")
             ],
             path: "Sources/midi-service-server"
+        ),
+        .executableTarget(
+            name: "planner-pe-bridge",
+            dependencies: [
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit")
+            ],
+            path: "Sources/planner-pe-bridge"
         ),
         .executableTarget(
             name: "ml-sampler-smoke",

@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Minimal MIDI 2.0 PE bridge for Planner service (loopback only)
+# Usage: Scripts/dev/planner-pe-bridge [build|run]
+
+ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+PKG_PATH="$ROOT_DIR/Packages/FountainApps"
+
+cmd="${1:-run}"
+case "$cmd" in
+  build)
+    swift build --package-path "$PKG_PATH" -c debug --target planner-pe-bridge
+    ;;
+  run)
+    : "${PLANNER_BASE_URL:=http://127.0.0.1:8020}"
+    : "${PLANNER_PLAN_PATH:=/planner/plan}"
+    echo "[planner-pe-bridge] base=$PLANNER_BASE_URL path=$PLANNER_PLAN_PATH"
+    swift run --package-path "$PKG_PATH" -c debug planner-pe-bridge
+    ;;
+  *)
+    echo "Usage: $0 [build|run]" >&2
+    exit 2
+    ;;
+esac
+

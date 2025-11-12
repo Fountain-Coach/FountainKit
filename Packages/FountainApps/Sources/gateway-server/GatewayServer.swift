@@ -208,6 +208,25 @@ public final class GatewayServer {
                 let body = try? JSONSerialization.data(withJSONObject: msg)
                 return HTTPResponse(status: 404, headers: ["Content-Type": "application/json"], body: body ?? Data())
             }
+            // Well-known agent facts (PE mappings; Store-backed)
+            if request.method == "GET", request.path.split(separator: "?", maxSplits: 1).first == "/.well-known/agent-facts" {
+                let env = ProcessInfo.processInfo.environment
+                let corpus = env["AGENT_CORPUS_ID"] ?? env["CORPUS_ID"] ?? "agents"
+                guard let agentId = env["AGENT_ID"] ?? env["GATEWAY_AGENT_ID"] else {
+                    let msg = ["error": "missing AGENT_ID or GATEWAY_AGENT_ID"]
+                    let body = try? JSONSerialization.data(withJSONObject: msg)
+                    return HTTPResponse(status: 404, headers: ["Content-Type": "application/json"], body: body ?? Data())
+                }
+                let safeId = agentId.replacingOccurrences(of: "/", with: "|")
+                let key = "facts:agent:\(safeId)"
+                let store = GatewayServer.resolveStore()
+                if let data = try? await store.getDoc(corpusId: corpus, collection: "agent-facts", id: key) {
+                    return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: data)
+                }
+                let msg = ["error": "facts not found", "agentId": agentId, "factsId": key, "corpus": corpus]
+                let body = try? JSONSerialization.data(withJSONObject: msg)
+                return HTTPResponse(status: 404, headers: ["Content-Type": "application/json"], body: body ?? Data())
+            }
             if request.path == "/openapi.yaml" {
                 let url = URL(fileURLWithPath: "Packages/FountainApps/Sources/gateway-service/openapi.yaml")
                 if let data = try? Data(contentsOf: url) {

@@ -27,13 +27,17 @@ let PRODUCTS: [Product] = BLANK_VRT_ONLY ? [
         // Robot-only: expose just what PatchBay tests need
         .executable(name: "patchbay-app", targets: ["patchbay-app"]),
         .executable(name: "replay-export", targets: ["replay-export"]),
+        .executable(name: "midi-instrument-host", targets: ["midi-instrument-host"]),
         .library(name: "MetalViewKit", targets: ["MetalViewKit"]) ,
         .library(name: "FountainEditorCoreKit", targets: ["fountain-editor-service-core"]) ,
         .executable(name: "metalviewkit-cc-fuzz", targets: ["metalviewkit-cc-fuzz"]) 
         
     ] : [
         .executable(name: "gateway-server", targets: ["gateway-server"]),
+        .executable(name: "store-apply-seed", targets: ["store-apply-seed"]),
+        .executable(name: "agent-host", targets: ["midi-instrument-host"]),
         .executable(name: "gateway-ci-smoke", targets: ["gateway-ci-smoke"]),
+        .executable(name: "facts-validate", targets: ["facts-validate"]),
         .executable(name: "tools-factory-server", targets: ["tools-factory-server"]),
         .executable(name: "tool-server", targets: ["tool-server"]),
         .executable(name: "agent-validate", targets: ["agent-validate"]),
@@ -64,6 +68,8 @@ let PRODUCTS: [Product] = BLANK_VRT_ONLY ? [
         .executable(name: "pbvrt-tone", targets: ["pbvrt-tone"]),
         .executable(name: "pbvrt-present", targets: ["pbvrt-present"]),
         .executable(name: "engraver-studio-app", targets: ["engraver-studio-app"]),
+        .executable(name: "sysx-json-sender", targets: ["sysx-json-sender"]),
+        .executable(name: "sysx-json-receiver", targets: ["sysx-json-receiver"]),
         .executable(name: "gateway-console", targets: ["gateway-console"]),
         .executable(name: "gateway-console-app", targets: ["gateway-console-app"]),
         .executable(name: "engraver-chat-tui", targets: ["engraver-chat-tui"]),
@@ -168,7 +174,7 @@ let DEPENDENCIES: [Package.Dependency] = BLANK_VRT_ONLY ? [
         .package(path: "../FountainServiceKit-ToolServer"),
         .package(path: "../FountainServiceKit-FKOps"),
         .package(path: "../FountainTooling"),
-        .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.20.0"),
+        // Removed unused swift-nio-extras to eliminate warnings in host-only builds
         // External UI graph editor used by PatchBay
         .package(url: "https://github.com/AudioKit/Flow.git", from: "1.0.4"),
         .package(path: "../FountainTelemetryKit"),
@@ -201,6 +207,16 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
         ],
         path: "Sources/blank-page-app"
     ),
+    .executableTarget(
+        name: "midi-instrument-host",
+        dependencies: [
+            .product(name: "MIDI2Transports", package: "FountainTelemetryKit"),
+            .product(name: "FountainStoreClient", package: "FountainCore"),
+            .product(name: "MIDI2CI", package: "midi2"),
+            .product(name: "MIDI2", package: "midi2")
+        ],
+        path: "Sources/midi-instrument-host"
+    ),
     .testTarget(
         name: "BlankAppUITests",
         dependencies: [
@@ -225,6 +241,16 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             "quietframe-editor-app"
         ],
         path: "Sources/editor-snapshots"
+    ),
+    .executableTarget(
+        name: "midi-instrument-host",
+        dependencies: [
+            .product(name: "MIDI2Transports", package: "FountainTelemetryKit"),
+            .product(name: "FountainStoreClient", package: "FountainCore"),
+            .product(name: "MIDI2CI", package: "midi2"),
+            .product(name: "MIDI2", package: "midi2")
+        ],
+        path: "Sources/midi-instrument-host"
     ),
     .testTarget(
         name: "EditorAppUITests",
@@ -273,6 +299,16 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             .product(name: "FountainStoreClient", package: "FountainCore")
         ],
         path: "Sources/service-minimal-seed"
+    ),
+    .executableTarget(
+        name: "midi-instrument-host",
+        dependencies: [
+            .product(name: "MIDI2Transports", package: "FountainTelemetryKit"),
+            .product(name: "FountainStoreClient", package: "FountainCore"),
+            .product(name: "MIDI2CI", package: "midi2"),
+            .product(name: "MIDI2", package: "midi2")
+        ],
+        path: "Sources/midi-instrument-host"
     )
 ] : (ROBOT_ONLY ? [
         .target(
@@ -285,37 +321,83 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             exclude: ["AGENTS.md"]
         ),
         .executableTarget(
+            name: "agent-pe-bridge",
+            dependencies: [
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/agent-pe-bridge"
+        ),
+        .executableTarget(
+            name: "facts-validate",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/facts-validate"
+        ),
+        .executableTarget(
             name: "planner-pe-bridge",
             dependencies: [
-                .product(name: "MIDI2Transports", package: "FountainTelemetryKit")
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
             ],
             path: "Sources/planner-pe-bridge"
         ),
         .executableTarget(
             name: "function-caller-pe-bridge",
             dependencies: [
-                .product(name: "MIDI2Transports", package: "FountainTelemetryKit")
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
             ],
             path: "Sources/function-caller-pe-bridge"
         ),
         .executableTarget(
             name: "persist-pe-bridge",
             dependencies: [
-                .product(name: "MIDI2Transports", package: "FountainTelemetryKit")
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
             ],
             path: "Sources/persist-pe-bridge"
         ),
-        .target(
-            name: "pbvrt-service",
+    .executableTarget(
+        name: "midi-instrument-host",
+        dependencies: [
+            .product(name: "MIDI2Transports", package: "FountainTelemetryKit"),
+            .product(name: "FountainStoreClient", package: "FountainCore")
+        ],
+        path: "Sources/midi-instrument-host"
+    ),
+        .executableTarget(
+            name: "sysx-json-sender",
             dependencies: [
-                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit")
+            ],
+            path: "Sources/sysx-json-sender"
+        ),
+        .executableTarget(
+            name: "sysx-json-receiver",
+            dependencies: [
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit")
+            ],
+            path: "Sources/sysx-json-receiver"
+        ),
+    .executableTarget(
+        name: "midi-instrument-host",
+        dependencies: [
+            .product(name: "MIDI2Transports", package: "FountainTelemetryKit"),
+            .product(name: "FountainStoreClient", package: "FountainCore")
+        ],
+        path: "Sources/midi-instrument-host",
+        resources: [ .process("Resources") ]
+    ),
+        .executableTarget(
+            name: "facts-validate",
+            dependencies: [
                 .product(name: "FountainStoreClient", package: "FountainCore")
             ],
-            path: "Sources/pbvrt-service",
-            plugins: [
-                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
-            ]
+            path: "Sources/facts-validate"
         ),
+        
         .target(
             name: "gateway-service",
             dependencies: [
@@ -530,6 +612,13 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             name: "QCMockCore",
             dependencies: [],
             path: "Sources/QCMockCore"
+        ),
+        .executableTarget(
+            name: "facts-validate",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/facts-validate"
         ),
         .target(
             name: "QCMockServiceCore",
@@ -1141,11 +1230,28 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             exclude: ["README.md", "Static"]
         ),
         .executableTarget(
+            name: "store-apply-seed",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/store-apply-seed"
+        ),
+        .executableTarget(
             name: "publishing-frontend",
             dependencies: [
                 .product(name: "PublishingFrontend", package: "FountainGatewayKit")
             ],
             exclude: ["README.md"]
+        ),
+        .executableTarget(
+            name: "midi-instrument-host",
+            dependencies: [
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit"),
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "MIDI2CI", package: "midi2"),
+                .product(name: "MIDI2", package: "midi2")
+            ],
+            path: "Sources/midi-instrument-host"
         ),
         .executableTarget(
             name: "ble-midi-scan",
@@ -1682,6 +1788,20 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             path: "Sources/metalviewkit-cc-fuzz"
         ),
         .executableTarget(
+            name: "sysx-json-sender",
+            dependencies: [
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit")
+            ],
+            path: "Sources/sysx-json-sender"
+        ),
+        .executableTarget(
+            name: "sysx-json-receiver",
+            dependencies: [
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit")
+            ],
+            path: "Sources/sysx-json-receiver"
+        ),
+        .executableTarget(
             name: "editor-snapshots",
             dependencies: [
                 "quietframe-editor-app"
@@ -1717,6 +1837,7 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
                 .process("Baselines")
             ]
         )
+        
     ] )))
 
 let package = Package(

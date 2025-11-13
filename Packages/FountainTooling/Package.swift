@@ -13,6 +13,7 @@ let package = Package(
         .executable(name: "openapi-jsonify", targets: ["openapi-jsonify"]),
         .executable(name: "clientgen-service", targets: ["clientgen-service"]),
         .executable(name: "sse-client", targets: ["sse-client"]),
+        .executable(name: "openapi-to-facts", targets: ["openapi-to-facts"]),
         .plugin(name: "EnsureOpenAPIConfigPlugin", targets: ["EnsureOpenAPIConfigPlugin"])
     ],
     dependencies: [
@@ -23,6 +24,13 @@ let package = Package(
         .target(
             name: "OpenAPICurator",
             dependencies: []
+        ),
+        .executableTarget(
+            name: "openapi-to-facts",
+            dependencies: [
+                "Yams",
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ]
         ),
         .executableTarget(
             name: "openapi-curator-cli",

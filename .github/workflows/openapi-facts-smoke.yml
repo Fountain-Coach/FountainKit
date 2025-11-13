@@ -1,0 +1,27 @@
+name: OpenAPI → Facts → Gateway Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'Packages/FountainSpecCuration/openapi/**'
+      - 'Packages/FountainTooling/**'
+      - 'Scripts/openapi/openapi-to-facts.sh'
+      - 'Packages/FountainApps/Sources/gateway-server/**'
+  push:
+    branches: [ main ]
+    paths:
+      - 'Packages/FountainSpecCuration/openapi/**'
+      - 'Packages/FountainTooling/**'
+      - 'Scripts/openapi/openapi-to-facts.sh'
+      - 'Packages/FountainApps/Sources/gateway-server/**'
+
+jobs:
+  facts-smoke:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: brew install jq curl ripgrep
+      - name: Generate and seed facts; smoke gateway well-known
+        run: bash Scripts/ci/openapi-facts-smoke.sh
+

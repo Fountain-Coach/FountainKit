@@ -1,0 +1,37 @@
+name: OpenAPI Facts Parity
+
+on:
+  pull_request:
+    paths:
+      - 'Packages/FountainSpecCuration/openapi/**'
+      - 'Packages/FountainTooling/**'
+      - 'Packages/FountainApps/Sources/gateway-server/**'
+      - 'Scripts/ci/openapi-facts-parity.sh'
+  push:
+    branches: [ main ]
+    paths:
+      - 'Packages/FountainSpecCuration/openapi/**'
+      - 'Packages/FountainTooling/**'
+      - 'Packages/FountainApps/Sources/gateway-server/**'
+      - 'Scripts/ci/openapi-facts-parity.sh'
+
+jobs:
+  parity:
+    runs-on: macos-14
+    strategy:
+      matrix:
+        include:
+          - { spec: planner.yml, agent: fountain.coach/agent/planner/service }
+          - { spec: function-caller.yml, agent: fountain.coach/agent/function-caller/service }
+          - { spec: persist.yml, agent: fountain.coach/agent/persist/service }
+          - { spec: baseline-awareness.yml, agent: fountain.coach/agent/baseline-awareness/service }
+          - { spec: bootstrap.yml, agent: fountain.coach/agent/bootstrap/service }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: brew install jq curl ripgrep
+      - name: Parity check ${{ matrix.spec }}
+        env:
+          SPEC_FILE: ${{ matrix.spec }}
+          AGENT_ID: ${{ matrix.agent }}
+        run: bash Scripts/ci/openapi-facts-parity.sh

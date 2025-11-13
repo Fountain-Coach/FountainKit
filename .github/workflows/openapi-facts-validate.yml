@@ -1,0 +1,25 @@
+name: OpenAPI Facts Validate (Live)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: macos-14
+    strategy:
+      matrix:
+        include:
+          - { spec: baseline-awareness.yml, agent: fountain.coach/agent/baseline-awareness/service, server: baseline-awareness-server, port_env: BASELINE_AWARENESS_PORT, port: 8001 }
+          - { spec: bootstrap.yml, agent: fountain.coach/agent/bootstrap/service, server: bootstrap-server, port_env: BOOTSTRAP_PORT, port: 8002 }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: brew install jq curl ripgrep
+      - name: Validate ${{ matrix.spec }} live parity
+        env:
+          SPEC_FILE: ${{ matrix.spec }}
+          AGENT_ID: ${{ matrix.agent }}
+          SERVER_TARGET: ${{ matrix.server }}
+          PORT_ENV: ${{ matrix.port_env }}
+          PORT: ${{ matrix.port }}
+        run: bash Scripts/ci/facts-validate.sh

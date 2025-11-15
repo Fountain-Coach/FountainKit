@@ -1,0 +1,249 @@
+openapi: 3.1.0
+info:
+  title: Composer Score Service
+  version: 1.0.0
+  description: Score state and cue spans for Composer Studio.
+
+paths:
+  /scores/{scoreId}/state:
+    get:
+      operationId: getScoreState
+      parameters:
+        - name: scoreId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Current score view state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoreState'
+    post:
+      operationId: setScoreState
+      parameters:
+        - name: scoreId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScoreStatePatch'
+      responses:
+        '204':
+          description: State updated.
+
+  /scores/{scoreId}/cues:
+    get:
+      operationId: listScoreCues
+      parameters:
+        - name: scoreId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cues attached to this score.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cues:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Cue'
+                required:
+                  - cues
+
+  /scores/{scoreId}/cues:propose:
+    post:
+      operationId: proposeCuesForScene
+      parameters:
+        - name: scoreId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CueProposalRequest'
+      responses:
+        '200':
+          description: Proposed cue plan for this score/scene.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CueProposalResponse'
+
+  /scores/{scoreId}/cues/{cueId}:update:
+    post:
+      operationId: updateCueSpan
+      parameters:
+        - name: scoreId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: cueId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CueUpdateRequest'
+      responses:
+        '204':
+          description: Cue updated.
+
+components:
+  schemas:
+    ScoreState:
+      type: object
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        zoom:
+          type: number
+          format: float
+        selection:
+          $ref: '#/components/schemas/BarSelection'
+        annotationsVisible:
+          type: boolean
+        cueFocusId:
+          type: string
+          nullable: true
+      required:
+        - page
+        - zoom
+
+    ScoreStatePatch:
+      type: object
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        zoom:
+          type: number
+          format: float
+        selection:
+          $ref: '#/components/schemas/BarSelection'
+        annotationsVisible:
+          type: boolean
+        cueFocusId:
+          type: string
+          nullable: true
+      description: Partial update; any missing fields are left unchanged.
+
+    BarSelection:
+      type: object
+      properties:
+        startBar:
+          type: integer
+          minimum: 1
+        endBar:
+          type: integer
+          minimum: 1
+      required:
+        - startBar
+        - endBar
+
+    Cue:
+      type: object
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        sceneId:
+          type: string
+        act:
+          type: integer
+          minimum: 1
+        barStart:
+          type: integer
+          minimum: 1
+        barEnd:
+          type: integer
+          minimum: 1
+        styleHint:
+          type: string
+          nullable: true
+      required:
+        - id
+        - sceneId
+        - act
+        - barStart
+        - barEnd
+
+    CueProposalRequest:
+      type: object
+      properties:
+        scriptSceneId:
+          type: string
+        act:
+          type: integer
+          minimum: 1
+        scene:
+          type: integer
+          minimum: 1
+        beats:
+          type: array
+          items:
+            type: string
+        styleHint:
+          type: string
+          nullable: true
+      required:
+        - scriptSceneId
+        - act
+        - scene
+
+    CueProposalResponse:
+      type: object
+      properties:
+        cues:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/Cue'
+              - type: object
+                properties:
+                  confidence:
+                    type: number
+                    format: float
+                  rationale:
+                    type: string
+      required:
+        - cues
+
+    CueUpdateRequest:
+      type: object
+      properties:
+        barStart:
+          type: integer
+          minimum: 1
+        barEnd:
+          type: integer
+          minimum: 1
+        label:
+          type: string
+        styleHint:
+          type: string
+      description: New span or label for an existing cue.
+

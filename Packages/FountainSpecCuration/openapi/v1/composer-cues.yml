@@ -1,0 +1,213 @@
+openapi: 3.1.0
+info:
+  title: Composer Cues Service
+  version: 1.0.0
+  description: Project-level cues, planning, and revisions for Composer Studio.
+
+paths:
+  /projects/{projectId}/cues:
+    get:
+      operationId: listProjectCues
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: All cues for the project.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cues:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CueSummary'
+                required:
+                  - cues
+
+  /projects/{projectId}/cues:plan:
+    post:
+      operationId: planCuesForSelection
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CuePlanRequest'
+      responses:
+        '200':
+          description: Proposed cue plan.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CuePlanResponse'
+
+  /projects/{projectId}/cues/{cueId}:revise:
+    post:
+      operationId: reviseCue
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: cueId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CueRevisionRequest'
+      responses:
+        '200':
+          description: Revised cue.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CueSummary'
+
+  /projects/{projectId}/cues:apply-plan:
+    post:
+      operationId: applyCuePlan
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CueApplyPlanRequest'
+      responses:
+        '204':
+          description: Plan applied.
+
+components:
+  schemas:
+    CueSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        sceneId:
+          type: string
+        act:
+          type: integer
+          minimum: 1
+        barStart:
+          type: integer
+          minimum: 1
+        barEnd:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum:
+            - proposed
+            - applied
+            - muted
+        styleHint:
+          type: string
+          nullable: true
+      required:
+        - id
+        - sceneId
+        - act
+        - barStart
+        - barEnd
+        - status
+
+    CuePlanRequest:
+      type: object
+      properties:
+        scriptSceneId:
+          type: string
+        scoreId:
+          type: string
+        scoreRange:
+          $ref: '#/components/schemas/BarSelection'
+        beats:
+          type: array
+          items:
+            type: string
+        styleHint:
+          type: string
+          nullable: true
+        agentNotes:
+          type: string
+          nullable: true
+      required:
+        - scriptSceneId
+        - scoreId
+
+    CuePlanResponse:
+      type: object
+      properties:
+        cues:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/CueSummary'
+              - type: object
+                properties:
+                  confidence:
+                    type: number
+                    format: float
+                  rationale:
+                    type: string
+      required:
+        - cues
+
+    CueRevisionRequest:
+      type: object
+      properties:
+        instructions:
+          type: string
+        keepRange:
+          type: boolean
+        retargetScene:
+          type: string
+          nullable: true
+
+    CueApplyPlanRequest:
+      type: object
+      properties:
+        cues:
+          type: array
+          items:
+            $ref: '#/components/schemas/CueSummary'
+      required:
+        - cues
+
+    BarSelection:
+      type: object
+      properties:
+        startBar:
+          type: integer
+          minimum: 1
+        endBar:
+          type: integer
+          minimum: 1
+      required:
+        - startBar
+        - endBar
+

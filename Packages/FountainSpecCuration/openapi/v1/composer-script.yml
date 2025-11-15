@@ -1,0 +1,267 @@
+openapi: 3.1.0
+info:
+  title: Composer Script Service
+  version: 1.0.0
+  description: Screenplay scenes, beats, and tagging for Composer Studio.
+
+paths:
+  /scripts/{scriptId}:
+    get:
+      operationId: getScript
+      parameters:
+        - name: scriptId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: act
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+        - name: scene
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Script structure and optional scene slice.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScriptDocument'
+
+  /scripts/{scriptId}/beats:
+    get:
+      operationId: getSceneBeats
+      parameters:
+        - name: scriptId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: act
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - name: scene
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Beats for the given scene.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  beats:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Beat'
+                required:
+                  - beats
+
+  /scripts/{scriptId}:tag-beats:
+    post:
+      operationId: tagSceneBeats
+      parameters:
+        - name: scriptId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagBeatsRequest'
+      responses:
+        '200':
+          description: Updated beats with tags.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  beats:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Beat'
+                required:
+                  - beats
+
+  /scripts/{scriptId}/state:
+    post:
+      operationId: setScriptState
+      parameters:
+        - name: scriptId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScriptStatePatch'
+      responses:
+        '204':
+          description: Script view state updated.
+
+components:
+  schemas:
+    ScriptDocument:
+      type: object
+      properties:
+        scriptId:
+          type: string
+        acts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Act'
+        scene:
+          $ref: '#/components/schemas/SceneSlice'
+      required:
+        - scriptId
+        - acts
+
+    Act:
+      type: object
+      properties:
+        index:
+          type: integer
+          minimum: 1
+        title:
+          type: string
+        scenes:
+          type: array
+          items:
+            $ref: '#/components/schemas/SceneSummary'
+      required:
+        - index
+        - title
+        - scenes
+
+    SceneSummary:
+      type: object
+      properties:
+        index:
+          type: integer
+          minimum: 1
+        slugline:
+          type: string
+      required:
+        - index
+        - slugline
+
+    SceneSlice:
+      type: object
+      properties:
+        act:
+          type: integer
+          minimum: 1
+        scene:
+          type: integer
+          minimum: 1
+        slugline:
+          type: string
+        startLine:
+          type: integer
+          minimum: 1
+        endLine:
+          type: integer
+          minimum: 1
+        text:
+          type: array
+          items:
+            type: string
+      required:
+        - act
+        - scene
+        - slugline
+        - startLine
+        - endLine
+        - text
+
+    Beat:
+      type: object
+      properties:
+        id:
+          type: string
+        lineStart:
+          type: integer
+          minimum: 1
+        lineEnd:
+          type: integer
+          minimum: 1
+        label:
+          type: string
+          nullable: true
+        emotionTag:
+          type: string
+          nullable: true
+      required:
+        - id
+        - lineStart
+        - lineEnd
+
+    TagBeatsRequest:
+      type: object
+      properties:
+        act:
+          type: integer
+          minimum: 1
+        scene:
+          type: integer
+          minimum: 1
+        mode:
+          type: string
+          enum:
+            - emotion
+            - density
+            - silence
+        hint:
+          type: string
+          nullable: true
+      required:
+        - act
+        - scene
+        - mode
+
+    ScriptStatePatch:
+      type: object
+      properties:
+        act:
+          type: integer
+          minimum: 1
+        scene:
+          type: integer
+          minimum: 1
+        cursorLine:
+          type: integer
+          minimum: 1
+        selection:
+          type: object
+          properties:
+            startLine:
+              type: integer
+              minimum: 1
+            endLine:
+              type: integer
+              minimum: 1
+          required:
+            - startLine
+            - endLine
+      description: Partial update of ScriptInstrument view state.
+

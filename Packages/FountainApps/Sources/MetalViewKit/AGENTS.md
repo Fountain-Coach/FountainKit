@@ -86,3 +86,18 @@ Build and run: use the robot tests to set exact transforms; rely on replay tests
 
 Change control
 Maintain source compatibility on public uniform names. If a rename is required, support both names (alias) until callers migrate.
+
+## Runtime instrument state plan
+
+MetalViewKit’s runtime (`metalviewkit-runtime-server`) is the shared HTTP sidecar for MIDI 2.0, audio, and tracing. It will also host **generic instrument state** for GUI instruments, driven by OpenAPI and facts rather than app‑specific types.
+
+- Design and implementation details live in `Plans/MetalViewKitRuntime-InstrumentStatePlan.md`.
+- The runtime exposes generic endpoints (to be added via that plan) for `GET /v1/instruments/{id}/state` and `POST /v1/instruments/{id}/state`, backed by a simple property map keyed by instrument id.
+- Facts generated from curated OpenAPI specs map instrument properties (for example `canvas.zoom`, `canvas.translation.x/y`) onto those runtime endpoints.
+- The MIDI Instrument Host (`Packages/FountainApps/Sources/midi-instrument-host`) uses those facts to route MIDI‑CI PE GET/SET to the runtime via HTTP, keeping the host and runtime instrument‑agnostic.
+- GUI apps like the FountainGUIKit demo treat the runtime as a generic state service; they never import runtime internals, and the runtime never knows about view classes or app‑specific types.
+
+When extending MetalViewKit or the runtime:
+
+- Update the curated spec under `Packages/FountainSpecCuration/openapi/v1/metalviewkit-runtime.yml` first, then regenerate server stubs via the OpenAPI Generator plugin in `MetalViewKitRuntimeServerKit`.
+- Keep any instrument‑specific behaviour in clients (apps/tests); the runtime should only manage generic state and transport, not concrete view logic.

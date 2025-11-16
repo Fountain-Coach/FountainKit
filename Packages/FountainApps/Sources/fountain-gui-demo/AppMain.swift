@@ -70,4 +70,3 @@ enum FountainGUIDemoMain {
         app.run()
     }
 }
-

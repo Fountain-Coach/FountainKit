@@ -176,7 +176,7 @@ let DEPENDENCIES: [Package.Dependency] = BLANK_VRT_ONLY ? [
         .package(path: "../FountainServiceKit-Persist"),
         .package(path: "../FountainServiceKit-AudioTalk"),
         .package(path: "../FountainServiceKit-MIDI"),
-        .package(url: "https://github.com/Fountain-Coach/FountainGUIKit.git", from: "0.1.0"),
+        .package(url: "https://github.com/Fountain-Coach/FountainGUIKit.git", from: "0.2.0"),
         .package(path: "../FountainServiceKit-ToolsFactory"),
         .package(path: "../FountainServiceKit-ToolServer"),
         .package(path: "../FountainServiceKit-FKOps"),

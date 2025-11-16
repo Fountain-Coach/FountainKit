@@ -4,8 +4,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
-export FK_SKIP_NOISY_TARGETS=1
 export FOUNTAIN_SKIP_LAUNCHER_SIG=1
 
 swift run --package-path "${REPO_ROOT}/Packages/FountainApps" -c debug fountain-gui-demo-app "$@"
-

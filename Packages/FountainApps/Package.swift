@@ -835,6 +835,14 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             ],
             path: "Sources/coreml-fetch"
         ),
+        .testTarget(
+            name: "FountainGUIDemoTests",
+            dependencies: [
+                "fountain-gui-demo-app",
+                .product(name: "FountainGUIKit", package: "FountainGUIKit")
+            ],
+            path: "Tests/FountainGUIDemoTests"
+        ),
         .target(
             name: "MetalViewKit",
             dependencies: [

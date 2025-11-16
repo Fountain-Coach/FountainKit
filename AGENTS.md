@@ -24,6 +24,7 @@ Welcome to FountainKit, the modular SwiftPM workspace for the Fountain Coach org
 - ML × MIDI 2.0 plan — `Plans/ML-MIDI2-Plan.md` (models, runners, CI/PE, integration).
 - Hybrid Semantic Audio System — `Plans/The Hybrid Semantic Audio System within FountainKit.pdf` (whitepaper).
 - PatchBay Node = Stage — `Plans/PatchBay-NodeStage-FeaturePlan.md` (capacity from baselines; in-node feedback; ports HUD). To be discussed.
+- FountainGUIKit demo integration — `Plans/FountainGUIKit-Demo-Plan.md` (NSView host, gestures, MIDI 2.0, MRTS/PB‑VRT).
 - Studio plan — `Packages/FountainApps/Sources/FountainLauncherUI/AGENTS.md` (Control workspace).
 - AudioTalk plan — `Packages/FountainServiceKit-AudioTalk/AGENTS.md` (service track).
 - Spec curation norms — `Packages/FountainSpecCuration/openapi/AGENTS.md`.
@@ -45,6 +46,7 @@ Why
 
 How
 - Run UI: `Scripts/dev/dev-up` (UI auto‑launches) or `Scripts/apps/baseline-patchbay`.
+- One‑click MPE demo: `Scripts/apps/mpe-pad-app` (launches the Baseline app; enable BLE and Open in the left‑pane MPE Pad, set filter to “AUM”).
 - Robot: see `Packages/FountainApps/Tests/PatchBayAppUITests/*` for examples.
 
 ## Teatro Prompt & FountainStore — Default Policy
@@ -208,6 +210,53 @@ Where
 - Every HTTP surface must have an authoritative OpenAPI document in `Packages/FountainSpecCuration/openapi`. Update specs *before* writing server or client code.
 - Specs are versioned (`openapi/v{major}/service-name.yml`) and curated via the FountainAI OpenAPI Curator. Keep the curator output as the single source of truth and follow `Packages/FountainSpecCuration/openapi/AGENTS.md` for directory rules.
 - Treat OpenAPI schema changes like code changes: include them in reviews, mention owning teams, and cite them in changelog/PR descriptions.
+
+## OpenAPI → PE Facts (Authoritative)
+
+What
+- Capability surfaces for instruments are derived from curated OpenAPI specs. A generator produces Property Exchange “facts” that map each operation to a PE property, and the instrument host executes mapped operations automatically.
+
+Why
+- Spec‑driven and deterministic: the same OpenAPI that drives HTTP types also defines the instrument’s PE surface. No ad‑hoc YAML; facts are generated and stored centrally.
+
+How
+- Batch (build/pre‑run) seeding: `bash Scripts/openapi/openapi-to-facts.sh`.
+  - Tool: `swift run --package-path Packages/FountainTooling openapi-to-facts <spec.yml> --agent-id <fountain.coach/agent/...> [--seed]`
+  - Store: `agent-facts` collection at id `facts:agent:<agentId>` (`/` replaced by `|`).
+- Runtime seeding via Tools Factory (recommended for interactive authoring): POST a spec to Tools Factory and receive seeded facts immediately.
+  - Endpoint: `POST /agent-facts/from-openapi` on `tools-factory-server`.
+  - Body (JSON): `{ "agentId": "fountain.coach/agent/<name>/service", "corpusId": "agents", "seed": true, "openapi": {…} }` or `{ "specURL": "http://<service>/openapi.yaml" }`.
+  - Response: facts JSON (also written into FountainStore when `seed: true`).
+  - Start server: `Scripts/dev/tools-factory-min run` (port `:8011`).
+- Secrets seeding via Tools Factory: upsert headers for an agent.
+  - Endpoint: `POST /agent-secrets` on `tools-factory-server`.
+  - Body (JSON): `{ "agentId": "fountain.coach/agent/<name>/service", "corpusId": "secrets", "headers": { "Authorization": "Bearer …", "X-API-Key": "…" } }`.
+  - Result: `{ ok: true, id, corpus }` on success.
+- Serve facts: Gateway exposes `/.well-known/agent-facts` (Store‑backed)
+- Host: the MIDI Instrument Host loads facts, advertises CI/PE, and routes PE SET/GET to mapped OpenAPI ops.
+
+Secrets (no env policy)
+- Do not pass credentials via environment. The host and tools read credentials from FountainStore only.
+- Corpus: `secrets` (default, override with `SECRETS_CORPUS_ID` if necessary).
+- Collection: `secrets`.
+- Document ids (in priority order):
+  - `secret:agent:<agent-id>` with `/` replaced by `|` (e.g., `secret:agent:fountain.coach|agent|tools-factory|service`)
+  - `secret:agent:<agent-id>` (raw)
+  - `secret:default` (fallback)
+- Document body: `{ "headers": { "Authorization": "Bearer …", "X-API-Key": "…" } }` or a flat header map.
+- Seeder: `swift run --package-path Packages/FountainApps secrets-seed --agent-id <id> --header Authorization="Bearer sk-..." [--header X-API-Key=...]`.
+- Convenience wrapper: `Scripts/apps/secrets-seed` (same flags as above) to write header maps without touching env.
+
+Where
+- Generator: `Packages/FountainTooling/Sources/openapi-to-facts`
+- Seed wrapper: `Scripts/openapi/openapi-to-facts.sh`
+- Tools Factory runtime endpoint: `Packages/FountainApps/Sources/tools-factory-server/main.swift:1` (`/agent-facts/from-openapi`).
+- Gateway facts endpoint: `Packages/FountainApps/Sources/gateway-server/GatewayServer.swift:1`
+- Host (prototype): `Packages/FountainApps/Sources/midi-instrument-host`
+
+Rules
+- Facts live only in FountainStore; never in ad‑hoc files. Specs are the source of truth; facts are generated from specs.
+- For new services, add the spec under `Packages/FountainSpecCuration/openapi/v1/<service>.yml`, then extend `Scripts/openapi/openapi-to-facts.sh` with the agent id mapping.
 
 ## SwiftPM‑Only Dependencies (authoritative)
 
@@ -412,6 +461,31 @@ FAQ
 - “How do we talk to external MIDI‑1 devices?” Use our MIDI 2.0 model with explicit downgrade/filters at the edges (BLE RTP peers or the sampler bridge). The internal model remains UMP‑first with journaled timing.
 - “What replaces virtual endpoints?” Loopback transport with explicit identity; our tests and tools target identity strings and UMP, not CoreMIDI virtuals.
 
+### Sidecar Exception (AudioKit lane) — BLE/RTP bridge for host apps
+
+Context
+- Some third‑party apps (e.g., AUM on iOS) only support MIDI 1.0 over BLE or RTP‑MIDI 1.0. While our stack is CoreMIDI‑free, macOS/iOS connection managers commonly rely on CoreMIDI for reliable BLE/RTP handshakes.
+
+Policy
+- It is acceptable to run a separate, opt‑in sidecar process that uses CoreMIDI (e.g., AudioKit/MIDIKit) to bridge BLE MIDI 1.0 and/or RTP‑MIDI 1.0 for external hosts. This sidecar is NOT linked into FountainKit and MUST live in a separate product/repo.
+- Communication between FountainKit and the sidecar happens over process boundaries (HTTP/IPC/UDP). No CoreMIDI types leak into this repository.
+
+Guardrails
+- Sidecar must be optional; default developer experience remains CoreMIDI‑free.
+- Scripts may start/stop the sidecar, but package graphs in this repo MUST NOT gain a CoreMIDI dependency.
+- Document the control protocol/ports. Prefer a tiny local HTTP control surface for selecting target BLE device name or RTP session parameters.
+
+Operator usage
+- Start sidecar: `Scripts/apps/midi-bridge` (looks for a configured bridge binary like an AudioKit‑based tool; see Scripts/AGENTS.md).
+- Configure through env:
+  - `BRIDGE_CMD` — absolute path to the sidecar binary/app bundle.
+  - `BRIDGE_PORT` — local HTTP control port (default 18090) if the sidecar exposes one.
+  - `BRIDGE_NAME` — advertised BLE device name (if the sidecar runs a Peripheral), or target BLE name (if it runs as Central).
+- Fountain host/app selects the “CoreMIDI sidecar” transport when present and routes MIDI 1.0 bytes to it; otherwise it falls back to built‑in Loopback/RTP‑MIDI 2.0.
+
+Why this exception exists
+- It unblocks real instruments and DAWs (AUM, AudioUnits, etc.) that only speak BLE/RTP MIDI 1.0 while keeping our Swift 6 codebase CoreMIDI‑free and portable.
+
 ---
 
 ## MIDI 2.0 Everywhere (Concept)
@@ -421,6 +495,25 @@ Every interactive surface is a MIDI 2.0 instrument. The canvas, nodes, inspector
 - State mapping: small PE schemas per surface (e.g., canvas: `zoom`, `translation.x/y`; stage: `page`, `margins.*`, `baseline`). GET is deterministic; SET applies and notifies.
 - Topology: begin with one group/function block per canvas; promote per‑node blocks as needed.
 - Transport‑agnostic: rendering and composition remain independent of MIDI; instrument mode is additive and optional.
+
+### Facts‑Factory Instrument (runtime authoring)
+
+What
+- A built‑in MIDI‑CI instrument exposed by the host (when `HOST_ENABLE_FACTS_FACTORY=1`) that accepts an OpenAPI document and returns/seeds agent facts. This mirrors the Tools Factory HTTP flow entirely over MIDI 2.0.
+
+Property surface
+- `facts.from_openapi.submit` (writable, json)
+  - Input: `{ agentId: string, corpusId?: string="agents", seed?: boolean=true, openapi?: object|string, specURL?: string }`
+  - Behavior: generates facts from OpenAPI, optionally seeds FountainStore, replies with facts JSON.
+
+How
+- Start host: `Scripts/dev/agent-host run` (defaults enable Facts‑Factory).
+- Send PE SET with the JSON envelope above; host replies with NOTIFY `{ status, body }` where `body` is the facts JSON (or an error object).
+- Gateway then serves `/.well-known/agent-facts` for the `agentId` once seeded.
+
+Notes
+- Prefer `specURL` for large specs; `openapi` inline accepts either a JSON object or a YAML/JSON string.
+- Enable/disable via `HOST_ENABLE_FACTS_FACTORY=1|0`. Agent id for this instrument defaults to `fountain.coach/agent/facts-factory/service` and can be overridden with `FACTS_FACTORY_AGENT_ID`.
 
 ---
 
@@ -539,3 +632,51 @@ Milestones (high level)
      - Mapping: CC → engine params now store‑backed (docs:quietframe:cc-mapping:doc).
      - Orchestration: Partiture YAML (docs:quietframe:orchestra-default:doc) + generator produce `prompt:quietframe-routing:routes` deterministically (with ETag provenance).
      - UI: Routing panel can Generate → Load → Apply; shows Partiture preview, ETag sync, and plan view.
+## Swift 6 Concurrency + Focus Guardrails (Authoritative)
+
+Why
+- Swift 6 actor isolation is strict. Older GCD patterns lead to races and flaky focus. We standardize main‑actor UI and deterministic focus backed by PB‑VRT tests.
+
+Rules
+- UI code is `@MainActor`. Prefer `await MainActor.run { … }` over `DispatchQueue.main.async { … }`.
+- Handlers are `@Sendable` and must not touch UI or non‑Sendable state. Hop to `Task { @MainActor in … }` before using `NSApp`/`NSWindow` or mutating `@Published`.
+- No `Task.detached` in app/UI code. Use structured tasks bound to actors.
+- No new `@unchecked Sendable` in app/UI targets. In services, isolate via actors or event‑loop contexts and document rationale.
+
+Responder chain (deterministic)
+- Text inputs that must take focus use an AppKit bridge (NSViewRepresentable) with a stable identifier and `window.makeFirstResponder`.
+- Apps launched from Terminal call `NSApplication.shared.activate(ignoringOtherApps: true)` during bootstrap.
+- PB‑VRT focus tests are required for new input surfaces; never land focus changes without tests.
+
+Lint (CI)
+- Concurrency: `! rg -n '\\bDispatchQueue\\.main\\.async\\b' -S Packages MIDI2InstrumentLab`, `! rg -n '\\bTask\\.detached\\(' -S`.
+- CoreMIDI: `! rg -n '\\bimport\\s+CoreMIDI\\b|\\bMIDI(Client|Source|Destination|Port|Send|Received)' -S | rg -v '^Sidecar/|^External/'`.
+- Unchecked Sendable in UI: `! rg -n '@unchecked\\s+Sendable' -S Packages/*UI* Packages/FountainApps MIDI2InstrumentLab`.
+
+Reference
+- FocusKit utility: `MIDI2InstrumentLab/Sources/FocusKit/` provides a reusable first‑responder TextField and a small focus helper. Reuse/port for other apps.
+
+## Automated Audit — Agent Tasks (Run Every Session)
+
+Intent
+- Make Swift 6 concurrency/focus hygiene and corpus discipline automatic. The agent performs these tasks at session start without asking the operator.
+
+Tasks (authoritative)
+- History audit (full git history): produce a summary of concurrency/focus patterns.
+  - Command: `Scripts/ci/history-audit.sh`
+  - Output: `Tools/history-audit.txt` (commit counts, first/last sighting) and a repo snapshot of current matches.
+- Repo scan + patch queue refresh:
+  - Command: `rg -n "\\bDispatchQueue\\.main\\.async\\b|\\.focused\\(|makeFirstResponder\\(|firstResponder\\b|fieldEditor\\(|@Sendable|@unchecked\\s+Sendable" -S`
+  - Update `Tools/concurrency_patch_queue.md` with file‑level actions (replace GCD, add FocusKit bridge, PB‑VRT tests).
+- Lints (must pass before landing changes):
+  - `bash Scripts/ci/lint-concurrency.sh`
+- PB‑VRT focus check for active app:
+  - Example (Lab): `make -C MIDI2InstrumentLab lab-pbvrt`
+- Optional org‑wide audit (when `gh` is configured):
+  - `gh api -X GET /search/code -f q='org:Fountain-Coach "DispatchQueue.main.async" language:Swift' -q '.total_count'`
+  - Produce `Tools/org-audit.md` with counts/links.
+
+Agent expectations
+- Do not ask the operator to paste logs; run the scripts locally, analyze outputs, and patch.
+- Do not introduce prompts or facts into code; keep guidance in FountainStore.
+- Only claim “green” after lints + PB‑VRT tests pass locally.

@@ -34,9 +34,12 @@ let PRODUCTS: [Product] = BLANK_VRT_ONLY ? [
         
     ] : [
         .executable(name: "gateway-server", targets: ["gateway-server"]),
+        .executable(name: "instrument-catalog-server", targets: ["instrument-catalog-server"]),
         .executable(name: "store-apply-seed", targets: ["store-apply-seed"]),
+        .executable(name: "mpe-pad-app-seed", targets: ["mpe-pad-app-seed"]),
         .executable(name: "agent-host", targets: ["midi-instrument-host"]),
         .executable(name: "gateway-ci-smoke", targets: ["gateway-ci-smoke"]),
+        .executable(name: "secrets-seed", targets: ["secrets-seed"]),
         .executable(name: "facts-validate", targets: ["facts-validate"]),
         .executable(name: "tools-factory-server", targets: ["tools-factory-server"]),
         .executable(name: "tool-server", targets: ["tool-server"]),
@@ -105,6 +108,7 @@ let PRODUCTS: [Product] = BLANK_VRT_ONLY ? [
         .executable(name: "fk", targets: ["fk"])
         ,
         .executable(name: "composer-studio", targets: ["composer-studio"]),
+        .executable(name: "composer-studio-seed", targets: ["composer-studio-seed"]),
         .executable(name: "qc-mock-app", targets: ["qc-mock-app"]),
         .executable(name: "qcmockcore-tests", targets: ["qcmockcore-tests"]),
         .executable(name: "patchbay-service-server", targets: ["patchbay-service-server"]),
@@ -114,6 +118,8 @@ let PRODUCTS: [Product] = BLANK_VRT_ONLY ? [
         .executable(name: "baseline-patchbay", targets: ["grid-dev-app"]),
         .executable(name: "grid-dev-app", targets: ["grid-dev-app"]),
         .executable(name: "grid-dev-seed", targets: ["grid-dev-seed"])
+        ,
+        .executable(name: "mpe-pad-app", targets: ["mpe-pad-app"])
         ,
         .executable(name: "baseline-robot-seed", targets: ["baseline-robot-seed"])
         ,
@@ -136,7 +142,8 @@ let PRODUCTS: [Product] = BLANK_VRT_ONLY ? [
         .executable(name: "fountain-editor-seed", targets: ["fountain-editor-seed"]),
         .executable(name: "quietframe-companion-app", targets: ["quietframe-companion-app"]),
         // removed: quietframe-smoke (CoreMIDI)
-        .executable(name: "metalviewkit-runtime-server", targets: ["metalviewkit-runtime-server"])
+        .executable(name: "metalviewkit-runtime-server", targets: ["metalviewkit-runtime-server"]),
+        .executable(name: "fountain-gui-demo-app", targets: ["fountain-gui-demo-app"])
         
     ])))
 
@@ -169,7 +176,7 @@ let DEPENDENCIES: [Package.Dependency] = BLANK_VRT_ONLY ? [
         .package(path: "../FountainServiceKit-Persist"),
         .package(path: "../FountainServiceKit-AudioTalk"),
         .package(path: "../FountainServiceKit-MIDI"),
-        
+        .package(url: "https://github.com/Fountain-Coach/FountainGUIKit.git", from: "0.1.0"),
         .package(path: "../FountainServiceKit-ToolsFactory"),
         .package(path: "../FountainServiceKit-ToolServer"),
         .package(path: "../FountainServiceKit-FKOps"),
@@ -319,6 +326,14 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             ],
             path: "Sources/MetalViewKit",
             exclude: ["AGENTS.md"]
+        ),
+        .executableTarget(
+            name: "secrets-seed",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ],
+            path: "Sources/secrets-seed"
         ),
         .executableTarget(
             name: "agent-pe-bridge",
@@ -516,6 +531,14 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             path: "Sources/patchbay-saliency-seed"
         ),
         .executableTarget(
+            name: "mpe-pad-app-seed",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ],
+            path: "Sources/mpe-pad-app-seed"
+        ),
+        .executableTarget(
             name: "baseline-editor-seed",
             dependencies: [
                 .product(name: "LauncherSignature", package: "FountainCore"),
@@ -544,6 +567,11 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
                 .plugin(name: "EnsureOpenAPIConfigPlugin", package: "FountainTooling"),
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
             ]
+        ),
+        .testTarget(
+            name: "MPEPadAppTests",
+            dependencies: ["mpe-pad-app"],
+            path: "Tests/MPEPadAppTests"
         ),
         .testTarget(
             name: "PBVRTServerTests",
@@ -606,6 +634,27 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
                 .product(name: "SDLKitAudio", package: "SDLKit")
             ],
             path: "Sources/FountainAudioEngine"
+        ),
+        .testTarget(
+            name: "ComposerScoreServiceTests",
+            dependencies: [
+                "composer-score-service"
+            ],
+            path: "Tests/ComposerScoreServiceTests"
+        ),
+        .testTarget(
+            name: "ComposerScriptServiceTests",
+            dependencies: [
+                "composer-script-service"
+            ],
+            path: "Tests/ComposerScriptServiceTests"
+        ),
+        .testTarget(
+            name: "ComposerCuesServiceTests",
+            dependencies: [
+                "composer-cues-service"
+            ],
+            path: "Tests/ComposerCuesServiceTests"
         )
     ] : [
         .target(
@@ -768,6 +817,13 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             path: "Sources/metalcompute-tests"
         ),
         .executableTarget(
+            name: "fountain-gui-demo-app",
+            dependencies: [
+                .product(name: "FountainGUIKit", package: "FountainGUIKit")
+            ],
+            path: "Sources/fountain-gui-demo"
+        ),
+        .executableTarget(
             name: "coreml-demo",
             dependencies: ["CoreMLKit"],
             path: "Sources/coreml-demo"
@@ -801,10 +857,55 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             exclude: ["AGENTS.md"]
         ),
         .executableTarget(
+            name: "composer-studio-seed",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/composer-studio-seed"
+        ),
+        .executableTarget(
             name: "composer-studio",
-            dependencies: [],
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                "composer-score-service",
+                "composer-script-service",
+                "composer-cues-service"
+            ],
             path: "Sources/composer-studio",
             exclude: ["AGENTS.md"]
+        ),
+        .target(
+            name: "composer-score-service",
+            dependencies: [
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/composer-score-service",
+            plugins: [
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
+        .target(
+            name: "composer-script-service",
+            dependencies: [
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/composer-script-service",
+            plugins: [
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
+        .target(
+            name: "composer-cues-service",
+            dependencies: [
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/composer-cues-service",
+            plugins: [
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
         ),
         .executableTarget(
             name: "qc-mock-app",
@@ -914,6 +1015,7 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
                 "MetalViewKit",
                 .product(name: "LauncherSignature", package: "FountainCore"),
                 .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit"),
                 .product(name: "Teatro", package: "TeatroFull"),
                 .product(name: "TeatroRenderAPI", package: "TeatroFull")
             ],
@@ -928,6 +1030,23 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
                 .product(name: "LauncherSignature", package: "FountainCore")
             ],
             path: "Sources/grid-dev-seed"
+        ),
+        .executableTarget(
+            name: "mpe-pad-app",
+            dependencies: [
+                .product(name: "MIDI2Transports", package: "FountainTelemetryKit"),
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ],
+            path: "Sources/mpe-pad-app"
+        ),
+        .executableTarget(
+            name: "mpe-pad-app-seed",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ],
+            path: "Sources/mpe-pad-app-seed"
         ),
         .executableTarget(
             name: "patchbay-graph-seed",
@@ -1230,6 +1349,15 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             exclude: ["README.md", "Static"]
         ),
         .executableTarget(
+            name: "instrument-catalog-server",
+            dependencies: [
+                .product(name: "FountainRuntime", package: "FountainCore"),
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ],
+            path: "Sources/instrument-catalog-server"
+        ),
+        .executableTarget(
             name: "store-apply-seed",
             dependencies: [
                 .product(name: "FountainStoreClient", package: "FountainCore")
@@ -1433,6 +1561,14 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             ]
         ),
         .executableTarget(
+            name: "secrets-seed",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ],
+            path: "Sources/secrets-seed"
+        ),
+        .executableTarget(
             name: "FountainLauncherUI",
             dependencies: [
                 .product(name: "SecretStore", package: "swift-secretstore")
@@ -1464,7 +1600,8 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             name: "gateway-console-app",
             dependencies: [
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
-                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession")
+                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
+                .product(name: "FountainStoreClient", package: "FountainCore")
             ],
             path: "Sources/gateway-console-app"
         ),

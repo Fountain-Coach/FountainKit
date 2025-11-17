@@ -26,7 +26,7 @@ fi
 
 echo "[facts-smoke] seeding facts from $SPEC_PATH → $AGENT_ID"
 FOUNTAINSTORE_DIR="$FOUNTAINSTORE_DIR" \
-  swift run --package-path "$TOOL_PKG" -c debug openapi-to-facts "$SPEC_PATH" --agent-id "$AGENT_ID" --seed >/dev/null
+  swift run --package-path "$TOOL_PKG" -c debug openapi-to-facts "$SPEC_PATH" --agent-id "$AGENT_ID" --seed --allow-tools-only >/dev/null
 
 echo "[facts-smoke] building gateway-server…"
 swift build --package-path "$APPS_PKG" -c debug --target gateway-server >/dev/null
@@ -59,4 +59,3 @@ if [[ "$code" != "200" ]]; then
 fi
 curl -s "http://127.0.0.1:$PORT/.well-known/agent-facts" | head -n 80
 echo "[facts-smoke] ✅ facts served"
-

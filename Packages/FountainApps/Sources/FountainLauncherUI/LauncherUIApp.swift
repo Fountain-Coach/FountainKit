@@ -198,7 +198,7 @@ final class LauncherViewModel: ObservableObject {
         var args = ["bash", script.path, "start"]
         switch buildMode { case .auto: break; case .noBuild: args.append("--no-build"); case .forceBuild: args.append("--force-build") }
         run(command: args, cwd: repoPath, env: env) { [weak self] code, out in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self?.starting = false
                 if code == 0 { self?.controlPlaneOK = true } else { self?.errorMessage = "Start failed. Check logs." }
             }
@@ -210,7 +210,7 @@ final class LauncherViewModel: ObservableObject {
         let env = processEnv()
         guard let script = LauncherResources.launcherScriptURL(repoRoot: repoPath, environment: env) else { return }
         run(command: ["bash", script.path, "stop"], cwd: repoPath, env: env) { [weak self] _, _ in
-            DispatchQueue.main.async { self?.controlPlaneOK = false }
+            Task { @MainActor in self?.controlPlaneOK = false }
         }
     }
 
@@ -368,7 +368,7 @@ final class LauncherViewModel: ObservableObject {
                 try? p.run(); p.waitUntilExit()
             }
             for pid in pids { runKill(["-TERM", pid]); usleep(200_000); runKill(["-0", pid]); runKill(["-KILL", pid]) }
-            DispatchQueue.main.async { self.refreshAudioTalkPIDs() }
+            Task { @MainActor in self.refreshAudioTalkPIDs() }
         }
     }
     func openAudioTalkLog(_ name: String) {
@@ -587,7 +587,7 @@ final class LauncherViewModel: ObservableObject {
             let data = handle.availableData
             if data.isEmpty { return }
             let chunk = String(decoding: data, as: UTF8.self)
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 var s = self.logText + chunk
                 if s.count > 20000 { s = String(s.suffix(20000)) }
                 self.logText = s
@@ -731,7 +731,11 @@ struct ControlTab: View {
                     Button("Copy") {
                         NSPasteboard.general.clearContents();
                         NSPasteboard.general.setString(vm.logText, forType: .string)
-                        copied = true; DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { copied = false }
+                        copied = true
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 1_200_000_000)
+                            copied = false
+                        }
                     }
                 }
                 LogTailView(text: vm.logText, follow: vm.followTailMain)
@@ -834,7 +838,11 @@ struct EnvTab: View {
                         let text = vm.sanitizedEnvReport()
                         NSPasteboard.general.clearContents();
                         NSPasteboard.general.setString(text, forType: .string)
-                        copied = true; DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { copied = false }
+                        copied = true
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 1_200_000_000)
+                            copied = false
+                        }
                     }
                 }
                 ScrollView {

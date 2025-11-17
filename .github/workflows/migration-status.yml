@@ -1,0 +1,27 @@
+name: Migration Status
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  push:
+    branches: [ main ]
+
+jobs:
+  migration-status:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: brew install jq curl ripgrep
+      - name: Run migration status
+        run: bash Scripts/ci/migration-status.sh
+      - name: Upload status artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-status
+          path: .fountain/artifacts/migration-status.json
+      - name: Summary
+        run: |
+          echo "# Migration Status" >> $GITHUB_STEP_SUMMARY
+          cat .fountain/artifacts/migration-status.json | jq -r '.services | ("agentId | spec | desc | facts"), (.[] | "\(.agentId) | \(.spec) | \(.descriptor) | \(.facts)")' | column -t -s '|' >> $GITHUB_STEP_SUMMARY
+

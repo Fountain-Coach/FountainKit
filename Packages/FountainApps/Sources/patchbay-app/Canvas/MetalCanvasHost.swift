@@ -153,7 +153,7 @@ fileprivate struct NodeTitlesOverlay: View {
         .onAppear {
             NotificationCenter.default.addObserver(forName: Notification.Name("PBVRTResult"), object: nil, queue: .main) { noti in
                 if let p = noti.userInfo?["pass"] as? Bool {
-                    DispatchQueue.main.async { lastPass = p }
+                    Task { @MainActor in lastPass = p }
                 }
             }
             // Animate edges from Chat → downstream on LLM streaming pulses

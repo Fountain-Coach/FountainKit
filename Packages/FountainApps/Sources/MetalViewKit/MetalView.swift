@@ -17,15 +17,11 @@ public typealias MetalSceneOnReady = (MetalSceneRenderer & MetalSceneUniformCont
 
 public struct MetalTriangleView: NSViewRepresentable {
     private let onReady: MetalSceneOnReady?
-    #if canImport(CoreMIDI)
     private let instrument: MetalInstrumentDescriptor?
     public init(onReady: MetalSceneOnReady? = nil, instrument: MetalInstrumentDescriptor? = nil) {
         self.onReady = onReady
         self.instrument = instrument
     }
-    #else
-    public init(onReady: MetalSceneOnReady? = nil) { self.onReady = onReady }
-    #endif
 
     public func makeNSView(context: Context) -> MTKView {
         let view = MTKView()
@@ -40,13 +36,11 @@ public struct MetalTriangleView: NSViewRepresentable {
         context.coordinator.renderer = renderer
         view.delegate = renderer
         if let r = renderer { onReady?(r) }
-        #if canImport(CoreMIDI)
         if let r = renderer, let instrument = instrument {
             let inst = MetalInstrument(sink: r, descriptor: instrument)
             inst.enable()
             context.coordinator.instrument = inst
         }
-        #endif
         return view
     }
 
@@ -58,9 +52,7 @@ public struct MetalTriangleView: NSViewRepresentable {
 
     public final class Coordinator {
         fileprivate var renderer: MetalTriangleRenderer?
-        #if canImport(CoreMIDI)
         fileprivate var instrument: MetalInstrument?
-        #endif
     }
 }
 

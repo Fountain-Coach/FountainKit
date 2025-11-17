@@ -1,0 +1,12 @@
+generate:
+  - types
+  - server
+accessModifier: public
+additionalImports: []
+filter:
+  paths:
+    - /projects/{projectId}/cues
+    - /projects/{projectId}/cues:plan
+    - /projects/{projectId}/cues/{cueId}:revise
+    - /projects/{projectId}/cues:apply-plan
+

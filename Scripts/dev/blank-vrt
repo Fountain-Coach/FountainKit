@@ -5,7 +5,7 @@ set -euo pipefail
 # Gates manifest to only blank-page-app and its tests.
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-PKG_PATH="$ROOT_DIR/Packages/FountainApps"
+PKG_PATH="$ROOT_DIR/Packages/BlankApp"
 
 export FK_BLANK_VRT_ONLY=1
 
@@ -24,4 +24,3 @@ case "$cmd" in
     echo "Usage: $0 [build|baselines|validate]" >&2; exit 2
     ;;
 esac
-

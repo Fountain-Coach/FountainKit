@@ -11,143 +11,55 @@ struct ComposerStudioApp: App {
             ComposerRootView()
                 .onAppear { if #available(macOS 14.0, *) { NSApp.activate() } else { NSApp.activate(ignoringOtherApps: true) } }
                 .task {
-                    // Seed & print Teatro prompt and minimal facts on boot (default policy)
-                    await PromptSeeder.seedAndPrint(
-                        appId: "composer-studio",
-                        prompt: ComposerStudioApp.buildTeatroPrompt(),
-                        facts: [
-                            "instruments": [[
-                                "manufacturer": "Fountain",
-                                "product": "ComposerStudio",
-                                "instanceId": "composer-studio-1",
-                                "displayName": "Composer Studio"
-                            ]],
-                            "flow": ["screenplay.save", "parse", "map.cues", "apply"],
-                            "invariants": [
-                                "session.hasETag": true,
-                                "actions.gatedByPreconditions": true
-                            ]
-                        ]
-                    )
+                    await ComposerStudioApp.printTeatroPromptIfAvailable()
                 }
         }
     }
 }
 
 struct ComposerRootView: View {
-    @State private var projectName: String = "Untitled"
-    @State private var screenplay: String = """
-Title: A New Piece
-
-INT. ROOM — DAY
-
-The composer sits at the desk.
-
-[[AudioTalk: mood gentle]]
-
-"""
-    @State private var parseSummary: String = ""
-    @State private var cuesSummary: String = ""
-    @State private var applySummary: String = ""
-    @State private var journal: [String] = []
-    @State private var chat: [ChatMessage] = [
-        .init(role: .assistant, text: "Welcome. Type your screenplay, then tell me what you want musically.")
-    ]
-    @State private var showReadyPulse: Bool = true
-    // Preview card toggles on when a suggestion or analysis is present
-    @State private var showPreview: Bool = false
+    @StateObject private var scriptViewModel = ScriptViewModel()
+    @State private var projectName: String = "Teatro Possibile"
+    @State private var screenplay: String = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                TextField("Title", text: $projectName)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 300)
-                readyBadge
-                Spacer()
+        ZStack {
+            Color(red: 0.98, green: 0.96, blue: 0.92)
+                .ignoresSafeArea()
+            HStack(alignment: .center, spacing: 48) {
+                TeatroScorePane()
+                    .frame(minWidth: 460, maxWidth: 520, maxHeight: .infinity, alignment: .topLeading)
+
+                TeatroScriptPane(
+                    title: scriptTitle,
+                    bodyText: scriptBody
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
-            .font(.callout)
-            HSplitView {
-                // Left: screenplay editor
-                VStack(alignment: .leading) {
-                    Text("Screenplay").font(.subheadline)
-                    TextEditor(text: $screenplay)
-                        .font(.system(size: 14, weight: .regular, design: .monospaced))
-                        .textEditorStyle(PlainTextEditorStyle())
-                        .frame(minHeight: 360)
-                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.gray.opacity(0.22)))
-                        .padding(.bottom, 6)
-                }
-                // Right: preview area (top) + chat anchored at bottom
-                VStack(alignment: .leading, spacing: 10) {
-                    if showPreview {
-                        PlanPreviewCard(analysis: parseSummary, cues: cuesSummary, apply: applySummary, onApply: applyToScore)
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                    }
-                    Spacer(minLength: 8)
-                    Text("Chat").font(.subheadline)
-                    ChatView(messages: $chat, onSend: handleSend)
-                        .frame(minHeight: 260)
-                        .transition(.opacity.combined(with: .move(edge: .trailing)))
-                }
-                .frame(minWidth: 420)
-            }
-            GroupBox(label: Text("Journal")) {
-                ScrollView { VStack(alignment: .leading, spacing: 4) { ForEach(journal, id: \.self) { Text($0).font(.caption) } } }.frame(minHeight: 120)
-            }
-            Spacer()
+            .padding(.horizontal, 72)
+            .padding(.vertical, 72)
         }
-        .padding(16)
-        .frame(minWidth: 880, minHeight: 560)
+        .frame(minWidth: 1100, minHeight: 720)
         .onAppear { bootstrap() }
     }
 
-    // Subviews
-    private var readyBadge: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(Color.green)
-                .frame(width: 8, height: 8)
-                .scaleEffect(showReadyPulse ? 1.0 : 0.8)
-                .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: showReadyPulse)
-            Text("Ready")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .onAppear { showReadyPulse = true }
+    private var scriptTitle: String {
+        scriptViewModel.sceneText
+            .split(separator: "\n")
+            .first.map(String.init) ?? "INT. OFFICE – DAY"
     }
-
-    private func resultCard(title: String, text: String) -> some View {
-        GroupBox(label: Text(title)) { ScrollView { Text(text.isEmpty ? "(no data)" : text).font(.system(.footnote, design: .monospaced)).frame(maxWidth: .infinity, alignment: .leading) } }.frame(minWidth: 260, minHeight: 160)
+    private var scriptBody: String {
+        let lines = scriptViewModel.sceneText.split(separator: "\n")
+        guard lines.count > 1 else { return scriptViewModel.sceneText }
+        return lines.dropFirst().joined(separator: "\n")
     }
 
     // MARK: - Placeholder logic (fresh start)
     private func bootstrap() {
-        parseSummary = ""; cuesSummary = ""; applySummary = ""; journal = []
-        if let saved = UserDefaults.standard.string(forKey: "ComposerStudio.Screenplay") { screenplay = saved }
-        if let name = UserDefaults.standard.string(forKey: "ComposerStudio.ProjectName") { projectName = name }
-    }
-    private func analyze() {
-        // Placeholder: in real app call parse + map endpoints
-        withAnimation(.spring()) {
-            parseSummary = "Parsed screenplay: scenes=1 beats=0 notes=1 (mood gentle)\nWarnings: 0"
-            cuesSummary = "Generated cues: 1\n- mood gentle → dynamics:p, tempo:moderato"
-            showPreview = true
-        }
-        saveDraft()
-        journal.insert("analyzed project=\(projectName)", at: 0)
-    }
-    private func applyToScore() {
-        withAnimation(.easeInOut) { applySummary = "Applied 1 cue to score (ok)" }
-        journal.insert("applied cues count=1", at: 0)
-    }
-    private func handleSend(_ text: String) {
-        withAnimation { chat.append(.init(role: .user, text: text)) }
-        // Very small assistant simulation
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            let preview = "Plan: \(text) → 1 cue\nPreview: mood gentle → p, moderato\n[Apply]"
-            withAnimation { chat.append(.init(role: .assistant, text: preview)) }
-            analyze()
+        // Keep screenplay text in sync with the script view model for later agent context.
+        screenplay = scriptViewModel.sceneText
+        if let name = UserDefaults.standard.string(forKey: "ComposerStudio.ProjectName"), !name.isEmpty {
+            projectName = name
         }
     }
     private func saveDraft() {
@@ -157,21 +69,45 @@ The composer sits at the desk.
 }
 @MainActor
 extension ComposerStudioApp {
-    static func buildTeatroPrompt() -> String {
-        return """
-        Scene: Composer Studio (Screenplay‑first Flow)
-        Text:
-        - Single window app for composing from screenplay text (.fountain) with inline tags.
-        - Left: screenplay editor. Right: preview card area (+ chat below).
-        - Actions: Parse → Map Cues → Apply; each action produces a result card with warnings/counts.
-        - Journal lists steps (stored/parsed/cued/applied) with timestamps.
-        - Session carries an ETag for determinism; actions are gated by preconditions.
-        Invariants:
-        - Parse does not mutate source; Apply is idempotent for the same ETag.
-        - Preview card appears only when analysis is available; Apply updates journal.
-        Where:
-        - Code: Packages/FountainApps/Sources/composer-studio/ComposerStudioApp.swift and related views.
-        """
+    static func printTeatroPromptIfAvailable() async {
+        let store: FountainStoreClient
+        let env = ProcessInfo.processInfo.environment
+
+        if let dir = env["FOUNTAINSTORE_DIR"], !dir.isEmpty {
+            let url: URL
+            if dir.hasPrefix("~") {
+                url = URL(fileURLWithPath: FileManager.default.homeDirectoryForCurrentUser.path + String(dir.dropFirst()), isDirectory: true)
+            } else {
+                url = URL(fileURLWithPath: dir, isDirectory: true)
+            }
+            if let disk = try? DiskFountainStoreClient(rootDirectory: url) {
+                store = FountainStoreClient(client: disk)
+            } else {
+                store = FountainStoreClient(client: EmbeddedFountainStoreClient())
+            }
+        } else {
+            let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            if let disk = try? DiskFountainStoreClient(rootDirectory: cwd.appendingPathComponent(".fountain/store", isDirectory: true)) {
+                store = FountainStoreClient(client: disk)
+            } else {
+                store = FountainStoreClient(client: EmbeddedFountainStoreClient())
+            }
+        }
+
+        let corpusId = "composer-studio"
+        let segmentId = "prompt:\(corpusId):teatro"
+
+        do {
+            if let data = try await store.getDoc(corpusId: corpusId, collection: "segments", id: segmentId),
+               let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let text = json["text"] as? String {
+                print("\n=== Teatro Prompt (\(corpusId)) ===\n\(text)\n=== end prompt ===\n")
+            } else {
+                FileHandle.standardError.write(Data("[composer-studio] Teatro prompt not found; run composer-studio-seed.\n".utf8))
+            }
+        } catch {
+            FileHandle.standardError.write(Data("[composer-studio] error loading Teatro prompt: \(error)\n".utf8))
+        }
     }
 }
 #else

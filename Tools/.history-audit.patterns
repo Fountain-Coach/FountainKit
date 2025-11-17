@@ -1,0 +1,11 @@
+DispatchQueue.main.async	DispatchQueue\.main\.async
+asyncAfter(	asyncAfter\(
+Task.detached(	Task\.detached\(
+@MainActor	@MainActor\b
+@Sendable	@Sendable\b
+@unchecked Sendable	@unchecked\s+Sendable
+firstResponder/makeFirstResponder/fieldEditor(	makeFirstResponder\(|firstResponder\b|fieldEditor\(
+.focused(	\.focused\(
+NSApplication.shared.activate	NSApplication\.shared\.activate
+NWListener	\bNWListener\b
+CoreMIDI imports or calls	\bimport\s+CoreMIDI\b|\bMIDI(Client|Source|Destination|Port|Send|Received)

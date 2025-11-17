@@ -1,6 +1,8 @@
 import XCTest
 import Foundation
+import MIDI2
 @testable import metalviewkit_runtime_server
+@testable import midi_instrument_host
 import MetalViewKit
 import FountainRuntime
 
@@ -190,5 +192,85 @@ final class MVKRuntimeServerTests: XCTestCase {
             (ep["id"] as? String) == iid || (ep["value2"] as? [String: Any])?["id"] as? String == iid
         }
         XCTAssertTrue(hasLive, "expected live loopback endpoint with id \(iid)")
+    }
+
+    /// End-to-end bridge: MIDI Instrument Host PE -> HTTP -> runtime instrument state (using the FountainGUIKit demo agent id).
+    @MainActor
+    func testInstrumentStateViaMidiHostPropertyExchange() async throws {
+        let running = try await startServer()
+        defer { Task { try? await running.server.stop() } }
+
+        // Load facts for the FountainGUIKit demo agent (seeded via openapi-to-facts from both
+        // fountain-gui-demo.yml and metalviewkit-runtime.yml).
+        let agentId = "fountain.coach/agent/fountain-gui-demo/service"
+        let corpus = "agents"
+        guard let facts = await MIDIInstrumentHost.loadFacts(agentId: agentId, corpus: corpus) else {
+            XCTFail("missing facts for \(agentId)")
+            return
+        }
+
+        // Build property routes with a base URL pointing at this runtime instance.
+        let safe = agentId
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "-", with: "_")
+            .uppercased()
+        let envKey = "AGENT_BASE_URL_\(safe)"
+        let baseURL = "http://127.0.0.1:\(running.port)"
+        let env = [envKey: baseURL]
+        let routes = MIDIInstrumentHost.buildPropertyRoutes(agentId: agentId, facts: facts, env: env)
+
+        // Find the POST route that maps to /v1/instruments/{id}/state.
+        guard let (propName, _) = routes.first(where: { _, r in
+            r.method == "POST" && r.path == "/v1/instruments/{id}/state"
+        }) else {
+            XCTFail("no runtime instrument state route found in property routes")
+            return
+        }
+
+        // Compose a PE SET body targeting the generic instrument state operation.
+        let instrumentId = "demo-pe"
+        let bodyObject: [String: Any] = [
+            "properties": [
+                [
+                    "name": propName,
+                    "value": [
+                        // Path parameter substitution for {id}
+                        "id": instrumentId,
+                        // JSON request body for InstrumentState
+                        "body": [
+                            "properties": [
+                                "canvas.zoom": 1.25,
+                                "canvas.translation.x": 7.0,
+                                "canvas.translation.y": -3.5
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ]
+        let payload = try JSONSerialization.data(withJSONObject: bodyObject)
+        let pe = MidiCiPropertyExchangeBody(
+            command: .set,
+            requestId: 1,
+            encoding: .json,
+            header: [:],
+            data: Array(payload)
+        )
+
+        // Invoke the host's PE handler; we don't care about outbound notify traffic here.
+        await MIDIInstrumentHost.handlePE(pe, propertyMap: routes, group: 0, tx: [])
+
+        // Verify runtime state was updated via HTTP.
+        let stateURL = url(running.port, "/v1/instruments/\(instrumentId)/state")
+        let (sdata, sresp) = try await URLSession.shared.data(from: stateURL)
+        XCTAssertEqual((sresp as? HTTPURLResponse)?.statusCode, 200)
+        let sobj = try JSONSerialization.jsonObject(with: sdata) as! [String: Any]
+        guard let props = sobj["properties"] as? [String: Any] else {
+            XCTFail("missing properties in InstrumentState")
+            return
+        }
+        XCTAssertEqual(props["canvas.zoom"] as? Double, 1.25)
+        XCTAssertEqual(props["canvas.translation.x"] as? Double, 7.0)
+        XCTAssertEqual(props["canvas.translation.y"] as? Double, -3.5)
     }
 }

@@ -29,7 +29,7 @@ struct GatewayRoutesView: View {
     private func refresh() {
         isLoading = true; error = nil
         vm.fetchGatewayRoutes { json in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self.isLoading = false
                 if json == "__INVALID_URL__" {
                     self.text = ""

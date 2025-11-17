@@ -127,9 +127,7 @@ struct ZoomScrollView<Content: View>: NSViewRepresentable {
         scroll.documentView = host
         context.coordinator.scrollView = scroll
         context.coordinator.observation = scroll.observe(\NSScrollView.magnification, options: [.new]) { [weak coord = context.coordinator] sv, _ in
-            DispatchQueue.main.async {
-                coord?.parent.zoom = sv.magnification
-            }
+            Task { @MainActor in coord?.parent.zoom = sv.magnification }
         }
         // Add magnification recognizer to anchor zoom under the fingers
         let mag = NSMagnificationGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleMagnify(_:)))
@@ -139,7 +137,7 @@ struct ZoomScrollView<Content: View>: NSViewRepresentable {
         dbl.numberOfClicksRequired = 2
         scroll.contentView.addGestureRecognizer(dbl)
         // Initial fit (once) and center
-        DispatchQueue.main.async {
+        Task { @MainActor in
             if let rect = fitRect {
                 context.coordinator.fit(rect, in: scroll)
             } else {

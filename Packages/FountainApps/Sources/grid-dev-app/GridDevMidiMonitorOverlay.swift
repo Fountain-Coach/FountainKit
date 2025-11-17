@@ -10,7 +10,7 @@ struct GridDevMidiMonitorOverlay: View {
     @State private var lastEvent: Date? = nil
     @State private var count: Int = 0
     @State private var events: [Event] = []
-    @State private var fadeWork: DispatchWorkItem? = nil
+    @State private var fadeTask: Task<Void, Never>? = nil
 
     struct Event: Identifiable {
         let id = UUID().uuidString
@@ -71,10 +71,16 @@ struct GridDevMidiMonitorOverlay: View {
     private func startFade() { withAnimation(.linear(duration: fadeSeconds)) { targetOpacity = minOpacity } }
     private func stopFade() { withAnimation(.easeOut(duration: 0.12)) { targetOpacity = 1.0 } }
     private func scheduleFade() {
-        fadeWork?.cancel()
-        let w = DispatchWorkItem { startFade() }
-        fadeWork = w
-        DispatchQueue.main.asyncAfter(deadline: .now() + fadeSeconds, execute: w)
+        fadeTask?.cancel()
+        let seconds = fadeSeconds
+        fadeTask = Task { @MainActor in
+            guard seconds > 0 else {
+                startFade()
+                return
+            }
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            startFade()
+        }
     }
 
     var body: some View {
@@ -125,6 +131,7 @@ fileprivate struct InstrumentBinder: NSViewRepresentable {
         func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
         func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
         func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+        func vendorEvent(topic: String, data: Any?) {}
     }
     final class Coordinator { var instrument: MetalInstrument? = nil }
     func makeCoordinator() -> Coordinator { Coordinator() }

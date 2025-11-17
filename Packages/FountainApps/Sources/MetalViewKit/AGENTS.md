@@ -101,3 +101,15 @@ When extending MetalViewKit or the runtime:
 
 - Update the curated spec under `Packages/FountainSpecCuration/openapi/v1/metalviewkit-runtime.yml` first, then regenerate server stubs via the OpenAPI Generator plugin in `MetalViewKitRuntimeServerKit`.
 - Keep any instrument‑specific behaviour in clients (apps/tests); the runtime should only manage generic state and transport, not concrete view logic.
+
+## Instrument Checklist (MetalViewKit surfaces)
+
+For any new MetalViewKit‑backed instrument or canvas (including demo apps that use `MetalViewKit` or `FountainGUIKit`):
+
+- Follow the global requirements in `Design/INSTRUMENT_REQUIREMENTS.md`:
+  - Add a Teatro prompt + facts page for the app into FountainStore via a small seeder (no prompts in code/docs).
+  - Ensure there is an OpenAPI spec and a mapping in `Scripts/openapi/openapi-to-facts.sh` for its `agentId`.
+  - Make sure MIDI Instrument Host can reach the instrument (facts + base URL and/or a MIDI endpoint).
+  - Use shared property names (`canvas.zoom`, `canvas.translation.{x,y}`, etc.) consistently in GUI, spec, and runtime.
+  - Add at least one PE/robot test that drives the instrument via MIDI 2.0 and verifies its invariants.
+- List the instrument in `Tools/instruments.json` so the linter and CI can enforce the checklist.

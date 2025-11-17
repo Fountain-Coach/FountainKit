@@ -55,7 +55,7 @@ public final class MetalInstrument: @unchecked Sendable {
                 let newSession = try self.transport.makeSession(descriptor: descriptor) { [weak self] words in
                     self?.handleUMP(words)
                 }
-                DispatchQueue.main.async { [weak self] in
+                Task { @MainActor [weak self] in
                     guard let self else {
                         newSession.close()
                         return
@@ -73,12 +73,13 @@ public final class MetalInstrument: @unchecked Sendable {
                     }
                 }
             } catch {
-                DispatchQueue.main.async { [weak self] in
+                Task { @MainActor [weak self] in
                     self?.handleEnableFailure(token: token, message: "Transport setup failed", error: error)
                 }
             }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + MetalInstrument.enableTimeout) { [weak self] in
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(MetalInstrument.enableTimeout * 1_000_000_000))
             guard let self else { return }
             if self.enableToken == token, self.session == nil {
                 self.handleEnableFailure(token: token, message: "Transport setup timed out", error: nil)

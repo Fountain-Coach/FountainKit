@@ -1,5 +1,6 @@
 import XCTest
 import AppKit
+import SwiftUI
 @testable import quietframe_sonify_app
 
 @MainActor
@@ -25,4 +26,3 @@ final class QuietFrameEditorNumericTests: XCTestCase {
         XCTAssertEqual(Int(pageH.rounded()), 1536)
     }
 }
-

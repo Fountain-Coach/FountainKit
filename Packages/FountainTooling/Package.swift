@@ -14,6 +14,7 @@ let package = Package(
         .executable(name: "clientgen-service", targets: ["clientgen-service"]),
         .executable(name: "sse-client", targets: ["sse-client"]),
         .executable(name: "openapi-to-facts", targets: ["openapi-to-facts"]),
+        .executable(name: "instrument-lint", targets: ["instrument-lint"]),
         .plugin(name: "EnsureOpenAPIConfigPlugin", targets: ["EnsureOpenAPIConfigPlugin"])
     ],
     dependencies: [
@@ -29,6 +30,12 @@ let package = Package(
             name: "openapi-to-facts",
             dependencies: [
                 "Yams",
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ]
+        ),
+        .executableTarget(
+            name: "instrument-lint",
+            dependencies: [
                 .product(name: "FountainStoreClient", package: "FountainCore")
             ]
         ),

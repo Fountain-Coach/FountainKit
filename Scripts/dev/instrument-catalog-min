@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Minimal Instrument-Catalog-only build helper
+# Usage: Scripts/dev/instrument-catalog-min [build|run]
+
+ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+PKG_PATH="$ROOT_DIR/Packages/FountainApps"
+
+export FK_MIN_TARGET=instrument-catalog
+export FK_SKIP_NOISY_TARGETS=1
+export FOUNTAIN_SKIP_LAUNCHER_SIG=1
+
+cmd="${1:-build}"
+case "$cmd" in
+  build)
+    echo "[instrument-catalog-min] Building instrument-catalog-server (minimal)…"
+    swift build --package-path "$PKG_PATH" -c debug --target instrument-catalog-server
+    ;;
+  run)
+    echo "[instrument-catalog-min] Running instrument-catalog-server (minimal)…"
+    swift run --package-path "$PKG_PATH" -c debug instrument-catalog-server
+    ;;
+  *)
+    echo "Usage: $0 [build|run]" >&2
+    exit 2
+    ;;
+esac
+

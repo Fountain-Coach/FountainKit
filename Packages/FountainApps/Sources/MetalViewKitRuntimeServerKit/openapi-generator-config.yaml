@@ -13,6 +13,7 @@ filter:
     - /v1/midi/events
     - /v1/midi/endpoints
     - /v1/midi/vendor
+    - /v1/instruments/{id}/state
     - /v1/audio/render
     - /v1/video/tick
     - /v1/faults/model

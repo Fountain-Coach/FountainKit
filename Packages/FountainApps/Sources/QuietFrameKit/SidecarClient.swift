@@ -28,7 +28,7 @@ public actor QuietFrameSidecarClient {
     // MARK: - Control
     public func startPolling(pollIntervalMs: Int = 100) {
         pollingTask?.cancel()
-        pollingTask = Task.detached(priority: .utility) { [weak self] in
+        pollingTask = Task(priority: .utility) { [weak self] in
             guard let self else { return }
             while !Task.isCancelled {
                 await self.pollOnce()

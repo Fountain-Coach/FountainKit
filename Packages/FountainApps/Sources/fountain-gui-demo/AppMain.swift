@@ -1,14 +1,14 @@
 import AppKit
 import FountainGUIKit
 
-private struct DemoState {
+struct DemoState {
     var zoom: CGFloat = 1.0
     var translation: CGPoint = .zero
     var rotation: CGFloat = 0.0
 }
 
 @MainActor
-private final class DemoSurfaceView: FGKRootView {
+final class DemoSurfaceView: FGKRootView {
     var state = DemoState()
 
     override func draw(_ dirtyRect: NSRect) {
@@ -35,7 +35,7 @@ private final class DemoSurfaceView: FGKRootView {
 }
 
 @MainActor
-private final class DemoInstrumentTarget: FGKEventTarget, FGKPropertyConsumer {
+final class DemoInstrumentTarget: FGKEventTarget, FGKPropertyConsumer {
     private unowned let view: DemoSurfaceView
     private let node: FGKNode
     private var lastDragLocation: NSPoint?
@@ -74,6 +74,29 @@ private final class DemoInstrumentTarget: FGKEventTarget, FGKPropertyConsumer {
         case .swipe(let swipe):
             fputs("[FGKDemo] swipe dx=\(swipe.deltaX) dy=\(swipe.deltaY) at=\(swipe.locationInView)\n", stderr)
         case .keyDown(let key):
+            // Simple keyboard controls as a fallback:
+            // arrow keys pan, +/- zoom, [/] rotate.
+            switch key.keyCode {
+            case 123: // left arrow
+                applyPan(dx: -20, dy: 0)
+            case 124: // right arrow
+                applyPan(dx: 20, dy: 0)
+            case 125: // down arrow
+                applyPan(dx: 0, dy: -20)
+            case 126: // up arrow
+                applyPan(dx: 0, dy: 20)
+            default:
+                break
+            }
+            if key.characters == "+" || key.characters == "=" {
+                applyZoom(factor: 1.1)
+            } else if key.characters == "-" || key.characters == "_" {
+                applyZoom(factor: 1.0 / 1.1)
+            } else if key.characters == "[" {
+                applyRotation(delta: -.pi / 12)
+            } else if key.characters == "]" {
+                applyRotation(delta: .pi / 12)
+            }
             fputs("[FGKDemo] keyDown chars=\(key.characters) code=\(key.keyCode)\n", stderr)
         case .keyUp(let key):
             fputs("[FGKDemo] keyUp chars=\(key.characters) code=\(key.keyCode)\n", stderr)
@@ -135,7 +158,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         ]
 
         let rootNode = FGKNode(
-            instrumentId: "fountain.gui.demo.surface",
+            instrumentId: "fountain.coach/agent/fountain-gui-demo/service",
             frame: frame,
             properties: properties,
             target: nil
@@ -155,7 +178,10 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         window.title = "FountainGUIKit Demo (FountainKit)"
         window.contentView = rootView
+        window.center()
         window.makeKeyAndOrderFront(nil)
+        window.makeFirstResponder(rootView)
+        NSApp.activate(ignoringOtherApps: true)
         self.window = window
     }
 }
@@ -164,6 +190,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 enum FountainGUIDemoMain {
     static func main() {
         let app = NSApplication.shared
+        app.setActivationPolicy(.regular)
         let delegate = AppDelegate()
         app.delegate = delegate
         app.run()

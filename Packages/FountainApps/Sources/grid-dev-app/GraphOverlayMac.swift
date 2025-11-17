@@ -55,7 +55,7 @@ struct GraphOverlayMac: View {
                 if t == "ui.zoom" || t == "ui.zoom.debug" {
                     let z = (info["zoom"] as? NSNumber)?.doubleValue
                     let mag = (info["magnification"] as? NSNumber)?.doubleValue
-                    DispatchQueue.main.async {
+                    Task { @MainActor in
                         if let z { self.scale = max(0.1, min(16.0, CGFloat(z))) }
                         if let mag { self.scale = max(0.1, min(16.0, self.scale * (1.0 + CGFloat(mag)))) }
                     }
@@ -64,7 +64,7 @@ struct GraphOverlayMac: View {
                     let y = (info["y"] as? NSNumber)?.doubleValue
                     let dx = (info["dx.doc"] as? NSNumber)?.doubleValue
                     let dy = (info["dy.doc"] as? NSNumber)?.doubleValue
-                    DispatchQueue.main.async {
+                    Task { @MainActor in
                         if let x, let y { self.tx = CGFloat(x); self.ty = CGFloat(y) }
                         if let dx, let dy { self.tx += CGFloat(dx); self.ty += CGFloat(dy) }
                     }

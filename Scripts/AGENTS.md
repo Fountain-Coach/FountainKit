@@ -39,6 +39,7 @@ How
   - `Scripts/dev/bootstrap-min [build|run]`
   - `Scripts/dev/tools-factory-min [build|run]`
   - `Scripts/dev/tool-server-min [build|run]`
+  - `Scripts/dev/instrument-catalog-min [build|run]`
 - Environment (set by wrappers): `FK_SKIP_NOISY_TARGETS=1`, `FOUNTAIN_SKIP_LAUNCHER_SIG=1`.
 
 Where
@@ -64,8 +65,20 @@ Core ML helpers (apps)
 Curated OpenAPI
 Use `Scripts/openapi/validate-curated-specs.sh` to keep `Configuration/curated-openapi-specs.json` in sync. Install local hooks once via `Scripts/install-git-hooks.sh`.
 
-Register external OpenAPI as tools
-- `Scripts/openapi/register-teatro-guide-as-tools.sh` normalizes the Teatro Prompt Field Guide OpenAPI and registers its operations via ToolsFactory. Dev‑up integration: set `REGISTER_TEATRO_GUIDE=1` to auto‑register on boot when ToolsFactory is reachable. Envs: `TOOLS_FACTORY_URL` (default `http://127.0.0.1:8011`), `TEATRO_GUIDE_CORPUS` (default `teatro-guide`), `TEATRO_GUIDE_BASE_URL` (absolute `http_path` when the spec lacks `servers[0].url`).
+Register external OpenAPI
+- Tools (Function‑Caller): `Scripts/openapi/register-teatro-guide-as-tools.sh` normalizes the Teatro Prompt Field Guide OpenAPI and registers its operations via ToolsFactory. Dev‑up integration: set `REGISTER_TEATRO_GUIDE=1` to auto‑register on boot when ToolsFactory is reachable. Envs: `TOOLS_FACTORY_URL` (default `http://127.0.0.1:8011`), `TEATRO_GUIDE_CORPUS` (default `teatro-guide`), `TEATRO_GUIDE_BASE_URL` (absolute `http_path` when the spec lacks `servers[0].url`).
+- Facts (MIDI‑CI properties): Use Tools Factory runtime endpoint to generate and seed agent facts from an OpenAPI document.
+  - Start server: `Scripts/dev/tools-factory-min run` (default `:8011`).
+  - Call: `curl -sS -X POST http://127.0.0.1:8011/agent-facts/from-openapi -H 'Content-Type: application/json' -d '{"agentId":"fountain.coach/agent/<name>/service","corpusId":"agents","seed":true,"specURL":"http://127.0.0.1:<port>/openapi.yaml"}' | jq .`
+  - Alternatively embed the spec as JSON under `openapi`.
+  - Facts are stored under collection `agent-facts` with id `facts:agent:<agentId>` (safe id) and served by Gateway at `/.well-known/agent-facts`.
+  - One‑click host demo (MPE Pad instrument): `Scripts/apps/mpe-pad-host` seeds facts and runs the MIDI 2.0 host for agent `fountain.coach/agent/mpe-pad/service`. Options: `--port <5869>`, `--bend <48>`.
+
+Instrument Catalog (groups + monetization)
+- Start: `Scripts/dev/instrument-catalog-min run` (default `:8041`).
+- Register/update: `curl -sS -X POST http://127.0.0.1:8041/catalog/instrument -H 'Content-Type: application/json' -d '{"id":"patchbay.pro","title":"PatchBay Pro","group":"PatchBay","agentIds":["fountain.coach/agent/patchbay/service"],"pricing":{"platform":"macOS","productId":"com.fountain.patchbay.pro"}}'`
+- List: `curl -sS http://127.0.0.1:8041/catalog/instruments | jq .`
+- Fetch: `curl -sS http://127.0.0.1:8041/catalog/instrument/patchbay.pro | jq .`
 
 CI smoke for Prompt Field Guide
 - `Scripts/ci/teatro-guide-smoke.sh` registers tools (idempotent), invokes one via FunctionCaller, and writes an ETag under `.fountain/artifacts/`. Inputs: `TOOLS_FACTORY_URL`, `FUNCTION_CALLER_URL`, `TEATRO_GUIDE_CORPUS`, `TEATRO_GUIDE_SPEC`, `TEATRO_GUIDE_BASE_URL` (optional; sensible defaults).
@@ -173,3 +186,22 @@ Notes
 
 - Sender: `swift run --package-path Packages/FountainApps sysx-json-sender <file.json>` or set `JSON_TEXT='{"propertyId":"…","body":{…}}'`
 - Receiver: `swift run --package-path Packages/FountainApps sysx-json-receiver` (prints decoded JSON envelopes)
+
+## AudioKit BLE/RTP Sidecar (Exception)
+
+What
+- Optional, external bridge process that uses CoreMIDI (e.g., AudioKit/MIDIKit) to expose BLE MIDI 1.0 and/or RTP‑MIDI 1.0 endpoints for third‑party hosts (AUM, DAWs). This sidecar lives outside FountainKit to preserve the CoreMIDI prohibition in this repo.
+
+Usage
+- Start: `Scripts/apps/midi-bridge start` (requires `BRIDGE_CMD` to point to the FountainCoreMIDIBridge binary/app bundle)
+- Stop: `Scripts/apps/midi-bridge stop`
+- Status: `Scripts/apps/midi-bridge status`
+
+Config
+- `BRIDGE_CMD` — absolute path to bridge binary (e.g., `/Applications/FountainCoreMIDIBridge.app/Contents/MacOS/FountainCoreMIDIBridge`)
+- `BRIDGE_PORT` — local HTTP control port (default `18090`) if the sidecar exposes control endpoints
+- `BRIDGE_NAME` — advertised BLE device name (Peripheral) or target name (Central)
+
+Integration
+- Fountain apps/host detect the sidecar via `localhost:$BRIDGE_PORT` and route MIDI 1.0 payloads to it when enabled; otherwise, built‑in Loopback/RTP‑MIDI 2.0 are used.
+- No CoreMIDI symbols or types enter this repository; the sidecar is a separate process and product.

@@ -38,6 +38,15 @@
       }
     },
     {
+      "identity" : "fountainguikit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Fountain-Coach/FountainGUIKit.git",
+      "state" : {
+        "revision" : "957a040673a7bf463581a77be683efd5abb21c0a",
+        "version" : "0.2.0"
+      }
+    },
+    {
       "identity" : "midi2",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Fountain-Coach/midi2.git",

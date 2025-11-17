@@ -257,8 +257,6 @@ public struct MemChatTeatroView: View {
     }
 
     private func focusInput() {
-        DispatchQueue.main.async {
-            inputFocused = true
-        }
+        Task { @MainActor in inputFocused = true }
     }
 }

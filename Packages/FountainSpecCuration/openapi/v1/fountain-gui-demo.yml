@@ -1,0 +1,73 @@
+openapi: 3.1.0
+info:
+  title: FountainGUIKit Demo Canvas Instrument
+  version: 1.0.0
+  summary: Minimal spec for the FountainGUIKit demo canvas instrument.
+  description: |
+    This spec models the interactive canvas surface exposed by the FountainGUIKit
+    demo app. It is used to derive MIDI 2.0 Property Exchange facts so the demo
+    can be addressed as an instrument over CI/PE.
+servers: []
+paths:
+  /canvas/state:
+    get:
+      operationId: canvas.get
+      summary: Get current canvas transform
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CanvasState'
+  /canvas/set:
+    post:
+      operationId: canvas.set
+      summary: Set canvas transform fields
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CanvasState'
+      responses:
+        '204':
+          description: Applied
+
+components:
+  schemas:
+    CanvasState:
+      type: object
+      description: Logical transform for the demo canvas.
+      properties:
+        canvas.zoom:
+          type: number
+          format: double
+          minimum: 0.2
+          maximum: 5.0
+          default: 1.0
+          description: Zoom factor for the canvas.
+        canvas.translation.x:
+          type: number
+          format: double
+          minimum: -1000.0
+          maximum: 1000.0
+          default: 0.0
+          description: Horizontal translation of the canvas in points.
+        canvas.translation.y:
+          type: number
+          format: double
+          minimum: -1000.0
+          maximum: 1000.0
+          default: 0.0
+          description: Vertical translation of the canvas in points.
+        canvas.rotation:
+          type: number
+          format: double
+          minimum: -6.283185307
+          maximum: 6.283185307
+          default: 0.0
+          description: Canvas rotation in radians.
+

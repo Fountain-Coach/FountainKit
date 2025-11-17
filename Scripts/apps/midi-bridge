@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# AudioKit/CoreMIDI sidecar launcher (external tool)
+# Usage:
+#   Scripts/apps/midi-bridge start|stop|status
+#
+# Env:
+#   BRIDGE_CMD   Absolute path to the sidecar binary/app CLI
+#   BRIDGE_PORT  Optional HTTP control port (default 18090)
+#   BRIDGE_NAME  Optional BLE name/target
+
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")"/../.. && pwd)
+PID_DIR="$ROOT_DIR/.fountain/pids"
+LOG_DIR="$ROOT_DIR/.fountain/logs"
+mkdir -p "$PID_DIR" "$LOG_DIR"
+PID_FILE="$PID_DIR/midi-bridge.pid"
+LOG_FILE="$LOG_DIR/midi-bridge.log"
+
+cmd=${1:-}
+case "$cmd" in
+  start)
+    if [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null; then
+      echo "[midi-bridge] already running (pid $(cat "$PID_FILE"))"
+      exit 0
+    fi
+    : >"$LOG_FILE"
+    if [[ -z "${BRIDGE_CMD:-}" ]]; then
+      echo "[midi-bridge] BRIDGE_CMD not set. Point it to your AudioKit/CoreMIDI sidecar binary." >&2
+      echo "Example: BRIDGE_CMD=/Applications/AudioKitMidiBridge.app/Contents/MacOS/AudioKitMidiBridge Scripts/apps/midi-bridge start" >&2
+      exit 2
+    fi
+    echo "[midi-bridge] starting sidecar → $LOG_FILE"
+    nohup env BRIDGE_PORT="${BRIDGE_PORT:-18090}" BRIDGE_NAME="${BRIDGE_NAME:-MPE Pad}" \
+      "$BRIDGE_CMD" >>"$LOG_FILE" 2>&1 &
+    echo $! >"$PID_FILE"
+    ;;
+  stop)
+    if [[ -f "$PID_FILE" ]]; then
+      pid=$(cat "$PID_FILE" 2>/dev/null || true)
+      if kill -0 "$pid" 2>/dev/null; then kill "$pid" || true; fi
+      rm -f "$PID_FILE"
+      echo "[midi-bridge] stopped"
+    else
+      echo "[midi-bridge] not running"
+    fi
+    ;;
+  status)
+    if [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null; then
+      echo "[midi-bridge] running (pid $(cat "$PID_FILE"))"
+    else
+      echo "[midi-bridge] not running"
+      exit 1
+    fi
+    ;;
+  *)
+    echo "Usage: $(basename "$0") start|stop|status" >&2
+    exit 2
+    ;;
+esac
+

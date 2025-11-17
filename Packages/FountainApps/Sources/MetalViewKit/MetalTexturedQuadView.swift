@@ -10,27 +10,21 @@ public struct MetalTexturedQuadView: NSViewRepresentable {
     private let image: NSImage?
     private let rotationSpeed: Float
     private let onReady: MetalSceneOnReady?
-    #if canImport(CoreMIDI)
     private let instrument: MetalInstrumentDescriptor?
-    #endif
 
     public init(image: NSImage? = nil, rotationSpeed: Float = 0.35, onReady: MetalSceneOnReady? = nil) {
         self.image = image
         self.rotationSpeed = rotationSpeed
         self.onReady = onReady
-        #if canImport(CoreMIDI)
         self.instrument = nil
-        #endif
     }
 
-    #if canImport(CoreMIDI)
     public init(image: NSImage? = nil, rotationSpeed: Float = 0.35, onReady: MetalSceneOnReady? = nil, instrument: MetalInstrumentDescriptor?) {
         self.image = image
         self.rotationSpeed = rotationSpeed
         self.onReady = onReady
         self.instrument = instrument
     }
-    #endif
 
     public func makeNSView(context: Context) -> MTKView {
         let view = MTKView()
@@ -51,13 +45,11 @@ public struct MetalTexturedQuadView: NSViewRepresentable {
         context.coordinator.renderer = renderer
         view.delegate = renderer
         if let r = renderer { onReady?(r) }
-        #if canImport(CoreMIDI)
         if let r = renderer, let instrument = instrument {
             let inst = MetalInstrument(sink: r, descriptor: instrument)
             inst.enable()
             context.coordinator.instrument = inst
         }
-        #endif
         return view
     }
 
@@ -70,9 +62,7 @@ public struct MetalTexturedQuadView: NSViewRepresentable {
 
     public final class Coordinator {
         fileprivate var renderer: MetalTexturedQuadRenderer?
-        #if canImport(CoreMIDI)
         fileprivate var instrument: MetalInstrument?
-        #endif
     }
 }
 

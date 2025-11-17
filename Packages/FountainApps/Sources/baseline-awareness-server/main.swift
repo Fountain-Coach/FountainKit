@@ -4,7 +4,7 @@ import AwarenessService
 import FountainRuntime
 import LauncherSignature
 
-verifyLauncherSignature()
+if env["FOUNTAIN_SKIP_LAUNCHER_SIG"] != "1" { verifyLauncherSignature() }
 
 let env = ProcessInfo.processInfo.environment
 let corpusId = env["DEFAULT_CORPUS_ID"] ?? "tools-factory"

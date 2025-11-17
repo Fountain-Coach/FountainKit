@@ -1,0 +1,12 @@
+generate:
+  - types
+  - server
+accessModifier: public
+additionalImports: []
+filter:
+  paths:
+    - /scripts/{scriptId}
+    - /scripts/{scriptId}/beats
+    - /scripts/{scriptId}:tag-beats
+    - /scripts/{scriptId}/state
+

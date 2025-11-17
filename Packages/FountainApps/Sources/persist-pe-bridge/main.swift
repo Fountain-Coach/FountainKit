@@ -9,8 +9,12 @@ struct PersistPEBridge {
     static func main() async {
         let env = ProcessInfo.processInfo.environment
         let baseURL = URL(string: env["PERSIST_BASE_URL"] ?? "http://127.0.0.1:8040")!
-        let getPathTmpl = env["PERSIST_GET_PATH"] ?? "/persist/{collection}/{id}"
-        let putPathTmpl = env["PERSIST_PUT_PATH"] ?? "/persist/{collection}/{id}"
+        var getPathTmpl = env["PERSIST_GET_PATH"] ?? "/persist/{collection}/{id}"
+        var putPathTmpl = env["PERSIST_PUT_PATH"] ?? "/persist/{collection}/{id}"
+        if let m = try? await loadMappingFromFacts(agentId: env["AGENT_ID"] ?? "fountain.coach/agent/persist/service") {
+            if let mg = m["persist.get.request"], let o = mg["openapi"] as? [String: Any], let path = o["path"] as? String { getPathTmpl = path }
+            if let mp = m["persist.put.request"], let o = mp["openapi"] as? [String: Any], let path = o["path"] as? String { putPathTmpl = path }
+        }
         FileHandle.standardError.write(Data("[persist-pe-bridge] base=\(baseURL.absoluteString)\n".utf8))
 
         let loop = LoopbackTransport()
@@ -70,6 +74,62 @@ struct PersistPEBridge {
     }
 }
 
+@MainActor private func loadMappingFromFacts(agentId: String) async throws -> [String: [String: Any]] {
+    let env = ProcessInfo.processInfo.environment
+    let corpus = env["AGENT_CORPUS_ID"] ?? env["CORPUS_ID"] ?? "agents"
+    let safeId = agentId.replacingOccurrences(of: "/", with: "|")
+    let factsId = "facts:agent:\(safeId)"
+
+    let exeURL = URL(fileURLWithPath: CommandLine.arguments.first ?? "")
+    let localStoreDump = exeURL.deletingLastPathComponent().appendingPathComponent("store-dump")
+    let toolPath: String
+    if FileManager.default.isExecutableFile(atPath: localStoreDump.path) {
+        toolPath = localStoreDump.path
+    } else {
+        toolPath = "store-dump"
+    }
+
+    let proc = Process()
+    proc.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+    proc.arguments = [toolPath]
+    var childEnv = env
+    childEnv["CORPUS_ID"] = corpus
+    childEnv["COLLECTION"] = "agent-facts"
+    childEnv["ID"] = factsId
+    proc.environment = childEnv
+    let outPipe = Pipe()
+    proc.standardOutput = outPipe
+    let errPipe = Pipe()
+    proc.standardError = errPipe
+
+    do {
+        try proc.run()
+    } catch {
+        return [:]
+    }
+    proc.waitUntilExit()
+    let data = outPipe.fileHandleForReading.readDataToEndOfFile()
+    guard proc.terminationStatus == 0, !data.isEmpty else {
+        return [:]
+    }
+    guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        return [:]
+    }
+    var map: [String: [String: Any]] = [:]
+    if let blocks = obj["functionBlocks"] as? [[String: Any]] {
+        for b in blocks {
+            if let props = b["properties"] as? [[String: Any]] {
+                for p in props {
+                    if let id = p["id"] as? String, let mapsTo = p["mapsTo"] as? [String: Any] {
+                        map[id] = mapsTo
+                    }
+                }
+            }
+        }
+    }
+    return map
+}
+
 private func decodeSysEx7UMP(_ words: [UInt32]) -> [UInt8] {
     var out: [UInt8] = []
     var i = 0
@@ -113,4 +173,3 @@ private func encodeSysEx7UMP(_ bytes: [UInt8]) -> [[UInt32]] {
     }
     return umps
 }
-

@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<USAGE
 Usage:
-  $(basename "$0") [env|prebuild] [--all] [--check] [--patchbay-only] [--robot]
+  $(basename "$0") [env|prebuild] [--all] [--check] [--patchbay-only] [--host-only] [--no-prebuild] [--robot]
 
 Commands:
   env       Export LAUNCHER_SIGNATURE into current shell (when sourced)
@@ -14,6 +14,8 @@ Options:
   --all            Start optional extras (semantic-browser, tools-factory, tool-server, publishing-frontend)
   --check          Wait for readiness on common endpoints (timeout ~30s per service)
   --patchbay-only  Fast profile: start MIDI + PatchBay only (service + UI); skip other servers
+  --host-only      Fastest: start agent-host only (BLE central, RTP) and exit
+  --no-prebuild    Skip initial prebuild compilation phase
   --robot         After --check, run robot tests subset (fast)
 USAGE
 }
@@ -42,6 +44,8 @@ fi
 
 ALL=0
 CHECK=0
+HOST_ONLY=0
+NO_PREBUILD=0
 CONFIGURATION="${DEV_UP_CONFIGURATION:-debug}"
 PATCHBAY_ONLY=0
 RUN_ROBOT=${DEV_UP_RUN_ROBOT:-0}
@@ -53,8 +57,15 @@ for a in "$@"; do
   if [[ "$a" == "--all" ]]; then ALL=1; fi
   if [[ "$a" == "--check" ]]; then CHECK=1; fi
   if [[ "$a" == "--patchbay-only" ]]; then PATCHBAY_ONLY=1; fi
+  if [[ "$a" == "--host-only" ]]; then HOST_ONLY=1; fi
+  if [[ "$a" == "--no-prebuild" ]]; then NO_PREBUILD=1; fi
   if [[ "$a" == "--robot" ]]; then RUN_ROBOT=1; fi
 done
+
+# Default experience: start agent-host only unless explicitly asked otherwise
+if [[ $ALL -eq 0 && $PATCHBAY_ONLY -eq 0 && $HOST_ONLY -eq 0 ]]; then
+  HOST_ONLY=1
+fi
 
 # Populate optional OpenAI configuration from Keychain when available.
 if [[ -z "${OPENAI_API_KEY:-}" ]]; then
@@ -83,6 +94,7 @@ fi
 # Helpers
 port_for() {
   case "$1" in
+    agent-host) echo "${HOST_HEALTH_PORT:-8787}" ;;
     baseline-awareness) echo "${BASELINE_AWARENESS_PORT:-8001}" ;;
     bootstrap) echo "${BOOTSTRAP_PORT:-8002}" ;;
     planner) echo "${PLANNER_PORT:-8003}" ;;
@@ -264,6 +276,8 @@ if [[ "${1:-}" == "prebuild" ]]; then
     if [[ "$a" == "--patchbay-only" ]]; then PATCHBAY_ONLY=1; fi
   done
   echo "[dev-up] Prebuilding server binaries (configuration=$CONFIGURATION)…"
+  echo "[dev-up] Seeding OpenAPI → facts…"
+  bash "$REPO_ROOT/Scripts/facts/seed-agents.sh" || true
   if [[ "$PATCHBAY_ONLY" == "1" ]]; then
     # Fast path: only PatchBay service/UI + MIDI service
     build_product "$REPO_ROOT/Packages/FountainApps" midi-service-server || exit 1
@@ -271,7 +285,7 @@ if [[ "${1:-}" == "prebuild" ]]; then
     build_product "$REPO_ROOT/Packages/FountainApps" patchbay-app || exit 1
   else
     # Core servers (FountainApps)
-    core_targets=(baseline-awareness-server bootstrap-server planner-server function-caller-server persist-server midi-service-server gateway-server)
+    core_targets=(agent-host baseline-awareness-server bootstrap-server planner-server function-caller-server persist-server midi-service-server gateway-server)
     for t in "${core_targets[@]}"; do
       build_product "$REPO_ROOT/Packages/FountainApps" "$t" || exit 1
     done
@@ -292,7 +306,20 @@ if [[ "${DEV_UP_NO_START_LOCAL_AGENT:-0}" != "1" ]]; then
   "$REPO_ROOT/Scripts/launcher" start || true
 fi
 
-if [[ "$PATCHBAY_ONLY" == "1" ]]; then
+if [[ "$HOST_ONLY" == "1" ]]; then
+  # Fastest profile: start agent-host only
+  echo "[dev-up] Seeding OpenAPI → facts…"
+  bash "$REPO_ROOT/Scripts/facts/seed-agents.sh" || true
+  if [[ "$NO_PREBUILD" != "1" ]]; then
+    build_product "$REPO_ROOT/Packages/FountainApps" agent-host || true
+  fi
+  start_bg agent-host agent-host Packages/FountainApps
+  if [[ "$CHECK" == "1" ]]; then
+    wait_ready agent-host "http://127.0.0.1:$(port_for agent-host)/ready" 10 || true
+  fi
+  echo "[dev-up] agent-host started (host-only mode)."
+  exit 0
+elif [[ "$PATCHBAY_ONLY" == "1" ]]; then
   # Fast profile: start MIDI service + PatchBay service/UI only
   start_bg midi "midi-service-server" Packages/FountainApps
   start_bg patchbay patchbay-service-server Packages/FountainApps
@@ -300,17 +327,19 @@ if [[ "$PATCHBAY_ONLY" == "1" ]]; then
     wait_ready_json midi "http://127.0.0.1:$(port_for midi)/health" 10 || true
     wait_ready patchbay "http://127.0.0.1:$(port_for patchbay)/health" 20 || true
   fi
-else
-  # Core services (ordered: deps first, gateway last)
-  start_bg baseline-awareness baseline-awareness-server Packages/FountainApps
-  start_bg bootstrap bootstrap-server Packages/FountainApps
-  start_bg planner planner-server Packages/FountainApps
+  else
+    # Core services (ordered: deps first, gateway last)
+  start_bg agent-host agent-host Packages/FountainApps
+    start_bg baseline-awareness baseline-awareness-server Packages/FountainApps
+    start_bg bootstrap bootstrap-server Packages/FountainApps
+    start_bg planner planner-server Packages/FountainApps
   start_bg function-caller function-caller-server Packages/FountainApps
   start_bg persist persist-server Packages/FountainApps
   start_bg midi "midi-service-server" Packages/FountainApps
   start_bg gateway gateway-server Packages/FountainApps
   start_bg patchbay patchbay-service-server Packages/FountainApps
   if [[ "$CHECK" == "1" ]]; then
+    wait_ready agent-host "http://127.0.0.1:$(port_for agent-host)/ready" 10 || true
     wait_ready_json midi "http://127.0.0.1:$(port_for midi)/health" 10 || true
     wait_ready patchbay "http://127.0.0.1:$(port_for patchbay)/health" 20 || true
   fi

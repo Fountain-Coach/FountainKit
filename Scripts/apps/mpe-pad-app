@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# One-click launcher for the Baseline app with the MPE Pad instrument.
+# Usage: Scripts/apps/mpe-pad-app [--no-build]
+
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")"/../.. && pwd)
+PKG="$ROOT_DIR/Packages/FountainApps"
+BIN_DIR="$PKG/.build/${CONFIGURATION:-debug}"
+
+if [[ "${1:-}" != "--no-build" ]]; then
+  echo "[mpe-pad-app] Building mpe-pad-app…"
+  swift build --package-path "$PKG" -c "${CONFIGURATION:-debug}" --product mpe-pad-app >/dev/null
+fi
+
+echo "[mpe-pad-app] Launching MPE Pad App"
+echo "Tip: Choose BLE Peripheral for AUM (iOS as Central), or RTP."
+echo "      Drag on the pad: X=pitch, Y=velocity, release resets."
+
+# Skip launcher signature in local dev
+export FOUNTAIN_SKIP_LAUNCHER_SIG=1
+export LAUNCHER_SIGNATURE="${LAUNCHER_SIGNATURE:-B86D7CEE-24C4-4C4C-A107-8D0542D1965B}"
+
+exec "$BIN_DIR/mpe-pad-app"

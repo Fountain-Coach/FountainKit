@@ -1,0 +1,12 @@
+generate:
+  - types
+  - server
+accessModifier: public
+additionalImports: []
+filter:
+  paths:
+    - /scores/{scoreId}/state
+    - /scores/{scoreId}/cues
+    - /scores/{scoreId}/cues:propose
+    - /scores/{scoreId}/cues/{cueId}:update
+

@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")"/../.. && pwd)
+SIDE_DIR="$ROOT_DIR/Sidecar/FountainCoreMIDIBridge"
+
+if [[ ! -d "$SIDE_DIR" ]]; then
+  echo "[publish] sidecar skeleton not found at $SIDE_DIR" >&2
+  exit 2
+fi
+
+cd "$SIDE_DIR"
+if ! command -v gh >/dev/null 2>&1; then
+  echo "[publish] gh CLI not found. Install from https://cli.github.com/" >&2
+  exit 2
+fi
+
+git init
+git add .
+git commit -m "feat: scaffold FountainCoreMIDIBridge sidecar (HTTP control)" || true
+
+echo "[publish] Creating repo Fountain-Coach/FountainCoreMIDIBridge (public)…"
+gh repo create Fountain-Coach/FountainCoreMIDIBridge --public --source=. --remote=origin --push
+echo "[publish] Done. Repo: https://github.com/Fountain-Coach/FountainCoreMIDIBridge"

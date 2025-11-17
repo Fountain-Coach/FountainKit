@@ -9,7 +9,7 @@ actor NotesSSEClient {
     func start() {
         guard !running else { return }
         running = true
-        task = Task.detached(priority: .background) {
+        task = Task(priority: .background) {
             while !Task.isCancelled {
                 await self.fetchOnce()
                 try? await Task.sleep(nanoseconds: 1_000_000_000) // 1s

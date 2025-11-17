@@ -1,0 +1,41 @@
+name: Build Seed Image
+
+on:
+  push:
+    paths:
+      - 'Packages/FountainSpecCuration/openapi/**'
+      - 'Packages/FountainTooling/**'
+      - 'Scripts/facts/**'
+  workflow_dispatch: {}
+
+jobs:
+  build-seed:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build generator
+        run: swift build --package-path Packages/FountainTooling -c release --target openapi-to-facts
+      - name: Generate seed
+        run: |
+          bash Scripts/facts/seed-agents.sh || true
+          mkdir -p Dist/store-seeds/seed-v1/agents/agent-facts
+          SPEC_DIR=Packages/FountainSpecCuration/openapi/v1
+          TOOL_PKG=Packages/FountainTooling
+          gen() { swift run --package-path "$TOOL_PKG" -c release openapi-to-facts "$SPEC_DIR/$1" > "Dist/store-seeds/seed-v1/agents/agent-facts/$2.json"; }
+          gen planner.yml facts:agent:fountain.coach|agent|planner|service
+          gen function-caller.yml facts:agent:fountain.coach|agent|function-caller|service
+          gen persist.yml facts:agent:fountain.coach|agent|persist|service
+          gen baseline-awareness.yml facts:agent:fountain.coach|agent|baseline-awareness|service
+          gen bootstrap.yml facts:agent:fountain.coach|agent|bootstrap|service
+          echo "{\"openapiCommit\": \"$(git rev-parse --short HEAD)\"}" > Dist/store-seeds/seed-v1/meta.json
+      - name: Upload seed artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fountain-store-seed
+          path: Dist/store-seeds/seed-v1
+      - name: Release seed (tagged builds)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            Dist/store-seeds/seed-v1/**

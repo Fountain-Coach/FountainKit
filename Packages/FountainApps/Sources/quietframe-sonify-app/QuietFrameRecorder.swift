@@ -74,7 +74,7 @@ import QuietFrameKit
         scStream = nil; scOutput = nil; scConfig = nil
         writer?.finishWriting { [weak self] in
             guard let self else { return }
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 QuietFrameRuntime.setRecState("idle")
                 NotificationCenter.default.post(name: Notification.Name("QuietFrameRecordStateChanged"), object: nil)
                 self.presentSaveAndNotify()

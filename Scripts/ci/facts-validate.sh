@@ -32,7 +32,7 @@ swift build --package-path "$APPS_PKG" -c debug --target "$SERVER_TARGET" >/dev/
 
 echo "[facts-validate] seeding facts from $SPEC_FILE for $AGENT_ID"
 FOUNTAINSTORE_DIR="$STORE_DIR" \
-  swift run --package-path "$TOOL_PKG" -c debug openapi-to-facts "$SPEC_PATH" --agent-id "$AGENT_ID" --seed >/dev/null
+swift run --package-path "$TOOL_PKG" -c debug openapi-to-facts "$SPEC_PATH" --agent-id "$AGENT_ID" --seed --allow-tools-only >/dev/null
 
 echo "[facts-validate] starting $SERVER_TARGET on :$PORT"
 env FOUNTAIN_SKIP_LAUNCHER_SIG=1 FOUNTAINSTORE_DIR="$STORE_DIR" "$PORT_ENV=$PORT" \
@@ -49,7 +49,7 @@ done
 
 echo "[facts-validate] generating facts for live validation"
 TMP_GEN="$(mktemp)"
-swift run --package-path "$TOOL_PKG" -c debug openapi-to-facts "$SPEC_PATH" --agent-id "$AGENT_ID" > "$TMP_GEN"
+swift run --package-path "$TOOL_PKG" -c debug openapi-to-facts "$SPEC_PATH" --agent-id "$AGENT_ID" --allow-tools-only > "$TMP_GEN"
 
 echo "[facts-validate] validating mapped operations with samples (POST/PUT/PATCH only)"
 BASE_URL="http://127.0.0.1:$PORT"

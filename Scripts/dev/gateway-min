@@ -14,10 +14,14 @@ export FOUNTAIN_SKIP_LAUNCHER_SIG=1
 cmd="${1:-build}"
 case "$cmd" in
   build)
+    # Keep facts in sync with curated OpenAPI before building
+    bash "$ROOT_DIR/Scripts/openapi/openapi-to-facts.sh" || true
     echo "[gateway-min] Building gateway-server (minimal)…"
     swift build --package-path "$PKG_PATH" -c debug --target gateway-server
     ;;
   run)
+    # Keep facts in sync with curated OpenAPI before running
+    bash "$ROOT_DIR/Scripts/openapi/openapi-to-facts.sh" || true
     echo "[gateway-min] Running gateway-server (minimal)…"
     swift run --package-path "$PKG_PATH" -c debug gateway-server
     ;;

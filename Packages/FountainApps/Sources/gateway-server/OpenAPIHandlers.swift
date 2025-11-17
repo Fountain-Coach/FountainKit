@@ -363,6 +363,7 @@ public struct GatewayOpenAPI: APIProtocol, @unchecked Sendable {
 }
 #endif
 
+#if canImport(gateway_service)
 private extension GatewayOpenAPI {
     static var iso8601WithFractional: ISO8601DateFormatter {
         let formatter = ISO8601DateFormatter()
@@ -598,3 +599,4 @@ private extension GatewayOpenAPI {
         Self.iso8601WithFractional.string(from: date)
     }
 }
+#endif

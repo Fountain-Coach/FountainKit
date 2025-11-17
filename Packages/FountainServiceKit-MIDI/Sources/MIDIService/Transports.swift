@@ -1032,15 +1032,14 @@ enum MIDISendError: Error { case unsupportedTransport, destinationNotFound }
 
 @MainActor
 final class SimpleMIDISender {
-    #if canImport(CoreMIDI)
-    private static var transports: [String: CoreMIDITransport] = [:] // key -> transport
-    #endif
+    // CoreMIDI transport is not supported in FountainKit (see AGENTS.md).
     static let recorder = UmpRecorder()
     private static var backend: String = {
         let env = ProcessInfo.processInfo.environment
         if let b = env["MIDI_SERVICE_BACKEND"], !b.isEmpty { return b.lowercased() }
+        // Default: RTP on macOS, ALSA on Linux
         #if os(macOS)
-        return "coremidi"
+        return "rtp"
         #else
         return "alsa"
         #endif
@@ -1048,9 +1047,6 @@ final class SimpleMIDISender {
 
     static func listDestinationNames() -> [String] {
         var names: [String] = []
-        #if canImport(CoreMIDI)
-        if backend == "coremidi" { names.append(contentsOf: CoreMIDITransport.destinationNames()) }
-        #endif
         if backend == "alsa" { names.append(contentsOf: ALSATransport.availableEndpoints()) }
         names.append(contentsOf: HeadlessRegistry.shared.list())
         return names
@@ -1082,14 +1078,6 @@ final class SimpleMIDISender {
             // Target not resolved; trace and fall through to backend send to still capture raw UMP
             recorder.recordSnapshot(vendorJSON: "{\"type\":\"debug.noheadless\",\"target\":\"\(targetName)\"}")
         }
-        #if canImport(CoreMIDI)
-        if backend == "coremidi" {
-            let key = name ?? "__first__"
-            let transport = try ensureCoreMIDITransport(key: key, destinationName: name)
-            try transport.send(umpWords: words)
-            return
-        }
-        #endif
         if backend == "alsa" {
             let t = ensureALSATransport()
             try t.send(umpWords: words)
@@ -1108,22 +1096,8 @@ final class SimpleMIDISender {
         throw MIDISendError.unsupportedTransport
     }
 
-    #if canImport(CoreMIDI)
-    private static func ensureCoreMIDITransport(key: String, destinationName: String?) throws -> CoreMIDITransport {
-        if let t = transports[key] { return t }
-        let t = CoreMIDITransport(name: "midi-service", destinationName: destinationName, enableVirtualEndpoints: false)
-        t.onReceiveUMP = { words in Task { @MainActor in recorder.record(words: words) } }
-        try t.open()
-        transports[key] = t
-        return t
-    }
-
-    static func ensureListener() {
-        #if canImport(CoreMIDI)
-        if backend == "coremidi" { _ = try? ensureCoreMIDITransport(key: "__listener__", destinationName: nil) }
-        #endif
-    }
-    #endif
+    // No-op listener when CoreMIDI is disabled.
+    static func ensureListener() { /* no CoreMIDI backend */ }
 
     // MARK: - UMP decoders (SysEx7)
     private static func reassembleSysEx7(_ words: [UInt32]) -> [UInt8] {

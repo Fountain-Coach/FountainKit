@@ -1,3 +1,5 @@
+// Robot-only mode: exclude this suite when building robot tests
+#if !ROBOT_ONLY
 import XCTest
 @testable import qc_mock_service
 import QCMockServiceCore
@@ -83,5 +85,3 @@ final class QCMockHandlersTests: XCTestCase {
 }
 
 #endif // !ROBOT_ONLY
-// Robot-only mode: exclude this suite when building robot tests
-#if !ROBOT_ONLY

@@ -8,13 +8,14 @@ public final class BLEMidiPeripheralTransport: NSObject, MIDITransport, @uncheck
     public var onReceiveUMP: (([UInt32]) -> Void)?
     public var onReceiveUmps: (([[UInt32]]) -> Void)?
 
-    private let queue = DispatchQueue(label: "BLEMidiPeripheralQueue")
+    private let queue = DispatchQueue.main
     private var manager: CBPeripheralManager!
     private var subscribers: [CBCentral] = []
     private var service: CBMutableService?
     private var characteristic: CBMutableCharacteristic?
     private let advertisedName: String
     private var rxSysex: [UInt8]? = nil
+    private var ts13: UInt16 = 0 // 13-bit BLE MIDI timestamp counter
 
     private let midiServiceUUID = CBUUID(string: "03B80E5A-EDE8-4B33-A751-6CE34EC4C700")
     private let midiCharUUID = CBUUID(string: "7772E5DB-3868-4112-A1A9-F2669D106BF3")
@@ -25,7 +26,7 @@ public final class BLEMidiPeripheralTransport: NSObject, MIDITransport, @uncheck
     }
 
     public func open() throws {
-        manager = CBPeripheralManager(delegate: self, queue: queue)
+        manager = CBPeripheralManager(delegate: self, queue: queue, options: [CBPeripheralManagerOptionShowPowerAlertKey: true])
         #if DEBUG
         print("[BLE-P] Peripheral init (advertised=\(advertisedName))")
         #endif
@@ -38,6 +39,21 @@ public final class BLEMidiPeripheralTransport: NSObject, MIDITransport, @uncheck
         manager = nil
     }
 
+    // Restart advertising on demand (e.g., when scanners time out)
+    public func restartAdvertising() {
+        guard let m = manager else { return }
+        #if DEBUG
+        print("[BLE-P] Restart advertising as \(advertisedName)")
+        #endif
+        let adv: [String: Any] = [CBAdvertisementDataServiceUUIDsKey: [midiServiceUUID], CBAdvertisementDataLocalNameKey: advertisedName]
+        if m.isAdvertising { m.stopAdvertising() }
+        m.startAdvertising(adv)
+    }
+
+    // Connected centrals count (approximate)
+    public var connectedCentralsCount: Int { subscribers.count }
+    public var isAdvertising: Bool { manager?.isAdvertising ?? false }
+
     public func send(umpWords: [UInt32]) throws {
         guard let m = manager, let c = characteristic else { return }
         guard !umpWords.isEmpty else { return }
@@ -45,44 +61,57 @@ public final class BLEMidiPeripheralTransport: NSObject, MIDITransport, @uncheck
         print("[BLE-P] TX UMP words=\(umpWords.count)")
         #endif
         let mt = UInt8((umpWords[0] >> 28) & 0xF)
-        var packets: [Data] = []
+        var midiBytes: [UInt8] = []
+        var midiMessages: [[UInt8]] = []
         switch mt {
         case 0x4:
-            for bytes in BLEMidiTransport.umpCV2ToMIDI1Packets(umpWords) { var d = Data([0x80]); d.append(contentsOf: bytes); packets.append(d) }
+            // Convert to MIDI 1 messages
+            midiMessages = BLEMidiTransport.umpCV2ToMIDI1Packets(umpWords)
+        case 0x3:
+            // SysEx7 → classic MIDI SysEx bytes (we will chunk below)
+            midiBytes = [0xF0]
+            midiBytes.append(contentsOf: BLEMidiTransport.decodeSysEx7UMP(umpWords))
+            midiBytes.append(0xF7)
+            midiMessages = [midiBytes]
         case 0x2:
             let status = UInt8((umpWords[0] >> 16) & 0xFF)
             let d1 = UInt8((umpWords[0] >> 8) & 0xFF)
             let d2 = UInt8(umpWords[0] & 0xFF)
             let hi = status & 0xF0
-            let bytes: [UInt8] = (hi == 0xC0 || hi == 0xD0) ? [status, d1] : [status, d1, d2]
-            var d = Data([0x80]); d.append(contentsOf: bytes); packets.append(d)
-        case 0x3:
-            let payload = BLEMidiTransport.decodeSysEx7UMP(umpWords)
-            var idx = 0
-            while idx < payload.count {
-                let n = min(19, payload.count - idx)
-                var d = Data([0x80, 0xF0])
-                d.append(contentsOf: payload[idx..<(idx+n)])
-                if idx + n >= payload.count { d.append(0xF7) }
-                packets.append(d)
-                idx += n
-            }
+            midiMessages = [(hi == 0xC0 || hi == 0xD0) ? [status, d1] : [status, d1, d2]]
         case 0x1:
             let status = UInt8((umpWords[0] >> 16) & 0xFF)
             let d1 = UInt8((umpWords[0] >> 8) & 0xFF)
             let d2 = UInt8(umpWords[0] & 0xFF)
-            let bytes: [UInt8]
             switch status {
-            case 0xF8, 0xFA, 0xFB, 0xFC, 0xFE, 0xFF, 0xF6: bytes = [status]
-            case 0xF1, 0xF3: bytes = [status, d1]
-            case 0xF2: bytes = [status, d1, d2]
-            default: bytes = [status]
+            case 0xF8, 0xFA, 0xFB, 0xFC, 0xFE, 0xFF, 0xF6: midiMessages = [[status]]
+            case 0xF1, 0xF3: midiMessages = [[status, d1]]
+            case 0xF2: midiMessages = [[status, d1, d2]]
+            default: midiMessages = [[status]]
             }
-            var d = Data([0x80]); d.append(contentsOf: bytes); packets.append(d)
-        default:
-            break
+        default: break
         }
-        for p in packets { _ = m.updateValue(p, for: c, onSubscribedCentrals: nil) }
+        // Encode to BLE MIDI packets: [timestampHi][timestampLo][midi bytes...], max 20 bytes per update
+        func nextTS() -> (UInt8, UInt8) {
+            let ts = ts13 & 0x1FFF
+            let hi = 0x80 | UInt8((ts >> 7) & 0x7F)
+            let lo = 0x80 | UInt8(ts & 0x7F)
+            ts13 = (ts13 &+ 1) & 0x1FFF
+            return (hi, lo)
+        }
+        for msg in midiMessages {
+            var idx = 0
+            while idx < msg.count {
+                let (hi, lo) = nextTS()
+                var packet = Data([hi, lo])
+                let remaining = msg.count - idx
+                let room = max(0, 20 - packet.count)
+                let n = min(room, remaining)
+                packet.append(contentsOf: msg[idx..<(idx+n)])
+                idx += n
+                _ = m.updateValue(packet, for: c, onSubscribedCentrals: nil)
+            }
+        }
     }
 }
 
@@ -93,17 +122,33 @@ extension BLEMidiPeripheralTransport: CBPeripheralManagerDelegate {
         print("[BLE-P] State=\(peripheral.state.rawValue)")
         #endif
         guard peripheral.state == .poweredOn else { return }
-        let props: CBCharacteristicProperties = [.notify, .writeWithoutResponse]
-        let perms: CBAttributePermissions = [.writeable]
+        let props: CBCharacteristicProperties = [.notify, .writeWithoutResponse, .read]
+        let perms: CBAttributePermissions = [.writeable, .readable]
         let ch = CBMutableCharacteristic(type: midiCharUUID, properties: props, value: nil, permissions: perms)
         let svc = CBMutableService(type: midiServiceUUID, primary: true)
         svc.characteristics = [ch]
         self.service = svc; self.characteristic = ch
         peripheral.add(svc)
+    }
+
+    public func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?) {
+        if let error = error {
+            #if DEBUG
+            print("[BLE-P] didAdd service error: \(error)")
+            #endif
+            return
+        }
         #if DEBUG
         print("[BLE-P] Service added → start advertising as \(advertisedName)")
         #endif
         peripheral.startAdvertising([CBAdvertisementDataServiceUUIDsKey: [midiServiceUUID], CBAdvertisementDataLocalNameKey: advertisedName])
+    }
+
+    public func peripheralManagerDidStartAdvertising(_ peripheral: CBPeripheralManager, error: Error?) {
+        #if DEBUG
+        if let error = error { print("[BLE-P] Advertising error: \(error)") }
+        else { print("[BLE-P] Advertising started") }
+        #endif
     }
 
     public func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic) {
@@ -116,6 +161,13 @@ extension BLEMidiPeripheralTransport: CBPeripheralManagerDelegate {
         subscribers.removeAll { $0.identifier == central.identifier }
         #if DEBUG
         print("[BLE-P] Central unsubscribed: id=\(central.identifier)")
+        #endif
+    }
+    public func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveRead request: CBATTRequest) {
+        request.value = Data()
+        peripheral.respond(to: request, withResult: .success)
+        #if DEBUG
+        print("[BLE-P] RX read: ok")
         #endif
     }
     public func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {
@@ -145,6 +197,7 @@ extension BLEMidiPeripheralTransport: CBPeripheralManagerDelegate {
                     let w1 = (UInt32(0x2) << 28) | (0 << 24) | (UInt32(status) << 16) | (UInt32(d1) << 8) | UInt32(d2)
                     umps.append([w1])
                 }
+                peripheral.respond(to: r, withResult: .success)
             }
         }
         if !umps.isEmpty {

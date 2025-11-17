@@ -76,7 +76,7 @@ struct FountainEditorInstrument: View {
                     count += 1
                 }
             }
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self.parsedCount = count
                 self.lastError = nil
                 // Emit a monitor snapshot for parity

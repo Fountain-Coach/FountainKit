@@ -81,7 +81,7 @@ final class FountainStoreBackend: SemanticMemoryService.Backend, @unchecked Send
     private func runSync<T>(_ work: @escaping @Sendable () async throws -> T) -> Result<T, Error> {
         let semaphore = DispatchSemaphore(value: 0)
         let storage = ResultBox<Result<T, Error>>()
-        Task.detached(priority: nil, operation: { @Sendable () async in
+        Task(priority: nil) { @Sendable in
             let result: Result<T, Error>
             do {
                 let value = try await work()
@@ -91,7 +91,7 @@ final class FountainStoreBackend: SemanticMemoryService.Backend, @unchecked Send
             }
             storage.value = result
             semaphore.signal()
-        })
+        }
         semaphore.wait()
         return storage.value!
     }

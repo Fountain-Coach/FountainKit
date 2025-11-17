@@ -43,6 +43,18 @@ jobs:
       - name: Run OpenAPI linter
         run: Scripts/openapi-lint.sh
 
+  concurrency-audit:
+    name: Concurrency and focus audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run history audit (concurrency/focus)
+        run: bash Scripts/ci/history-audit.sh
+      - name: Run concurrency lint
+        run: bash Scripts/ci/lint-concurrency.sh
+
   integration-smoke:
     name: Integration smoke (${{ matrix.platform }})
     needs:

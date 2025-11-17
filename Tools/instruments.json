@@ -1,0 +1,15 @@
+[
+  {
+    "appId": "fountain-gui-demo",
+    "agentId": "fountain.coach/agent/fountain-gui-demo/service",
+    "corpusId": "fountain-gui-demo",
+    "spec": "fountain-gui-demo.yml",
+    "runtimeAgentId": "fountain.coach/agent/metalviewkit-runtime/service",
+    "testModulePath": "Packages/FountainApps/Tests/FountainGUIDemoTests",
+    "snapshotBaselinesDir": "Packages/FountainApps/Tests/FountainGUIDemoTests/Baselines",
+    "requiredTestSymbols": [
+      "FountainGUIDemoTests",
+      "FountainGUIDemoSnapshotTests"
+    ]
+  }
+]

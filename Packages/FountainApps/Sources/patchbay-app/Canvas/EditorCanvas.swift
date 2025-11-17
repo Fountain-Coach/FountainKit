@@ -125,7 +125,12 @@ final class EditorVM: ObservableObject {
 
     func transientGlowEdge(fromRef: String, toRef: String, duration: TimeInterval = 1.5) {
         setGlow(fromRef: fromRef, toRef: toRef, glow: true)
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
+        Task { @MainActor [weak self] in
+            guard duration > 0 else {
+                self?.setGlow(fromRef: fromRef, toRef: toRef, glow: false)
+                return
+            }
+            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
             self?.setGlow(fromRef: fromRef, toRef: toRef, glow: false)
         }
     }
@@ -785,7 +790,7 @@ fileprivate struct NodeHandleOverlay: View {
                             .shadow(radius: 6)
                         }
                         .position(x: rectView.minX + 12, y: rectView.minY + 18)
-                        .onAppear { DispatchQueue.main.async { nameFocused = true } }
+                        .onAppear { Task { @MainActor in nameFocused = true } }
                     }
                 }
             }
@@ -1056,7 +1061,10 @@ fileprivate struct QuickActionsMenu: View {
                     let center = CGPoint(x: rectView.midX, y: rectView.midY)
                     let puff = PuffItem(center: center)
                     puffItems.append(puff)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { puffItems.removeAll { $0.id == puff.id } }
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 500_000_000)
+                        puffItems.removeAll { $0.id == puff.id }
+                    }
                         for did in idsToDelete { state.removeDashNode(id: did); state.removeServerNode(id: did); state.closeRendererPreview(id: did) }
                 }
             }

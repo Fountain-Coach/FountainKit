@@ -170,7 +170,7 @@ struct PBVRTInspector: View {
 
     private func thresholds() -> (Double, Double, Double) { (0.035, 0.012, 0.94) }
 
-    private func updateAsk(_ text: String) { DispatchQueue.main.async { self.askText = text } }
+    private func updateAsk(_ text: String) { Task { @MainActor in self.askText = text } }
 
     private func explainFromSummaryLines(focusFailures: Bool = false) {
         var metrics: [String: Any] = [:]
@@ -195,7 +195,7 @@ struct PBVRTInspector: View {
 
     // MARK: - Actions
     private func startServer() {
-        Task.detached {
+        Task(priority: .background) {
             _ = PBVRT_runBash(["bash","Scripts/apps/pbvrt-up"]) // best-effort
         }
     }
@@ -205,10 +205,10 @@ struct PBVRTInspector: View {
         if #available(macOS 12.0, *) { panel.allowedContentTypes = [.png] } else { panel.allowedFileTypes = ["png"] }
         panel.allowsMultipleSelection = false
         if panel.runModal() == .OK, let url = panel.url {
-            Task.detached { [sel = selectedBaseline] in
+            Task(priority: .background) { [sel = selectedBaseline] in
                 let base = PBVRT_baseURL()
                 _ = PBVRT_runBash(["bash","Scripts/apps/pbvrt-baseline-seed","--png", url.path, "--server", base, "--out", "baseline.id"]) ?? ""
-                DispatchQueue.main.async {
+                await MainActor.run {
                     refreshList()
                 }
             }
@@ -221,9 +221,9 @@ struct PBVRTInspector: View {
         if #available(macOS 12.0, *) { panel.allowedContentTypes = [.png] } else { panel.allowedFileTypes = ["png"] }
         panel.allowsMultipleSelection = false
         if panel.runModal() == .OK, let url = panel.url {
-            Task.detached { [id = selectedBaseline] in
+            Task(priority: .background) { [id = selectedBaseline] in
                 let out = PBVRT_runBash(["bash","Scripts/apps/pbvrt-compare-run","--baseline-id", id, "--candidate", url.path]) ?? ""
-                DispatchQueue.main.async {
+                await MainActor.run {
                     self.summaryLines = out.split(separator: "\n").map(String.init)
                     self.loadSelected()
                 }
@@ -233,7 +233,7 @@ struct PBVRTInspector: View {
 
     private func composePresentation() {
         guard !selectedBaseline.isEmpty else { return }
-        Task.detached { [id = selectedBaseline] in
+        Task(priority: .background) { [id = selectedBaseline] in
             let fm = FileManager.default
             let cwd = URL(fileURLWithPath: fm.currentDirectoryPath)
             let work = cwd.appendingPathComponent(".fountain/demos/pb-vrt/\(Int(Date().timeIntervalSince1970))", isDirectory: true)
@@ -242,7 +242,7 @@ struct PBVRTInspector: View {
             _ = PBVRT_runBash(["python3","Scripts/apps/pbvrt-animate","--baseline-id", id, "--frames-dir", work.appendingPathComponent("frames").path, "--out", work.appendingPathComponent("demo.gif").path])
             // Build mp4 (best-effort without audio if WAVs not present)
             _ = PBVRT_runBash(["swift","run","--package-path","Packages/FountainApps","pbvrt-present","--frames-dir", work.appendingPathComponent("frames").path, "--out", work.appendingPathComponent("demo.mp4").path])
-            DispatchQueue.main.async {
+            await MainActor.run {
                 self.demoGIF = work.appendingPathComponent("demo.gif")
                 self.demoMP4 = work.appendingPathComponent("demo.mp4")
             }

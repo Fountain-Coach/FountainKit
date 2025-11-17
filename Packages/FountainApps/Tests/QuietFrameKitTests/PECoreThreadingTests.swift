@@ -1,7 +1,9 @@
 import XCTest
+import MIDI2
 import MIDI2CI
 @testable import QuietFrameKit
 
+@MainActor
 final class PECoreThreadingTests: XCTestCase {
     final class Delegate: QFPECoreDelegate {
         let expUpdate: XCTestExpectation
@@ -46,4 +48,3 @@ final class PECoreThreadingTests: XCTestCase {
         wait(for: [u, e], timeout: 2.0)
     }
 }
-

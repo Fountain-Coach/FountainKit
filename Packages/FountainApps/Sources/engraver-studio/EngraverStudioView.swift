@@ -66,7 +66,7 @@ struct EngraverStudioView: View {
         }
         .onChange(of: viewModel.lastError) { newValue in
             showErrorAlert = newValue != nil
-            if let msg = newValue { withAnimation { toast = msg } ; DispatchQueue.main.asyncAfter(deadline: .now() + 3) { withAnimation { if toast == msg { toast = nil } } } }
+            if let msg = newValue { withAnimation { toast = msg } ; Task { @MainActor in try? await Task.sleep(nanoseconds: 3_000_000_000); withAnimation { if toast == msg { toast = nil } } } }
         }
         .onChange(of: viewModel.state) { newState in 
             if newState != .streaming {
@@ -439,7 +439,7 @@ private struct PromptTextEditor: NSViewRepresentable {
 
     private func focus(_ textView: NSTextView, attempt: Int) {
         guard attempt < 10 else { return }
-        DispatchQueue.main.async {
+        Task { @MainActor in
             if #available(macOS 14.0, *) {
                 NSApp.activate()
             } else {
@@ -453,24 +453,20 @@ private struct PromptTextEditor: NSViewRepresentable {
                     window.makeFirstResponder(textView)
                 }
             } else {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    self.focus(textView, attempt: attempt + 1)
-                }
+                Task { @MainActor in try? await Task.sleep(nanoseconds: 50_000_000); self.focus(textView, attempt: attempt + 1) }
             }
         }
     }
 
     private func resign(_ textView: NSTextView, attempt: Int) {
         guard attempt < 10 else { return }
-        DispatchQueue.main.async {
+        Task { @MainActor in
             if let window = textView.window {
                 if window.firstResponder === textView {
                     window.makeFirstResponder(nil)
                 }
             } else {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    self.resign(textView, attempt: attempt + 1)
-                }
+                Task { @MainActor in try? await Task.sleep(nanoseconds: 50_000_000); self.resign(textView, attempt: attempt + 1) }
             }
         }
     }
@@ -569,7 +565,10 @@ private struct DiagnosticsPanel: View {
 
     private func flashCopied() {
         copied = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { copied = false }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            copied = false
+        }
     }
 }
 
@@ -1104,7 +1103,10 @@ private struct CopyButton: View {
             pb.clearContents()
             pb.setString(textProvider(), forType: .string)
             copied = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { copied = false }
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                copied = false
+            }
         } label: {
             if copied { Label("Copied", systemImage: "checkmark") }
             else { Label("Copy", systemImage: "doc.on.doc") }
@@ -1375,7 +1377,7 @@ private struct SemanticBrowserSheet: View {
 private struct WindowActivationView: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
-        DispatchQueue.main.async {
+        Task { @MainActor in
             if let window = view.window {
                 window.makeKeyAndOrderFront(nil)
             }

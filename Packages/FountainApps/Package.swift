@@ -539,6 +539,14 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             path: "Sources/mpe-pad-app-seed"
         ),
         .executableTarget(
+            name: "fountain-gui-demo-seed",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ],
+            path: "Sources/fountain-gui-demo-seed"
+        ),
+        .executableTarget(
             name: "baseline-editor-seed",
             dependencies: [
                 .product(name: "LauncherSignature", package: "FountainCore"),

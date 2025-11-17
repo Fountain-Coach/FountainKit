@@ -75,20 +75,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Ensure app becomes a regular, foreground app even when launched via `swift run` from Terminal.
         NSApp.setActivationPolicy(.regular)
-        func attemptActivate(_ remaining: Int) {
-            guard remaining >= 0 else { return }
-            // Try both activation paths (Apple deprecates the flag on macOS 14, but plain activate still works)
-            NSApp.activate(ignoringOtherApps: true)
-            NSRunningApplication.current.activate(options: [])
-            if let win = NSApp.keyWindow ?? NSApp.windows.first {
-                win.makeKeyAndOrderFront(nil)
+        Task { @MainActor in
+            var remaining = 12 // ~1s total at 80 ms steps
+            while remaining >= 0 {
+                // Try both activation paths (Apple deprecates the flag on macOS 14, but plain activate still works)
+                NSApp.activate(ignoringOtherApps: true)
+                NSRunningApplication.current.activate(options: [])
+                if let win = NSApp.keyWindow ?? NSApp.windows.first {
+                    win.makeKeyAndOrderFront(nil)
+                }
+                if NSApp.isActive, NSApp.keyWindow != nil { break }
+                remaining -= 1
+                try? await Task.sleep(nanoseconds: 80_000_000)
             }
-            if NSApp.isActive, NSApp.keyWindow != nil { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { attemptActivate(remaining - 1) }
         }
-        attemptActivate(12) // ~1s
         // Seed + print Teatro prompt (default policy)
-        Task.detached {
+        Task {
             let prompt = PatchBayStudioApp_buildTeatroPrompt()
             await PromptSeeder.seedAndPrint(appId: "patchbay-app", prompt: prompt, facts: [
                 "instruments": [
@@ -105,10 +107,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 MetalInstrument.setTransportOverride(NoopMetalInstrumentTransport())
             case "midi2":
                 MetalInstrument.setTransportOverride(MIDI2SystemInstrumentTransport())
-            #if canImport(CoreMIDI)
             case "coremidi", "system":
+                // CoreMIDI path is implemented via a Loopback-backed stub transport.
                 MetalInstrument.setTransportOverride(CoreMIDIMetalInstrumentTransport.shared)
-            #endif
             default:
                 break
             }
@@ -256,11 +257,7 @@ final class AppState: ObservableObject {
                 return false
                 #endif
             case .coremidi:
-                #if canImport(CoreMIDI)
                 return true
-                #else
-                return false
-                #endif
             }
         }
     }
@@ -450,11 +447,7 @@ final class AppState: ObservableObject {
         midiTransportStatusMessage = nil
         switch mode {
         case .auto:
-            #if canImport(CoreMIDI)
-            MetalInstrument.setTransportOverride(nil)
-            #else
             MetalInstrument.setTransportOverride(MIDI2SystemInstrumentTransport())
-            #endif
         case .midi2:
             MetalInstrument.setTransportOverride(MIDI2SystemInstrumentTransport())
         case .noop:
@@ -462,11 +455,7 @@ final class AppState: ObservableObject {
         case .loopback:
             MetalInstrument.setTransportOverride(LoopbackMetalInstrumentTransport.shared)
         case .coremidi:
-            #if canImport(CoreMIDI)
             MetalInstrument.setTransportOverride(CoreMIDIMetalInstrumentTransport.shared)
-            #else
-            MetalInstrument.setTransportOverride(nil)
-            #endif
         }
     }
     private func applyRobotMode() {
@@ -487,19 +476,11 @@ final class AppState: ObservableObject {
         let base: String
         switch midiTransportMode {
         case .auto:
-            #if canImport(CoreMIDI)
-            base = "Auto mode uses CoreMIDI when available."
-            #else
             base = "Auto mode uses the MIDI 2.0 transport."
-            #endif
         case .midi2:
             base = "MIDI 2.0 transport uses FountainTelemetryKit drivers."
         case .coremidi:
-            #if canImport(CoreMIDI)
-            base = "CoreMIDI endpoints will be provisioned."
-            #else
-            base = "CoreMIDI unavailable on this platform."
-            #endif
+            base = "CoreMIDI transport is routed via a Loopback-backed stub."
         case .loopback:
             base = "Loopback transport keeps MIDI in-process for tests."
         case .noop:
@@ -1252,7 +1233,7 @@ fileprivate final class AppInstrumentSink: MetalSceneRenderer {
     // PE setters
     func setUniform(_ name: String, float: Float) {
         if let st = self.state {
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 switch name {
                 case "app.robot.enabled":
                     st.robotMode = (float >= 0.5)
@@ -1296,6 +1277,7 @@ fileprivate final class AppInstrumentSink: MetalSceneRenderer {
     func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
     func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
     func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+    func vendorEvent(topic: String, data: Any?) {}
     // PE GET snapshot
     func snapshot() -> [String: Any] {
         return ["app.identity": "PatchBay"]
@@ -2293,7 +2275,7 @@ struct DashNodeRow: View {
             let g = max(4, vm.grid)
             let x = g * 6, y = g * 6
             let id = create(kind: dashKind, props: defaultProps, x: x, y: y)
-            DispatchQueue.main.async { state.pendingEditNodeId = id }
+            Task { @MainActor in state.pendingEditNodeId = id }
         }
         .onDrag {
             struct DashPayload: Codable { let dashKind: String; let props: [String:String] }
@@ -2472,7 +2454,6 @@ struct AddInstrumentSheet: View {
     @State private var title: String = ""
     @State private var working: Bool = false
     @State private var errorText: String = ""
-    @FocusState private var titleFocused: Bool
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack { Text("Add Instrument").font(.title3).bold(); Spacer(); Button("Close") { dismiss() } }
@@ -2492,7 +2473,6 @@ struct AddInstrumentSheet: View {
         .onAppear {
             // Ensure app is active and the sheet captures typing
             NSApp.activate(ignoringOtherApps: true)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { titleFocused = true }
         }
     }
     @MainActor
@@ -2560,7 +2540,7 @@ struct AddInstrumentSheet: View {
                             guard let provider = providers.first else { return false }
                             provider.loadDataRepresentation(forTypeIdentifier: UTType.text.identifier) { data, _ in
                                 guard let data = data, let name = String(data: data, encoding: .utf8), let fromTab = Tab(rawValue: name) else { return }
-                                DispatchQueue.main.async {
+                                Task { @MainActor in
                                     if let fromIndex = tabsOrder.firstIndex(of: fromTab), let toIndex = tabsOrder.firstIndex(of: t), fromIndex != toIndex {
                                         var arr = tabsOrder
                                         let item = arr.remove(at: fromIndex)
@@ -2887,7 +2867,7 @@ struct AddInstrumentSheet: View {
                         guard let provider = providers.first else { return false }
                         provider.loadDataRepresentation(forTypeIdentifier: UTType.text.identifier) { data, _ in
                             guard let data = data, let name = String(data: data, encoding: .utf8), let from = StellwerkSection(rawValue: name) else { return }
-                            DispatchQueue.main.async {
+                            Task { @MainActor in
                                 if let fromIndex = stellwerkSections.firstIndex(of: from), let toIndex = stellwerkSections.firstIndex(of: sec), fromIndex != toIndex {
                                     var arr = stellwerkSections
                                     let item = arr.remove(at: fromIndex)
@@ -3121,7 +3101,10 @@ struct AssistantPane: View {
             }
             .onAppear {
                 // Autofocus chat when the app first launches; user can click elsewhere to move focus
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { chatFocused = true }
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 150_000_000)
+                    chatFocused = true
+                }
             }
             Divider().padding(.vertical, 6)
             // Keep quick actions visible

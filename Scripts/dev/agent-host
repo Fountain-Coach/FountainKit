@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Fast host runner (minimal, no other servers)
+# Usage: Scripts/dev/agent-host [build|run] [--seed]
+
+ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+PKG_PATH="$ROOT_DIR/Packages/FountainApps"
+SEED=0
+CMD="${1:-run}"; shift || true
+for a in "$@"; do [[ "$a" == "--seed" ]] && SEED=1; done
+
+if [[ "$SEED" == "1" ]]; then
+  echo "[agent-host] Seeding facts from curated OpenAPI specs…"
+  bash "$ROOT_DIR/Scripts/openapi/openapi-to-facts.sh" || true
+fi
+
+case "$CMD" in
+  build)
+    echo "[agent-host] Building agent-host (product)…"
+    swift build --package-path "$PKG_PATH" -c debug --product agent-host
+    ;;
+  run)
+    BIN="$PKG_PATH/.build/debug/agent-host"
+    if [[ ! -x "$BIN" ]]; then
+      echo "[agent-host] Compiling first run…"
+      swift build --package-path "$PKG_PATH" -c debug --product agent-host
+    fi
+    : "${FOUNTAINSTORE_DIR:=$ROOT_DIR/.fountain/store}"
+    : "${HOST_BLE:=1}"  # central enabled by default
+    : "${HOST_RTP_PORT:=5868}"
+    echo "[agent-host] Starting (BLE central=$HOST_BLE RTP=$HOST_RTP_PORT store=$FOUNTAINSTORE_DIR)"
+    env FOUNTAINSTORE_DIR="$FOUNTAINSTORE_DIR" HOST_BLE="$HOST_BLE" HOST_RTP_PORT="$HOST_RTP_PORT" \
+      "$BIN"
+    ;;
+  *)
+    echo "Usage: $0 [build|run] [--seed]" >&2
+    exit 2
+    ;;
+esac
+

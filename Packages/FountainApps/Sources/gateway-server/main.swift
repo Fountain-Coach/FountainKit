@@ -112,6 +112,14 @@ if enableGuardian { personas.append(DestructiveGuardianPersona()) }
 let orchestrator = GatewayPersonaOrchestrator(personas: personas)
 
 let server = GatewayServer(plugins: plugins, zoneManager: nil, routeStoreURL: routesURL, certificatePath: nil, rateLimiter: rateLimiter, roleGuardStore: roleGuardStore, personaOrchestrator: orchestrator)
+// Debug log: surface store and agent identity to aid local wiring
+do {
+    let storeDir = env["FOUNTAINSTORE_DIR"] ?? (FileManager.default.currentDirectoryPath + "/.fountain/store")
+    let corpus = env["AGENT_CORPUS_ID"] ?? env["CORPUS_ID"] ?? "agents"
+    let agent = env["AGENT_ID"] ?? env["GATEWAY_AGENT_ID"] ?? "<unset>"
+    let line = "[gateway] store=\(storeDir) corpus=\(corpus) agent=\(agent)\n"
+    FileHandle.standardError.write(Data(line.utf8))
+}
 Task { @MainActor in
     let port = Int(env["GATEWAY_PORT"] ?? env["PORT"] ?? "8010") ?? 8010
     try await server.start(port: port)

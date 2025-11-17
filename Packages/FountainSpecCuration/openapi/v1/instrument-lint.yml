@@ -1,0 +1,89 @@
+openapi: 3.1.0
+info:
+  title: Instrument Lint Service
+  version: 1.0.0
+  summary: Lint Fountain instruments for spec, facts, and tests.
+  description: |
+    The Instrument Lint API inspects the instrument index and enforces
+    that each listed instrument has an OpenAPI spec, PE facts, and tests.
+servers:
+  - url: http://localhost:8071
+    description: Local instrument-lint service
+paths:
+  /instruments:
+    get:
+      operationId: listInstruments
+      summary: List all indexed instruments and their metadata.
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  instruments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Instrument'
+
+  /lint/run:
+    post:
+      operationId: runLint
+      summary: Run lint on all instruments or a selected subset.
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                appIds:
+                  type: array
+                  items: { type: string }
+      responses:
+        '200':
+          description: Lint results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LintResult'
+
+components:
+  schemas:
+    Instrument:
+      type: object
+      required: [appId, agentId, corpusId, spec]
+      properties:
+        appId: { type: string }
+        agentId: { type: string }
+        corpusId: { type: string }
+        spec: { type: string }
+        runtimeAgentId: { type: string, nullable: true }
+        testModulePath: { type: string, nullable: true }
+        snapshotBaselinesDir: { type: string, nullable: true }
+        requiredTestSymbols:
+          type: array
+          items: { type: string }
+          nullable: true
+
+    LintResult:
+      type: object
+      required: [appId, agentId, ok]
+      properties:
+        appId: { type: string }
+        agentId: { type: string }
+        ok: { type: boolean }
+        messages:
+          type: array
+          items: { type: string }
+

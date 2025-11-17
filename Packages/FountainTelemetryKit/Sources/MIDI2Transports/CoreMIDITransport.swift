@@ -13,4 +13,14 @@ public final class CoreMIDITransport: MIDITransport {
     }
     public func close() throws {}
     public func send(umpWords: [UInt32]) throws { try loop.send(umpWords: umpWords) }
+
+    // Legacy introspection helpers used by demo and ML tools.
+    // In the CoreMIDI‑free stub we expose a minimal, loopback‑only view.
+    public static func destinationNames() -> [String] {
+        ["loopback"]
+    }
+
+    public static func sourceNames() -> [String] {
+        ["loopback"]
+    }
 }

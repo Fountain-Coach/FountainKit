@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Copies a PNG into the BlankApp resources and rebaselines PB‑VRT.
+# Usage: Scripts/apps/blankapp-import-png /path/to/blank-paper-1024x1536.png
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+SRC="${1:-}"
+if [[ -z "$SRC" ]]; then
+  echo "Usage: $0 /path/to/blank-paper-1024x1536.png" >&2
+  exit 2
+fi
+if [[ ! -f "$SRC" ]]; then
+  echo "[blankapp] Source PNG not found: $SRC" >&2
+  exit 2
+fi
+
+DEST_DIR="$ROOT/Packages/BlankApp/Sources/blank-page-app/Resources"
+DEST="$DEST_DIR/blank-paper-1024x1536.png"
+mkdir -p "$DEST_DIR"
+cp "$SRC" "$DEST"
+echo "[blankapp] Copied → $DEST"
+
+# Validate dimensions when 'sips' is available (macOS).
+if command -v sips >/dev/null 2>&1; then
+  W=$(sips -g pixelWidth "$DEST" 2>/dev/null | awk '/pixelWidth/ {print $2}')
+  H=$(sips -g pixelHeight "$DEST" 2>/dev/null | awk '/pixelHeight/ {print $2}')
+  echo "[blankapp] PNG size: ${W}x${H}"
+  if [[ "$W" != "1024" || "$H" != "1536" ]]; then
+    echo "[blankapp] WARN: expected 1024x1536; continuing with ${W}x${H}." >&2
+  fi
+fi
+
+echo "[blankapp] Rebaselining PB‑VRT…"
+UPDATE_BASELINES=1 swift test --package-path "$ROOT/Packages/BlankApp" -c debug --filter BlankSnapshotTests
+echo "[blankapp] Baselines updated. Validate with: Scripts/dev/blank-vrt validate"
+

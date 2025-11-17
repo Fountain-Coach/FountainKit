@@ -64,7 +64,8 @@ struct AgentDescriptorSeed {
                     throw NSError(domain: "agent-descriptor-seed", code: 4, userInfo: [NSLocalizedDescriptionKey: "facts is not an object"])
                 }
                 let factsPayload = try JSONSerialization.data(withJSONObject: factsDict)
-                let factsId = "facts:agent:\(agentId)"
+                let safeId = agentId.replacingOccurrences(of: "/", with: "|")
+                let factsId = "facts:agent:\(safeId)"
                 try await store.putDoc(corpusId: corpusId, collection: "agent-facts", id: factsId, body: factsPayload)
                 print("facts seeded: corpus=\(corpusId) id=\(factsId)")
             } catch {

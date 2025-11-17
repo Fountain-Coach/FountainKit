@@ -1,0 +1,76 @@
+openapi: 3.1.0
+info:
+  title: FountainAI MPE Pad Instrument
+  version: 1.0.0
+  x-fountain.port: 0
+  x-fountain.binary: mpe-pad
+servers: []
+paths:
+  /mpe/open:
+    post:
+      summary: Open RTP session and set bend range
+      operationId: mpe.open
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                port: { type: integer, minimum: 1024, maximum: 65535 }
+                bendRange: { type: integer, minimum: 2, maximum: 96 }
+      responses:
+        '200': { description: OK }
+  /mpe/note:
+    post:
+      summary: Note on/off
+      operationId: mpe.note
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note, on]
+              properties:
+                note: { type: integer, minimum: 0, maximum: 127 }
+                velocity: { type: integer, minimum: 0, maximum: 127, default: 96 }
+                on: { type: boolean, description: true for noteOn, false for noteOff }
+      responses:
+        '200': { description: OK }
+  /mpe/pitchbend:
+    post:
+      summary: Pitch bend 14-bit
+      operationId: mpe.pitchbend
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value14]
+              properties:
+                value14: { type: integer, minimum: 0, maximum: 16383 }
+      responses:
+        '200': { description: OK }
+  /mpe/polyaftertouch:
+    post:
+      summary: Polyphonic aftertouch for a note
+      operationId: mpe.polyaftertouch
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note, pressure]
+              properties:
+                note: { type: integer, minimum: 0, maximum: 127 }
+                pressure: { type: integer, minimum: 0, maximum: 127 }
+      responses:
+        '200': { description: OK }
+

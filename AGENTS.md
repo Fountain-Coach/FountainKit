@@ -24,6 +24,7 @@ Welcome to FountainKit, the modular SwiftPM workspace for the Fountain Coach org
 - ML × MIDI 2.0 plan — `Plans/ML-MIDI2-Plan.md` (models, runners, CI/PE, integration).
 - Hybrid Semantic Audio System — `Plans/The Hybrid Semantic Audio System within FountainKit.pdf` (whitepaper).
 - PatchBay Node = Stage — `Plans/PatchBay-NodeStage-FeaturePlan.md` (capacity from baselines; in-node feedback; ports HUD). To be discussed.
+- Instrument requirements — `Design/INSTRUMENT_REQUIREMENTS.md` (what every instrument must provide: prompt, spec, facts, MIDI host wiring, tests).
 - FountainGUIKit demo integration — `Plans/FountainGUIKit-Demo-Plan.md` (NSView host, gestures, MIDI 2.0, MRTS/PB‑VRT).
  - MetalViewKit runtime instrument state — `Plans/MetalViewKitRuntime-InstrumentStatePlan.md` (generic instrument state API, facts integration, MIDI host wiring).
 - Studio plan — `Packages/FountainApps/Sources/FountainLauncherUI/AGENTS.md` (Control workspace).

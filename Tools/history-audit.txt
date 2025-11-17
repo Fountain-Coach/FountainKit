@@ -1,0 +1,255 @@
+# History Audit — Concurrency/Focus Patterns
+Sat Nov 15 11:07:07 CET 2025
+
+## DispatchQueue.main.async
+commits: 61
+first: 04ccd0c4 2025-09-22 Initial FountainKit workspace import
+last:  1589ecb8 2025-11-09 feat(blank): add minimal blank-page-app (1024x1536 page, centered) + PB‑VRT tests and wrapper gate FK_BLANK_VRT_ONLY
+
+## asyncAfter(
+commits: 36
+first: 04ccd0c4 2025-09-22 Initial FountainKit workspace import
+last:  1589ecb8 2025-11-09 feat(blank): add minimal blank-page-app (1024x1536 page, centered) + PB‑VRT tests and wrapper gate FK_BLANK_VRT_ONLY
+
+## Task.detached(
+commits: 5
+first: f41adf93 2025-10-16 Add awareness, bootstrap, and seeding support to EngraverChatViewModel
+last:  d1eca676 2025-11-07 chore(teatro): prepare for external publish (assets optional; Csound deprecated; assets target; resource cleanup)
+
+## @MainActor
+commits: 0
+first: none
+last:  none
+
+## @Sendable
+commits: 0
+first: none
+last:  none
+
+## @unchecked Sendable
+commits: 0
+first: none
+last:  none
+
+## firstResponder/makeFirstResponder/fieldEditor(
+commits: 8
+first: 78c0d2d5 2025-10-15 Improve Engraver Studio focus and TUI scrolling
+last:  077f2227 2025-10-31 feat(canvas): mirror web blank-drag panning (follow‑finger); add UITest for blank drag pan; gestures preserved in three‑pane layout
+
+## .focused(
+commits: 12
+first: 8b49739d 2025-10-12 Add Engraver Studio app and core components
+last:  88861f81 2025-11-08 feat(quietframe): make Fountain Editor the primary QuietFrame surface (Slugline-style shell)\n\n- Integrate Outline+Editor+Status inline within the central page.\n- Keep right drawer stub; outline on left.\n- Leaves toolbar controls intact for now; will be reworked next.
+
+## NSApplication.shared.activate
+commits: 5
+first: bd6ea013 2025-10-19 MemChat UX: switch to multiline TextEditor with focus management; activate app at launch; add launch-memchat-app.sh to open as .app (ensures focus)
+last:  1589ecb8 2025-11-09 feat(blank): add minimal blank-page-app (1024x1536 page, centered) + PB‑VRT tests and wrapper gate FK_BLANK_VRT_ONLY
+
+## NWListener
+commits: 0
+first: none
+last:  none
+
+## CoreMIDI imports or calls
+commits: 0
+first: none
+last:  none
+
+# Current snapshot (file counts)
+  34 Public/quietframe-web/node_modules/typescript/lib/lib.dom.d.ts
+  13 External/_gh/Fountain-Store/Sources/FountainStore/Store.swift
+  12 Packages/FountainApps/Sources/MetalViewKitCore/MetalInstrumentTransport.swift
+  12 Packages/FountainApps/Sources/MetalViewKit/MetalInstrumentTransport.swift
+  11 Packages/FountainCore/Sources/FountainRuntime/IntegrationRuntime/NIOHTTPServer.swift
+  10 Scripts/ci/history-audit.sh
+  10 External/SDLKit/Sources/SDLKit/Core/MIDIOut.swift
+  10 External/_gh/ScoreKit/Sources/ScoreKit/Playback/CoreMIDIPort.swift
+  10 AGENTS.md
+   9 Tools/history-audit.txt
+   8 Packages/FountainApps/Sources/MetalViewKitCore/MIDI2SystemInstrumentTransport.swift
+   8 Packages/FountainApps/Sources/MetalViewKit/MIDI2SystemInstrumentTransport.swift
+   8 MIDI2InstrumentLab/Sources/LabGUIApp/App.swift
+   7 Sidecar/FountainCoreMIDIBridge/Sources/FountainCoreMIDIBridge/main.swift
+   7 Packages/FountainTelemetryKit/Sources/MIDI2Transports/RTPMidiSession.swift
+   7 Packages/FountainServiceKit-SemanticBrowser/Sources/SemanticBrowserService/NIOHTTPServerCompat.swift
+   6 Tools/concurrency_patch_queue.md
+   6 External/TeatroFull/Packages/TeatroTelemetry/Sources/TeatroTelemetry/SSE/FountainSSEReliability.swift
+   6 External/_gh/Teatro/Packages/TeatroTelemetry/Sources/TeatroTelemetry/SSE/FountainSSEReliability.swift
+   5 Packages/FountainGatewayKit/Sources/CuratorGatewayPlugin/CuratorGatewayPlugin/CuratorGatewayPlugin.swift
+   5 Packages/FountainApps/Sources/quietframe-sonify-app/AppMain.swift
+   5 Packages/FountainApps/Sources/patchbay-app/Views/FocusManager.swift
+   5 Packages/FountainApps/Sources/memchat-app/AppMain.swift
+   5 External/TeatroFull/Packages/TeatroCore/Sources/TeatroCore/Teatro/Core/TeatroPlayer.swift
+   5 External/SDLKit/External/Fountain-Store/Sources/FountainStore/Store.swift
+   5 External/_gh/Teatro/Packages/TeatroCore/Sources/TeatroCore/Teatro/Core/TeatroPlayer.swift
+   4 Packages/MemChatKit/Sources/MemChatKit/MemChatView.swift
+   4 Packages/FountainCore/Sources/FountainRuntime/DNS/DNSServer.swift
+   4 Packages/FountainApps/Sources/midi-instrument-host/main.swift
+   4 Packages/FountainApps/Sources/memchat-teatro/AppMain.swift
+   4 Packages/FountainApps/Sources/FountainLauncherUI/LauncherUIApp.swift
+   4 Packages/FountainApps/Sources/engraver-studio/EngraverStudioView.swift
+   4 Packages/FountainApps-SemanticBrowser/Sources/semantic-browser-server/main.swift
+   4 Packages/FountainAIKit/Sources/FountainAIKit/EngraverChatViewModel.swift
+   4 External/TeatroFull/Packages/TeatroCore/Sources/TeatroCore/MIDI/Midi2Sendable.swift
+   4 External/SDLKit/Sources/SDLKitGeneratedServer/main.swift
+   4 External/_gh/Teatro/Packages/TeatroCore/Sources/TeatroCore/MIDI/Midi2Sendable.swift
+   4 External/_gh/semantic-browser/Sources/SemanticBrowser/Server.swift
+   4 External/_gh/AudioTalk/Sources/SDLKitGeneratedServer/main.swift
+   4 docs/blog/bye-bye-coremidi.md
+   3 Packages/FountainCore/Sources/FountainRuntime/OpenAPI/NIOOpenAPIServerTransport.swift
+   3 Packages/FountainApps/Tests/PatchBayAppUITests/FocusHarness.swift
+   3 Packages/FountainApps/Sources/quietframe-editor-app/AppMain.swift
+   3 Packages/FountainApps/Sources/MetalViewKit/MultiInstrumentTransport.swift
+   3 Packages/FountainApps/Sources/MetalViewKit/FilteredInstrumentTransport.swift
+   3 Packages/FountainAIKit/Sources/FountainAIKit/SemanticBrowserSeeder.swift
+   3 External/TeatroFull/Sources/ScoreKitCompareApp/main.swift
+   3 External/SDLKit/External/Fountain-Store/Sources/FountainFTS/FTS.swift
+   3 External/_gh/Teatro/Sources/ScoreKitCompareApp/main.swift
+   3 External/_gh/Fountain-Store/Sources/FountainFTS/FTS.swift
+   2 Scripts/ci/lint-concurrency.sh
+   2 Packages/MemChatKit/Sources/MemChatKit/LearnSiteCrawler.swift
+   2 Packages/FountainTelemetryKit/Sources/MIDI2Transports/BLEMidiTransport.swift
+   2 Packages/FountainServiceKit-ToolServer/Sources/ToolServerService/HTTPServer.swift
+   2 Packages/FountainServiceKit-SemanticBrowser/Sources/SemanticBrowserService/Artifacts.swift
+   2 Packages/FountainServiceKit-MIDI/Sources/MIDIService/Transports.swift
+   2 Packages/FountainGatewayKit/Sources/RateLimiterGatewayPlugin/RateLimiterGatewayPlugin/Handlers.swift
+   2 Packages/FountainCore/Sources/FountainRuntime/OpenAPI/ClientMiddleware.swift
+   2 Packages/FountainCore/Sources/FountainCodex/FountainCodex/ServerGenerator/ServerGenerator.swift
+   2 Packages/FountainApps/Tests/QuietFrameThreadingTests/ThreadingTests.swift
+   2 Packages/FountainApps/Tests/PatchBayAppUITests/AssistantFocusTests.swift
+   2 Packages/FountainApps/Tests/PatchBayAppUITests/AddInstrumentFocusTests.swift
+   2 Packages/FountainApps/Tests/GatewayServerTests/ChatKitGatewayTests.swift
+   2 Packages/FountainApps/Sources/QuietFrameKit/SidecarClient.swift
+   2 Packages/FountainApps/Sources/quietframe-sonify-app/FountainEditorSurface.swift
+   2 Packages/FountainApps/Sources/pbvrt-server/Handlers.swift
+   2 Packages/FountainApps/Sources/patchbay-service/Handlers.swift
+   2 Packages/FountainApps/Sources/MetalViewKitRuntimeServerKit/Handlers.swift
+   2 Packages/FountainApps/Sources/MetalViewKitCore/MetalInstrument.swift
+   2 Packages/FountainApps/Sources/MetalViewKit/MetalInstrument.swift
+   2 Packages/FountainApps/Sources/metalviewkit-runtime-server/main.swift
+   2 Packages/FountainApps/Sources/gateway-server/Logging/ChatKitLogging.swift
+   2 Packages/FountainApps/Sources/gateway-server/AttachmentCleanupJob.swift
+   2 Packages/FountainApps/Sources/gateway-console-app/GatewayConsoleRoot.swift
+   2 Packages/FountainApps/Sources/FountainLauncherUI/OpenAPISidePanel.swift
+   2 Packages/FountainApps/Sources/fountain-editor-service-server/Handlers.swift
+   2 Packages/FountainApps/Sources/blank-page-app/AppMain.swift
+   2 Packages/FountainAPIClients/Sources/ApiClientsCore/ApiClientsCore/OpenAPIClientHelpers.swift
+   2 Packages/BlankApp/Sources/blank-page-app/AppMain.swift
+   2 MIDI2InstrumentLab/Sources/FocusKit/FocusKit.swift
+   2 External/TeatroFull/Tests/CLI/RenderCLITests.swift
+   2 External/TeatroFull/Sources/TeatroRenderAPI/PreviewAPI.swift
+   2 External/TeatroFull/Sources/CLI/RenderCLI.swift
+   2 External/SDLKit/Tests/SDLKitTests/SDLKitScreenshotTests.swift
+   2 External/SDLKit/Sources/SDLKit/Support/Settings.swift
+   2 External/SDLKit/Sources/SDLKit/Support/RenderBackendTestHarness.swift
+   2 External/_gh/Teatro/Tests/CLI/RenderCLITests.swift
+   2 External/_gh/Teatro/Sources/TeatroRenderAPI/PreviewAPI.swift
+   2 External/_gh/Teatro/Sources/CLI/RenderCLI.swift
+   2 External/_gh/semantic-browser/Sources/SemanticBrowser/Artifacts.swift
+   2 External/_gh/ScoreKit/Sources/ScoreKitDemo/Storyboard.swift
+   2 External/_gh/midi2/Packages/TeatroAppleBridge/Sources/TeatroAppleBridge/AppleMIDIBridge.swift
+   2 External/_gh/Fountain-Store/Sources/FountainStoreHTTP/AdminService.swift
+   1 Public/quietframe-web/node_modules/rollup/dist/shared/rollup.js
+   1 Public/quietframe-web/node_modules/rollup/dist/es/shared/node-entry.js
+   1 Public/quietframe-web/node_modules/@babel/helper-globals/data/browser-upper.json
+   1 Plans/CrossPlatform-MIDI-Plan.md
+   1 Packages/MemChatKit/Tests/MemChatKitTests/ChatFlowTests.swift
+   1 Packages/MemChatKit/Sources/MemChatKit/MemChatTeatroView.swift
+   1 Packages/FountainTooling/Sources/OpenAPICurator/OpenAPICurator/Kit.swift
+   1 Packages/FountainTooling/Sources/openapi-curator-service/CuratorRulesReloader.swift
+   1 Packages/FountainTelemetryKit/Sources/SSEOverMIDI/DefaultSseSender.swift
+   1 Packages/FountainTelemetryKit/Sources/MIDI2Transports/BLEMidiPeripheralTransport.swift
+   1 Packages/FountainTelemetryKit/Sources/FlexBridge/FlexBridge.swift
+   1 Packages/FountainServiceKit-ToolsFactory/Sources/ToolsFactoryService/ToolsFactoryService.swift
+   1 Packages/FountainServiceKit-ToolsFactory/Sources/ToolsFactoryService/OpenAPIHandlers.swift
+   1 Packages/FountainServiceKit-ToolServer/Sources/ToolServerService/Router.swift
+   1 Packages/FountainServiceKit-ToolServer/Sources/ToolServerService/OpenAPIHandlers.swift
+   1 Packages/FountainServiceKit-ToolServer/Sources/ToolServerService/HTTPKernel.swift
+   1 Packages/FountainServiceKit-ToolServer/Sources/ToolServerService/Handlers.swift
+   1 Packages/FountainServiceKit-SemanticBrowser/Sources/SemanticBrowserService/TypesenseBackend.swift
+   1 Packages/FountainServiceKit-SemanticBrowser/Sources/SemanticBrowserService/OpenAPIHandlers.swift
+   1 Packages/FountainServiceKit-SemanticBrowser/Sources/SemanticBrowserService/CDPBrowserEngine.swift
+   1 Packages/FountainServiceKit-Planner/Sources/PlannerService/PlannerService.swift
+   1 Packages/FountainServiceKit-Planner/Sources/PlannerService/OpenAPIHandlers.swift
+   1 Packages/FountainServiceKit-Persist/Sources/SpeechAtlasService/SpeechAtlasService.swift
+   1 Packages/FountainServiceKit-Persist/Sources/PersistService/OpenAPIHandlers.swift
+   1 Packages/FountainServiceKit-FunctionCaller/Sources/FunctionCallerService/OpenAPIHandlers.swift
+   1 Packages/FountainServiceKit-FunctionCaller/Sources/FunctionCallerService/FunctionCallerService.swift
+   1 Packages/FountainServiceKit-FKOps/Sources/FKOpsService/OpenAPIHandlers.swift
+   1 Packages/FountainServiceKit-Bootstrap/Sources/BootstrapService/OpenAPIHandlers.swift
+   1 Packages/FountainServiceKit-Bootstrap/Sources/BootstrapService/BootstrapService.swift
+   1 Packages/FountainServiceKit-Awareness/Sources/AwarenessService/OpenAPIHandlers.swift
+   1 Packages/FountainServiceKit-Awareness/Sources/AwarenessService/AwarenessService.swift
+   1 Packages/FountainServiceKit-AudioTalk/Sources/AudioTalkService/OpenAPIHandlers.swift
+   1 Packages/FountainProviders/Sources/ProviderOpenAI/OpenAICompatibleChatProvider.swift
+   1 Packages/FountainGatewayKit/Sources/RateLimiterGatewayPlugin/RateLimiterGatewayPlugin/RateLimiterGatewayPlugin.swift
+   1 Packages/FountainGatewayKit/Sources/FountainAIAdapters/FountainAIAdapters/GatewayChatClient.swift
+   1 Packages/FountainGatewayKit/Sources/ChatKitGatewayPlugin/ChatKitGatewayPlugin.swift
+   1 Packages/FountainCore/Sources/FountainRuntime/IntegrationRuntime/HTTPKernel.swift
+   1 Packages/FountainCore/Sources/FountainRuntime/IntegrationRuntime/AsyncHTTPClientDriver.swift
+   1 Packages/FountainCore/Sources/FountainRuntime/DNS/ZoneManager.swift
+   1 Packages/FountainCore/Sources/FountainRuntime/DNS/DNSSECSigner.swift
+   1 Packages/FountainCore/Sources/FountainRuntime/DNS/DNSHandler.swift
+   1 Packages/FountainApps/Tests/PatchBayAppUITests/TrackpadGestureTests.swift
+   1 Packages/FountainApps/Tests/PatchBayAppUITests/ChatFocusTests.swift
+   1 Packages/FountainApps/Tests/PatchBayAppUITests/CanvasMarqueeTests.swift
+   1 Packages/FountainApps/Sources/quietframe-sonify-app/FountainEditorView.swift
+   1 Packages/FountainApps/Sources/quietframe-sonify-app/CellsSim.swift
+   1 Packages/FountainApps/Sources/quietframe-companion-app/QuietFramePEClient.swift
+   1 Packages/FountainApps/Sources/qc-mock-service/Handlers.swift
+   1 Packages/FountainApps/Sources/patchbay-app/Canvas/KeyInputContainer.swift
+   1 Packages/FountainApps/Sources/patchbay-app/Canvas/EditorCanvas.swift
+   1 Packages/FountainApps/Sources/patchbay-app/AppMain.swift
+   1 Packages/FountainApps/Sources/mpe-pad-app/AppMain.swift
+   1 Packages/FountainApps/Sources/MetalViewKit/MetalCanvasView.swift
+   1 Packages/FountainApps/Sources/metalviewkit-cc-fuzz/main.swift
+   1 Packages/FountainApps/Sources/grid-dev-app/GridDevMidiMonitorOverlay.swift
+   1 Packages/FountainApps/Sources/grid-dev-app/FountainEditorInstrument.swift
+   1 Packages/FountainApps/Sources/grid-dev-app/AppMain.swift
+   1 Packages/FountainApps/Sources/gateway-server/TokenValidation.swift
+   1 Packages/FountainApps/Sources/gateway-server/RoleGuardConfigReloader.swift
+   1 Packages/FountainApps/Sources/gateway-server/OpenAPIHandlers.swift
+   1 Packages/FountainApps/Sources/gateway-server/CredentialStore.swift
+   1 Packages/FountainApps/Sources/fk/main.swift
+   1 Packages/FountainApps/Sources/composer-studio/ComposerStudioApp.swift
+   1 Packages/FountainApps/Sources/ble-midi-scan/main.swift
+   1 Packages/FountainAPIClients/Sources/TutorDashboard/ServiceStatusPoller.swift
+   1 Packages/FountainAPIClients/Sources/TutorDashboard/SendableShims.swift
+   1 Packages/FountainAPIClients/Sources/ApiClientsCore/ApiClientsCore/HTTP.swift
+   1 MIDI2InstrumentLab/Tests/LabPBVRTTests/ChatFocusPBVRTTests.swift
+   1 External/TeatroFull/Packages/TeatroGUI/Sources/TeatroGUI/TeatroSDLBackend/SDLWindow.swift
+   1 External/TeatroFull/Packages/TeatroGUI/Sources/TeatroGUI/TeatroSDLBackend/SDLRunLoop.swift
+   1 External/TeatroFull/Packages/TeatroGUI/Sources/TeatroGUI/TeatroSDLBackend/SDLRenderer.swift
+   1 External/TeatroFull/Packages/TeatroGUI/Sources/TeatroGUI/MIDIIntegration/MIDIOutput.swift
+   1 External/TeatroFull/Packages/TeatroGUI/Sources/TeatroGUI/MIDIIntegration/MIDIEndpointManager.swift
+   1 External/TeatroFull/Packages/TeatroCore/Sources/TeatroCore/Renderers/RendererRegistry.swift
+   1 External/TeatroFull/Packages/TeatroAudio/Sources/TeatroAudio/Samplers/CsoundSampler.swift
+   1 External/SDLKit/Sources/SDLKitNIO/main.swift
+   1 External/SDLKit/Sources/SDLKit/Support/GoldenRefs.swift
+   1 External/SDLKit/Sources/SDLKit/Graphics/RenderBackend.swift
+   1 External/SDLKit/Sources/SDLKit/Core/SDLAudio.swift
+   1 External/SDLKit/Sources/SDLKit/Core/AudioRingBuffer.swift
+   1 External/SDLKit/Sources/SDLKit/Core/AudioMonitor.swift
+   1 External/SDLKit/Sources/SDLKit/Core/AudioFeatures.swift
+   1 External/SDLKit/Sources/SDLKit/Core/AudioA2MStream.swift
+   1 External/SDLKit/Legacy/SDLKit.pdf.txt
+   1 External/SDLKit/External/Fountain-Store/Tests/FountainStoreTests/LoggingTests.swift
+   1 External/SDLKit/External/Fountain-Store/Sources/FountainStoreCore/Memtable.swift
+   1 External/_gh/Teatro/Packages/TeatroGUI/Sources/TeatroGUI/TeatroSDLBackend/SDLWindow.swift
+   1 External/_gh/Teatro/Packages/TeatroGUI/Sources/TeatroGUI/TeatroSDLBackend/SDLRunLoop.swift
+   1 External/_gh/Teatro/Packages/TeatroGUI/Sources/TeatroGUI/TeatroSDLBackend/SDLRenderer.swift
+   1 External/_gh/Teatro/Packages/TeatroGUI/Sources/TeatroGUI/MIDIIntegration/MIDIOutput.swift
+   1 External/_gh/Teatro/Packages/TeatroGUI/Sources/TeatroGUI/MIDIIntegration/MIDIEndpointManager.swift
+   1 External/_gh/Teatro/Packages/TeatroCore/Sources/TeatroCore/Renderers/RendererRegistry.swift
+   1 External/_gh/Teatro/Packages/TeatroAudio/Sources/TeatroAudio/Samplers/CsoundSampler.swift
+   1 External/_gh/semantic-browser/Sources/SemanticBrowser/TypesenseBackend.swift
+   1 External/_gh/semantic-browser/Sources/SemanticBrowser/CDPBrowserEngine.swift
+   1 External/_gh/ScoreKit/STATUS-AUDIT.md
+   1 External/_gh/ScoreKit/Sources/ScoreKitUI/Views/ScoreView.swift
+   1 External/_gh/ScoreKit/Sources/ScoreKit/Playback/CoreMIDISink.swift
+   1 External/_gh/midi2/Packages/TeatroAppleBridge/Sources/TeatroAppleBridge/VirtualMIDIRouter.swift
+   1 External/_gh/midi2/Packages/TeatroAppleBridge/Sources/TeatroAppleBridge/AppleMIDIReceiver.swift
+   1 External/_gh/Fountain-Store/Tests/FountainStoreTests/LoggingTests.swift
+   1 External/_gh/Fountain-Store/Sources/FountainStoreHTTPServer/main.swift
+   1 External/_gh/Fountain-Store/Sources/FountainStoreCore/Memtable.swift

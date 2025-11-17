@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# One-click: Seed MPE Pad facts and run the MIDI 2.0 Host for that instrument.
+# Usage: Scripts/apps/mpe-pad-host [--port <5869>] [--bend <48>]
+
+ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+TOOL_PKG="$ROOT_DIR/Packages/FountainTooling"
+APPS_PKG="$ROOT_DIR/Packages/FountainApps"
+SPEC="$ROOT_DIR/Packages/FountainSpecCuration/openapi/v1/mpe-pad.yml"
+
+PORT=${MPE_PORT:-5869}
+BEND=${MPE_BEND:-48}
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --port) PORT="$2"; shift 2 ;;
+    --bend) BEND="$2"; shift 2 ;;
+    *) echo "Usage: $0 [--port <5869>] [--bend <48>]" >&2; exit 2 ;;
+  esac
+done
+
+if [[ ! -f "$SPEC" ]]; then
+  echo "[mpe-pad-host] ERROR: missing spec $SPEC" >&2
+  exit 1
+fi
+
+echo "[mpe-pad-host] Seeding facts for MPE Pad…"
+swift build --package-path "$TOOL_PKG" -c debug --target openapi-to-facts >/dev/null
+FOUNTAINSTORE_DIR="${FOUNTAINSTORE_DIR:-$ROOT_DIR/.fountain/store}" \
+  swift run --package-path "$TOOL_PKG" -c debug openapi-to-facts "$SPEC" \
+    --agent-id fountain.coach/agent/mpe-pad/service --seed --allow-tools-only >/dev/null
+
+echo "[mpe-pad-host] Starting MIDI 2.0 Host for agent=mpe-pad on RTP :$PORT (bend ±$BEND)"
+export HOST_AGENTS='fountain.coach/agent/mpe-pad/service'
+export HOST_RTP_PORT="$PORT"
+export FOUNTAIN_SKIP_LAUNCHER_SIG=1
+# Ensure host resolves the same store path regardless of working directory
+export FOUNTAINSTORE_DIR="${FOUNTAINSTORE_DIR:-$ROOT_DIR/.fountain/store}"
+
+# Run host in foreground for easy stop with Ctrl+C
+swift run --package-path "$APPS_PKG" -c debug agent-host <<EOF
+EOF

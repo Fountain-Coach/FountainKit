@@ -1,5 +1,5 @@
 {
-  "originHash" : "a4c3f3f7ba229a2b5133d07ec74ba7a93daf72295e48419458b342465d00c410",
+  "originHash" : "9b1fc0a4a75fc3d52218873263e3ef9ee6011d7f7bd94df13a7c3187103ba647",
   "pins" : [
     {
       "identity" : "async-http-client",
@@ -25,6 +25,15 @@
       "location" : "https://github.com/Fountain-Coach/Fountain-Store.git",
       "state" : {
         "revision" : "42404e5b5fa2759ac56eb91151b8287a9c4b5d29",
+        "version" : "0.2.0"
+      }
+    },
+    {
+      "identity" : "fountainguikit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Fountain-Coach/FountainGUIKit.git",
+      "state" : {
+        "revision" : "957a040673a7bf463581a77be683efd5abb21c0a",
         "version" : "0.2.0"
       }
     },

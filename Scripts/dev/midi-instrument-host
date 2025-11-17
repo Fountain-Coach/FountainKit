@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# MIDI Instrument Host wrapper (ensures full target list, no minimal gates)
+# Usage: Scripts/dev/midi-instrument-host [build|run]
+
+ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+PKG_PATH="$ROOT_DIR/Packages/FountainApps"
+
+cmd="${1:-run}"
+case "$cmd" in
+  build)
+    FK_EDITOR_MINIMAL=0 FK_SKIP_NOISY_TARGETS=0 ROBOT_ONLY=0 \
+      swift build --package-path "$PKG_PATH" -c debug --product agent-host
+    ;;
+  run)
+    : "${AGENT_ID:=fountain.coach/agent/planner/service}"
+    : "${AGENT_BASE_URL:=http://127.0.0.1:8020}"
+    echo "[midi-instrument-host] agent=$AGENT_ID base=$AGENT_BASE_URL"
+    FK_EDITOR_MINIMAL=0 FK_SKIP_NOISY_TARGETS=0 ROBOT_ONLY=0 \
+      swift run --package-path "$PKG_PATH" -c debug agent-host
+    ;;
+  *)
+    echo "Usage: $0 [build|run]" >&2
+    exit 2
+    ;;
+esac

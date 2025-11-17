@@ -1,6 +1,8 @@
 import XCTest
 @testable import patchbay_service
 
+// Robot-only mode: exclude this suite when building robot tests
+#if !ROBOT_ONLY
 final class ServiceHandlersTests: XCTestCase {
     func testSuggestLinksFindsCommonProperties() async throws {
         let h = PatchBayHandlers()
@@ -32,7 +34,4 @@ final class ServiceHandlersTests: XCTestCase {
         }
     }
 }
-
 #endif // !ROBOT_ONLY
-// Robot-only mode: exclude this suite when building robot tests
-#if !ROBOT_ONLY

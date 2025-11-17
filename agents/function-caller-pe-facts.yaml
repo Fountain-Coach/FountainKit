@@ -1,0 +1,49 @@
+protocol: midi-ci-pe
+functionBlocks:
+  - name: FunctionCaller
+    group: 0
+    properties:
+      - id: function.tools.request
+        writable: true
+        type: json
+        schema:
+          type: object
+          properties:
+            tags: { type: array, items: { type: string } }
+          additionalProperties: false
+        mapsTo:
+          openapi:
+            method: GET
+            path: /function-caller/tools
+            query: [tags]
+      - id: function.tools.result
+        readable: true
+        type: json
+        schema: { type: array, items: { type: object } }
+      - id: function.call.request
+        writable: true
+        type: json
+        schema:
+          type: object
+          properties:
+            tool_id: { type: string }
+            input: { type: object }
+          required: [tool_id]
+          additionalProperties: true
+        mapsTo:
+          openapi:
+            method: POST
+            path: /function-caller/call
+            body: json
+      - id: function.call.result
+        readable: true
+        type: json
+        schema: { type: object }
+    notify:
+      - on: function.tools.result
+        transport: ump
+        latencyBudgetMs: 25
+      - on: function.call.result
+        transport: ump
+        latencyBudgetMs: 25
+

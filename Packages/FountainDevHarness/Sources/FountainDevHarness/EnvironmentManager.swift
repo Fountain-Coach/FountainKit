@@ -166,7 +166,7 @@ public final class FountainEnvironmentManager: ObservableObject {
     // MARK: - Process controls
 
     public func forceKillPID(_ pid: String) async {
-        await Task.detached(priority: .utility) {
+        await Task(priority: .utility) {
             func run(_ args: [String]) throws {
                 let proc = Process()
                 proc.executableURL = URL(fileURLWithPath: "/bin/kill")
@@ -282,4 +282,3 @@ public final class FountainEnvironmentManager: ObservableObject {
         }
     }
 }
-

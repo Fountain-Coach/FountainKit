@@ -63,11 +63,42 @@ struct Main {
             throw NSError(domain: "mvk-runtime-tests", code: 3, userInfo: [NSLocalizedDescriptionKey: "no UMP echoed"])
         }
 
+        // Instrument state: set then get for a demo instrument id
+        let instrumentId = "demo"
+        let stateURL = URL(string: "http://127.0.0.1:\(port)/v1/instruments/\(instrumentId)/state")!
+        let stateBody: [String: Any] = [
+            "properties": [
+                "canvas.zoom": 1.5,
+                "canvas.translation.x": 10.0,
+                "canvas.translation.y": -4.0
+            ]
+        ]
+        var sreq = URLRequest(url: stateURL)
+        sreq.httpMethod = "POST"
+        sreq.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        sreq.httpBody = try JSONSerialization.data(withJSONObject: stateBody)
+        let (_, sresp) = try await URLSession.shared.data(for: sreq)
+        guard (sresp as? HTTPURLResponse)?.statusCode == 204 else {
+            throw NSError(domain: "mvk-runtime-tests", code: 4, userInfo: [NSLocalizedDescriptionKey: "setInstrumentState failed"])
+        }
+
+        let (gdata, gresp) = try await URLSession.shared.data(from: stateURL)
+        guard (gresp as? HTTPURLResponse)?.statusCode == 200,
+              let sobj = try? JSONSerialization.jsonObject(with: gdata) as? [String: Any],
+              let props = sobj["properties"] as? [String: Any],
+              let zoom = props["canvas.zoom"] as? Double,
+              let tx = props["canvas.translation.x"] as? Double,
+              let ty = props["canvas.translation.y"] as? Double,
+              zoom == 1.5, tx == 10.0, ty == -4.0 else {
+            throw NSError(domain: "mvk-runtime-tests", code: 5, userInfo: [NSLocalizedDescriptionKey: "getInstrumentState mismatch"])
+        }
+
         // Summary
         let summary: [String: Any] = [
             "ok": true,
             "port": port,
-            "echoedUMP": [String(format: "0x%08X", w0), String(format: "0x%08X", w1)]
+            "echoedUMP": [String(format: "0x%08X", w0), String(format: "0x%08X", w1)],
+            "instrumentStateChecked": true
         ]
         let data = try JSONSerialization.data(withJSONObject: summary, options: [.prettyPrinted])
         return String(data: data, encoding: .utf8) ?? "{\"ok\":true}"

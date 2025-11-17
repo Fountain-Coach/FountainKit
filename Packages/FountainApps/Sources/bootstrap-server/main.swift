@@ -4,9 +4,8 @@ import BootstrapService
 import FountainRuntime
 import LauncherSignature
 
-verifyLauncherSignature()
-
 let env = ProcessInfo.processInfo.environment
+if env["FOUNTAIN_SKIP_LAUNCHER_SIG"] != "1" { verifyLauncherSignature() }
 let corpusId = env["DEFAULT_CORPUS_ID"] ?? "tools-factory"
 let svc = FountainStoreClient(client: EmbeddedFountainStoreClient())
 

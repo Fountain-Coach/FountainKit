@@ -41,6 +41,9 @@ final class MVKRuntimeCore: @unchecked Sendable {
     private let maxTraces = 10000
     var traces: [Components.Schemas.TraceEvent] = []
 
+    // Generic instrument state (per logical instrument id)
+    var instrumentStates: [String: OpenAPIRuntime.OpenAPIObjectContainer] = [:]
+
     func nowNs() -> UInt64 {
         if testClockEnabled { return testClockNs }
         let elapsed = DispatchTime.now().uptimeNanoseconds - sysStart.uptimeNanoseconds
@@ -229,6 +232,27 @@ final class MVKRuntimeHandlers: APIProtocol, @unchecked Sendable {
             default:
                 continue
             }
+        }
+        return .noContent
+    }
+
+    // Instrument state — generic JSON map per logical instrument id
+    func getInstrumentState(_ input: Operations.getInstrumentState.Input) async throws -> Operations.getInstrumentState.Output {
+        let id = input.path.id
+        let stored = core.instrumentStates[id]
+        let state = Components.Schemas.InstrumentState(properties: stored)
+        return .ok(.init(body: .json(state)))
+    }
+
+    func setInstrumentState(_ input: Operations.setInstrumentState.Input) async throws -> Operations.setInstrumentState.Output {
+        guard case let .json(body) = input.body else {
+            return .undocumented(statusCode: 400, .init())
+        }
+        let id = input.path.id
+        if let props = body.properties {
+            core.instrumentStates[id] = props
+        } else {
+            core.instrumentStates.removeValue(forKey: id)
         }
         return .noContent
     }

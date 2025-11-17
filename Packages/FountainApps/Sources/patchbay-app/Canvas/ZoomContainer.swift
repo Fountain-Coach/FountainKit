@@ -117,7 +117,7 @@ struct ZoomContainer<Content: View>: NSViewRepresentable {
             return e
         }
         // Install content after view is set up
-        DispatchQueue.main.async {
+        Task { @MainActor in
             host.rootView = AnyView(content())
         }
         return view
@@ -126,7 +126,7 @@ struct ZoomContainer<Content: View>: NSViewRepresentable {
     func updateNSView(_ view: NSView, context: Context) {
         guard let host = context.coordinator.host else { return }
         // Defer updating the hosted rootView to avoid re-entrancy during SwiftUI updates
-        DispatchQueue.main.async {
+        Task { @MainActor in
             host.rootView = AnyView(content())
         }
     }

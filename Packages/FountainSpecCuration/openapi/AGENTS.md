@@ -16,6 +16,12 @@ Lint and validate
 Curator as source of truth
 Normalize and bundle specs with the FountainAI OpenAPI Curator: service at `Packages/FountainTooling/Sources/openapi-curator-service` (HTTP `POST /curate`) or CLI at `Packages/FountainTooling/Sources/openapi-curator-cli`. Curated output is authoritative and may be submitted to ToolsFactory when appropriate.
 
+Facts from OpenAPI (runtime)
+For MIDI‑CI Property Exchange, generate facts directly from a curated spec using the Tools Factory runtime endpoint, then serve them via Gateway.
+- Start Tools Factory: `Scripts/dev/tools-factory-min run` (default `:8011`).
+- Generate + seed: `curl -sS -X POST http://127.0.0.1:8011/agent-facts/from-openapi -H 'Content-Type: application/json' -d '{"agentId":"fountain.coach/agent/<name>/service","corpusId":"agents","seed":true,"openapi":{…}}' | jq .`
+- Gateway serves: `/.well-known/agent-facts` for the selected `GATEWAY_AGENT_ID`.
+
 Swift OpenAPI Generator
 - Consuming targets provide an `openapi.yaml` in their source directory (or a symlink into this folder) and an `openapi-generator-config.yaml` declaring `generate: [types, server]` or `generate: [types, client]` (use `filter.paths` to scope operations).
 - Shared models live in `FountainCore` (or another shared kit); configure generators to omit duplicate schema emission.

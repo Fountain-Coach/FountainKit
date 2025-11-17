@@ -7,8 +7,12 @@ import MetalViewKitRuntimeServerKit
 let env = ProcessInfo.processInfo.environment
 let port = Int(env["MVK_RUNTIME_PORT"] ?? env["PORT"] ?? "7777") ?? 7777
 
-fileprivate var _ciEvents: [[String: Any]] = []
-fileprivate var _noteEvents: [[String: Any]] = []
+final class MVKRuntimeEventStore: @unchecked Sendable {
+    var ciEvents: [[String: Any]] = []
+    var noteEvents: [[String: Any]] = []
+}
+
+fileprivate let _eventStore = MVKRuntimeEventStore()
 
 let fallback = HTTPKernel { req in
     // Serve curated spec via local $ref file
@@ -60,7 +64,10 @@ let fallback = HTTPKernel { req in
         }
         if let out = ciEnvelopeJSONLight(bytes) {
             if let data = try? JSONSerialization.data(withJSONObject: out) {
-                _ciEvents.append(out); if _ciEvents.count > 1000 { _ciEvents.removeFirst(_ciEvents.count - 1000) }
+                _eventStore.ciEvents.append(out)
+                if _eventStore.ciEvents.count > 1000 {
+                    _eventStore.ciEvents.removeFirst(_eventStore.ciEvents.count - 1000)
+                }
                 return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: data)
             }
         }
@@ -73,17 +80,22 @@ let fallback = HTTPKernel { req in
         }
         if let ev = obj["event"] as? String { // single event form
             var e = obj; e["tNs"] = e["tNs"] ?? "\(DispatchTime.now().uptimeNanoseconds)"
-            _noteEvents.append(e)
+            _eventStore.noteEvents.append(e)
         }
         if let arr = obj["events"] as? [[String: Any]] { // batch form
-            for var e0 in arr { if e0["tNs"] == nil { e0["tNs"] = "\(DispatchTime.now().uptimeNanoseconds)" }; _noteEvents.append(e0) }
+            for var e0 in arr {
+                if e0["tNs"] == nil { e0["tNs"] = "\(DispatchTime.now().uptimeNanoseconds)" }
+                _eventStore.noteEvents.append(e0)
+            }
         }
-        if _noteEvents.count > 2000 { _noteEvents.removeFirst(_noteEvents.count - 2000) }
+        if _eventStore.noteEvents.count > 2000 {
+            _eventStore.noteEvents.removeFirst(_eventStore.noteEvents.count - 2000)
+        }
         return HTTPResponse(status: 204)
     }
     // CI SSE stream
     if req.path.split(separator: "?").first == "/v1/midi/ci/sse" {
-        let json = (try? JSONSerialization.data(withJSONObject: _ciEvents))
+        let json = (try? JSONSerialization.data(withJSONObject: _eventStore.ciEvents))
             .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
         let line = "data: \(json)\n\n"
         let body = Data(Array(repeating: line, count: 10).joined().utf8)
@@ -91,7 +103,7 @@ let fallback = HTTPKernel { req in
     }
     // Notes SSE stream
     if req.path.split(separator: "?").first == "/v1/midi/notes/stream" {
-        let json = (try? JSONSerialization.data(withJSONObject: _noteEvents))
+        let json = (try? JSONSerialization.data(withJSONObject: _eventStore.noteEvents))
             .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
         let line = "data: \(json)\n\n"
         let body = Data(Array(repeating: line, count: 10).joined().utf8)
@@ -113,7 +125,12 @@ let sse: [String: @Sendable () -> String] = [
     "/v1/tracing/sse": { MetalViewKitRuntimeServer.tracingJSON() },
     "/v1/audio/backend/events-sse": { MetalViewKitRuntimeServer.backendEventJSON() },
     "/v1/midi/ci/sse": { MetalViewKitRuntimeServer.tracingJSON() },
-    "/v1/midi/notes/stream": { (try? String(data: JSONSerialization.data(withJSONObject: _noteEvents), encoding: .utf8)) ?? "[]" }
+    "/v1/midi/notes/stream": {
+        (try? String(
+            data: JSONSerialization.data(withJSONObject: _eventStore.noteEvents),
+            encoding: .utf8
+        )) ?? "[]"
+    }
 ]
 let server = NIOHTTPServer(kernel: transport.asKernel(), webSocketRoutes: ws, sseRoutes: sse)
 

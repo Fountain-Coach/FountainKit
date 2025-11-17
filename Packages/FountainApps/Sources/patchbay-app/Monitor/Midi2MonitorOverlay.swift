@@ -10,7 +10,7 @@ struct Midi2MonitorOverlay: View {
     @State private var lastEvent: Date? = nil
     @State private var count: Int = 0
     @State private var events: [Event] = []
-    @State private var fadeWork: DispatchWorkItem? = nil
+    @State private var fadeTask: Task<Void, Never>? = nil
 
     struct Event: Identifiable {
         let id = UUID().uuidString
@@ -65,10 +65,16 @@ struct Midi2MonitorOverlay: View {
         withAnimation(.easeOut(duration: 0.12)) { targetOpacity = 1.0 }
     }
     private func scheduleFade() {
-        fadeWork?.cancel()
-        let w = DispatchWorkItem { startFade() }
-        fadeWork = w
-        DispatchQueue.main.asyncAfter(deadline: .now() + fadeSeconds, execute: w)
+        fadeTask?.cancel()
+        let seconds = fadeSeconds
+        fadeTask = Task { @MainActor in
+            guard seconds > 0 else {
+                startFade()
+                return
+            }
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            startFade()
+        }
     }
 
     var body: some View {

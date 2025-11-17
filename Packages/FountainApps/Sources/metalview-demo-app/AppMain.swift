@@ -39,9 +39,7 @@ struct ContentView: View {
     enum TransportMode: String, CaseIterable {
         case loopback = "Loopback"
         case rtp = "RTP"
-        #if canImport(CoreMIDI)
         case coremidi = "CoreMIDI"
-        #endif
     }
     @State private var midiEnabled = false
     @State private var mode: TransportMode = .loopback
@@ -55,18 +53,17 @@ struct ContentView: View {
     @State private var lastSize: CGSize = .zero
     @State private var lb: LoopbackTransport? = nil
     @State private var rtp: RTPMidiSession? = nil
-    @State private var sceneHandle: MetalSceneRenderer? = nil
+    @State private var sceneHandle: (MetalSceneRenderer & MetalSceneUniformControls)? = nil
     @State private var triHandle: MetalSceneRenderer? = nil
     @State private var quadHandle: MetalSceneRenderer? = nil
     // Instrument display names for per-view endpoints
     @State private var triInstName: String = "MetalTriangleView#Local"
     @State private var quadInstName: String = "MetalTexturedQuadView#Local"
-    #if canImport(CoreMIDI)
     @State private var coreDestinations: [String] = []
     @State private var coreSources: [String] = []
     @State private var coreSelectedDest: String = ""
     @State private var coreUseVirtualEndpoints: Bool = true
-    @State private var core: AnyObject? = nil // CoreMIDITransport instance (type hidden behind #if)
+    @State private var core: AnyObject? = nil // CoreMIDITransport stub instance
     // Inspector state
     @State private var inspectorListen: Bool = true
     @State private var triSnapshot: String = ""
@@ -74,7 +71,6 @@ struct ContentView: View {
     // Optional cross-links between view instruments
     @State private var triToQuadLink: AnyObject? = nil
     @State private var quadToTriLink: AnyObject? = nil
-    #endif
     // Monitoring and logs
     @State private var monitorLocal = true
     @State private var logs: [String] = []
@@ -116,7 +112,7 @@ struct ContentView: View {
                         Text("Tri: \(triInstName)")
                         Text("Quad: \(quadInstName)").foregroundColor(.secondary)
                     }
-                    #if canImport(MIDI2Transports) && canImport(CoreMIDI)
+                    #if canImport(MIDI2Transports)
                     GroupBox("Inspector") {
                         VStack(alignment: .leading, spacing: 6) {
                             Toggle("Listen to CoreMIDI sources", isOn: $inspectorListen)
@@ -237,7 +233,7 @@ struct ContentView: View {
                 Text("Quad: \(quadInstName)")
                     .foregroundColor(.secondary)
             }
-            #if canImport(MIDI2Transports) && canImport(CoreMIDI)
+            #if canImport(MIDI2Transports)
             GroupBox("Inspector") {
                 VStack(alignment: .leading, spacing: 6) {
                     Toggle("Listen to CoreMIDI sources", isOn: $inspectorListen)
@@ -280,9 +276,7 @@ struct ContentView: View {
         .onChange(of: rotationSpeed) { _, newValue in sceneHandle?.setUniform("rotationSpeed", float: newValue) }
         .onChange(of: audioEnabled) { _, newValue in if newValue { setupAudio() } else { teardownAudio() } }
         .onChange(of: audioVolume) { _, newValue in synth?.setVolume(newValue) }
-        #if canImport(CoreMIDI)
         .onAppear { refreshCoreMIDIDestinations(); startInspectorListening(); setupLinksIfNeeded() }
-        #endif
         #endif
         }
 }
@@ -306,7 +300,6 @@ extension ContentView {
             let p = UInt16(rtpPortText) ?? 5004
             try? t.connect(host: host, port: p); log("RTP connecting to \(host):\(p)")
             sendVelocityUMP(velocity)
-        #if canImport(CoreMIDI)
         case .coremidi:
             if #available(macOS 13.0, *) {
                 let destName = coreSelectedDest.isEmpty ? nil : coreSelectedDest
@@ -316,7 +309,6 @@ extension ContentView {
                 core = t as AnyObject
                 sendVelocityUMP(velocity)
             }
-        #endif
         }
         if audioEnabled { setupAudio() }
     }
@@ -324,9 +316,7 @@ extension ContentView {
     private func teardownTransport() {
         try? rtp?.close(); rtp = nil
         lb = nil
-        #if canImport(CoreMIDI)
         core = nil
-        #endif
         teardownAudio()
     }
 
@@ -361,15 +351,12 @@ extension ContentView {
         var transport: (any MIDITransport)? = nil
         if let t = lb { transport = t }
         else if let t = rtp { transport = t }
-        #if canImport(CoreMIDI)
         if transport == nil, let t = core as? (any MIDITransport) { transport = t }
-        #endif
         if let t = transport { try? t.send(umpWords: msg); log("OUT \(summaryUMP(msg))") }
         if monitorLocal { handleIncomingUMP(msg); log("MON \(summaryUMP(msg))") }
     }
 
     private func ciDiscoverViews() {
-        #if canImport(CoreMIDI)
         // Probe CoreMIDI destinations and send CI Discovery Inquiry (0x7E .. 0x0D 0x70) to our view endpoints if present
         if #available(macOS 13.0, *) {
             let dests = CoreMIDITransport.destinationNames()
@@ -385,7 +372,6 @@ extension ContentView {
                 log("CI Inquiry sent to \(target)")
             }
         }
-        #endif
     }
 
     private func handleIncomingUMP(_ words: [UInt32]) {
@@ -541,7 +527,7 @@ extension ContentView {
 }
 #endif
 
-#if canImport(MIDI2Transports) && canImport(CoreMIDI)
+#if canImport(MIDI2Transports)
 extension ContentView {
     private func setupLinksIfNeeded() {
         if #available(macOS 13.0, *) {
@@ -790,6 +776,6 @@ extension ContentView {
                 self.sceneHandle?.setUniform(key, float: v)
             }
         }
-        if Thread.isMainThread { applyOnMain() } else { DispatchQueue.main.async(execute: applyOnMain) }
+        if Thread.isMainThread { applyOnMain() } else { Task { @MainActor in applyOnMain() } }
     }
 }

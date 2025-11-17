@@ -7,23 +7,40 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 PKG_PATH="$ROOT_DIR/Packages/FountainApps"
 
-export FK_MIN_TARGET=tools-factory
-export FK_SKIP_NOISY_TARGETS=1
+# Keep package manifest ungated to avoid dependency mismatches.
 export FOUNTAIN_SKIP_LAUNCHER_SIG=1
 
 cmd="${1:-build}"
 case "$cmd" in
   build)
-    echo "[tools-factory-min] Building tools-factory-server (minimal)…"
-    swift build --package-path "$PKG_PATH" -c debug --target tools-factory-server
+    echo "[tools-factory-min] Building tools-factory-server…"
+    swift build --package-path "$PKG_PATH" -c debug --product tools-factory-server
     ;;
   run)
-    echo "[tools-factory-min] Running tools-factory-server (minimal)…"
-    swift run --package-path "$PKG_PATH" -c debug tools-factory-server
+    echo "[tools-factory-min] Running tools-factory-server…"
+    : "${TOOLS_FACTORY_PORT:=8011}"
+    : "${TOOLS_FACTORY_PORT_FILE:=/tmp/tools_factory.port}"
+    TOOLS_FACTORY_PORT="$TOOLS_FACTORY_PORT" TOOLS_FACTORY_PORT_FILE="$TOOLS_FACTORY_PORT_FILE" \
+    swift run --package-path "$PKG_PATH" -c debug tools-factory-server &
+    pid=$!
+    echo "[tools-factory-min] pid=$pid (pref=:${TOOLS_FACTORY_PORT}), port file: ${TOOLS_FACTORY_PORT_FILE}"
+    # Wait up to 10s for port file or metrics
+    for i in {1..40}; do
+      if [[ -f "$TOOLS_FACTORY_PORT_FILE" ]]; then break; fi
+      if curl -fsS "http://127.0.0.1:${TOOLS_FACTORY_PORT}/metrics" >/dev/null 2>&1; then echo "$TOOLS_FACTORY_PORT" > "$TOOLS_FACTORY_PORT_FILE"; break; fi
+      sleep 0.25
+    done
+    if [[ -f "$TOOLS_FACTORY_PORT_FILE" ]]; then
+      bound=$(cat "$TOOLS_FACTORY_PORT_FILE" 2>/dev/null || echo "$TOOLS_FACTORY_PORT")
+      echo "[tools-factory-min] listening on :$bound"
+      echo "[tools-factory-min] metrics → http://127.0.0.1:${bound}/metrics"
+    else
+      echo "[tools-factory-min] port file not found; try curl http://127.0.0.1:${TOOLS_FACTORY_PORT}/metrics"
+    fi
+    wait $pid
     ;;
   *)
     echo "Usage: $0 [build|run]" >&2
     exit 2
     ;;
 esac
-

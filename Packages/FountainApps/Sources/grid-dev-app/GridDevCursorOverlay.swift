@@ -49,6 +49,7 @@ fileprivate struct Binder: NSViewRepresentable {
         func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
         func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
         func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+        func vendorEvent(topic: String, data: Any?) {}
     }
     final class Coordinator {
         var instrument: MetalInstrument? = nil
@@ -109,4 +110,3 @@ fileprivate struct Binder: NSViewRepresentable {
         override func mouseExited(with event: NSEvent) {}
     }
 }
-

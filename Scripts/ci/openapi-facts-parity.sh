@@ -27,11 +27,11 @@ swift build --package-path "$APPS_PKG" -c debug --target gateway-server >/dev/nu
 TMP_GEN="$(mktemp)"; TMP_SERVED="$(mktemp)"
 
 echo "[facts-parity] generating facts from spec…"
-swift run --package-path "$TOOL_PKG" -c debug openapi-to-facts "$SPEC_PATH" --agent-id "$AGENT_ID" > "$TMP_GEN"
+swift run --package-path "$TOOL_PKG" -c debug openapi-to-facts "$SPEC_PATH" --agent-id "$AGENT_ID" --allow-tools-only > "$TMP_GEN"
 
 echo "[facts-parity] seeding facts and starting gateway…"
 FOUNTAINSTORE_DIR="$FOUNTAINSTORE_DIR" \
-  swift run --package-path "$TOOL_PKG" -c debug openapi-to-facts "$SPEC_PATH" --agent-id "$AGENT_ID" --seed >/dev/null
+  swift run --package-path "$TOOL_PKG" -c debug openapi-to-facts "$SPEC_PATH" --agent-id "$AGENT_ID" --seed --allow-tools-only >/dev/null
 FOUNTAIN_SKIP_LAUNCHER_SIG=1 FOUNTAINSTORE_DIR="$FOUNTAINSTORE_DIR" GATEWAY_AGENT_ID="$AGENT_ID" GATEWAY_PORT="$PORT" \
   nohup swift run --package-path "$APPS_PKG" -c debug gateway-server > "$ROOT_DIR/.fountain/logs/gateway-$PORT.log" 2>&1 &
 PID=$!
@@ -59,4 +59,3 @@ if ! diff -u <(echo "$GEN_C") <(echo "$SRV_C") >/dev/null; then
 fi
 
 echo "[facts-parity] ✅ parity ok"
-

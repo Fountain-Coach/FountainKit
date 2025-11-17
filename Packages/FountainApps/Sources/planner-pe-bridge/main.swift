@@ -9,7 +9,13 @@ struct PlannerPEBridge {
     static func main() async {
         let env = ProcessInfo.processInfo.environment
         let baseURL = URL(string: env["PLANNER_BASE_URL"] ?? "http://127.0.0.1:8020")!
-        let requestPath = env["PLANNER_PLAN_PATH"] ?? "/planner/plan"
+        var requestPath = env["PLANNER_PLAN_PATH"] ?? "/planner/plan"
+        // Optional: load mapping from FountainStore agent-facts
+        if let m = try? await loadMappingFromFacts(agentId: env["AGENT_ID"] ?? "fountain.coach/agent/planner/service") {
+            if let p = m["planner.plan.request"], let openapi = p["openapi"] as? [String: Any], let path = openapi["path"] as? String {
+                requestPath = path
+            }
+        }
         let out = FileHandle.standardError
         out.write(Data("[planner-pe-bridge] starting (loopback) base=\(baseURL.absoluteString) path=\(requestPath)\n".utf8))
 
@@ -62,6 +68,62 @@ struct PlannerPEBridge {
         } catch {
             out.write(Data("[planner-pe-bridge] HTTP error: \(error)\n".utf8))
         }
+    }
+
+    @MainActor private static func loadMappingFromFacts(agentId: String) async throws -> [String: [String: Any]] {
+        let env = ProcessInfo.processInfo.environment
+        let corpus = env["AGENT_CORPUS_ID"] ?? env["CORPUS_ID"] ?? "agents"
+        let safeId = agentId.replacingOccurrences(of: "/", with: "|")
+        let factsId = "facts:agent:\(safeId)"
+
+        let exeURL = URL(fileURLWithPath: CommandLine.arguments.first ?? "")
+        let localStoreDump = exeURL.deletingLastPathComponent().appendingPathComponent("store-dump")
+        let toolPath: String
+        if FileManager.default.isExecutableFile(atPath: localStoreDump.path) {
+            toolPath = localStoreDump.path
+        } else {
+            toolPath = "store-dump"
+        }
+
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        proc.arguments = [toolPath]
+        var childEnv = env
+        childEnv["CORPUS_ID"] = corpus
+        childEnv["COLLECTION"] = "agent-facts"
+        childEnv["ID"] = factsId
+        proc.environment = childEnv
+        let outPipe = Pipe()
+        proc.standardOutput = outPipe
+        let errPipe = Pipe()
+        proc.standardError = errPipe
+
+        do {
+            try proc.run()
+        } catch {
+            return [:]
+        }
+        proc.waitUntilExit()
+        let data = outPipe.fileHandleForReading.readDataToEndOfFile()
+        guard proc.terminationStatus == 0, !data.isEmpty else {
+            return [:]
+        }
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return [:]
+        }
+        var map: [String: [String: Any]] = [:]
+        if let blocks = obj["functionBlocks"] as? [[String: Any]] {
+            for b in blocks {
+                if let props = b["properties"] as? [[String: Any]] {
+                    for p in props {
+                        if let id = p["id"] as? String, let mapsTo = p["mapsTo"] as? [String: Any] {
+                            map[id] = mapsTo
+                        }
+                    }
+                }
+            }
+        }
+        return map
     }
 }
 

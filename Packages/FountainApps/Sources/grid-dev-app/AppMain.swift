@@ -63,17 +63,23 @@ struct GridDevView: View {
     @State private var resetOpacity: Double = 0.18
     @State private var resetMinOpacity: Double = 0.18
     @State private var resetFadeSeconds: Double = 3.0
-    @State private var resetFadeWork: DispatchWorkItem? = nil
+    @State private var resetFadeTask: Task<Void, Never>? = nil
     @State private var leftFrac: CGFloat = 0.22
     @State private var rightFrac: CGFloat = 0.26
     @State private var leftItems: [String] = (0..<20).map { "Item #\($0)" }
     @State private var rightItems: [String] = (0..<8).map { "Log #\($0)" }
     private func bumpResetAndScheduleFade() {
         withAnimation(.easeOut(duration: 0.12)) { resetOpacity = 1.0 }
-        resetFadeWork?.cancel()
-        let w = DispatchWorkItem { withAnimation(.linear(duration: resetFadeSeconds)) { resetOpacity = resetMinOpacity } }
-        resetFadeWork = w
-        DispatchQueue.main.asyncAfter(deadline: .now() + resetFadeSeconds, execute: w)
+        resetFadeTask?.cancel()
+        let seconds = resetFadeSeconds
+        resetFadeTask = Task { @MainActor in
+            guard seconds > 0 else {
+                withAnimation(.linear(duration: resetFadeSeconds)) { resetOpacity = resetMinOpacity }
+                return
+            }
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            withAnimation(.linear(duration: resetFadeSeconds)) { resetOpacity = resetMinOpacity }
+        }
     }
     var body: some View {
         GeometryReader { geo in
@@ -87,6 +93,10 @@ struct GridDevView: View {
                 ScrollView(.vertical) {
                     VStack(alignment: .leading, spacing: 10) {
                         FountainEditorInstrument(text: $editorText)
+                        Divider()
+                        LLMChatInstrument()
+                        Divider()
+                        MPEPadInstrument()
                         Divider()
                         Text("Left Pane").font(.system(size: 12, weight: .semibold))
                         ForEach(leftItems, id: \.self) { id in
@@ -325,6 +335,7 @@ fileprivate struct GridDevUXBinder: NSViewRepresentable {
         func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
         func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
         func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+        func vendorEvent(topic: String, data: Any?) {}
     }
     final class Coordinator { var instrument: MetalInstrument? = nil }
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -348,6 +359,7 @@ fileprivate struct GridDevLayoutBinder: NSViewRepresentable {
         func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
         func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
         func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+        func vendorEvent(topic: String, data: Any?) {}
     }
     final class Coordinator { var instrument: MetalInstrument? = nil }
     func makeCoordinator() -> Coordinator { Coordinator() }

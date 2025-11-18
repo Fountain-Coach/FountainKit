@@ -77,6 +77,12 @@ let package = Package(
             name: "sse-client",
             dependencies: []
         ),
+        .testTarget(
+            name: "InstrumentNewTests",
+            dependencies: [
+                "instrument-new"
+            ]
+        ),
         .plugin(
             name: "EnsureOpenAPIConfigPlugin",
             capability: .buildTool()

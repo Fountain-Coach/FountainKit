@@ -1,0 +1,266 @@
+openapi: 3.1.0
+info:
+  title: LLM Chat Instrument API
+  version: 1.0.0
+  summary: Instrument-level API for a local LLM chat surface (Ollama-backed).
+  description: |
+    This spec models the GUI-facing surface of a local LLM chat instrument.
+    It exposes prompt/editor state, chat thread navigation, and lightweight
+    run diagnostics so the instrument can be driven over MIDI 2.0 Property
+    Exchange and inspected by tools.
+servers: []
+paths:
+  /prompt/state:
+    get:
+      operationId: prompt.getState
+      summary: Get current prompt editor state.
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromptState'
+
+  /prompt/set:
+    post:
+      operationId: prompt.setState
+      summary: Set prompt editor fields.
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromptState'
+      responses:
+        '204':
+          description: Applied
+
+  /thread/messages:
+    get:
+      operationId: thread.listMessages
+      summary: List messages in the current chat thread.
+      x-fountain.allow-as-tool: true
+      parameters:
+        - in: query
+          name: limit
+          description: Maximum number of messages to return (most recent first).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThreadState'
+
+  /thread/scroll:
+    post:
+      operationId: thread.setScroll
+      summary: Set the logical scroll offset for the chat thread.
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ThreadScroll'
+      responses:
+        '204':
+          description: Applied
+
+  /thread/select:
+    post:
+      operationId: thread.selectMessage
+      summary: Select a message in the chat thread.
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ThreadSelect'
+      responses:
+        '204':
+          description: Applied
+
+  /chat/request:
+    post:
+      operationId: chat.request
+      summary: Issue a chat request using the current prompt and controls.
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequest'
+      responses:
+        '200':
+          description: Synchronous chat completion (non-streaming).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatResponse'
+
+  /run/current:
+    get:
+      operationId: run.getCurrent
+      summary: Get the current run status and basic metrics.
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunStatus'
+
+components:
+  schemas:
+    PromptState:
+      type: object
+      description: Logical state of the prompt editor instrument.
+      properties:
+        prompt.text:
+          type: string
+          description: Current text in the prompt editor.
+        prompt.cursorOffset:
+          type: integer
+          minimum: 0
+          description: Zero-based cursor offset in UTF-16 code units.
+        prompt.mode:
+          type: string
+          description: Prompt mode (chat / command / edit).
+          enum: ["chat", "command", "edit"]
+          default: "chat"
+        prompt.canSend:
+          type: boolean
+          description: Whether the SEND action is currently enabled.
+
+    ChatMessage:
+      type: object
+      description: One message in the chat thread.
+      properties:
+        id:
+          type: string
+        role:
+          type: string
+          enum: ["user", "assistant", "system", "tool"]
+        text:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        tokensPrompt:
+          type: integer
+          minimum: 0
+          description: Prompt tokens attributed to this turn (if known).
+        tokensCompletion:
+          type: integer
+          minimum: 0
+          description: Completion tokens attributed to this turn (if known).
+
+    ThreadState:
+      type: object
+      description: Snapshot of the chat thread.
+      properties:
+        thread.scrollOffset:
+          type: number
+          format: double
+          description: Logical scroll offset for PB-VRT / robot tests (0 = bottom).
+        thread.selectedMessageId:
+          type: string
+          nullable: true
+          description: Currently selected message, if any.
+        thread.filter.role:
+          type: string
+          enum: ["all", "user", "assistant", "tool"]
+          default: "all"
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatMessage'
+
+    ThreadScroll:
+      type: object
+      properties:
+        thread.scrollOffset:
+          type: number
+          format: double
+          minimum: 0.0
+          maximum: 1.0
+          description: Normalised scroll position in [0,1], 0 = bottom, 1 = oldest.
+
+    ThreadSelect:
+      type: object
+      properties:
+        thread.selectedMessageId:
+          type: string
+          nullable: true
+
+    ChatRequest:
+      type: object
+      description: Chat request inputs, including controls for the local LLM.
+      required: [prompt.text]
+      properties:
+        prompt.text:
+          type: string
+        llm.modelId:
+          type: string
+          description: Identifier of the Ollama model (e.g., llama3.1:8b).
+          default: "llama3.1:8b"
+        llm.temperature:
+          type: number
+          format: double
+          minimum: 0.0
+          maximum: 2.0
+          default: 0.7
+        llm.maxTokens:
+          type: integer
+          minimum: 16
+          maximum: 32768
+          default: 1024
+        llm.systemPrompt.enabled:
+          type: boolean
+          default: true
+        llm.systemPrompt.text:
+          type: string
+          nullable: true
+
+    ChatResponse:
+      type: object
+      description: Simple non-streaming chat response.
+      properties:
+        answer:
+          type: string
+        run:
+          $ref: '#/components/schemas/RunStatus'
+
+    RunStatus:
+      type: object
+      description: Lightweight status of the most recent chat run.
+      properties:
+        run.current.status:
+          type: string
+          enum: ["idle", "streaming", "failed"]
+          default: "idle"
+        run.current.tokensPrompt:
+          type: integer
+          minimum: 0
+        run.current.tokensCompletion:
+          type: integer
+          minimum: 0
+        run.current.latencyMs:
+          type: number
+          format: double
+          minimum: 0.0
+        run.current.errorMessage:
+          type: string
+          nullable: true

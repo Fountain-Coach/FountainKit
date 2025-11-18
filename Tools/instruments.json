@@ -11,5 +11,19 @@
       "FountainGUIDemoTests",
       "FountainGUIDemoSnapshotTests"
     ]
+  },
+  {
+    "appId": "llm-chat",
+    "agentId": "fountain.coach/agent/llm-chat/service",
+    "corpusId": "llm-chat",
+    "spec": "llm-chat.yml",
+    "runtimeAgentId": null,
+    "testModulePath": "Packages/FountainApps/Tests/LLMChatAppTests",
+    "snapshotBaselinesDir": "Packages/FountainApps/Tests/LLMChatAppTests/Baselines",
+    "requiredTestSymbols": [
+      "LLMChatAppTests",
+      "LLMChatAppSnapshotTests"
+    ]
   }
 ]
+

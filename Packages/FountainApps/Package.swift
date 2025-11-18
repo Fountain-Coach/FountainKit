@@ -87,6 +87,7 @@ let PRODUCTS: [Product] = BLANK_VRT_ONLY ? [
         .executable(name: "memchat-save-reply", targets: ["memchat-save-reply"]),
         .executable(name: "memchat-save-continuity", targets: ["memchat-save-continuity"]),
         .executable(name: "memchat-save-plan", targets: ["memchat-save-plan"]),
+        .executable(name: "llm-chat-seed", targets: ["llm-chat-seed"]),
         .executable(name: "llm-doctor", targets: ["llm-doctor"]),
         .executable(name: "engraver-direct", targets: ["engraver-direct"]),
         .library(name: "EngraverChatCore", targets: ["EngraverChatCore"]),
@@ -1697,6 +1698,14 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             path: "Sources/engraving-app"
         ),
         .executableTarget(
+            name: "llm-chat-seed",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ],
+            path: "Sources/llm-chat-seed"
+        ),
+        .executableTarget(
             name: "quietframe-editor-app",
             dependencies: [
                 .product(name: "FountainStoreClient", package: "FountainCore")
@@ -1969,6 +1978,14 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
                 .product(name: "FountainRuntime", package: "FountainCore")
             ],
             path: "Tests/MVKRuntimeServerTests"
+        ),
+        .testTarget(
+            name: "LLMChatAppTests",
+            dependencies: [],
+            path: "Tests/LLMChatAppTests",
+            resources: [
+                .process("Baselines")
+            ]
         ),
         .testTarget(
             name: "EditorAppUITests",

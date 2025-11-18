@@ -27,6 +27,7 @@ For a repository‑wide index of OpenAPI coverage and adoption status, see [../O
 | Function Caller Service | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/function-caller.yml](v1/function-caller.yml) |
 | Gateway | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/gateway.yml](v1/gateway.yml) |
 | LLM Gateway Plugin | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/llm-gateway.yml](v1/llm-gateway.yml) |
+| LLM Chat Instrument | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/llm-chat.yml](v1/llm-chat.yml) |
 | The Four Stars – Speech Atlas | 0.1.0 | Contexter alias Benedikt Eickhoff | [v1/the-four-stars-speech-atlas.yml](v1/the-four-stars-speech-atlas.yml) |
 | OpenAPI Curator Service | 1.0.2 | Contexter alias Benedikt Eickhoff | [v1/openapi-curator.yml](v1/openapi-curator.yml) |
 | Payload Inspection Gateway Plugin | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/payload-inspection-gateway.yml](v1/payload-inspection-gateway.yml) |

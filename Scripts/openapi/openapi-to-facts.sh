@@ -31,6 +31,7 @@ MAP_LIST=(
   "metalviewkit-runtime.yml:fountain.coach/agent/fountain-gui-demo/service"
   "midi-service.yml:fountain.coach/agent/midi-service/service"
   "instrument-lint.yml:fountain.coach/agent/instrument-lint/service"
+  "llm-chat.yml:fountain.coach/agent/llm-chat/service"
   "openapi-curator.yml:fountain.coach/agent/openapi-curator/service"
   "patchbay.yml:fountain.coach/agent/patchbay/service"
   "payload-inspection-gateway.yml:fountain.coach/agent/payload-inspection-gateway/service"

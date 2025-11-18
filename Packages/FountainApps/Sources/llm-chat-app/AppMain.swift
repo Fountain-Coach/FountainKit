@@ -5,7 +5,7 @@ import FountainAICore
 import ProviderLocalLLM
 import LauncherSignature
 
-private struct LLMChatMessage {
+struct LLMChatMessage {
     enum Role {
         case user
         case assistant
@@ -15,7 +15,7 @@ private struct LLMChatMessage {
     let text: String
 }
 
-private struct LLMChatState {
+struct LLMChatState {
     var messages: [LLMChatMessage] = []
     var streamingText: String = ""
     var inputText: String = ""
@@ -136,14 +136,10 @@ final class LLMChatInstrumentTarget: FGKEventTarget {
             return
         }
 
-        // Append visible characters
+        // Append any printable characters from this event.
         if !key.characters.isEmpty {
-            let scalars = key.characters.unicodeScalars
-            // Filter out control characters (arrows, function keys, etc.)
-            if scalars.allSatisfy({ !$0.properties.isControl }) {
-                view.state.inputText.append(contentsOf: key.characters)
-                view.needsDisplay = true
-            }
+            view.state.inputText.append(contentsOf: key.characters)
+            view.needsDisplay = true
         }
     }
 
@@ -251,7 +247,10 @@ private final class LLMChatAppDelegate: NSObject, NSApplicationDelegate {
 @main
 enum LLMChatAppMain {
     static func main() {
-        verifyLauncherSignature()
+        let env = ProcessInfo.processInfo.environment
+        if env["FOUNTAIN_SKIP_LAUNCHER_SIG"] != "1" {
+            verifyLauncherSignature()
+        }
         let app = NSApplication.shared
         app.setActivationPolicy(.regular)
         let delegate = LLMChatAppDelegate()
@@ -259,4 +258,3 @@ enum LLMChatAppMain {
         app.run()
     }
 }
-

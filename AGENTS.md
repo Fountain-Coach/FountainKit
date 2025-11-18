@@ -658,6 +658,30 @@ Lint (CI)
 Reference
 - FocusKit utility: `MIDI2InstrumentLab/Sources/FocusKit/` provides a reusable first‑responder TextField and a small focus helper. Reuse/port for other apps.
 
+## GUI Surfaces — Event Graph, Not Widget Toolkit (New Work)
+
+Intent
+- New instruments and demos should be built on our own event graph and rendering layers, not on Apple’s widget toolkits. We keep a thin OS host (NSApplication/NSWindow/NSView) where needed, but the “UI” lives in our graph.
+
+Rules (new work only)
+- No new SwiftUI views in instrument surfaces. Existing SwiftUI apps (PatchBay, MemChat, QuietFrame, etc.) are grandfathered; future instruments must not add new SwiftUI entry points.
+- AppKit is allowed only as a host: `NSApplication`, `NSWindow`, and a minimal `NSView` (or `FGKRootView`/MetalViewKit view) that forwards OS events into our event graph. Do not add new AppKit widgets (e.g., `NSTextField`, `NSButton`) for instrument interaction.
+- Instruments expose their surface via:
+  - the MetalViewKit / Canvas graph, or
+  - the FountainGUIKit graph (`FGKNode` + `FGKEvent` + properties),
+  and are addressed via specs + facts (OpenAPI + PE), not via framework‑specific controls.
+- Specs and prompts remain the source of truth:
+  - Teatro prompt in FountainStore (`prompt:<app-id>:teatro` + `:facts`).
+  - OpenAPI spec under `Packages/FountainSpecCuration/openapi/v1`.
+  - Facts generated via `Scripts/openapi/openapi-to-facts.sh`.
+
+Enforcement
+- For new instruments added to `Tools/instruments.json`, the default expectation is:
+  - event‑graph based surface (FountainGUIKit or MetalViewKit),
+  - no SwiftUI in the instrument view path,
+  - NSView used as a thin host only.
+- Agents should prefer reusing existing canvases (PatchBay, MIDI2InstrumentLab, FountainGUIKit demo host) rather than introducing new SwiftUI windows.
+
 ## Automated Audit — Agent Tasks (Run Every Session)
 
 Intent

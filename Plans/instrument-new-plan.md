@@ -4,7 +4,7 @@ This plan defines the `instrument-new` tool and the default template for creatin
 
 Status (2025-11-18)
 - This document captures the desired shape; implementation work is open.
-- `instrument-lint` exists and performs structural checks; `instrument-new` will sit beside it in `FountainTooling`.
+- `instrument-lint` exists and performs structural checks; `instrument-new` and the facts mapper will sit beside it in `FountainTooling`.
 
 ## 1. Intent
 
@@ -50,15 +50,31 @@ For a given `{appId, agentId, specName}`, `instrument-new` will:
 - Append a row to `Packages/FountainSpecCuration/openapi/README.md`:
   - Name, version, and link to `v1/<specName>`.
 
-### 3.2 Facts wiring from OpenAPI
+### 3.2 Facts mapping from OpenAPI (mapper + generator)
 
-- Append a mapping to `Scripts/openapi/openapi-to-facts.sh`:
+We standardise on a single facts pipeline:
 
-  ```bash
-  "<specName>:<agentId>"
+- **Generator**: `Packages/FountainTooling/Sources/openapi-to-facts` is the pure function from curated OpenAPI → facts JSON. It knows nothing about instruments beyond the spec and `agentId`.
+- **Mapper/driver**: a thin script (`Scripts/openapi/openapi-to-facts.sh`) that:
+  - Reads a declarative mapping file (to be introduced by `instrument-new`, e.g. `Tools/openapi-facts-mapping.json`) listing `<specName> → <agentId>`.
+  - Iterates that mapping and calls the generator for each entry.
+
+For each new instrument, `instrument-new` will:
+
+- Append a record to the mapping file (exact format to be finalised, but structurally equivalent to the current hard‑coded pairs in `openapi-to-facts.sh`):
+
+  ```json
+  { "spec": "<specName>", "agentId": "<agentId>" }
   ```
 
-- This is generic; no app‑specific branching.
+- Ensure `Scripts/openapi/openapi-to-facts.sh` remains a stateless driver:
+  - No per‑instrument logic beyond “for each mapping, call the generator with `--agent-id` and `--seed`”.
+  - No accumulation of ad‑hoc state in the script itself.
+
+The generator’s seeding behaviour must be deterministic per agent:
+
+- For simple instruments, regenerating facts from a single spec should **overwrite** that agent’s functionBlocks in `agent-facts` rather than unboundedly appending.
+- For aggregator agents (e.g. composer‑studio combining score/script/cues), the mapping file will list all contributing specs, and the generator will recompute the aggregate in one pass, instead of merging arbitrarily over time.
 
 ### 3.3 Teatro prompt + facts seeder
 

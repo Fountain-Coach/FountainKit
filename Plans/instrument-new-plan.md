@@ -189,7 +189,33 @@ If `--no-app` is not set, create a thin event‑graph app:
     - `<AppId>InstrumentTarget: FGKEventTarget` to interpret keyboard/gesture events.
   - App respects `FOUNTAIN_SKIP_LAUNCHER_SIG` and uses the same instrument id as in `Tools/instruments.json`.
 
-## 4. Tool Behaviour and Validation
+## 4. Instrument Invariants (Non‑Negotiables)
+
+The following invariants apply to every instrument created via `instrument-new`. They are part of the contract; templates and lints must enforce them:
+
+- **MIDI 2.0 first**:
+  - Every instrument is a MIDI 2.0 instrument with a CI/PE surface. There is no notion of a “non‑MIDI instrument”.
+  - The PE surface is derived from OpenAPI facts and must be usable by the MIDI host without knowing about the GUI.
+
+- **Prompt/spec/facts/tests are always present**:
+  - Teatro prompt and facts segments exist in FountainStore for the instrument corpus (`prompt:<appId>:teatro` and `:facts`).
+  - An OpenAPI spec under `Packages/FountainSpecCuration/openapi/v1/<specName>` describes the instrument’s HTTP surface.
+  - Facts for `<agentId>` are generated from that spec and stored under `agents/agent-facts/facts:agent:<safeId>`.
+  - Tests exist in a dedicated module `Packages/FountainApps/Tests/<AppId>Tests` and include surface, PE, and (when visual) snapshot coverage.
+
+- **Event graph is canonical**:
+  - All instrument surfaces are backed by FountainGUIKit (`FGKNode`, `FGKEvent`, `FGKRootView`).
+  - MetalViewKit and other renderers are consumers of this graph; they do not define their own event graph.
+
+- **No widget‑toolkit instruments**:
+  - No new SwiftUI views or AppKit widgets (`NSTextField`, `NSButton`, etc.) may serve as instrument surfaces.
+  - NSApplication/NSWindow/NSView are allowed only as thin hosts that forward events into the FGK graph.
+
+- **Lints must pass**:
+  - `Scripts/instrument-lint.sh` must succeed (modulo temporary soft warnings for facts during migration).
+  - Any new invariant for instruments must be either encoded into `instrument-lint` or into the `instrument-new` template so new instruments inherit it by default.
+
+## 5. Tool Behaviour and Validation
 
 `instrument-new` should be implemented as:
 
@@ -225,7 +251,7 @@ On each run, `instrument-new` must:
 
    - If tests fail to compile or run, `instrument-new` prints a focused error and exits non‑zero.
 
-## 5. AGENTS Integration and Maintenance
+## 6. AGENTS Integration and Maintenance
 
 - Root `AGENTS.md` should be updated to:
   - Mention `Plans/instrument-new-plan.md` in the Plans Index.

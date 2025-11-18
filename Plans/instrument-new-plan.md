@@ -12,7 +12,7 @@ We want a single entry point for creating new instruments that:
 
 - Treats **every instrument as a MIDI 2.0 instrument** (CI/PE surface, facts in FountainStore, discoverable by the MIDI host).
 - Always creates a **surface**:
-  - For visual instruments: an event‑graph GUI surface (MetalViewKit or FountainGUIKit).
+  - For visual instruments: an event‑graph GUI surface built on **FountainGUIKit** (`FGKNode`, `FGKEvent`, `FGKRootView`), with optional MetalViewKit renderers sitting on top of that graph when we need a GPU canvas.
   - For non‑visual instruments: a logical surface over PE properties.
 - Produces artifacts that immediately satisfy:
   - `Design/INSTRUMENT_REQUIREMENTS.md`.
@@ -29,10 +29,8 @@ We want a single entry point for creating new instruments that:
   - `agentId` — canonical agent id (e.g., `fountain.coach/agent/llm-chat/service`).
   - `specName` — spec filename under `openapi/v1` (e.g., `llm-chat.yml`).
 - Optional flags:
-  - `--graph=fgk|metalview` — preferred UI/event graph host:
-    - `fgk` → FountainGUIKit (`FGKNode`, `FGKRootView`, `FGKEvent`).
-    - `metalview` → MetalViewKit canvas node.
   - `--visual` (default true) — instrument has a visual surface and must get PB‑VRT scaffolding.
+  - `--metalview` — in addition to the FountainGUIKit graph, scaffold a MetalViewKit canvas renderer that is driven by the same FGK node/events.
   - `--no-app` — seed/spec/tests only; no executable app surface yet (for backend‑only instruments).
 
 Everything else (Teatro prompt, facts, test layout) is derived from these inputs.
@@ -116,17 +114,16 @@ Under `Packages/FountainApps/Tests/<AppId>Tests/`:
 
 - `Baselines/.gitkeep` (when `--visual`).
 - `<AppId>Tests.swift`:
-  - Imports the app surface target when present, plus the graph host (`FountainGUIKit` or MetalViewKit).
-  - Instantiates a minimal surface:
-    - For `fgk`:
+  - Imports the app surface target when present, plus **FountainGUIKit** (the canonical event graph).
+  - Instantiates a minimal FGK surface:
 
-      ```swift
-      let frame = NSRect(x: 0, y: 0, width: 640, height: 400)
-      let node = FGKNode(instrumentId: "<agentId>", frame: frame, properties: [], target: nil)
-      let view = <AppId>SurfaceView(frame: frame, rootNode: node)
-      let target = <AppId>InstrumentTarget(view: view, node: node)
-      node.target = target
-      ```
+    ```swift
+    let frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+    let node = FGKNode(instrumentId: "<agentId>", frame: frame, properties: [], target: nil)
+    let view = <AppId>SurfaceView(frame: frame, rootNode: node)
+    let target = <AppId>InstrumentTarget(view: view, node: node)
+    node.target = target
+    ```
 
   - At least one test that:
     - Sends a small sequence of events (`FGKEvent.keyDown`, `scroll`, etc.) into the target.
@@ -207,4 +204,3 @@ On each run, `instrument-new` must:
   - Extending `instrument-new`’s template (so new instruments inherit the rules by default).
 
 This plan is the source of truth for the `instrument-new` tool. Implementation work belongs under `Packages/FountainTooling` and must keep this document in sync when behaviour changes.
-

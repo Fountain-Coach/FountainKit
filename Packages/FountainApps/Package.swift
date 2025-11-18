@@ -87,6 +87,7 @@ let PRODUCTS: [Product] = BLANK_VRT_ONLY ? [
         .executable(name: "memchat-save-reply", targets: ["memchat-save-reply"]),
         .executable(name: "memchat-save-continuity", targets: ["memchat-save-continuity"]),
         .executable(name: "memchat-save-plan", targets: ["memchat-save-plan"]),
+        .executable(name: "llm-chat-app", targets: ["llm-chat-app"]),
         .executable(name: "llm-chat-seed", targets: ["llm-chat-seed"]),
         .executable(name: "llm-doctor", targets: ["llm-doctor"]),
         .executable(name: "engraver-direct", targets: ["engraver-direct"]),
@@ -824,6 +825,16 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             name: "metalcompute-tests",
             dependencies: ["MetalComputeKit"],
             path: "Sources/metalcompute-tests"
+        ),
+        .executableTarget(
+            name: "llm-chat-app",
+            dependencies: [
+                .product(name: "FountainGUIKit", package: "FountainGUIKit"),
+                .product(name: "FountainAICore", package: "FountainCore"),
+                .product(name: "ProviderLocalLLM", package: "FountainProviders"),
+                .product(name: "LauncherSignature", package: "FountainCore")
+            ],
+            path: "Sources/llm-chat-app"
         ),
         .executableTarget(
             name: "fountain-gui-demo-app",

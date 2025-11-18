@@ -124,12 +124,15 @@ The generator’s seeding behaviour must be deterministic per agent:
 
 - If `--visual=false`, `snapshotBaselinesDir` and `SnapshotTests` can be omitted; otherwise they are required.
 
-### 3.5 Test scaffolding (surface + PE behaviour)
+### 3.5 Test scaffolding (surface + PE/MIDI 2.0 behaviour)
+
+Every instrument is a MIDI 2.0 instrument. Tests must reflect that: we do not just click the GUI; we verify that the PE surface behaves as an instrument.
 
 Under `Packages/FountainApps/Tests/<AppId>Tests/`:
 
 - `Baselines/.gitkeep` (when `--visual`).
-- `<AppId>Tests.swift`:
+
+- `<AppId>SurfaceTests.swift`:
   - Imports the app surface target when present, plus **FountainGUIKit** (the canonical event graph).
   - Instantiates a minimal FGK surface:
 
@@ -142,8 +145,20 @@ Under `Packages/FountainApps/Tests/<AppId>Tests/`:
     ```
 
   - At least one test that:
-    - Sends a small sequence of events (`FGKEvent.keyDown`, `scroll`, etc.) into the target.
-    - Asserts state changes that match initial property semantics (e.g., pan, zoom, prompt editing).
+    - Sends a small sequence of FGK events (`FGKEvent.keyDown`, `scroll`, etc.) into the target.
+    - Asserts state changes that match the instrument’s properties (e.g., pan, zoom, prompt editing).
+
+- `<AppId>PETests.swift`:
+  - Treats the instrument as a MIDI 2.0 PE endpoint, even when we do not spin up the full host:
+    - Loads or synthesises a small PE descriptor from the facts (e.g., by calling the OpenAPI → facts generator in‑process against the spec).
+    - Applies PE‑style “SET” operations by calling into the same property layer the host would (for simple instruments, this can be proxied by calling `node.setProperty(name:value:)` with the names used in facts).
+  - Must include at least one test that:
+    - Applies a PE‑style property change (e.g., `canvas.zoom`, `prompt.text`, `thread.scrollOffset`).
+    - Asserts that the surface state and/or rendered output changes accordingly.
+  - Where possible (and when it is cheap enough in CI), this can be extended to a full host round‑trip by:
+    - Starting the MIDI host and the instrument’s HTTP surface in‑process.
+    - Sending a single PE SET via the host.
+    - Verifying that the instrument’s state or pixels change as expected.
 
 - `<AppId>SnapshotTests.swift` (when `--visual`):
   - Renders the surface into an image at a canonical size.

@@ -15,6 +15,7 @@ let package = Package(
         .executable(name: "sse-client", targets: ["sse-client"]),
         .executable(name: "openapi-to-facts", targets: ["openapi-to-facts"]),
         .executable(name: "instrument-lint", targets: ["instrument-lint"]),
+        .executable(name: "instrument-new", targets: ["instrument-new"]),
         .plugin(name: "EnsureOpenAPIConfigPlugin", targets: ["EnsureOpenAPIConfigPlugin"])
     ],
     dependencies: [
@@ -35,6 +36,12 @@ let package = Package(
         ),
         .executableTarget(
             name: "instrument-lint",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ]
+        ),
+        .executableTarget(
+            name: "instrument-new",
             dependencies: [
                 .product(name: "FountainStoreClient", package: "FountainCore")
             ]

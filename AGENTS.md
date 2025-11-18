@@ -224,6 +224,7 @@ Why
 
 How
 - Batch (build/pre‑run) seeding: `bash Scripts/openapi/openapi-to-facts.sh`.
+  - Mapping file (authoritative): `Tools/openapi-facts-mapping.json` lists `{ spec, agentId }` pairs for all agents.
   - Tool: `swift run --package-path Packages/FountainTooling openapi-to-facts <spec.yml> --agent-id <fountain.coach/agent/...> [--seed]`
   - Store: `agent-facts` collection at id `facts:agent:<agentId>` (`/` replaced by `|`).
 - Runtime seeding via Tools Factory (recommended for interactive authoring): POST a spec to Tools Factory and receive seeded facts immediately.
@@ -252,7 +253,7 @@ Secrets (no env policy)
 
 Where
 - Generator: `Packages/FountainTooling/Sources/openapi-to-facts`
-- Seed wrapper: `Scripts/openapi/openapi-to-facts.sh`
+- Seed wrapper (mapper): `Scripts/openapi/openapi-to-facts.sh` reads `Tools/openapi-facts-mapping.json` and invokes the generator for each `{spec, agentId}` mapping.
 - Tools Factory runtime endpoint: `Packages/FountainApps/Sources/tools-factory-server/main.swift:1` (`/agent-facts/from-openapi`).
 - Gateway facts endpoint: `Packages/FountainApps/Sources/gateway-server/GatewayServer.swift:1`
 - Host (prototype): `Packages/FountainApps/Sources/midi-instrument-host`

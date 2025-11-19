@@ -29,8 +29,24 @@ let svc: FountainStoreClient = {
 Task {
     await svc.ensureCollections(corpusId: corpusId)
     try? await publishFunctions(manifest: manifest, corpusId: corpusId, service: svc)
-    // Fallback serves metrics, the spec, and facts-from-openapi helper.
+    // Fallback serves metrics, the spec, facts helpers, and secrets helpers.
     let fallback = HTTPKernel { req in
+        func parseQuery(_ raw: String) -> [String: String] {
+            guard let qm = raw.firstIndex(of: "?") else { return [:] }
+            let q = raw[raw.index(after: qm)...]
+            var out: [String: String] = [:]
+            for pair in q.split(separator: "&") {
+                let parts = pair.split(separator: "=", maxSplits: 1)
+                if parts.count == 2,
+                   let k = String(parts[0]).removingPercentEncoding,
+                   let v = String(parts[1]).removingPercentEncoding
+                {
+                    out[k] = v
+                }
+            }
+            return out
+        }
+
         if req.method == "GET" && req.path == "/metrics" {
             return HTTPResponse(status: 200, headers: ["Content-Type": "text/plain"], body: Data("ok\n".utf8))
         }
@@ -111,6 +127,27 @@ Task {
             // Return the generator stdout (facts JSON)
             return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: stdoutData)
         }
+        // GET /agent-facts?agentId=...&corpusId=agents
+        if req.method == "GET" && req.path == "/agent-facts" {
+            let raw = req.headers["X-Request-Target"] ?? (req.headers[":path"] ?? req.path)
+            let q = parseQuery(raw)
+            guard let agentId = q["agentId"], !agentId.isEmpty else {
+                let msg = ["error": "invalid_request", "message": "agentId required"]
+                let body = try? JSONSerialization.data(withJSONObject: msg)
+                return HTTPResponse(status: 400, headers: ["Content-Type": "application/json"], body: body ?? Data())
+            }
+            let corpus = q["corpusId"] ?? "agents"
+            let safe = agentId.replacingOccurrences(of: "/", with: "|")
+            let keys = ["facts:agent:\(safe)", "facts:agent:\(agentId)"]
+            for key in keys {
+                if let data = try? await svc.getDoc(corpusId: corpus, collection: "agent-facts", id: key) {
+                    return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: data)
+                }
+            }
+            let msg = ["error": "not_found", "message": "no facts for agentId \(agentId) in corpus \(corpus)"]
+            let body = try? JSONSerialization.data(withJSONObject: msg)
+            return HTTPResponse(status: 404, headers: ["Content-Type": "application/json"], body: body ?? Data())
+        }
         // POST /agent-secrets — upsert SecretStore headers for an agent (gated)
         if req.method == "POST" && req.path == "/agent-secrets" {
             // Gate: disabled unless TOOLS_FACTORY_ALLOW_SECRET_UPSERT=1
@@ -168,16 +205,6 @@ Task {
         // GET /agent-secrets/missing?agentId=...&factsCorpusId=agents&secretsCorpusId=secrets
         if req.method == "GET" && req.path == "/agent-secrets/missing" {
             // Fallback: parse query from the raw path (req.path excludes query; use req.raw if available)
-            func parseQuery(_ raw: String) -> [String: String] {
-                guard let qm = raw.firstIndex(of: "?") else { return [:] }
-                let q = raw[raw.index(after: qm)...]
-                var out: [String: String] = [:]
-                for pair in q.split(separator: "&") {
-                    let parts = pair.split(separator: "=", maxSplits: 1)
-                    if parts.count == 2, let k = String(parts[0]).removingPercentEncoding, let v = String(parts[1]).removingPercentEncoding { out[k] = v }
-                }
-                return out
-            }
             let raw = req.headers["X-Request-Target"] ?? (req.headers[":path"] ?? req.path)
             let q = parseQuery(raw)
             guard let agentId = q["agentId"], !agentId.isEmpty else {

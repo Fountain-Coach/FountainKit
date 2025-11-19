@@ -16,16 +16,25 @@ let package = Package(
         .executable(name: "openapi-to-facts", targets: ["openapi-to-facts"]),
         .executable(name: "instrument-lint", targets: ["instrument-lint"]),
         .executable(name: "instrument-new", targets: ["instrument-new"]),
+        .executable(name: "instrument-new-service-server", targets: ["instrument-new-service-server"]),
         .plugin(name: "EnsureOpenAPIConfigPlugin", targets: ["EnsureOpenAPIConfigPlugin"])
     ],
     dependencies: [
         .package(path: "../FountainCore"),
-        .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0")
+        .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
+        .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
+        .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0")
     ],
     targets: [
         .target(
             name: "OpenAPICurator",
             dependencies: []
+        ),
+        .target(
+            name: "InstrumentNewCore",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ]
         ),
         .executableTarget(
             name: "openapi-to-facts",
@@ -43,7 +52,7 @@ let package = Package(
         .executableTarget(
             name: "instrument-new",
             dependencies: [
-                .product(name: "FountainStoreClient", package: "FountainCore")
+                "InstrumentNewCore"
             ]
         ),
         .executableTarget(
@@ -80,7 +89,51 @@ let package = Package(
         .testTarget(
             name: "InstrumentNewTests",
             dependencies: [
-                "instrument-new"
+                "InstrumentNewCore"
+            ]
+        ),
+        .testTarget(
+            name: "OpenAPICuratorTests",
+            dependencies: [
+                "OpenAPICurator"
+            ]
+        ),
+        .testTarget(
+            name: "OpenAPIToFactsTests",
+            dependencies: [
+                "openapi-to-facts"
+            ]
+        ),
+        .testTarget(
+            name: "InstrumentLintTests",
+            dependencies: [
+                "instrument-lint"
+            ]
+        ),
+        .testTarget(
+            name: "InstrumentNewServiceTests",
+            dependencies: [
+                "InstrumentNewService",
+                .product(name: "FountainRuntime", package: "FountainCore")
+            ]
+        ),
+        .target(
+            name: "InstrumentNewService",
+            dependencies: [
+                "InstrumentNewCore",
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "FountainRuntime", package: "FountainCore")
+            ],
+            plugins: [
+                .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
+            ]
+        ),
+        .executableTarget(
+            name: "instrument-new-service-server",
+            dependencies: [
+                "InstrumentNewService",
+                .product(name: "FountainRuntime", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore")
             ]
         ),
         .plugin(

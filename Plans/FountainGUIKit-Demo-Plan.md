@@ -56,7 +56,7 @@ FountainGUIKit is a standalone GUI framework that gives us an NSView‑based hos
 - Wire the demo into PB‑VRT visual regression testing:
   - Add snapshots of the demo surface at key zoom/pan states.
   - Ensure PB‑VRT harnesses can target the `fountain-gui-demo` app via the same scripting interface used for existing PatchBay tests.
-- Align robot and PB‑VRT docs in `Plans/Robot-Testing.md` and relevant AGENTS files so the demo’s coverage is visible and maintained.
+- Align robot and PB‑VRT docs in `Plans/Legacy/Robot-Testing.md` and relevant AGENTS files so the demo’s coverage is visible and maintained.
 
 ### Phase 6 — Documentation, Prompts, and Operator Ergonomics
 - Add or extend an AGENTS file under the `fountain-gui-demo` source directory to:
@@ -75,4 +75,3 @@ FountainGUIKit is a standalone GUI framework that gives us an NSView‑based hos
 - MIDI 2.0 CI/PE integration is in place and CoreMIDI is not referenced anywhere in the demo codepath.
 - MRTS and PB‑VRT suites cover the demo’s key interactions and visual states, with passing tests in CI.
 - AGENTS, this plan, and operator‑facing docs stay in sync whenever the demo’s behaviour or surface changes.
-

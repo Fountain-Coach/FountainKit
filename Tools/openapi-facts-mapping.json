@@ -37,6 +37,6 @@
   { "spec": "composer-score.yml", "agentId": "fountain.coach/agent/composer-score/service" },
   { "spec": "composer-script.yml", "agentId": "fountain.coach/agent/composer-script/service" },
   { "spec": "composer-cues.yml", "agentId": "fountain.coach/agent/composer-cues/service" },
-  { "spec": "fountain-gui-demo.yml", "agentId": "fountain.coach/agent/fountain-gui-demo/service" }
+  { "spec": "fountain-gui-demo.yml", "agentId": "fountain.coach/agent/fountain-gui-demo/service" },
+  { "spec": "instrument-new.yml", "agentId": "fountain.coach/agent/instrument-new/service" }
 ]
-

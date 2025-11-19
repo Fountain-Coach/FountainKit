@@ -1,7 +1,7 @@
 # Tools Factory Server — Agent Guide
 
 What
-- Hosts the Tools Factory service (curation → tools registry) and provides a runtime endpoint to generate and seed MIDI‑CI facts from OpenAPI.
+- Hosts the Tools Factory service (curation → tools registry) and provides runtime endpoints to generate/seed MIDI‑CI facts from OpenAPI and to inspect existing facts.
 
 Why
 - Keep OpenAPI as the single source of truth. Enable fast, runtime authoring: submit a spec and immediately get back PE facts that the MIDI 2.0 host exposes as properties.
@@ -18,6 +18,8 @@ How
       - `openapi`: object or YAML/JSON string of the spec
       - `specURL`: URL to fetch the spec (e.g., a service’s `/openapi.yaml`)
   - Response: facts JSON. When `seed=true`, the server also writes to `agent-facts/facts:agent:<safeId>`.
+- Inspect existing facts: `GET /agent-facts?agentId=...&corpusId=agents`
+  - Returns the raw JSON facts document for the resolved agent id (first `facts:agent:<safeId>`, then `facts:agent:<agentId>`), or `404` when missing.
 
 Where
 - Server main: `Packages/FountainApps/Sources/tools-factory-server/main.swift:1`.

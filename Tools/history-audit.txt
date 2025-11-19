@@ -153,7 +153,7 @@ last:  none
    1 Public/quietframe-web/node_modules/rollup/dist/shared/rollup.js
    1 Public/quietframe-web/node_modules/rollup/dist/es/shared/node-entry.js
    1 Public/quietframe-web/node_modules/@babel/helper-globals/data/browser-upper.json
-   1 Plans/CrossPlatform-MIDI-Plan.md
+   1 Plans/Legacy/CrossPlatform-MIDI-Plan.md
    1 Packages/MemChatKit/Tests/MemChatKitTests/ChatFlowTests.swift
    1 Packages/MemChatKit/Sources/MemChatKit/MemChatTeatroView.swift
    1 Packages/FountainTooling/Sources/OpenAPICurator/OpenAPICurator/Kit.swift

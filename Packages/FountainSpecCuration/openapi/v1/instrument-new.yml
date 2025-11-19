@@ -1,0 +1,110 @@
+openapi: 3.1.0
+info:
+  title: Instrument New Service
+  version: 1.0.0
+  summary: Scaffold new Fountain instruments (spec, facts, tests, app).
+  description: |
+    The Instrument New API encapsulates the canonical workflow for creating
+    new Fountain instruments. It accepts a small, structured description of
+    the instrument (appId, agentId, specName, and flags) and produces a plan
+    describing the scaffolding actions. The CLI implementation in FountainTooling
+    applies this plan directly to the workspace.
+servers:
+  - url: http://localhost:8072
+    description: Local instrument-new service
+paths:
+  /instrument-new/run:
+    post:
+      operationId: runInstrumentNew
+      summary: Scaffold a new instrument from a template.
+      description: |
+        Generate or update the OpenAPI spec stub, facts mapping, instruments index,
+        Teatro prompt/facts seeder, tests module, and optional app surface target
+        for a new instrument. When dryRun is true, only the plan is returned.
+      x-fountain.visibility: public
+      x-fountain.reason: instrument-new
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstrumentNewRequest'
+      responses:
+        '200':
+          description: Scaffolding plan and status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentNewResponse'
+        '400':
+          description: Invalid request or missing fields.
+        '500':
+          description: Unexpected failure while applying scaffolding.
+
+components:
+  schemas:
+    InstrumentNewRequest:
+      type: object
+      required:
+        - appId
+        - agentId
+        - specName
+      properties:
+        appId:
+          type: string
+          description: Short identifier for the instrument (e.g., llm-chat, orbit-canvas).
+        agentId:
+          type: string
+          description: Canonical agent id (e.g., fountain.coach/agent/llm-chat/service).
+        specName:
+          type: string
+          description: Spec filename under openapi/v1 (e.g., llm-chat.yml).
+        visual:
+          type: boolean
+          description: Whether the instrument has a visual surface and PB-VRT baselines.
+          default: true
+        metalview:
+          type: boolean
+          description: Whether to also scaffold a MetalViewKit renderer.
+          default: false
+        noApp:
+          type: boolean
+          description: When true, only scaffold spec/facts/tests without an app target.
+          default: false
+        dryRun:
+          type: boolean
+          description: When true, only compute the plan without applying changes.
+          default: false
+
+    InstrumentNewResponse:
+      type: object
+      required:
+        - ok
+        - appId
+        - agentId
+        - specName
+      properties:
+        ok:
+          type: boolean
+          description: True when scaffolding was applied successfully.
+        appId:
+          type: string
+        agentId:
+          type: string
+        specName:
+          type: string
+        applied:
+          type: array
+          description: List of high-level scaffolding steps that were applied.
+          items:
+            type: string
+        warnings:
+          type: array
+          description: Non-fatal warnings encountered during scaffolding.
+          items:
+            type: string
+        dryRun:
+          type: boolean
+          description: Echo of the dryRun flag from the request.
+

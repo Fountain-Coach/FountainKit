@@ -47,6 +47,8 @@ For a repository‑wide index of OpenAPI coverage and adoption status, see [../O
 | Composer Score Service | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/composer-score.yml](v1/composer-score.yml) |
 | Composer Script Service | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/composer-script.yml](v1/composer-script.yml) |
 | Composer Cues Service | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/composer-cues.yml](v1/composer-cues.yml) |
+| Instrument Lint Service | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/instrument-lint.yml](v1/instrument-lint.yml) |
+| Instrument New Service | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/instrument-new.yml](v1/instrument-new.yml) |
 
 ## Coverage Status
 

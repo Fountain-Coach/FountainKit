@@ -8,6 +8,10 @@ import AppKit
 import MetalViewKit
 import FountainStoreClient
 
+extension Notification.Name {
+    static let MetalInstrumentTransportError = Notification.Name("MetalInstrumentTransportError")
+}
+
 @main
 struct PatchBayStudioApp: App {
     @StateObject private var appState = AppState()
@@ -223,6 +227,11 @@ fileprivate func PatchBayStudioApp_buildTeatroPrompt() -> String {
 
 @MainActor
 final class AppState: ObservableObject {
+    // Infinity/workbench mode: run without contacting PatchBay service.
+    let offlineMode: Bool = {
+        let env = ProcessInfo.processInfo.environment
+        return env["PATCHBAY_INFINITY"] == "1" || env["PATCHBAY_OFFLINE"] == "1"
+    }()
     @Published var instruments: [Components.Schemas.Instrument] = []
     @Published var suggestions: [Components.Schemas.SuggestedLink] = []
     @Published var links: [Components.Schemas.Link] = []
@@ -282,14 +291,17 @@ final class AppState: ObservableObject {
     func endActivity() { if let a = activity { NetDebug.log(String(format: "activity: end — %@ (%.2fs)", a.label, Date().timeIntervalSince(a.startedAt))) }; activity = nil; activityTask = nil }
     func cancelActivity() { activityTask?.cancel(); endActivity() }
     func startRefresh() {
+        if offlineMode { return }
         activityTask?.cancel()
         activityTask = Task { [weak self] in await self?.refresh() }
     }
     func startRefreshLinks() {
+        if offlineMode { return }
         activityTask?.cancel()
         activityTask = Task { [weak self] in await self?.refreshLinks() }
     }
     func startRefreshStore() {
+        if offlineMode { return }
         activityTask?.cancel()
         activityTask = Task { [weak self] in await self?.refreshStore() }
     }
@@ -303,6 +315,10 @@ final class AppState: ObservableObject {
         return URL(string: "http://127.0.0.1:7090")!
     }
     func checkStartup() async {
+        if offlineMode {
+            startupStatus = .ok
+            return
+        }
         startupStatus = .checking
         let base = serviceBaseURL()
         func quickSession() -> URLSession {
@@ -1290,54 +1306,40 @@ struct ContentView: View {
     @State private var showDashEditor: Bool = false
     init(state: AppState = AppState()) { _state = StateObject(wrappedValue: state) }
     var body: some View {
-        NavigationSplitView(columnVisibility: .constant(.automatic)) {
-            // Left: Template Library
-            TemplateLibraryView()
-                .environmentObject(state)
+        // Infinite canvas-only workspace: Metal canvas fills the window.
+        KeyInputContainer(onKey: { event in
+            let flags = event.modifierFlags
+            let stepMult = flags.contains(.option) ? 5 : 1
+            switch event.keyCode {
+            case 123: vm.nudgeSelected(dx: -1 * stepMult, dy: 0)
+            case 124: vm.nudgeSelected(dx: 1 * stepMult, dy: 0)
+            case 125: vm.nudgeSelected(dx: 0, dy: 1 * stepMult)
+            case 126: vm.nudgeSelected(dx: 0, dy: -1 * stepMult)
+            default: break
+            }
+        }) {
+            MetalCanvasHost()
                 .environmentObject(vm)
-                .navigationTitle("Templates")
-                .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 360)
-        } detail: {
-            // Center: Canvas + PB‑VRT Inspector (right)
-            KeyInputContainer(onKey: { event in
-                let flags = event.modifierFlags
-                let stepMult = flags.contains(.option) ? 5 : 1
-                switch event.keyCode {
-                case 123: vm.nudgeSelected(dx: -1 * stepMult, dy: 0)
-                case 124: vm.nudgeSelected(dx: 1 * stepMult, dy: 0)
-                case 125: vm.nudgeSelected(dx: 0, dy: 1 * stepMult)
-                case 126: vm.nudgeSelected(dx: 0, dy: -1 * stepMult)
-                default: break
+                .environmentObject(state)
+                .background(Color(NSColor.textBackgroundColor))
+                .onDrop(of: [UTType.json, UTType.text], isTargeted: .constant(false)) { providers, location in
+                    handleDrop(providers: providers, location: location)
                 }
-            }) {
-                HStack(spacing: 0) {
-                    MetalCanvasHost()
-                        .environmentObject(vm)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .overlay(
+                    // App‑level MIDI 2.0 instrument (PatchBay App) — overlay so it takes no layout space
+                    PatchBayAppInstrumentBinder()
                         .environmentObject(state)
-                        .background(Color(NSColor.textBackgroundColor))
-                        .onDrop(of: [UTType.json, UTType.text], isTargeted: .constant(false)) { providers, location in
-                            handleDrop(providers: providers, location: location)
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .overlay(
-                            // App‑level MIDI 2.0 instrument (PatchBay App) — overlay so it takes no layout space
-                            PatchBayAppInstrumentBinder()
-                                .environmentObject(state)
-                                .frame(width: 0, height: 0)
-                        )
-                    Divider()
-                    PBVRTInspectorHost()
-                        .frame(width: 380)
-                }
-            }
-            .navigationTitle("PatchBay Canvas")
-            .navigationSplitViewColumnWidth(min: 600, ideal: 900, max: .infinity)
-            .onAppear {
-                // Auto‑insert story patch if canvas is empty
-                if vm.nodes.isEmpty { vm.insertPBVRTStoryPatch() }
-            }
-            .toolbar {
-                ToolbarItemGroup(placement: .automatic) {
+                        .frame(width: 0, height: 0)
+                )
+        }
+        .navigationTitle("PatchBay Canvas")
+        .onAppear {
+            // Auto‑insert story patch if canvas is empty
+            if vm.nodes.isEmpty { vm.insertPBVRTStoryPatch() }
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .automatic) {
                     Toggle(isOn: $vm.connectMode) { Label("Connect", systemImage: vm.connectMode ? "link" : "link.badge.plus") }
                     HStack(spacing: 4) {
                         Button { vm.zoom = max(0.25, vm.zoom - 0.1) } label: { Image(systemName: "minus.magnifyingglass") }

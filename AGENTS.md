@@ -13,6 +13,17 @@ Welcome to FountainKit, the modular SwiftPM workspace for the Fountain Coach org
 - `FountainSpecCuration`: Canonical OpenAPI specs, fixtures, and regeneration scripts shared across packages.
 - `FountainExamples`: Sample apps and Teatro integrations that consume the published packages.
 
+## Core Contract (read first)
+
+- Prompts + facts: Teatro prompts and PE facts live only in FountainStore, never in ad‑hoc files. Apps must seed via small `*-seed` executables and read/print prompts from the store on boot.
+- Baseline: `baseline-patchbay` (grid‑dev‑app) is the canonical UI baseline for viewport math and robot invariants. Any change to the baseline must ship a matching MRTS Teatro prompt and keep robot tests green.
+- Engines: CoreMIDI and UIKit are banned; new interactive work (Infinity and successors) must use SDLKit for windowing/events and our own canvas core (`Canvas2D` + node/edge graph). AppKit/SwiftUI remain only for legacy surfaces.
+- Infinity: the “Infinity” app is the forward workbench surface — an SDLKit‑backed, instant‑start, offline‑capable canvas that runs directly on our graph; no servers or control‑plane boot are required to sketch.
+- OpenAPI‑first: every HTTP surface and instrument capability surface is defined by curated OpenAPI under `Packages/FountainSpecCuration/openapi`; server/client types and PE facts are always generated from these specs.
+- Store + secrets: FountainStore is the only authority for prompts, facts, graphs, and secrets. Secrets must be seeded via store tools, not environment variables.
+- Dependencies: third‑party code comes via SwiftPM `.package(url:)` from the Fountain Coach org; `External/` path imports are being removed and must not be reintroduced.
+- Build/test discipline: changes must compile with `swift build` at the root and pass focused `swift test --package-path Packages/<Package>` on touched packages before they are considered “green”.
+
 ## Quick Start
 - Bring the workspace up: `Scripts/dev/dev-up` (UI auto‑launches). Add `--check` for readiness probes.
 - Check status: `Scripts/dev/dev-status`.
@@ -271,6 +282,28 @@ Hard rules
 - No `External/*` code referenced by `.package(path:)` or scripts. Remove/deny path imports of third‑party code. First‑party in‑repo packages under `Packages/` remain `.package(path: "../<Pkg>")`.
 - Packages must own their assets with `resources: [...]` — no stray top‑level files that trigger “unhandled resource” warnings.
 - Optional/external engines (e.g., SDLKit) are gated behind env flags (e.g., `FK_USE_SDLKIT=1`) to keep offline builds working.
+
+## Infinity & SDLKit — New Work Contract
+
+For new interactive work (Infinity and follow‑on instruments), we standardise on SDLKit + our own graph/renderer and keep legacy frameworks at the edges only.
+
+What
+- GUI host: SDLKit windowing (`SDLWindow`) and renderer (`SDLRenderer`) provide the only interactive surface for new apps like Infinity; SwiftUI and UIKit are prohibited, and AppKit is allowed only inside SDL’s internals or thin legacy shims.
+- Canvas core: `Canvas2D` (doc↔view transform) and a small node/edge model form the canonical “infinite canvas” runtime; renderers (MetalViewKit, SDLKit) consume this math without redefining pan/zoom behaviour.
+- Infinity app: a new SDLKit‑backed executable (Infinity) uses `Canvas2D` + the graph only, runs without servers by default, and starts from a prebuilt binary so launch feels like a normal desktop app.
+
+Why
+- Cross‑platform: SDLKit gives us a portable window/event loop without binding new work to macOS‑only APIs.
+- Deterministic math: one transform (`Canvas2D`) keeps pan/zoom behaviour and robot invariants identical across hosts.
+- Reduced legacy drag: existing AppKit/SwiftUI apps remain supported but are treated as legacy; Infinity is the forward path for canvas‑centric instruments.
+
+Rules (new work)
+- CoreMIDI and UIKit are banned for all targets; no new code may `import CoreMIDI` or `import UIKit`.
+- New interactive UIs (Infinity, future canvases, instrument workbenches) must:
+  - host windows and events via SDLKit (no SwiftUI views, no direct NSView/NSWindow in their code paths),
+  - use `Canvas2D` as the single source of truth for zoom/translation (no ad‑hoc pan/zoom math),
+  - keep network/services optional so Infinity can launch instantly in an offline, local‑only mode.
+- Legacy AppKit/SwiftUI surfaces remain until migrated but must not be extended for Infinity‑class work; prefer building new tools on the SDLKit/Canvas2D stack instead.
 
 Deprecated (Teatro Csound)
 - The Teatro Csound path is deprecated and off by default. The authoritative audio engine is our Metal/DSP stack (`FountainAudioEngine`). Csound demos/tests in Teatro must be guarded (compile flag) and optional. No app targets may import or require Csound assets. Missing demo assets must not fail planning/builds; tests should skip when assets are absent.

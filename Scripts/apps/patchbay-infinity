@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# PatchBay Infinity — instant canvas-only workbench launcher.
+# Usage:
+#   Scripts/apps/patchbay-infinity          # start immediately (expects prebuilt binary)
+#   Scripts/apps/patchbay-infinity --build  # one-time build of patchbay-app
+
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")"/../.. && pwd)
+BUILD=0
+for a in "$@"; do
+  [[ "$a" == "--build" ]] && BUILD=1
+done
+
+export LAUNCHER_SIGNATURE=${LAUNCHER_SIGNATURE:-B86D7CEE-24C4-4C4C-A107-8D0542D1965B}
+export FOUNTAIN_SKIP_LAUNCHER_SIG=${FOUNTAIN_SKIP_LAUNCHER_SIG:-1}
+export FOUNTAINSTORE_DIR=${FOUNTAINSTORE_DIR:-$ROOT_DIR/.fountain/store}
+export APP_TITLE=${APP_TITLE:-PatchBay Infinity}
+export PATCHBAY_INFINITY=1
+
+APP_PKG="$ROOT_DIR/Packages/FountainApps"
+BIN_DIR="$APP_PKG/.build/debug"
+BIN="$BIN_DIR/patchbay-app"
+
+if (( BUILD )); then
+  echo "[patchbay-infinity] Building patchbay-app once (debug)…"
+  swift build --package-path "$APP_PKG" -c debug --product patchbay-app
+fi
+
+if [[ ! -x "$BIN" ]]; then
+  echo "[patchbay-infinity] error: patchbay-app binary not found at $BIN" >&2
+  echo "[patchbay-infinity] run with --build once to compile, then launch again without flags." >&2
+  exit 1
+fi
+
+exec "$BIN"

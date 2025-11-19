@@ -12,7 +12,7 @@ For most local UI work, start the Baseline app (Baseline‑PatchBay): `Scripts/d
 
 Baseline prompt policy: Any change to the Baseline app must ship a matching MRTS (MIDI Robot Test Script) Teatro prompt that encodes the numeric invariants. On boot, the Baseline app prints both prompts (creation + MRTS) for review. Persist the MRTS with `swift run --package-path Packages/FountainApps baseline-robot-seed` (or run `Scripts/ci/baseline-robot.sh` to execute the invariants subset).
 
-If you want the full PatchBay Studio app instead, start core services (`bash Scripts/dev-up --check`) and then run `swift run --package-path Packages/FountainApps patchbay-app`. Prefer to run the service manually? Use `swift run --package-path Packages/FountainApps patchbay-service-server` (it falls back to an ephemeral port if 7090 is busy and prints the bound port). For CI smoke, `PATCHBAY_ONESHOT=1` binds and exits.
+If you want the full PatchBay Studio app instead, start core services (`bash Scripts/dev-up --check`) and then run `swift run --package-path Packages/FountainApps patchbay-app`. Prefer a focused, canvas‑only workbench? Use `Scripts/apps/patchbay-infinity` which boots just the MIDI + PatchBay services and launches the infinite canvas UI. To run the service manually, use `swift run --package-path Packages/FountainApps patchbay-service-server` (it falls back to an ephemeral port if 7090 is busy and prints the bound port). For CI smoke, `PATCHBAY_ONESHOT=1` binds and exits.
 
 ### Using the canvas
 

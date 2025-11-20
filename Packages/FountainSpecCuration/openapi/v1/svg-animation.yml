@@ -1,0 +1,265 @@
+openapi: 3.1.0
+info:
+  title: SVG Animation Renderer Instrument
+  version: 1.0.0
+  summary: HTTP wrapper for SVGAnimationKit scenes and timelines.
+  description: |
+    The SVG Animation Renderer exposes a minimal HTTP surface for rendering
+    SVG scenes (static and animated). It is backed by SVGAnimationKit and is
+    intended to act as a rendering instrument for other services and tools.
+  x-fountain.port: 8091
+  x-fountain.binary: svg-animation-service
+  license:
+    name: FountainAI Internal
+servers:
+  - url: http://svg-animation.local
+    description: Local development
+security: []
+paths:
+  /svg/scene:
+    post:
+      summary: Render a static SVG scene
+      operationId: svgAnimation.renderScene
+      x-fountain.visibility: internal
+      x-fountain.reason: render SVG for instruments and tools
+      x-fountain.allow-as-tool: true
+      description: Render a single SVG scene described by JSON.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenderSceneRequest'
+      responses:
+        '200':
+          description: Rendered SVG
+          content:
+            image/svg+xml:
+              schema:
+                type: string
+        '400':
+          description: Invalid scene description
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Rendering error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /svg/scene/frames:
+    post:
+      summary: Render an animated SVG as frames
+      operationId: svgAnimation.renderFrames
+      x-fountain.visibility: internal
+      x-fountain.reason: render frame sequence for animated scenes
+      x-fountain.allow-as-tool: true
+      description: |
+        Render a sequence of SVG frames (or an animated SVG) for a scene with a
+        scalar animation timeline. Callers can choose to treat frames as discrete
+        images or post-process them into a single animated asset.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenderFramesRequest'
+      responses:
+        '200':
+          description: Rendered frames
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RenderFramesResponse'
+        '400':
+          description: Invalid scene or timeline description
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Rendering error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    RenderSceneRequest:
+      type: object
+      required:
+        - width
+        - height
+        - nodes
+      properties:
+        width:
+          type: number
+          format: double
+        height:
+          type: number
+          format: double
+        background:
+          type: string
+          description: Optional background fill (CSS color or hex).
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Node'
+
+    RenderFramesRequest:
+      type: object
+      required:
+        - scene
+        - timeline
+        - fps
+      properties:
+        scene:
+          $ref: '#/components/schemas/RenderSceneRequest'
+        timeline:
+          $ref: '#/components/schemas/Timeline1D'
+        fps:
+          type: number
+          format: double
+          minimum: 1
+
+    RenderFramesResponse:
+      type: object
+      properties:
+        frames:
+          type: array
+          description: SVG strings for each frame, in time order.
+          items:
+            type: string
+
+    Node:
+      type: object
+      description: Union type for supported SVG nodes.
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum: [rect, circle, text, path]
+        rect:
+          $ref: '#/components/schemas/Rect'
+        circle:
+          $ref: '#/components/schemas/Circle'
+        text:
+          $ref: '#/components/schemas/Text'
+        path:
+          $ref: '#/components/schemas/Path'
+
+    Rect:
+      type: object
+      required: [x, y, width, height]
+      properties:
+        x: { type: number, format: double }
+        y: { type: number, format: double }
+        width: { type: number, format: double }
+        height: { type: number, format: double }
+        fill: { type: string }
+        stroke: { type: string }
+        strokeWidth: { type: number, format: double }
+
+    Circle:
+      type: object
+      required: [cx, cy, r]
+      properties:
+        cx: { type: number, format: double }
+        cy: { type: number, format: double }
+        r: { type: number, format: double }
+        fill: { type: string }
+        stroke: { type: string }
+        strokeWidth: { type: number, format: double }
+
+    Text:
+      type: object
+      required: [x, y, content]
+      properties:
+        x: { type: number, format: double }
+        y: { type: number, format: double }
+        content: { type: string }
+        fill: { type: string }
+        fontSize: { type: number, format: double }
+
+    Path:
+      type: object
+      required: [commands]
+      properties:
+        commands:
+          type: array
+          items:
+            $ref: '#/components/schemas/PathCommand'
+        fill: { type: string }
+        stroke: { type: string }
+        strokeWidth: { type: number, format: double }
+
+    PathCommand:
+      type: object
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum: [moveTo, lineTo, quadTo, cubicTo, close]
+        x: { type: number, format: double }
+        y: { type: number, format: double }
+        cx: { type: number, format: double }
+        cy: { type: number, format: double }
+        cx1: { type: number, format: double }
+        cy1: { type: number, format: double }
+        cx2: { type: number, format: double }
+        cy2: { type: number, format: double }
+
+    Timeline1D:
+      type: object
+      required:
+        - duration
+        - tracks
+      properties:
+        duration:
+          type: number
+          format: double
+        tracks:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Curve1D'
+
+    Curve1D:
+      type: object
+      required:
+        - keyframes
+      properties:
+        keyframes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Keyframe1D'
+
+    Keyframe1D:
+      type: object
+      required:
+        - time
+        - value
+      properties:
+        time:
+          type: number
+          format: double
+        value:
+          type: number
+          format: double
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+

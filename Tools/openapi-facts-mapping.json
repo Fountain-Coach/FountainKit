@@ -38,5 +38,8 @@
   { "spec": "composer-script.yml", "agentId": "fountain.coach/agent/composer-script/service" },
   { "spec": "composer-cues.yml", "agentId": "fountain.coach/agent/composer-cues/service" },
   { "spec": "fountain-gui-demo.yml", "agentId": "fountain.coach/agent/fountain-gui-demo/service" },
-  { "spec": "instrument-new.yml", "agentId": "fountain.coach/agent/instrument-new/service" }
+  { "spec": "instrument-new.yml", "agentId": "fountain.coach/agent/instrument-new/service" },
+  { "spec": "infinity.yml", "agentId": "fountain.coach/agent/infinity/service" },
+  { "spec": "teatro-prompt-factory.yml", "agentId": "fountain.coach/agent/teatro-prompt-factory/service" },
+  { "spec": "svg-animation.yml", "agentId": "fountain.coach/agent/svg-animation/service" }
 ]

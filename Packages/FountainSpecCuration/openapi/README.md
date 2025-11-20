@@ -49,6 +49,8 @@ For a repository‑wide index of OpenAPI coverage and adoption status, see [../O
 | Composer Cues Service | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/composer-cues.yml](v1/composer-cues.yml) |
 | Instrument Lint Service | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/instrument-lint.yml](v1/instrument-lint.yml) |
 | Instrument New Service | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/instrument-new.yml](v1/instrument-new.yml) |
+| SVG Animation Renderer Instrument | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/svg-animation.yml](v1/svg-animation.yml) |
+| Teatro Prompt Factory | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/teatro-prompt-factory.yml](v1/teatro-prompt-factory.yml) |
 
 ## Coverage Status
 

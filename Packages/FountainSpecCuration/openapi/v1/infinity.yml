@@ -1,0 +1,78 @@
+openapi: 3.1.0
+info:
+  title: Infinity Canvas Instrument
+  version: 1.0.0
+  summary: Minimal spec for the Infinity SDLKit-based canvas instrument.
+  description: |
+    This spec models the Infinity canvas instrument: a single infinite canvas
+    with a small set of properties (zoom, translation, grid spacing). It is
+    used to derive MIDI 2.0 Property Exchange facts so Infinity can be addressed
+    as an instrument over CI/PE.
+servers: []
+paths:
+  /infinity/canvas:
+    get:
+      operationId: infinity.canvas.get
+      summary: Get current Infinity canvas transform
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InfinityCanvasState'
+    post:
+      operationId: infinity.canvas.set
+      summary: Set Infinity canvas transform fields
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InfinityCanvasState'
+      responses:
+        '204':
+          description: Applied
+
+components:
+  schemas:
+    InfinityCanvasState:
+      type: object
+      description: Logical transform for the Infinity canvas.
+      properties:
+        canvas.zoom:
+          type: number
+          format: double
+          minimum: 0.25
+          maximum: 3.0
+          default: 1.0
+          description: Zoom factor for the canvas.
+        canvas.translation.x:
+          type: number
+          format: double
+          minimum: -10000.0
+          maximum: 10000.0
+          default: 0.0
+          description: Horizontal translation of the canvas in document units.
+        canvas.translation.y:
+          type: number
+          format: double
+          minimum: -10000.0
+          maximum: 10000.0
+          default: 0.0
+          description: Vertical translation of the canvas in document units.
+        grid.minor:
+          type: integer
+          minimum: 2
+          maximum: 128
+          default: 24
+          description: Minor grid spacing in document units.
+        grid.majorEvery:
+          type: integer
+          minimum: 1
+          maximum: 16
+          default: 5
+          description: Number of minor steps between major grid lines.
+

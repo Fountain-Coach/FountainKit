@@ -34,6 +34,7 @@ Welcome to FountainKit, the modular SwiftPM workspace for the Fountain Coach org
 - Unified Master Plan — embedded below in this file (authoritative).
 - ML × MIDI 2.0 plan — `Plans/ML-MIDI2-Plan.md` (models, runners, CI/PE, integration).
 - PatchBay Node = Stage — `Plans/PatchBay-NodeStage-FeaturePlan.md` (capacity from baselines; in-node feedback; ports HUD). To be discussed.
+- Infinity workbench — `Plans/Infinity-Plan.md` (SDLKit infinite canvas instrument; keep this plan current as Infinity evolves).
 - Instrument requirements — `Design/INSTRUMENT_REQUIREMENTS.md` (what every instrument must provide: prompt, spec, facts, MIDI host wiring, tests).
 - FountainGUIKit demo integration — `Plans/FountainGUIKit-Demo-Plan.md` (NSView host, gestures, MIDI 2.0, MRTS/PB‑VRT).
 - MetalViewKit runtime instrument state — `Plans/MetalViewKitRuntime-InstrumentStatePlan.md` (generic instrument state API, facts integration, MIDI host wiring).
@@ -234,10 +235,12 @@ Why
 - Spec‑driven and deterministic: the same OpenAPI that drives HTTP types also defines the instrument’s PE surface. No ad‑hoc YAML; facts are generated and stored centrally.
 
 How
-- Batch (build/pre‑run) seeding: `bash Scripts/openapi/openapi-to-facts.sh`.
+- Per‑agent seeding (authoritative for dev/interactive): build the tooling once and call `openapi-to-facts` for exactly one spec/agent.
+  - Build: `swift build --package-path Packages/FountainTooling -c debug --target openapi-to-facts`.
+  - Seed one: `FOUNTAINSTORE_DIR=.fountain/store swift run --package-path Packages/FountainTooling -c debug openapi-to-facts Packages/FountainSpecCuration/openapi/v1/<spec>.yml --agent-id fountain.coach/agent/<name>/service --seed --allow-tools-only`.
   - Mapping file (authoritative): `Tools/openapi-facts-mapping.json` lists `{ spec, agentId }` pairs for all agents.
-  - Tool: `swift run --package-path Packages/FountainTooling openapi-to-facts <spec.yml> --agent-id <fountain.coach/agent/...> [--seed]`
   - Store: `agent-facts` collection at id `facts:agent:<agentId>` (`/` replaced by `|`).
+- The legacy batch script `Scripts/openapi/openapi-to-facts.sh` is intentionally **disabled**; do not use it in CI or dev flows.
 - Runtime seeding via Tools Factory (recommended for interactive authoring): POST a spec to Tools Factory and receive seeded facts immediately.
   - Endpoint: `POST /agent-facts/from-openapi` on `tools-factory-server`.
   - Body (JSON): `{ "agentId": "fountain.coach/agent/<name>/service", "corpusId": "agents", "seed": true, "openapi": {…} }` or `{ "specURL": "http://<service>/openapi.yaml" }`.
@@ -264,14 +267,110 @@ Secrets (no env policy)
 
 Where
 - Generator: `Packages/FountainTooling/Sources/openapi-to-facts`
-- Seed wrapper (mapper): `Scripts/openapi/openapi-to-facts.sh` reads `Tools/openapi-facts-mapping.json` and invokes the generator for each `{spec, agentId}` mapping.
-- Tools Factory runtime endpoint: `Packages/FountainApps/Sources/tools-factory-server/main.swift:1` (`/agent-facts/from-openapi`).
+- Tools Factory runtime endpoint: `Packages/FountainApps/Sources/tools-factory-server/main.swift:1` (`/agent-facts/from-openapi`, `/agent-facts`).
 - Gateway facts endpoint: `Packages/FountainApps/Sources/gateway-server/GatewayServer.swift:1`
 - Host (prototype): `Packages/FountainApps/Sources/midi-instrument-host`
 
 Rules
 - Facts live only in FountainStore; never in ad‑hoc files. Specs are the source of truth; facts are generated from specs.
-- For new services, add the spec under `Packages/FountainSpecCuration/openapi/v1/<service>.yml`, then extend `Scripts/openapi/openapi-to-facts.sh` with the agent id mapping.
+- For new services, add the spec under `Packages/FountainSpecCuration/openapi/v1/<service>.yml`, then extend `Tools/openapi-facts-mapping.json` with the `{spec, agentId}` mapping and generate facts per‑agent via `openapi-to-facts` or Tools Factory.
+
+## Instrument Creation Pipeline — Prompt + Facts (Authoritative)
+
+Every first‑class instrument follows a contract‑first pipeline: spec, prompt, facts, tests.
+
+What
+- Prompts are generated, not free‑handed: authors describe the surface and tests in a structured contract, and a factory renders both the Teatro prompt and its facts.
+- Facts come from curated OpenAPI and are stored centrally; runtime components (Tools Factory, Gateway, MIDI hosts, LLM tools) read facts instead of re‑parsing specs.
+
+How
+- Prompt contract:
+  - Author a `TeatroPromptContract` (scene title, host/surface, cores, properties, invariants, tests) for each new instrument/app.
+  - Spec: `Packages/FountainSpecCuration/openapi/v1/teatro-prompt-factory.yml` defines the contract schema and response bundle.
+- Prompt factory:
+  - Factory CLI: `swift run --package-path Packages/FountainTooling -c debug teatro-prompt-factory --input <contract.json>` produces `{ promptText, facts }`.
+  - Seed into FountainStore via a small `*-seed` executable: write `prompt:<appId>:teatro` and `prompt:<appId>:facts` segments; apps read and print the prompt on boot.
+- Facts factory:
+  - OpenAPI spec lives under `Packages/FountainSpecCuration/openapi/v1/<service>.yml` and is mapped in `Tools/openapi-facts-mapping.json` to an `agentId`.
+  - Generate facts per agent with either:
+    - CLI: `openapi-to-facts` (per‑agent, as described above), or
+    - Tools Factory: `POST /agent-facts/from-openapi` (`Packages/FountainApps/Sources/tools-factory-server/main.swift:1`) with `{agentId, corpusId, seed, openapi/specURL}`.
+  - Facts are served via Gateway (`/.well-known/agent-facts`) and consumed by hosts (`midi-instrument-host`, LLM tools).
+- Tests linkage:
+  - Facts and prompts must name the owning test module and suites (see `Design/INSTRUMENT_REQUIREMENTS.md`); `Tools/instruments.json` and `instrument-lint` enforce the presence of tests and symbols.
+
+Rules
+- No hand‑written prompts in code or docs: always go through the Teatro prompt factory and seeders.
+- No batch regeneration of all facts: use per‑agent generation or Tools Factory; the legacy script under `Scripts/openapi/openapi-to-facts.sh` is disabled and must not be re‑enabled.
+
+## FountainStore Schema & Seeders (Authoritative)
+
+FountainStore is the single backing store for prompts, facts, instruments, and secrets. Instead of generic “PUT any JSON anywhere”, we keep a small, named set of corpora and collections, each owned by a seeder or factory.
+
+What
+- Per‑app corpora (`<app-id>`):
+  - Corpus: `<app-id>` (e.g., `grid-dev`, `baseline-patchbay`, `infinity`).
+  - Collection: `segments`.
+  - Documents:
+    - `prompt:<app-id>:teatro` → Teatro creation prompt (text).
+    - `prompt:<app-id>:facts` → companion JSON facts for that surface.
+    - Other app‑specific segments as needed (e.g., docs, baselines) with the same `segments` pattern.
+  - Seeders:
+    - Small `*-seed` executables under `Packages/FountainApps/Sources/*-seed` (for example `grid-dev-seed`, `baseline-robot-seed`, `infinity-seed`).
+    - Launchers under `Scripts/apps/<app-id>` call the seeder first, then start the app.
+
+- Agents corpus (`agents`):
+  - Corpus: `agents`.
+  - Collection: `agent-facts`.
+  - Documents:
+    - `facts:agent:<agent-id>` with `/` replaced by `|` (for example `facts:agent:fountain.coach|agent|svg-animation|service`).
+  - Seeders / factories:
+    - CLI: `openapi-to-facts` in `Packages/FountainTooling/Sources/openapi-to-facts` (per‑agent generation with `--seed`).
+    - Tools Factory HTTP: `POST /agent-facts/from-openapi` on `tools-factory-server` (`Packages/FountainApps/Sources/tools-factory-server`).
+    - Facts‑Factory MIDI instrument exposed by `agent-host` (see `Packages/FountainApps/Sources/midi-instrument-host` and `AGENTS.md` Facts‑Factory section).
+
+- Instruments corpus (`instruments`):
+  - Corpus: `instruments`.
+  - Collection: `instrument-catalog`.
+  - Documents:
+    - `instrument:<id>` → one instrument entry (id, title, summary, group, agentIds, version, pricing, enabled).
+    - `instrument-catalog:index` → `{ "ids": ["id1","id2",…] }` for fast listing.
+  - Seeders / factories:
+    - HTTP server: `instrument-catalog-server` (`Packages/FountainApps/Sources/instrument-catalog-server`), `POST /catalog/instrument`.
+    - CLI seeder: `instrument-catalog-seed` (`Packages/FountainTooling/Sources/instrument-catalog-seed`) for direct, scriptable catalog updates without starting a server.
+
+- Secrets corpus (`secrets`):
+  - Corpus: `secrets`.
+  - Collection: `secrets`.
+  - Documents (in priority order):
+    - `secret:agent:<agent-id>` with `/` replaced by `|`.
+    - `secret:agent:<agent-id>` (raw form).
+    - `secret:default` as a fallback.
+  - Body: `{ "headers": { "Authorization": "Bearer …", "X-API-Key": "…" } }` or a flat header map.
+  - Seeders:
+    - CLI: `secrets-seed` (`Packages/FountainApps/Sources/secrets-seed`).
+    - Wrapper: `Scripts/apps/secrets-seed` with `--agent-id` and repeated `--header` flags.
+  - Consumers:
+    - MIDI Instrument Host (`midi-instrument-host`) via `loadSecrets`.
+    - Tools Factory when calling external agents on behalf of hosts.
+
+- Other named corpora:
+  - Build profiles: `build-profiles` corpus (for example `prompt:service-minimal` segments) seeded by `service-minimal-seed`.
+  - Service and demo corpora (for example `audiotalk`, `composer-studio`, `teatro-guide`): each has its own `*-seed` executable and follows the same `segments` pattern for prompts and facts.
+
+How
+- Always resolve the store root via `FOUNTAINSTORE_DIR` (default `.fountain/store`), then select a corpus by id.
+- Use `FountainStoreClient` from `FountainCore` in seeders and services; do not talk to the underlying on‑disk layout directly.
+- For instrument creation, the pipeline is:
+  - OpenAPI spec → `openapi-to-facts` / Tools Factory → `agents` corpus (`agent-facts`).
+  - Prompt contract → `teatro-prompt-factory` → per‑app corpus (`segments`).
+  - Instrument metadata → `instrument-catalog-seed` or `instrument-catalog-server` → `instruments` corpus.
+  - Secrets → `secrets-seed` → `secrets` corpus.
+
+Rules
+- No raw, ad‑hoc writes into FountainStore: always go through a dedicated seeder or factory that owns the schema for its corpus and collection.
+- Keep corpora small and purpose‑specific; new data shapes require either extending an existing corpus/collection schema or introducing a new, documented corpus with a corresponding seeder.
+- Treat `Tools/instruments.json` + `instrument-lint` as the gatekeeper for “first‑class” instruments: entries there must have matching specs, prompts, facts, tests, and (when applicable) catalog/agent facts seeded via the tools above.
 
 ## SwiftPM‑Only Dependencies (authoritative)
 

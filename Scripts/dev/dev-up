@@ -327,7 +327,18 @@ elif [[ "$PATCHBAY_ONLY" == "1" ]]; then
     wait_ready_json midi "http://127.0.0.1:$(port_for midi)/health" 10 || true
     wait_ready patchbay "http://127.0.0.1:$(port_for patchbay)/health" 20 || true
   fi
-  else
+  # In patchbay-only mode, skip full control-plane boot and heavy UI test builds.
+  # Launch the Baseline PatchBay UI once services are up, then exit.
+  echo "[dev-up] Building Baseline PatchBay app (patchbay-only)…"
+  swift build --package-path "$REPO_ROOT/Packages/FountainApps" --configuration "$CONFIGURATION" --product baseline-patchbay || {
+    echo "[dev-up] WARN: failed to build baseline-patchbay product" >&2
+  }
+  if [[ "${DEV_UP_NO_PATCHBAY_UI:-0}" != "1" ]]; then
+    start_bg patchbay-ui baseline-patchbay Packages/FountainApps
+  fi
+  echo "[dev-up] PatchBay workbench started (patchbay-only mode)."
+  exit 0
+else
     # Core services (ordered: deps first, gateway last)
   start_bg agent-host agent-host Packages/FountainApps
     start_bg baseline-awareness baseline-awareness-server Packages/FountainApps

@@ -1,5 +1,5 @@
 {
-  "originHash" : "9b1fc0a4a75fc3d52218873263e3ef9ee6011d7f7bd94df13a7c3187103ba647",
+  "originHash" : "8171a41bd504fc49ae6a996d944589d30e73678c4ac47010f3d812da45028534",
   "pins" : [
     {
       "identity" : "async-http-client",
@@ -80,6 +80,15 @@
       "state" : {
         "branch" : "main",
         "revision" : "73c1f2d0926bbce57b872ffc5d948b2f2ecd3f40"
+      }
+    },
+    {
+      "identity" : "svganimationkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Fountain-Coach/SVGAnimationKit.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "d3591b1d59de9957752b8f7e3e206149d752699e"
       }
     },
     {

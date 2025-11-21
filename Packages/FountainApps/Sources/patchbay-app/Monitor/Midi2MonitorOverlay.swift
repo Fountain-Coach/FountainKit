@@ -135,10 +135,13 @@ struct Midi2MonitorOverlay: View {
 // Binds a MetalInstrument (MIDI 2.0) to this overlay and maps PE setUniform to overlay properties.
 fileprivate struct InstrumentBinder: NSViewRepresentable {
     let onSet: (String, Float) -> Void
-    final class Sink: MetalSceneRenderer { var onSet: ((String, Float)->Void)?; func setUniform(_ name: String, float: Float) { onSet?(name, float) }
+    final class Sink: MetalSceneRenderer {
+        var onSet: ((String, Float) -> Void)?
+        func setUniform(_ name: String, float: Float) { onSet?(name, float) }
         func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
         func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
         func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+        func vendorEvent(topic: String, data: Any?) {}
     }
     final class Coordinator { var instrument: MetalInstrument? = nil }
     func makeCoordinator() -> Coordinator { Coordinator() }

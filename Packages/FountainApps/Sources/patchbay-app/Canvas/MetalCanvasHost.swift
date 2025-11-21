@@ -237,6 +237,7 @@ fileprivate final class MarqueeSink: MetalSceneRenderer {
     func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
     func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
     func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+    func vendorEvent(topic: String, data: Any?) {}
 
     func stateSnapshot() -> [String: Any] {
         [
@@ -330,6 +331,7 @@ fileprivate final class CursorSink: MetalSceneRenderer {
     func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
     func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
     func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+    func vendorEvent(topic: String, data: Any?) {}
     func stateSnapshot() -> [String: Any] {
         [
             "cursor.visible": visible ? 1.0 : 0.0,
@@ -433,6 +435,7 @@ fileprivate final class GridSink: MetalSceneRenderer {
     func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
     func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
     func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+    func vendorEvent(topic: String, data: Any?) {}
     var snapshot: (() -> [String: Any])? = nil
 }
 
@@ -496,6 +499,7 @@ fileprivate final class ViewportSink: MetalSceneRenderer {
     func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
     func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
     func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+    func vendorEvent(topic: String, data: Any?) {}
 }
 
 fileprivate struct ViewportInstrumentBinder: NSViewRepresentable {
@@ -568,6 +572,7 @@ fileprivate struct StageInstrumentsBinder: NSViewRepresentable {
         func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
         func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
         func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+        func vendorEvent(topic: String, data: Any?) {}
     }
     final class Coordinator {
         var instruments: [String: MetalInstrument] = [:] // stageId → instrument
@@ -1097,6 +1102,7 @@ fileprivate struct ReplayInstrumentsBinder: NSViewRepresentable {
         func noteOn(note: UInt8, velocity: UInt8, channel: UInt8, group: UInt8) {}
         func controlChange(controller: UInt8, value: UInt8, channel: UInt8, group: UInt8) {}
         func pitchBend(value14: UInt16, channel: UInt8, group: UInt8) {}
+        func vendorEvent(topic: String, data: Any?) {}
     }
     final class Coordinator { var instruments: [String: MetalInstrument] = [:] }
     func makeCoordinator() -> Coordinator { Coordinator() }

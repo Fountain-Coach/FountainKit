@@ -1,16 +1,13 @@
 #if canImport(SwiftUI) && canImport(AppKit) && canImport(Metal) && canImport(MetalKit)
 import SwiftUI
-extension Notification.Name {
+public extension Notification.Name {
     static let MetalCanvasMarqueeCommand = Notification.Name("MetalCanvasMarqueeCommand")
+    static let MetalCanvasMIDIActivity = Notification.Name("MetalCanvasMIDIActivity")
+    static let MetalCanvasUMPOut = Notification.Name("MetalCanvasUMPOut")
 }
 import AppKit
 import Metal
 import MetalKit
-
-public extension Notification.Name {
-    static let MetalCanvasMIDIActivity = Notification.Name("MetalCanvasMIDIActivity")
-    static let MetalCanvasUMPOut = Notification.Name("MetalCanvasUMPOut")
-}
 
 public struct MetalCanvasView: NSViewRepresentable {
     public typealias NodesProvider = () -> [MetalCanvasNode]

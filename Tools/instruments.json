@@ -24,6 +24,18 @@
       "LLMChatAppTests",
       "LLMChatAppSnapshotTests"
     ]
+  },
+  {
+    "appId": "infinity",
+    "agentId": "fountain.coach/agent/infinity/service",
+    "corpusId": "infinity",
+    "spec": "infinity.yml",
+    "runtimeAgentId": null,
+    "testModulePath": "Packages/FountainApps/Tests/InfinityTests",
+    "snapshotBaselinesDir": null,
+    "requiredTestSymbols": [
+      "InfinityCanvasTests",
+      "InfinityGraphTests"
+    ]
   }
 ]
-

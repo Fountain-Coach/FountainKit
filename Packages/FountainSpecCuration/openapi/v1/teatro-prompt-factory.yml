@@ -1,0 +1,162 @@
+openapi: 3.1.0
+info:
+  title: Teatro Prompt Factory
+  version: 1.0.0
+  summary: Structured factory for Fountain instruments' Teatro prompts and facts.
+  description: |
+    The Teatro Prompt Factory accepts a structured contract for an instrument/app
+    and returns a canonical Teatro prompt text plus a matching facts JSON object.
+    This enforces a shared template (Scene, Text, Camera, Input, Properties,
+    Invariants, Tests/Robot) across all instruments.
+  license:
+    name: FountainAI Internal
+servers:
+  - url: http://127.0.0.1:0
+    description: Logical factory host (embedded or via Tools Factory)
+paths:
+  /teatro/prompt:
+    post:
+      operationId: teatro.prompt.create
+      summary: Generate a Teatro prompt and facts bundle
+      x-fountain.allow-as-tool: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeatroPromptContract'
+      responses:
+        '200':
+          description: Prompt and facts bundle
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeatroPromptBundle'
+
+components:
+  schemas:
+    TeatroPromptContract:
+      type: object
+      description: Contract for generating a Teatro prompt + facts for an instrument or app.
+      required:
+        - appId
+        - sceneTitle
+        - role
+        - host
+        - surface
+        - cores
+        - properties
+        - invariants
+        - tests
+        - agentId
+        - specName
+      properties:
+        appId:
+          type: string
+          description: Application or instrument id (corpus id in FountainStore).
+          example: infinity
+        sceneTitle:
+          type: string
+          description: Scene title for the Teatro prompt.
+          example: Infinity — Canvas-Only PatchBay Canvas
+        role:
+          type: string
+          description: Short role description (e.g. "canvas-only workbench").
+          example: canvas-only workbench
+        host:
+          type: string
+          description: Host/windowing stack and platform.
+          example: SDLKit window on macOS; AppKit only via SDLKit internals
+        surface:
+          type: string
+          description: High-level description of what is visible on screen.
+          example: Single infinite canvas filling the window; no side panes or monitors
+        cores:
+          type: array
+          items:
+            type: string
+          description: Shared core components this instrument must honour (e.g. Canvas2D).
+          example: [Canvas2D, InfinityScene]
+        properties:
+          type: array
+          description: Canonical properties exposed via OpenAPI / PE.
+          items:
+            $ref: '#/components/schemas/TeatroProperty'
+        invariants:
+          type: array
+          description: Symbolic invariant names that tests must enforce.
+          items:
+            type: string
+          example:
+            - followFingerPan
+            - anchorStableZoom
+        tests:
+          $ref: '#/components/schemas/TeatroTestsContract'
+        agentId:
+          type: string
+          description: Agent id for this instrument surface.
+          example: fountain.coach/agent/infinity/service
+        specName:
+          type: string
+          description: OpenAPI spec file name for this surface.
+          example: infinity.yml
+
+    TeatroProperty:
+      type: object
+      description: Single property in the instrument's public schema.
+      required:
+        - name
+        - type
+      properties:
+        name:
+          type: string
+          description: Fully qualified property name.
+          example: canvas.zoom
+        type:
+          type: string
+          description: Primitive type (float, int, bool, string).
+          example: float
+        min:
+          type: number
+          format: double
+        max:
+          type: number
+          format: double
+        default:
+          type: number
+          format: double
+
+    TeatroTestsContract:
+      type: object
+      description: Mapping between this instrument and its owning test suites.
+      required:
+        - modulePath
+        - suites
+      properties:
+        modulePath:
+          type: string
+          description: Relative path to the XCTest module that owns the suites.
+          example: Packages/FountainApps/Tests/InfinityTests
+        suites:
+          type: array
+          description: XCTest class names that enforce this contract.
+          items:
+            type: string
+          example:
+            - InfinityCanvasTests
+            - InfinityGraphTests
+
+    TeatroPromptBundle:
+      type: object
+      description: Generated prompt and facts bundle.
+      required:
+        - promptText
+        - facts
+      properties:
+        promptText:
+          type: string
+          description: Rendered Teatro prompt text following the canonical template.
+        facts:
+          type: object
+          description: Structured facts JSON suitable for `prompt:<appId>:facts`.

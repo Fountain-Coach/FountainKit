@@ -12,11 +12,14 @@ let package = Package(
         .executable(name: "openapi-curator-service", targets: ["openapi-curator-service"]),
         .executable(name: "openapi-jsonify", targets: ["openapi-jsonify"]),
         .executable(name: "clientgen-service", targets: ["clientgen-service"]),
+        .executable(name: "teatro-prompt-factory", targets: ["teatro-prompt-factory"]),
         .executable(name: "sse-client", targets: ["sse-client"]),
+        .executable(name: "openapi-facts-status", targets: ["openapi-facts-status"]),
         .executable(name: "openapi-to-facts", targets: ["openapi-to-facts"]),
         .executable(name: "instrument-lint", targets: ["instrument-lint"]),
         .executable(name: "instrument-new", targets: ["instrument-new"]),
         .executable(name: "instrument-new-service-server", targets: ["instrument-new-service-server"]),
+        .executable(name: "instrument-catalog-seed", targets: ["instrument-catalog-seed"]),
         .plugin(name: "EnsureOpenAPIConfigPlugin", targets: ["EnsureOpenAPIConfigPlugin"])
     ],
     dependencies: [
@@ -40,6 +43,12 @@ let package = Package(
             name: "openapi-to-facts",
             dependencies: [
                 "Yams",
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ]
+        ),
+        .executableTarget(
+            name: "openapi-facts-status",
+            dependencies: [
                 .product(name: "FountainStoreClient", package: "FountainCore")
             ]
         ),
@@ -84,6 +93,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "sse-client",
+            dependencies: []
+        ),
+        .executableTarget(
+            name: "teatro-prompt-factory",
             dependencies: []
         ),
         .testTarget(
@@ -134,6 +147,12 @@ let package = Package(
                 "InstrumentNewService",
                 .product(name: "FountainRuntime", package: "FountainCore"),
                 .product(name: "LauncherSignature", package: "FountainCore")
+            ]
+        ),
+        .executableTarget(
+            name: "instrument-catalog-seed",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore")
             ]
         ),
         .plugin(

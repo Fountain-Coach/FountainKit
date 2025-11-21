@@ -1,7 +1,10 @@
-// MetalViewKit — Canonical 2D transform (doc -> view -> NDC)
+// MetalViewKit — Canonical 2D transform (doc ↔ view)
+//
+// Canvas2D is the shared camera model for infinite canvases in this workspace.
+// It is intentionally UI‑agnostic and depends only on CoreGraphics so it can be
+// reused by MetalViewKit, SDLKit-based apps (Infinity), and tests.
 
-#if canImport(AppKit)
-import AppKit
+#if canImport(CoreGraphics)
 import CoreGraphics
 
 public struct Canvas2D {
@@ -18,11 +21,11 @@ public struct Canvas2D {
     }
     public mutating func clamp() { zoom = max(minZoom, min(maxZoom, zoom)) }
 
-    // Map a doc-space point to a view-space point (AppKit points)
+    // Map a doc-space point to a view-space point
     public func docToView(_ p: CGPoint) -> CGPoint { CGPoint(x: (p.x + translation.x) * zoom,
                                                             y: (p.y + translation.y) * zoom) }
 
-    // Map a view-space point (AppKit points) to doc-space
+    // Map a view-space point to doc-space
     public func viewToDoc(_ p: CGPoint) -> CGPoint { CGPoint(x: (p.x / max(0.0001, zoom)) - translation.x,
                                                             y: (p.y / max(0.0001, zoom)) - translation.y) }
 

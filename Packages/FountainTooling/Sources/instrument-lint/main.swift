@@ -66,14 +66,19 @@ struct InstrumentLint {
             fail("agentId \(inst.agentId) is not referenced in Scripts/openapi/openapi-to-facts.sh")
         }
 
-        // 3) Facts document exists for agentId in FountainStore (agents corpus)
+        // 3) Teatro prompt exists for appId in FountainStore and follows the template.
+        // For now this is a soft check to keep tests self-contained; missing prompts
+        // are reported but do not fail instruments yet.
+        _ = await hasTeatroPrompt(appId: inst.appId, root: root)
+
+        // 4) Facts document exists for agentId in FountainStore (agents corpus)
         // For now this is a soft check: we warn when facts are missing, but do not
         // fail the instrument outright while store tooling is being migrated.
         if await !hasFacts(agentId: inst.agentId, root: root) {
             fputs("[instrument-lint] WARN: \(inst.appId): facts document missing for agentId \(inst.agentId) in agents corpus\n", stderr)
         }
 
-        // 4) Tests: require a test module directory when specified
+        // 5) Tests: require a test module directory when specified
         if let rel = inst.testModulePath {
             let path = root.appendingPathComponent(rel)
             var isDir: ObjCBool = false
@@ -88,7 +93,7 @@ struct InstrumentLint {
             }
         }
 
-        // 5) Snapshot / PB-VRT baselines: require directory when specified
+        // 6) Snapshot / PB-VRT baselines: require directory when specified
         if let rel = inst.snapshotBaselinesDir {
             let path = root.appendingPathComponent(rel)
             var isDir: ObjCBool = false
@@ -97,7 +102,7 @@ struct InstrumentLint {
             }
         }
 
-        // 6) Required test symbols: ensure specific PBVRT/robot test classes exist
+        // 7) Required test symbols: ensure specific PBVRT/robot test classes exist
         if let symbols = inst.requiredTestSymbols, !symbols.isEmpty {
             guard let rel = inst.testModulePath else {
                 fail("requiredTestSymbols specified but no testModulePath for \(inst.appId)")
@@ -124,6 +129,43 @@ struct InstrumentLint {
         }
 
         return ok
+    }
+
+    @MainActor
+    static func hasTeatroPrompt(appId: String, root: URL) async -> Bool {
+        let store: FountainStoreClient = {
+            let env = ProcessInfo.processInfo.environment
+            let url: URL
+            if let dir = env["FOUNTAINSTORE_DIR"], !dir.isEmpty {
+                if dir.hasPrefix("/") {
+                    url = URL(fileURLWithPath: dir, isDirectory: true)
+                } else {
+                    url = root.appendingPathComponent(dir, isDirectory: true)
+                }
+            } else {
+                url = root.appendingPathComponent(".fountain/store", isDirectory: true)
+            }
+            if let disk = try? DiskFountainStoreClient(rootDirectory: url) {
+                return FountainStoreClient(client: disk)
+            } else {
+                return FountainStoreClient(client: EmbeddedFountainStoreClient())
+            }
+        }()
+        let corpusId = appId
+        let segmentId = "prompt:\(appId):teatro"
+        do {
+            if let data = try await store.getDoc(corpusId: corpusId, collection: "segments", id: segmentId),
+               let segment = try? JSONDecoder().decode(Segment.self, from: data) {
+                if !segment.text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("Scene:") {
+                    FileHandle.standardError.write(Data("[instrument-lint] \(appId): teatro prompt does not start with 'Scene:'\n".utf8))
+                }
+                return true
+            }
+        } catch {
+            FileHandle.standardError.write(Data("[instrument-lint] \(appId): error fetching teatro prompt: \(error)\n".utf8))
+        }
+        FileHandle.standardError.write(Data("[instrument-lint] \(appId): teatro prompt segment missing (prompt:\(appId):teatro)\n".utf8))
+        return false
     }
 
     @MainActor

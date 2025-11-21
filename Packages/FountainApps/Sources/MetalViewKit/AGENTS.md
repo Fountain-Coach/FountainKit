@@ -51,6 +51,23 @@ Canvas Nodes (draft)
 - Stage nodes will implement `node = page` by drawing the page body and placing input ports at baseline midpoints; panel/query/transform nodes keep tile bodies.
 - No overlays: HUD (ticks/selection) remains transient; node bodies are rendered by the node itself.
 
+## Canvas2D and Infinity (shared camera core)
+
+Canvas2D underpins every infinite canvas in this workspace. It is a small, UI‑agnostic type that owns only zoom and translation and provides deterministic mappings between document space and view space.
+
+What
+- File: `Packages/FountainApps/Sources/MetalViewKit/Canvas2D.swift` (CoreGraphics‑only).
+- Responsibilities: hold `zoom` and `translation`, clamp to `[minZoom,maxZoom]`, map points via `docToView`/`viewToDoc`, and implement follow‑finger pan (`panBy(viewDelta:)`) and anchor‑stable zoom (`zoomAround(viewAnchor:magnification:)`).
+- Consumers: MetalViewKit renderers, SDLKit‑based canvases (Infinity), and tests must all use Canvas2D as the single source of truth for camera math.
+
+Why
+- One transform keeps robot invariants and viewport math consistent across hosts (MetalViewKit, SDLKit, tests).
+- CoreGraphics‑only makes the type safe to use from non‑AppKit contexts, including SDLKit on macOS and future cross‑platform backends.
+
+Rules
+- Do not re‑implement pan/zoom/anchor math elsewhere; new canvases (including Infinity) must call into Canvas2D instead of duplicating logic.
+- If Canvas2D’s behaviour changes (ranges, invariants), update its doc comment and the Infinity plan (`Plans/Infinity-Plan.md`) in the same change.
+
 MIDI Robot Testing (canonical) — Default Policy
 Narrative first: we test every interactive surface by treating it as a MIDI 2.0 instrument and by validating invariants against the canonical 2D transform. No UI automation is needed — tests send UMP and observe deterministic transform updates.
 

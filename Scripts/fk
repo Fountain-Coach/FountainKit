@@ -96,6 +96,7 @@ Commands:
   up              Start core services (dev-up)
   down            Stop core services (dev-down)
   status          Show status of core services and tool-server
+  workbench       Start PatchBay workbench (MIDI + PatchBay only)
   baseline        Launch the Baseline‑PatchBay UI (grid‑only, instrument‑first)
   logs [what]     Stream logs: 'compose' or 'tool-server'
   open <target>   Open common endpoints in browser
@@ -138,6 +139,10 @@ case "${1:-help}" in
   up) shift; up "$@" ;;
   down) shift; down "$@" ;;
   status) shift; status "$@" ;;
+  workbench)
+    shift
+    echo "[fk] Starting PatchBay workbench (MIDI + PatchBay only)…"
+    "$ROOT/Scripts/dev/patchbay-fast" "$@" ;;
   baseline)
     shift
     echo "[fk] Launching Baseline‑PatchBay UI…"

@@ -187,6 +187,7 @@ let DEPENDENCIES: [Package.Dependency] = BLANK_VRT_ONLY ? [
         // External UI graph editor used by PatchBay
         .package(url: "https://github.com/AudioKit/Flow.git", from: "1.0.4"),
         .package(path: "../FountainTelemetryKit"),
+        .package(url: "https://github.com/Fountain-Coach/SVGAnimationKit.git", branch: "main"),
         .package(path: "../../Tools/PersistenceSeeder"),
         // Teatro (path-based until repo splits subpackages for URL consumption)
         .package(path: "../../External/TeatroFull"),
@@ -272,7 +273,7 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
         ]
     ),
     .testTarget(
-        name: "QuietFrameEditorUITests",
+            name: "QuietFrameEditorUITests",
         dependencies: [
             "quietframe-sonify-app"
         ],
@@ -1919,6 +1920,13 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             ],
             path: "Sources/quietframe-teatro-seed"
         ),
+        .executableTarget(
+            name: "infinity-seed",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/infinity-seed"
+        ),
         // MVK Runtime Server split: library (kit) + thin executable
         .target(
             name: "MetalViewKitRuntimeServerKit",
@@ -1959,6 +1967,17 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
                 "MetalViewKit"
             ],
             path: "Sources/metalviewkit-cc-fuzz"
+        ),
+        .executableTarget(
+            name: "svg-animation-service",
+            dependencies: [
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "FountainRuntime", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "SVGAnimationKit", package: "SVGAnimationKit")
+            ],
+            path: "Sources/svg-animation-service",
+            exclude: ["AGENTS.md"]
         ),
         .executableTarget(
             name: "sysx-json-sender",
@@ -2017,9 +2036,28 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             resources: [
                 .process("Baselines")
             ]
+        ),
+        .testTarget(
+            name: "InfinityTests",
+            dependencies: [
+                "MetalViewKit"
+            ],
+            path: "Tests/InfinityTests"
         )
         
     ] )))
+
+let INFINITY_TARGETS: [Target] = USE_SDLKIT ? [
+    .executableTarget(
+        name: "infinity",
+        dependencies: [
+            "MetalViewKit",
+            .product(name: "SDLKit", package: "SDLKit"),
+            .product(name: "FountainStoreClient", package: "FountainCore")
+        ],
+        path: "Sources/infinity"
+    )
+] : []
 
 let package = Package(
     name: "FountainApps",
@@ -2028,5 +2066,5 @@ let package = Package(
     ],
     products: PRODUCTS,
     dependencies: DEPENDENCIES,
-    targets: TARGETS
+    targets: TARGETS + INFINITY_TARGETS
 )

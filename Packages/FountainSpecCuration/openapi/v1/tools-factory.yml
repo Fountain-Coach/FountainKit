@@ -82,6 +82,85 @@ paths:
                 $ref: '#/components/schemas/FunctionListResponse'
         '422':
           $ref: '#/components/responses/ValidationErrorResponse'
+
+  /agent-facts/from-openapi:
+    post:
+      summary: Generate and optionally seed agent facts from OpenAPI
+      operationId: agentFacts_fromOpenAPI
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      description: |
+        Generate Property Exchange facts for an agent from an OpenAPI document and,
+        when requested, seed them into FountainStore under the `agents` corpus.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentFactsFromOpenAPIRequest'
+      responses:
+        '200':
+          description: Generated facts (and seeded when requested)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentFactsResponse'
+        '400':
+          description: Invalid request (missing agentId or OpenAPI payload)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Generator or IO failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /agent-facts:
+    get:
+      summary: Fetch stored agent facts
+      operationId: agentFacts_get
+      x-fountain.visibility: public
+      x-fountain.reason: ''
+      x-fountain.allow-as-tool: true
+      description: |
+        Return the stored facts document for a given agentId from FountainStore.
+      parameters:
+        - name: agentId
+          in: query
+          required: true
+          description: Agent identifier (e.g. fountain.coach/agent/infinity/service)
+          schema:
+            type: string
+        - name: corpusId
+          in: query
+          required: false
+          description: Corpus containing the facts document (defaults to agents).
+          schema:
+            type: string
+            default: agents
+      responses:
+        '200':
+          description: Stored facts document
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          description: Invalid request (missing agentId)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Facts not found for the given agentId/corpus
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /metrics:
     get:
       summary: Metrics
@@ -149,6 +228,52 @@ components:
       description: OpenAPI specification describing one or more tools
       type: object
       additionalProperties: true
+    AgentFactsFromOpenAPIRequest:
+      type: object
+      description: Request to generate (and optionally seed) agent facts from an OpenAPI spec.
+      required:
+        - agentId
+      properties:
+        agentId:
+          type: string
+          description: Agent identifier (e.g. fountain.coach/agent/infinity/service).
+        corpusId:
+          type: string
+          description: Corpus id to write facts into when seeding.
+          default: agents
+        seed:
+          type: boolean
+          description: When true, write facts into FountainStore as well as returning them.
+          default: true
+        openapi:
+          description: Inline OpenAPI document to use as the source of truth.
+          allOf:
+            - $ref: '#/components/schemas/OpenAPIDocument'
+        specURL:
+          type: string
+          format: uri
+          description: URL pointing at an OpenAPI document (alternative to inline `openapi`).
+    AgentFactsResponse:
+      type: object
+      description: Response containing generated facts and seeding metadata.
+      required:
+        - agentId
+        - corpusId
+        - facts
+      properties:
+        agentId:
+          type: string
+        corpusId:
+          type: string
+        seeded:
+          type: boolean
+          description: Indicates whether the facts were written into FountainStore.
+        id:
+          type: string
+          description: Document id used when seeding into FountainStore.
+        facts:
+          type: object
+          description: Generated facts JSON for the agent.
     ErrorResponse:
       type: object
       required:

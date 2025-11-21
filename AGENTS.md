@@ -253,17 +253,22 @@ How
 - Serve facts: Gateway exposes `/.well-known/agent-facts` (Store‑backed)
 - Host: the MIDI Instrument Host loads facts, advertises CI/PE, and routes PE SET/GET to mapped OpenAPI ops.
 
-Secrets (no env policy)
-- Do not pass credentials via environment. The host and tools read credentials from FountainStore only.
-- Corpus: `secrets` (default, override with `SECRETS_CORPUS_ID` if necessary).
-- Collection: `secrets`.
-- Document ids (in priority order):
-  - `secret:agent:<agent-id>` with `/` replaced by `|` (e.g., `secret:agent:fountain.coach|agent|tools-factory|service`)
-  - `secret:agent:<agent-id>` (raw)
-  - `secret:default` (fallback)
-- Document body: `{ "headers": { "Authorization": "Bearer …", "X-API-Key": "…" } }` or a flat header map.
-- Seeder: `swift run --package-path Packages/FountainApps secrets-seed --agent-id <id> --header Authorization="Bearer sk-..." [--header X-API-Key=...]`.
-- Convenience wrapper: `Scripts/apps/secrets-seed` (same flags as above) to write header maps without touching env.
+Secrets (SecretStore + FountainStore, no env policy)
+- Primary secret backend for human‑entered credentials is `SecretStore` (Keychain on macOS, libsecret on Linux), accessed via `SecretStoreHelper` (see `Packages/FountainApps/Sources/EngraverChatCore/SecretStoreHelper.swift`).
+- FountainStore is used to hold **per‑agent header maps** (ready‑to‑send HTTP headers), not raw API keys; these are typically derived from SecretStore or seeded once, then read by hosts/tools.
+- Do not pass credentials via environment in steady‑state; env overrides are only for migration or bootstrapping, not the main path.
+- FountainStore secrets corpus:
+  - Corpus: `secrets` (default, override with `SECRETS_CORPUS_ID` when needed).
+  - Collection: `secrets`.
+  - Document ids (in priority order):
+    - `secret:agent:<agent-id>` with `/` replaced by `|` (e.g., `secret:agent:fountain.coach|agent|tools-factory|service`).
+    - `secret:agent:<agent-id>` (raw).
+    - `secret:default` (fallback).
+  - Document body: `{ "headers": { "Authorization": "Bearer …", "X-API-Key": "…" } }` or a flat header map.
+- Seeders:
+  - CLI: `swift run --package-path Packages/FountainApps secrets-seed --agent-id <id> --header Authorization="Bearer sk-..." [--header X-API-Key=...]`.
+  - Tools Factory: `POST /agent-secrets` on `tools-factory-server` with `{ agentId, corpusId?: "secrets", headers: { ... } }` (behind `TOOLS_FACTORY_ALLOW_SECRET_UPSERT=1` and optional admin key).
+  - Convenience wrapper: `Scripts/apps/secrets-seed` (same flags as above) to write header maps without touching env.
 
 Where
 - Generator: `Packages/FountainTooling/Sources/openapi-to-facts`
@@ -348,10 +353,10 @@ What
     - `secret:default` as a fallback.
   - Body: `{ "headers": { "Authorization": "Bearer …", "X-API-Key": "…" } }` or a flat header map.
   - Seeders:
-    - CLI: `secrets-seed` (`Packages/FountainApps/Sources/secrets-seed`).
+    - CLI: `secrets-seed` (`Packages/FountainApps/Sources/secrets-seed`) to materialise per‑agent header maps into FountainStore from an operator‑supplied source (often SecretStore during setup).
     - Wrapper: `Scripts/apps/secrets-seed` with `--agent-id` and repeated `--header` flags.
   - Consumers:
-    - MIDI Instrument Host (`midi-instrument-host`) via `loadSecrets`.
+    - MIDI Instrument Host (`midi-instrument-host`) via `loadSecrets` (pulls `secrets` corpus into runtime header maps).
     - Tools Factory when calling external agents on behalf of hosts.
 
 - Other named corpora:

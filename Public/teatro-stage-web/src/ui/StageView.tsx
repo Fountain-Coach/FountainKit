@@ -100,10 +100,11 @@ export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
       passive: false
     });
 
-    // Room
+    // Room — draw the stage box slightly below the puppet so feet are above the floor
     const roomGroup = new THREE.Group();
     scene.add(roomGroup);
     const lineMat = new THREE.LineBasicMaterial({ color: 0x111111, linewidth: 1 });
+    const stageOffsetY = -5;
 
     const addBoxEdges = (
       widthBox: number,
@@ -118,10 +119,11 @@ export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
       roomGroup.add(line);
     };
 
-    addBoxEdges(30, 0.01, 20, new THREE.Vector3(0, 0, 0));
-    addBoxEdges(30, 20, 0.01, new THREE.Vector3(0, 10, -10));
-    addBoxEdges(0.01, 20, 20, new THREE.Vector3(-15, 10, 0));
-    addBoxEdges(0.01, 20, 20, new THREE.Vector3(15, 10, 0));
+    // Floor at stageOffsetY, walls rising 20 units above
+    addBoxEdges(30, 0.01, 20, new THREE.Vector3(0, stageOffsetY, 0));
+    addBoxEdges(30, 20, 0.01, new THREE.Vector3(0, stageOffsetY + 10, -10));
+    addBoxEdges(0.01, 20, 20, new THREE.Vector3(-15, stageOffsetY + 10, 0));
+    addBoxEdges(0.01, 20, 20, new THREE.Vector3(15, stageOffsetY + 10, 0));
 
     // Overhead rig (simple truss above the stage)
     const rigGroup = new THREE.Group();
@@ -257,7 +259,7 @@ export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
       );
 
       // Controller cross follows the bar horizontally at rig height
-      const controllerY = 19;
+      const controllerY = stageOffsetY + 24;
       const controllerCenter = new THREE.Vector3(
         snap.controller.x,
         controllerY,

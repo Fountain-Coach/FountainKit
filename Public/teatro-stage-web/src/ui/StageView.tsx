@@ -103,8 +103,11 @@ export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
     // Room — draw the stage box slightly below the puppet so feet are above the floor
     const roomGroup = new THREE.Group();
     scene.add(roomGroup);
-    const lineMat = new THREE.LineBasicMaterial({ color: 0x111111, linewidth: 1 });
-    const stageOffsetY = -5;
+    const lineMat = new THREE.LineBasicMaterial({
+      color: 0x111111,
+      linewidth: 1
+    });
+    const stageOffsetY = 0;
 
     const addBoxEdges = (
       widthBox: number,
@@ -119,7 +122,7 @@ export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
       roomGroup.add(line);
     };
 
-    // Floor at stageOffsetY, walls rising 20 units above
+    // Floor at stageOffsetY (y = 0), walls rising 20 units above
     addBoxEdges(30, 0.01, 20, new THREE.Vector3(0, stageOffsetY, 0));
     addBoxEdges(30, 20, 0.01, new THREE.Vector3(0, stageOffsetY + 10, -10));
     addBoxEdges(0.01, 20, 20, new THREE.Vector3(-15, stageOffsetY + 10, 0));
@@ -218,7 +221,7 @@ export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
     });
     const spot = new THREE.Mesh(spotGeo, spotMat);
     spot.rotation.x = -Math.PI / 2;
-    spot.position.set(0, 0.01, 0);
+    spot.position.set(0, stageOffsetY + 0.01, 0);
     scene.add(spot);
 
     let lastTime = performance.now() / 1000;

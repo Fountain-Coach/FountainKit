@@ -1,4 +1,4 @@
-import { Body, DistanceConstraint, Vec3, World } from "./physics";
+import { Body, DistanceConstraint, GroundConstraint, Vec3, World } from "./physics";
 
 export interface PuppetSnapshot {
   controller: Vec3;
@@ -62,12 +62,15 @@ export class PuppetRig {
     addDistance(this.torsoBody, this.handRBody, 0.8);
     addDistance(this.torsoBody, this.footLBody, 0.8);
     addDistance(this.torsoBody, this.footRBody, 0.8);
-    // Strings: controller ↔ bar / hands
+    // Strings: controller ↔ bar / hands, plus a reinforcing string from bar to head
     addDistance(this.controllerBody, this.barBody, 0.9);
     addDistance(this.controllerBody, this.handLBody, 0.9);
     addDistance(this.controllerBody, this.handRBody, 0.9);
-    // Optional reinforcing string from bar to head
     addDistance(this.barBody, this.headBody, 0.8);
+
+    // Ground contacts for feet so they do not fall through the floor
+    this.world.addConstraint(new GroundConstraint(this.footLBody, 0));
+    this.world.addConstraint(new GroundConstraint(this.footRBody, 0));
   }
 
   step(dt: number, time: number): void {

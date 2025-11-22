@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Body, Vec3, World, DistanceConstraint } from "./physics";
+import { Body, Vec3, World, DistanceConstraint, GroundConstraint } from "./physics";
 
 describe("Vec3", () => {
   it("adds and scales correctly", () => {
@@ -36,5 +36,13 @@ describe("World", () => {
     const dist = Vec3.subtract(b.position, a.position).length();
     expect(Math.abs(dist - rest)).toBeLessThan(0.2);
   });
-});
 
+  it("keeps body above floor with GroundConstraint", () => {
+    const world = new World();
+    const body = new Body(new Vec3(0, -1, 0), 1);
+    world.addBody(body);
+    world.addConstraint(new GroundConstraint(body, 0));
+    world.step(0.1);
+    expect(body.position.y).toBeGreaterThanOrEqual(0);
+  });
+});

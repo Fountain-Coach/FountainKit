@@ -80,6 +80,25 @@ export interface Constraint {
   solve(dt: number): void;
 }
 
+export class GroundConstraint implements Constraint {
+  readonly body: Body;
+  readonly floorY: number;
+
+  constructor(body: Body, floorY = 0) {
+    this.body = body;
+    this.floorY = floorY;
+  }
+
+  solve(_dt: number): void {
+    if (this.body.position.y < this.floorY) {
+      this.body.position.y = this.floorY;
+      if (this.body.velocity.y < 0) {
+        this.body.velocity.y = 0;
+      }
+    }
+  }
+}
+
 export class DistanceConstraint implements Constraint {
   readonly bodyA: Body;
   readonly bodyB: Body;
@@ -139,4 +158,3 @@ export class World {
     }
   }
 }
-

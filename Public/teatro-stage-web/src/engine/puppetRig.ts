@@ -1,6 +1,7 @@
 import { Body, DistanceConstraint, Vec3, World } from "./physics";
 
 export interface PuppetSnapshot {
+  controller: Vec3;
   bar: Vec3;
   torso: Vec3;
   head: Vec3;
@@ -12,6 +13,7 @@ export interface PuppetSnapshot {
 
 export class PuppetRig {
   readonly world: World;
+  readonly controllerBody: Body;
   readonly barBody: Body;
   readonly torsoBody: Body;
   readonly headBody: Body;
@@ -25,6 +27,7 @@ export class PuppetRig {
     this.world.gravity = new Vec3(0, -9.82, 0);
     this.world.linearDamping = 0.02;
 
+    this.controllerBody = new Body(new Vec3(0, 19, 0), 0.1);
     this.barBody = new Body(new Vec3(0, 15, 0), 0.1);
     this.torsoBody = new Body(new Vec3(0, 8, 0), 1.0);
     this.headBody = new Body(new Vec3(0, 10, 0), 0.5);
@@ -34,6 +37,7 @@ export class PuppetRig {
     this.footRBody = new Body(new Vec3(0.6, 5, 0), 0.4);
 
     const bodies = [
+      this.controllerBody,
       this.barBody,
       this.torsoBody,
       this.headBody,
@@ -58,19 +62,22 @@ export class PuppetRig {
     addDistance(this.torsoBody, this.handRBody, 0.8);
     addDistance(this.torsoBody, this.footLBody, 0.8);
     addDistance(this.torsoBody, this.footRBody, 0.8);
-    // Strings
-    addDistance(this.barBody, this.headBody, 0.9);
-    addDistance(this.barBody, this.handLBody, 0.9);
-    addDistance(this.barBody, this.handRBody, 0.9);
+    // Strings: controller ↔ bar / hands
+    addDistance(this.controllerBody, this.barBody, 0.9);
+    addDistance(this.controllerBody, this.handLBody, 0.9);
+    addDistance(this.controllerBody, this.handRBody, 0.9);
+    // Optional reinforcing string from bar to head
+    addDistance(this.barBody, this.headBody, 0.8);
   }
 
   step(dt: number, time: number): void {
-    this.driveBar(time);
+    this.driveController(time);
     this.world.step(dt);
   }
 
   snapshot(): PuppetSnapshot {
     return {
+      controller: this.controllerBody.position.clone(),
       bar: this.barBody.position.clone(),
       torso: this.torsoBody.position.clone(),
       head: this.headBody.position.clone(),
@@ -82,6 +89,7 @@ export class PuppetRig {
   }
 
   applySnapshot(snap: PuppetSnapshot): void {
+    this.controllerBody.position = snap.controller.clone();
     this.barBody.position = snap.bar.clone();
     this.torsoBody.position = snap.torso.clone();
     this.headBody.position = snap.head.clone();
@@ -107,8 +115,8 @@ export class PuppetRig {
   private driveBar(time: number): void {
     const sway = Math.sin(time * 0.7) * 2.0;
     const upDown = Math.sin(time * 0.9) * 0.5;
-    this.barBody.position.x = sway;
-    this.barBody.position.y = 15 + upDown;
-    this.barBody.position.z = 0;
+    this.controllerBody.position.x = sway;
+    this.controllerBody.position.y = 19 + upDown;
+    this.controllerBody.position.z = 0;
   }
 }

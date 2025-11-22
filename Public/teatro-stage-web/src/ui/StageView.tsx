@@ -48,6 +48,49 @@ export const StageView: React.FC = () => {
     camera.zoom = 1;
     camera.updateProjectionMatrix();
 
+    // Orbit and zoom interaction
+    let dragging = false;
+    let lastX = 0;
+
+    const handlePointerDown = (e: PointerEvent) => {
+      dragging = true;
+      lastX = e.clientX;
+      renderer.domElement.setPointerCapture(e.pointerId);
+    };
+
+    const handlePointerMove = (e: PointerEvent) => {
+      if (!dragging) return;
+      const dx = e.clientX - lastX;
+      lastX = e.clientX;
+      cameraAzimuth += dx * 0.003;
+      updateCameraPosition();
+    };
+
+    const handlePointerUp = (e: PointerEvent) => {
+      dragging = false;
+      try {
+        renderer.domElement.releasePointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+    };
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const factor = e.deltaY > 0 ? 0.9 : 1.1;
+      const nextZoom = Math.max(0.5, Math.min(3.0, camera.zoom * factor));
+      camera.zoom = nextZoom;
+      camera.updateProjectionMatrix();
+    };
+
+    renderer.domElement.addEventListener("pointerdown", handlePointerDown);
+    renderer.domElement.addEventListener("pointermove", handlePointerMove);
+    renderer.domElement.addEventListener("pointerup", handlePointerUp);
+    renderer.domElement.addEventListener("pointerleave", handlePointerUp);
+    renderer.domElement.addEventListener("wheel", handleWheel, {
+      passive: false
+    });
+
     // Room
     const roomGroup = new THREE.Group();
     scene.add(roomGroup);
@@ -172,6 +215,20 @@ export const StageView: React.FC = () => {
     return () => {
       cancelAnimationFrame(frameId);
       window.removeEventListener("resize", onResize);
+      renderer.domElement.removeEventListener(
+        "pointerdown",
+        handlePointerDown
+      );
+      renderer.domElement.removeEventListener(
+        "pointermove",
+        handlePointerMove
+      );
+      renderer.domElement.removeEventListener("pointerup", handlePointerUp);
+      renderer.domElement.removeEventListener(
+        "pointerleave",
+        handlePointerUp
+      );
+      renderer.domElement.removeEventListener("wheel", handleWheel);
       renderer.dispose();
       container.removeChild(renderer.domElement);
     };
@@ -179,4 +236,3 @@ export const StageView: React.FC = () => {
 
   return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 };
-

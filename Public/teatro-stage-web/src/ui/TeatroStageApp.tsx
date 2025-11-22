@@ -1,4 +1,5 @@
 import React from "react";
+import { StageView } from "./StageView";
 
 export const TeatroStageApp: React.FC = () => {
   return (
@@ -28,22 +29,7 @@ export const TeatroStageApp: React.FC = () => {
             borderBottom: "1px solid rgba(0,0,0,0.08)"
           }}
         >
-          {/* Stage view placeholder; Three.js canvas will live here */}
-          <div
-            style={{
-              width: "100%",
-              height: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "rgba(0,0,0,0.45)",
-              fontFamily:
-                "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
-              fontSize: 13
-            }}
-          >
-            Stage view (room + puppet) — Three.js integration pending
-          </div>
+          <StageView />
         </div>
         <div
           style={{
@@ -64,4 +50,3 @@ export const TeatroStageApp: React.FC = () => {
     </div>
   );
 };
-

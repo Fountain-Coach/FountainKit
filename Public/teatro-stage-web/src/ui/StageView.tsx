@@ -1,9 +1,18 @@
 import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { PuppetRig } from "../engine/puppetRig";
+import type { PuppetSnapshot } from "../engine/puppetRig";
 
-export const StageView: React.FC = () => {
+interface StageViewProps {
+  snapshot: PuppetSnapshot;
+}
+
+export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const snapshotRef = useRef<PuppetSnapshot>(snapshot);
+
+  if (snapshotRef.current !== snapshot) {
+    snapshotRef.current = snapshot;
+  }
 
   useEffect(() => {
     const container = containerRef.current;
@@ -151,7 +160,6 @@ export const StageView: React.FC = () => {
     spot.position.set(0, 0.01, 0);
     scene.add(spot);
 
-    const rig = new PuppetRig();
     let lastTime = performance.now() / 1000;
     let frameId: number;
 
@@ -161,8 +169,7 @@ export const StageView: React.FC = () => {
       const dt = Math.min(now - lastTime, 1 / 30);
       lastTime = now;
 
-      rig.step(dt, now);
-      const snap = rig.snapshot();
+      const snap = snapshotRef.current;
 
       puppetMeshes["bar"].position.set(snap.bar.x, snap.bar.y, snap.bar.z);
       puppetMeshes["torso"].position.set(

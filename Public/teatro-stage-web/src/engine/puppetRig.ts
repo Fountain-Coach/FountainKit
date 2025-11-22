@@ -81,6 +81,29 @@ export class PuppetRig {
     };
   }
 
+  applySnapshot(snap: PuppetSnapshot): void {
+    this.barBody.position = snap.bar.clone();
+    this.torsoBody.position = snap.torso.clone();
+    this.headBody.position = snap.head.clone();
+    this.handLBody.position = snap.handL.clone();
+    this.handRBody.position = snap.handR.clone();
+    this.footLBody.position = snap.footL.clone();
+    this.footRBody.position = snap.footR.clone();
+    // Reset velocities so the rig starts from rest at this pose
+    const bodies = [
+      this.barBody,
+      this.torsoBody,
+      this.headBody,
+      this.handLBody,
+      this.handRBody,
+      this.footLBody,
+      this.footRBody
+    ];
+    for (const b of bodies) {
+      b.velocity = new Vec3(0, 0, 0);
+    }
+  }
+
   private driveBar(time: number): void {
     const sway = Math.sin(time * 0.7) * 2.0;
     const upDown = Math.sin(time * 0.9) * 0.5;
@@ -89,4 +112,3 @@ export class PuppetRig {
     this.barBody.position.z = 0;
   }
 }
-

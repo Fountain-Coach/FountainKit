@@ -199,7 +199,7 @@ export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
       return mesh;
     };
 
-    makeBoxMesh(10, 0.2, 0.2, "bar");
+    // Torso + head + limbs only; bar is now an internal harness, not a visible stage element.
     makeBoxMesh(1.6, 3, 0.8, "torso");
     makeBoxMesh(1.1, 1.1, 0.8, "head");
     makeBoxMesh(0.4, 2.0, 0.4, "handL");
@@ -229,8 +229,6 @@ export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
       lastTime = now;
 
       const snap = snapshotRef.current;
-
-      puppetMeshes["bar"].position.set(snap.bar.x, snap.bar.y, snap.bar.z);
       puppetMeshes["torso"].position.set(
         snap.torso.x,
         snap.torso.y,
@@ -261,9 +259,9 @@ export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
       // Controller cross follows the bar horizontally at rig height
       const controllerY = 19;
       const controllerCenter = new THREE.Vector3(
-        snap.bar.x,
+        snap.controller.x,
         controllerY,
-        snap.bar.z
+        snap.controller.z
       );
       controllerGroup.position.copy(controllerCenter);
 
@@ -292,9 +290,22 @@ export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
         controllerCenter.z
       );
 
-      updateString(stringBar, controllerCenter, new THREE.Vector3(snap.bar.x, snap.bar.y, snap.bar.z));
-      updateString(stringHandL, controllerLeft, new THREE.Vector3(snap.handL.x, snap.handL.y, snap.handL.z));
-      updateString(stringHandR, controllerRight, new THREE.Vector3(snap.handR.x, snap.handR.y, snap.handR.z));
+      // Strings: center → head, left/right ends → hands
+      updateString(
+        stringBar,
+        controllerCenter,
+        new THREE.Vector3(snap.head.x, snap.head.y, snap.head.z)
+      );
+      updateString(
+        stringHandL,
+        controllerLeft,
+        new THREE.Vector3(snap.handL.x, snap.handL.y, snap.handL.z)
+      );
+      updateString(
+        stringHandR,
+        controllerRight,
+        new THREE.Vector3(snap.handR.x, snap.handR.y, snap.handR.z)
+      );
 
       renderer.render(scene, camera);
     };

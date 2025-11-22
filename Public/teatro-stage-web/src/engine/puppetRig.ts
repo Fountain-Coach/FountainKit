@@ -112,7 +112,7 @@ export class PuppetRig {
     }
   }
 
-  private driveBar(time: number): void {
+  private driveController(time: number): void {
     const sway = Math.sin(time * 0.7) * 2.0;
     const upDown = Math.sin(time * 0.9) * 0.5;
     this.controllerBody.position.x = sway;

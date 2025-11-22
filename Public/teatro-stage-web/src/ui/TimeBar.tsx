@@ -12,9 +12,11 @@ interface TimeBarProps {
   time: number;
   isPlaying: boolean;
   snapshots: SnapshotRecord[];
+  selectedId?: string;
   onTogglePlay(): void;
   onAddSnapshot(): void;
   onSelectSnapshot(id: string): void;
+  onChangeLabel(id: string, label: string): void;
 }
 
 export const TimeBar: React.FC<TimeBarProps> = ({
@@ -23,10 +25,14 @@ export const TimeBar: React.FC<TimeBarProps> = ({
   snapshots,
   onTogglePlay,
   onAddSnapshot,
-  onSelectSnapshot
+  onSelectSnapshot,
+  selectedId,
+  onChangeLabel
 }) => {
   const duration = Math.max(10, Math.ceil(time) + 2);
   const normalized = Math.min(1, Math.max(0, time / duration));
+
+  const selected = snapshots.find((s) => s.id === selectedId);
 
   return (
     <div
@@ -85,6 +91,7 @@ export const TimeBar: React.FC<TimeBarProps> = ({
         />
         {snapshots.map((s) => {
           const center = Math.min(1, Math.max(0, s.time / duration));
+          const isSelected = s.id === selectedId;
           return (
             <div
               key={s.id}
@@ -98,7 +105,9 @@ export const TimeBar: React.FC<TimeBarProps> = ({
                 width: 8,
                 height: 16,
                 borderRadius: 3,
-                backgroundColor: "rgba(0,0,0,0.55)",
+                backgroundColor: isSelected
+                  ? "rgba(0,0,0,0.9)"
+                  : "rgba(0,0,0,0.55)",
                 cursor: "pointer"
               }}
             />
@@ -116,10 +125,38 @@ export const TimeBar: React.FC<TimeBarProps> = ({
           }}
         />
       </div>
-      <div style={{ minWidth: 80, textAlign: "right" }}>
-        t = {time.toFixed(2)}s
+      <div
+        style={{
+          minWidth: 220,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-end",
+          gap: 4
+        }}
+      >
+        <div>t = {time.toFixed(2)}s</div>
+        <div>
+          <span style={{ marginRight: 4 }}>Label:</span>
+          <input
+            type="text"
+            value={selected?.label ?? ""}
+            onChange={(e) =>
+              selected &&
+              onChangeLabel(selected.id, e.currentTarget.value)
+            }
+            placeholder={selected ? "Snapshot label" : "Select a snapshot…"}
+            disabled={!selected}
+            style={{
+              fontSize: 11,
+              padding: "2px 4px",
+              borderRadius: 4,
+              border: "1px solid rgba(0,0,0,0.25)",
+              width: 140,
+              backgroundColor: selected ? "#fffdf7" : "#f1e3cc"
+            }}
+          />
+        </div>
       </div>
     </div>
   );
 };
-

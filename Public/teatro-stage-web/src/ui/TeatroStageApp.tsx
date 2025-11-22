@@ -11,6 +11,7 @@ export const TeatroStageApp: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState(true);
   const playingRef = useRef(true);
   const [snapshots, setSnapshots] = useState<SnapshotRecord[]>([]);
+  const [selectedSnapshotId, setSelectedSnapshotId] = useState<string>();
 
   useEffect(() => {
     rigRef.current = new PuppetRig();
@@ -57,6 +58,7 @@ export const TeatroStageApp: React.FC = () => {
       ...prev,
       { id, time, snapshot, label: undefined }
     ]);
+    setSelectedSnapshotId(id);
   };
 
   const handleSelectSnapshot = (id: string) => {
@@ -68,6 +70,13 @@ export const TeatroStageApp: React.FC = () => {
     timeRef.current = rec.time;
     setTime(rec.time);
     setSnapshot(rec.snapshot);
+    setSelectedSnapshotId(id);
+  };
+
+  const handleChangeSnapshotLabel = (id: string, label: string) => {
+    setSnapshots((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, label } : s))
+    );
   };
 
   return (
@@ -103,9 +112,11 @@ export const TeatroStageApp: React.FC = () => {
           time={time}
           isPlaying={isPlaying}
           snapshots={snapshots}
+          selectedId={selectedSnapshotId}
           onTogglePlay={handleTogglePlay}
           onAddSnapshot={handleAddSnapshot}
           onSelectSnapshot={handleSelectSnapshot}
+          onChangeLabel={handleChangeSnapshotLabel}
         />
       </main>
     </div>

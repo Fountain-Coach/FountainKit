@@ -123,6 +123,23 @@ export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
     addBoxEdges(0.01, 20, 20, new THREE.Vector3(-15, 10, 0));
     addBoxEdges(0.01, 20, 20, new THREE.Vector3(15, 10, 0));
 
+    // Overhead rig (simple truss above the stage)
+    const rigGroup = new THREE.Group();
+    scene.add(rigGroup);
+    const rigMat = new THREE.LineBasicMaterial({
+      color: 0x111111,
+      linewidth: 1
+    });
+    const rigGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-15, 19, -10),
+      new THREE.Vector3(15, 19, -10),
+      new THREE.Vector3(15, 19, 10),
+      new THREE.Vector3(-15, 19, 10),
+      new THREE.Vector3(-15, 19, -10)
+    ]);
+    const rigOutline = new THREE.Line(rigGeo, rigMat);
+    rigGroup.add(rigOutline);
+
     // Puppet boxes
     const blackMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
     const puppetMeshes: { [key: string]: THREE.Mesh } = {};

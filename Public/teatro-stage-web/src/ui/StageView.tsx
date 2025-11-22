@@ -140,6 +140,48 @@ export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
     const rigOutline = new THREE.Line(rigGeo, rigMat);
     rigGroup.add(rigOutline);
 
+    // Controller cross: a movable cross inside the rig, driven by the puppet bar
+    const controllerGroup = new THREE.Group();
+    const crossHalfW = 5;
+    const crossHalfD = 3;
+    const controllerMat = new THREE.LineBasicMaterial({
+      color: 0x111111,
+      linewidth: 1
+    });
+    const horizGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-crossHalfW, 0, 0),
+      new THREE.Vector3(crossHalfW, 0, 0)
+    ]);
+    const vertGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0, -crossHalfD),
+      new THREE.Vector3(0, 0, crossHalfD)
+    ]);
+    const horizLine = new THREE.Line(horizGeo, controllerMat);
+    const vertLine = new THREE.Line(vertGeo, controllerMat);
+    controllerGroup.add(horizLine);
+    controllerGroup.add(vertLine);
+    scene.add(controllerGroup);
+
+    // Strings: from controller cross to bar/head/hands
+    const stringMat = new THREE.LineBasicMaterial({
+      color: 0x111111,
+      linewidth: 1
+    });
+    const makeString = (): THREE.Line => {
+      const geo = new THREE.BufferGeometry();
+      const positions = new Float32Array(6); // 2 points
+      geo.setAttribute(
+        "position",
+        new THREE.BufferAttribute(positions, 3)
+      );
+      const line = new THREE.Line(geo, stringMat);
+      scene.add(line);
+      return line;
+    };
+    const stringBar = makeString();
+    const stringHandL = makeString();
+    const stringHandR = makeString();
+
     // Puppet boxes
     const blackMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
     const puppetMeshes: { [key: string]: THREE.Mesh } = {};
@@ -215,6 +257,44 @@ export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
         snap.footR.y,
         snap.footR.z
       );
+
+      // Controller cross follows the bar horizontally at rig height
+      const controllerY = 19;
+      const controllerCenter = new THREE.Vector3(
+        snap.bar.x,
+        controllerY,
+        snap.bar.z
+      );
+      controllerGroup.position.copy(controllerCenter);
+
+      // Strings: controller center → bar, controller ends → hands
+      const updateString = (
+        line: THREE.Line,
+        from: THREE.Vector3,
+        to: THREE.Vector3
+      ) => {
+        const attr = line.geometry.getAttribute(
+          "position"
+        ) as THREE.BufferAttribute;
+        attr.setXYZ(0, from.x, from.y, from.z);
+        attr.setXYZ(1, to.x, to.y, to.z);
+        attr.needsUpdate = true;
+      };
+
+      const controllerLeft = new THREE.Vector3(
+        controllerCenter.x - crossHalfW,
+        controllerY,
+        controllerCenter.z
+      );
+      const controllerRight = new THREE.Vector3(
+        controllerCenter.x + crossHalfW,
+        controllerY,
+        controllerCenter.z
+      );
+
+      updateString(stringBar, controllerCenter, new THREE.Vector3(snap.bar.x, snap.bar.y, snap.bar.z));
+      updateString(stringHandL, controllerLeft, new THREE.Vector3(snap.handL.x, snap.handL.y, snap.handL.z));
+      updateString(stringHandR, controllerRight, new THREE.Vector3(snap.handR.x, snap.handR.y, snap.handR.z));
 
       renderer.render(scene, camera);
     };

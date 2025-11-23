@@ -54,6 +54,7 @@ For a repository‑wide index of OpenAPI coverage and adoption status, see [../O
 | Teatro Game Engine Core | 0.1.0 | Contexter alias Benedikt Eickhoff | [v1/teatro-game-engine-core.yml](v1/teatro-game-engine-core.yml) |
 | Bullet Physics Engine Service | 0.1.0 | Contexter alias Benedikt Eickhoff | [v1/bullet-physics.yml](v1/bullet-physics.yml) |
 | Teatro Rendering Service | 0.1.0 | Contexter alias Benedikt Eickhoff | [v1/teatro-rendering.yml](v1/teatro-rendering.yml) |
+| Teatro Input Service | 0.1.0 | Contexter alias Benedikt Eickhoff | [v1/teatro-input.yml](v1/teatro-input.yml) |
 
 ## Coverage Status
 

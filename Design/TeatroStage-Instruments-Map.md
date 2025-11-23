@@ -145,3 +145,52 @@ This conceptual map ties together several concrete pieces already present in Fou
 
 When adding or changing Teatro Stage instruments, update this conceptual map as you adjust specs and hosts, so readers can see the end‑to‑end picture from physics core to instruments and tools.
 
+## 6. Authoring Playbook — Stage Engine → Instruments
+
+This section is the short, practical checklist for “tomorrow’s self” when changing the Teatro stage or its instruments. It does not introduce new rules; it just links the existing ones into a path.
+
+### 6.1 Change the stage behaviour (physics, rig, room, camera, style)
+
+When you want to change how “The Teatro” actually behaves:
+
+1. **Start in the engine specs**  
+   - Edit the relevant document under `Packages/TeatroPhysics/spec/**` (physics, rig‑puppet, stage‑room, camera, style, authoring, interchange).  
+   - Keep changes small and explicit; this is the single source of truth.
+
+2. **Update the Swift engine**  
+   - Adjust `Packages/TeatroPhysics/Sources/TeatroPhysics/*` to match the spec changes.  
+   - Extend or fix tests under `Packages/TeatroPhysics/Tests/**` so they cover the new behaviour.
+
+3. **Align the hosts**  
+   - Metal: update `Packages/FountainApps/Sources/teatro-stage-app/*` (and related MetalViewKit nodes) so the on‑screen stage matches the new behaviour.  
+   - Web: update `Public/teatro-stage-web/src/**` so the Cannon‑based demo stays visually consistent with the specs.
+
+4. **Re‑evaluate instruments (if needed)**  
+   - If the change introduces new tunable parameters or observables that instruments should expose (e.g., a new camera preset, a new rig mode), decide which instrument they belong to (Stage World, Puppet, Camera, Style, Recording) and note that in this map.
+
+5. **Only then touch OpenAPI / facts / prompts**  
+   - Once the engine and hosts are updated, adapt the relevant OpenAPI specs under `Packages/FountainSpecCuration/openapi/v1/teatro-stage-*.yml` and regenerate facts as needed.  
+   - Update the Teatro prompt in FountainStore via its `*-seed` executable; do not write prompts into docs or code.
+
+### 6.2 Add or change an instrument surface
+
+When you want to add a new instrument or extend an existing one:
+
+1. **Confirm the engine already supports it**  
+   - The capability must already exist in `Packages/TeatroPhysics` and its specs; if it does not, follow 6.1 first.
+
+2. **Design the surface in OpenAPI**  
+   - Add or edit the appropriate spec under `Packages/FountainSpecCuration/openapi/v1/teatro-stage-*.yml`.  
+   - Keep routes and schemas as thin veneers over engine state and snapshot structures.
+
+3. **Generate and seed facts**  
+   - Use `openapi-to-facts` or Tools Factory to generate PE facts for the new/changed spec and seed them into FountainStore (`Tools/openapi-facts-mapping.json` should list the mapping).
+
+4. **Wire up hosts**  
+   - Update `Packages/FountainApps/Sources/teatro-stage-app/*`, `Public/teatro-stage-web/*`, or other hosts to call the new instrument surface where appropriate.
+
+5. **Update the Teatro prompt**  
+   - Adjust the Teatro prompt for the Teatro stage (via its seeder) so it describes the new instrument surface and invariants in human language, consistent with this map.
+
+6. **Refresh this map as needed**  
+   - If you introduce a new kind of instrument or significantly change the boundaries of an existing one, add a short note to this document so future authors see the updated shape at a glance.

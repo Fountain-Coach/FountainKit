@@ -1,0 +1,82 @@
+{
+  "engineId": "teatro-stage",
+  "summary": "Teatro Stage Engine profile composed from core, physics, rendering, input, assets, audio, and scripting specs.",
+  "repo": "github.com/Fountain-Coach/TeatroStageEngine",
+  "core": {
+    "specName": "teatro-game-engine-core.yml",
+    "agentId": "fountain.coach/agent/teatro-game-engine-core/service",
+    "role": "core"
+  },
+  "modules": [
+    {
+      "specName": "bullet-physics.yml",
+      "agentId": "fountain.coach/agent/bullet-physics/service",
+      "role": "physics"
+    },
+    {
+      "specName": "teatro-rendering.yml",
+      "agentId": "fountain.coach/agent/teatro-rendering/service",
+      "role": "rendering"
+    },
+    {
+      "specName": "teatro-input.yml",
+      "agentId": "fountain.coach/agent/teatro-input/service",
+      "role": "input"
+    },
+    {
+      "specName": "teatro-assets.yml",
+      "agentId": "fountain.coach/agent/teatro-assets/service",
+      "role": "assets"
+    },
+    {
+      "specName": "teatro-audio.yml",
+      "agentId": "fountain.coach/agent/teatro-audio/service",
+      "role": "audio"
+    },
+    {
+      "specName": "teatro-scripting.yml",
+      "agentId": "fountain.coach/agent/teatro-scripting/service",
+      "role": "scripting"
+    }
+  ],
+  "instrumentSpecs": [],
+  "scenarios": [
+    {
+      "id": "ballOnFloor",
+      "description": "A dynamic ball above a static stage floor must fall, collide with the floor, and come to rest near the surface instead of falling into the abyss.",
+      "apiNotes": [
+        "bullet-physics.createWorld",
+        "bullet-physics.createBody (static floor and dynamic sphere)",
+        "bullet-physics.stepWorld (multiple small dt steps)",
+        "bullet-physics.listContacts to verify a floor contact exists"
+      ],
+      "tests": [
+        {
+          "kind": "swiftTest",
+          "packagePath": "External/_gh/TeatroStageEngine",
+          "target": "TeatroPhysicsTests",
+          "scenarios": []
+        }
+      ]
+    },
+    {
+      "id": "puppetOnStage",
+      "description": "The Teatro puppet rig, when seeded with default pose and gravity, should remain within the stage room bounds with feet resting near the floor plane over a long run.",
+      "apiNotes": [
+        "teatro-game-engine-core.tick to advance the simulation",
+        "bullet-physics.stepWorld or TPWorld.step to advance physics",
+        "teatro-rendering.buildFrame or snapshot schema to inspect puppet pose"
+      ],
+      "tests": [
+        {
+          "kind": "swiftTest",
+          "packagePath": "External/_gh/TeatroStageEngine",
+          "target": "TeatroPhysicsTests",
+          "scenarios": []
+        }
+      ]
+    }
+  ],
+  "notes": "This profile treats TeatroStageEngine as a concrete instance of the generic Teatro Game Engine. Behavioural semantics remain owned by the referenced specs and the TeatroPhysics reference implementation."
+}
+

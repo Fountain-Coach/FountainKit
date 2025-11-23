@@ -1,0 +1,186 @@
+openapi: 3.1.0
+info:
+  title: Teatro Engine Profile Service
+  version: 0.1.0
+  summary: Declarative composition of Teatro engine specs into named engine profiles.
+  description: |
+    The Teatro Engine Profile Service defines a small contract for describing how
+    existing Teatro engine specs (core, physics, rendering, input, assets, audio,
+    scripting) are composed into a named engine profile.
+
+    This spec does not introduce new runtime behaviour. Instead, it provides a
+    schema (TeatroEngineProfile) that:
+
+    - references other curated OpenAPI specs by name and agent id,
+    - references test harnesses that exercise key engine scenarios,
+    - gives tools and agents a single place to discover which specs and tests
+      belong to an engine such as the Teatro Stage Engine.
+
+    Behavioural semantics remain owned by the referenced specs (for example
+    bullet-physics.yml or teatro-rendering.yml). Profiles are purely compositional.
+  license:
+    name: FountainAI Internal
+    url: https://fountain.coach/internal
+servers:
+  - url: http://127.0.0.1:0
+    description: Logical engine profile host (CLI or Tools Factory)
+
+tags:
+  - name: engine-profiles
+    description: Validate and register engine profiles that reference existing specs.
+
+paths:
+  /engine-profiles:
+    post:
+      tags: [engine-profiles]
+      operationId: engineProfiles.create
+      summary: Validate and register an engine profile
+      description: |
+        Validates a Teatro engine profile against this schema and optionally
+        registers it for discovery. Profiles are purely referential: they select
+        and name existing specs and tests; they do not define new semantics.
+      x-fountain.visibility: public
+      x-fountain.reason: validate an engine profile that ties specs and tests together
+      x-fountain.allow-as-tool: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeatroEngineProfile'
+      responses:
+        '200':
+          description: Profile accepted and normalized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeatroEngineProfile'
+        '400':
+          description: Invalid profile payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    SpecRef:
+      type: object
+      description: Reference to a curated OpenAPI spec and its agent facts.
+      required:
+        - specName
+        - agentId
+      properties:
+        specName:
+          type: string
+          description: OpenAPI file name under v1/ (for example "bullet-physics.yml").
+        agentId:
+          type: string
+          description: Agent id used in openapi-facts-mapping.json.
+        role:
+          type: string
+          description: Short role of this spec in the engine (for example "core", "physics").
+
+    TestRef:
+      type: object
+      description: Reference to an engine test harness.
+      required:
+        - kind
+        - packagePath
+        - target
+      properties:
+        kind:
+          type: string
+          description: Kind of test harness.
+          enum:
+            - swiftTest
+        packagePath:
+          type: string
+          description: SwiftPM package path relative to the repository root.
+        target:
+          type: string
+          description: Test target name (for example "TeatroPhysicsTests").
+        scenarios:
+          type: array
+          description: Optional named scenarios or test cases exercised by this harness.
+          items:
+            type: string
+
+    ScenarioRef:
+      type: object
+      description: |
+        Named scenario that should hold for this engine, expressed in terms of
+        existing OpenAPI operations and/or tests. It does not define new rules.
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Stable scenario id (for example "ballOnFloor").
+        description:
+          type: string
+        apiNotes:
+          type: array
+          description: |
+            Optional hints for tools: which operations in which specs are typically
+            used to set up and inspect this scenario.
+          items:
+            type: string
+        tests:
+          type: array
+          description: References to test harnesses that exercise this scenario.
+          items:
+            $ref: '#/components/schemas/TestRef'
+
+    TeatroEngineProfile:
+      type: object
+      description: |
+        Declarative composition of existing Teatro engine specs into a named engine.
+        Behavioural semantics remain owned by the referenced specs; this profile only
+        selects and names them and points to tests that exercise key scenarios.
+      required:
+        - engineId
+        - summary
+        - repo
+        - core
+        - modules
+      properties:
+        engineId:
+          type: string
+          description: Logical engine id (for example "teatro-stage").
+        summary:
+          type: string
+        repo:
+          type: string
+          description: Source repo URL or slug (for example "github.com/Fountain-Coach/TeatroStageEngine").
+        core:
+          $ref: '#/components/schemas/SpecRef'
+        modules:
+          type: array
+          description: Engine modules referenced by this profile (physics, rendering, input, assets, audio, scripting).
+          items:
+            $ref: '#/components/schemas/SpecRef'
+        instrumentSpecs:
+          type: array
+          description: Instrument-level OpenAPI specs that sit on top of this engine.
+          items:
+            $ref: '#/components/schemas/SpecRef'
+        scenarios:
+          type: array
+          description: Named scenarios this engine should satisfy.
+          items:
+            $ref: '#/components/schemas/ScenarioRef'
+        notes:
+          type: string
+          description: Optional free-form notes for humans (no new rules here).
+
+    ErrorResponse:
+      type: object
+      description: Standard error response with human-readable message.
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+

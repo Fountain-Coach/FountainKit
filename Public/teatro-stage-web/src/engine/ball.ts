@@ -1,3 +1,4 @@
+import * as CANNON from "cannon-es";
 import { Body, GroundConstraint, Vec3, World } from "./physics";
 
 export interface BallSnapshot {
@@ -31,11 +32,15 @@ export class BallWorld {
 
     const halfExtents = new Vec3(radius, radius, radius);
     this.ballBody = new Body(initialPosition.clone(), mass, halfExtents);
+    // Assign a dedicated material so we can configure a bouncy contact
+    // between the ball and the floor plane.
+    const ballMaterial = new CANNON.Material("ball");
+    this.ballBody.material = ballMaterial;
     this.world.addBody(this.ballBody);
 
     // Floor at y = 0 with a bit of restitution so the ball bounces before
     // settling under damping.
-    this.world.addConstraint(new GroundConstraint(0, 0.4));
+    this.world.addConstraint(new GroundConstraint(0, 0.4, ballMaterial));
   }
 
   step(dtSeconds: number): void {

@@ -1,0 +1,864 @@
+openapi: 3.1.0
+info:
+  title: Teatro Game Engine Core
+  version: 0.1.0
+  summary: Core session, scene, entity, and component model for the Teatro Game Engine.
+  description: |
+    The Teatro Game Engine Core spec describes the high-level, engine-agnostic model
+    for building and running interactive 3D games and simulations within FountainKit.
+    It does not render pixels or simulate physics directly; instead, it defines how
+    a game session orchestrates subsystems (physics, rendering, input, audio, scripts)
+    over a sequence of ticks.
+
+    This spec is written as documentation for both humans and LLMs. It explains what
+    a game engine is conceptually and exposes a minimal, explicit API for:
+
+    - creating game sessions and scenes,
+    - creating entities inside scenes,
+    - attaching typed components (Transform, PhysicsBodyRef, MeshRef, Camera, AudioSource, Script),
+    - advancing the simulation by one tick and observing the resulting state.
+
+    Core concepts:
+
+    - GameSession: a running game or simulation instance. It owns one or more scenes,
+      tracks simulation time, and knows which subsystems are active (physics, rendering, input, audio, scripting).
+    - Scene: a logical collection of entities and their components. Scenes are the unit of
+      loading/unloading game content and can be activated or deactivated.
+    - Entity: a uniquely identified object within a scene. Entities are empty shells until
+      components are attached.
+    - Component: a typed piece of data that gives entities behaviour or representation
+      (for example, Transform for spatial placement, PhysicsBodyRef to bind to a physics body,
+      MeshRef for rendering, AudioSource for sound playback, Script for game-specific logic).
+    - Tick: a single step of the game loop. On each tick, the engine advances time,
+      updates subsystems (physics, scripts, animation, audio), and then renders a frame.
+
+    This spec deliberately does not prescribe rendering or physics details. Physics is covered
+    by a separate spec (for example a Bullet-based service), and rendering is covered by a
+    rendering spec. The core engine is responsible for wiring these subsystems together and
+    maintaining a consistent, inspectable world state for tools and hosts.
+  license:
+    name: FountainAI Internal
+    url: https://fountain.coach/internal
+servers:
+  - url: http://127.0.0.1:0
+    description: Logical Teatro Game Engine Core host (embedded or via Tools Factory)
+
+tags:
+  - name: sessions
+    description: Manage game sessions and their global settings.
+  - name: scenes
+    description: Manage scenes inside a game session.
+  - name: entities
+    description: Create and update entities and their components.
+  - name: simulation
+    description: Advance the game loop and observe snapshots.
+
+paths:
+  /sessions:
+    post:
+      tags: [sessions]
+      operationId: teatro.gameEngine.createSession
+      summary: Create a new game session
+      description: |
+        Creates a new game session (an independent game or simulation instance).
+        A session owns its own scenes, simulation time, and configured subsystems
+        such as physics, rendering, input, audio, and scripting.
+      security: []
+      x-fountain.visibility: public
+      x-fountain.reason: create new game session with configured subsystems
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGameSessionRequest'
+      responses:
+        '201':
+          description: Session created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameSession'
+
+  /sessions/{sessionId}:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      tags: [sessions]
+      operationId: teatro.gameEngine.getSession
+      summary: Get a game session
+      description: |
+        Returns metadata and current state for a game session, including
+        active subsystems, simulation time, and scene counts.
+      security: []
+      x-fountain.visibility: public
+      x-fountain.reason: inspect current game session configuration and time
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: Game session details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameSession'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [sessions]
+      operationId: teatro.gameEngine.deleteSession
+      summary: Destroy a game session
+      description: |
+        Destroys a game session and all scenes and entities it owns.
+        After deletion the session id is no longer valid.
+      security: []
+      x-fountain.visibility: public
+      x-fountain.reason: clean up a game session and all associated state
+      x-fountain.allow-as-tool: true
+      responses:
+        '204':
+          description: Session deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /sessions/{sessionId}/scenes:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      tags: [scenes]
+      operationId: teatro.gameEngine.listScenes
+      summary: List scenes in a session
+      description: |
+        Returns all scenes that belong to the given game session. Each
+        scene entry includes its id, name, activation state, and entity count.
+      security: []
+      x-fountain.visibility: public
+      x-fountain.reason: inspect available scenes inside a game session
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: List of scenes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scenes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Scene'
+    post:
+      tags: [scenes]
+      operationId: teatro.gameEngine.createScene
+      summary: Create a new scene
+      description: |
+        Creates a new scene inside the given game session. Scenes group
+        entities and can be activated or deactivated independently.
+      security: []
+      x-fountain.visibility: public
+      x-fountain.reason: create new logical scene for entities and components
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSceneRequest'
+      responses:
+        '201':
+          description: Scene created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scene'
+
+  /sessions/{sessionId}/scenes/{sceneId}:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+      - $ref: '#/components/parameters/SceneId'
+    get:
+      tags: [scenes]
+      operationId: teatro.gameEngine.getScene
+      summary: Get a scene
+      description: |
+        Returns detailed information about a scene, including whether it is
+        currently active and how many entities it contains.
+      security: []
+      x-fountain.visibility: public
+      x-fountain.reason: inspect scene state and metadata
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: Scene details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scene'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [scenes]
+      operationId: teatro.gameEngine.updateScene
+      summary: Update a scene
+      description: |
+        Updates scene properties such as its name or activation state.
+        Activating a scene makes it participate in subsequent ticks.
+      security: []
+      x-fountain.visibility: public
+      x-fountain.reason: rename or activate/deactivate a scene
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSceneRequest'
+      responses:
+        '200':
+          description: Updated scene
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scene'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [scenes]
+      operationId: teatro.gameEngine.deleteScene
+      summary: Delete a scene
+      description: |
+        Deletes a scene and all entities it contains. This does not delete
+        the owning game session.
+      security: []
+      x-fountain.visibility: public
+      x-fountain.reason: remove an entire scene and its entities
+      x-fountain.allow-as-tool: true
+      responses:
+        '204':
+          description: Scene deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /sessions/{sessionId}/scenes/{sceneId}/entities:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+      - $ref: '#/components/parameters/SceneId'
+    get:
+      tags: [entities]
+      operationId: teatro.gameEngine.listEntities
+      summary: List entities in a scene
+      description: |
+        Returns all entities that belong to the specified scene, including
+        their ids, names, and a compact summary of attached components.
+      security: []
+      x-fountain.visibility: public
+      x-fountain.reason: inspect entities and their component kinds in a scene
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: List of entities
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entities:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Entity'
+    post:
+      tags: [entities]
+      operationId: teatro.gameEngine.createEntity
+      summary: Create an entity in a scene
+      description: |
+        Creates a new entity within the given scene. You can optionally attach
+        an initial Transform and other components at creation time.
+      security: []
+      x-fountain.visibility: public
+      x-fountain.reason: add new entity with optional initial components
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEntityRequest'
+      responses:
+        '201':
+          description: Entity created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entity'
+
+  /sessions/{sessionId}/scenes/{sceneId}/entities/{entityId}:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+      - $ref: '#/components/parameters/SceneId'
+      - $ref: '#/components/parameters/EntityId'
+    get:
+      tags: [entities]
+      operationId: teatro.gameEngine.getEntity
+      summary: Get an entity and its components
+      description: |
+        Returns full information about an entity, including all attached
+        components and their current values.
+      security: []
+      x-fountain.visibility: public
+      x-fountain.reason: inspect a specific entity and its component state
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: Entity details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entity'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [entities]
+      operationId: teatro.gameEngine.deleteEntity
+      summary: Delete an entity
+      description: |
+        Deletes an entity and all components attached to it.
+        References from other subsystems (such as physics bodies) should
+        be cleaned up by the engine.
+      security: []
+      x-fountain.visibility: public
+      x-fountain.reason: remove an entity and its components
+      x-fountain.allow-as-tool: true
+      responses:
+        '204':
+          description: Entity deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /sessions/{sessionId}/scenes/{sceneId}/entities/{entityId}/components:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+      - $ref: '#/components/parameters/SceneId'
+      - $ref: '#/components/parameters/EntityId'
+    patch:
+      tags: [entities]
+      operationId: teatro.gameEngine.patchEntityComponents
+      summary: Upsert components on an entity
+      description: |
+        Adds new components to an entity or updates existing ones. Component
+        patches are idempotent and keyed by component kind (for example
+        transform, physicsBodyRef, meshRef).
+      security: []
+      x-fountain.visibility: public
+      x-fountain.reason: attach or update components on an entity
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchComponentsRequest'
+      responses:
+        '200':
+          description: Updated entity with new component state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entity'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /sessions/{sessionId}/tick:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    post:
+      tags: [simulation]
+      operationId: teatro.gameEngine.tick
+      summary: Advance the game session by one tick
+      description: |
+        Advances the game session by one tick. On each tick, the engine:
+
+        - advances simulation time by the requested delta,
+        - updates active scenes and entities,
+        - delegates to subsystems such as physics, scripts, and audio,
+        - collects a snapshot of scenes and entities after the tick.
+
+        This endpoint models the "main loop" of a game engine in a tool-friendly
+        way and is the primary entry point for driving simulations from tests
+        or external agents.
+      security: []
+      x-fountain.visibility: public
+      x-fountain.reason: drive the game loop forward and observe resulting state
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TickRequest'
+      responses:
+        '200':
+          description: Tick result including updated time and optional scene snapshots
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TickResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  parameters:
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier of a game session.
+    SceneId:
+      name: sceneId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier of a scene within a session.
+    EntityId:
+      name: entityId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier of an entity within a scene.
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    GameSubsystem:
+      type: string
+      description: |
+        A logical subsystem that participates in the game loop. Subsystems
+        can be enabled or disabled per session.
+      enum:
+        - physics
+        - rendering
+        - input
+        - audio
+        - scripting
+
+    GameSession:
+      type: object
+      description: |
+        Represents a running game session. A session owns scenes, tracks
+        simulation time, and knows which subsystems are active.
+      required:
+        - id
+        - time
+        - subsystems
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the session.
+        name:
+          type: string
+          description: Optional human-readable name for the session.
+        time:
+          type: number
+          format: float
+          description: Current simulation time in seconds.
+        tickRate:
+          type: number
+          format: float
+          description: |
+            Optional target tick rate in ticks per second. This is a hint
+            for tools rather than a strict guarantee.
+        subsystems:
+          type: array
+          items:
+            $ref: '#/components/schemas/GameSubsystem'
+          description: Subsystems that are enabled for this session.
+        sceneCount:
+          type: integer
+          minimum: 0
+          description: Number of scenes currently registered in this session.
+
+    CreateGameSessionRequest:
+      type: object
+      description: Request payload used when creating a new game session.
+      properties:
+        name:
+          type: string
+          description: Optional human-readable name for the session.
+        tickRate:
+          type: number
+          format: float
+          description: |
+            Desired tick rate in ticks per second (for example 60 for 60 Hz).
+        subsystems:
+          type: array
+          items:
+            $ref: '#/components/schemas/GameSubsystem'
+          description: |
+            Subsystems to enable for this session. If omitted, a sensible
+            default (physics + rendering + input) is used.
+
+    Scene:
+      type: object
+      description: |
+        Represents a logical scene within a game session. Scenes group
+        entities and can be activated or deactivated.
+      required:
+        - id
+        - sessionId
+        - name
+        - isActive
+      properties:
+        id:
+          type: string
+        sessionId:
+          type: string
+        name:
+          type: string
+        isActive:
+          type: boolean
+          description: Whether the scene participates in ticks.
+        entityCount:
+          type: integer
+          minimum: 0
+          description: Number of entities currently present in the scene.
+
+    CreateSceneRequest:
+      type: object
+      description: Request payload used when creating a scene.
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Human-readable name for the scene.
+        isActive:
+          type: boolean
+          default: true
+          description: Whether the scene should start active.
+
+    UpdateSceneRequest:
+      type: object
+      description: Fields that can be updated on a scene.
+      properties:
+        name:
+          type: string
+        isActive:
+          type: boolean
+
+    Entity:
+      type: object
+      description: |
+        Represents an entity within a scene. Entities are identified by id
+        and become meaningful when they have components attached.
+      required:
+        - id
+        - sessionId
+        - sceneId
+        - componentKinds
+      properties:
+        id:
+          type: string
+        sessionId:
+          type: string
+        sceneId:
+          type: string
+        name:
+          type: string
+        componentKinds:
+          type: array
+          description: |
+            List of component kinds currently attached to this entity
+            (for example ["transform", "physicsBodyRef", "meshRef"]).
+          items:
+            type: string
+        components:
+          type: array
+          description: |
+            Optional full component state for this entity. When returned,
+            each entry describes one attached component.
+          items:
+            $ref: '#/components/schemas/ComponentState'
+
+    CreateEntityRequest:
+      type: object
+      description: Parameters required to create a new entity.
+      properties:
+        name:
+          type: string
+          description: Optional human-readable name for the entity.
+        components:
+          type: array
+          description: Optional initial components to attach to the entity.
+          items:
+            $ref: '#/components/schemas/ComponentState'
+
+    PatchComponentsRequest:
+      type: object
+      description: |
+        Describes a set of components to upsert on an entity. Each entry
+        is keyed by component kind; existing components of the same kind
+        are replaced.
+      required:
+        - components
+      properties:
+        components:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComponentState'
+
+    Vector3:
+      type: object
+      description: 3D vector used for positions, scales, and directions.
+      required:
+        - x
+        - y
+        - z
+      properties:
+        x:
+          type: number
+          format: float
+        y:
+          type: number
+          format: float
+        z:
+          type: number
+          format: float
+
+    Quaternion:
+      type: object
+      description: Unit quaternion representing 3D orientation.
+      required:
+        - x
+        - y
+        - z
+        - w
+      properties:
+        x:
+          type: number
+          format: float
+        y:
+          type: number
+          format: float
+        z:
+          type: number
+          format: float
+        w:
+          type: number
+          format: float
+
+    TransformComponent:
+      type: object
+      description: |
+        Spatial transform for an entity in world space. The Transform
+        component is typically the root for rendering and physics.
+      properties:
+        position:
+          $ref: '#/components/schemas/Vector3'
+        rotation:
+          $ref: '#/components/schemas/Quaternion'
+        scale:
+          $ref: '#/components/schemas/Vector3'
+
+    PhysicsBodyRefComponent:
+      type: object
+      description: |
+        Reference from an entity to a physics body owned by a physics
+        subsystem (for example a Bullet-based service). The physics world
+        id and body id are opaque strings that must match the physics spec.
+      required:
+        - physicsWorldId
+        - bodyId
+      properties:
+        physicsWorldId:
+          type: string
+          description: Identifier of the physics world containing this body.
+        bodyId:
+          type: string
+          description: Identifier of the physics body within the physics world.
+        syncMode:
+          type: string
+          description: |
+            How the transform of the entity and the physics body are kept
+            in sync.
+          enum:
+            - engineDrivesPhysics
+            - physicsDrivesEngine
+            - bidirectional
+
+    MeshRefComponent:
+      type: object
+      description: |
+        Reference to a mesh and material used when rendering the entity.
+        The mesh and material identifiers are resolved by the rendering /
+        asset subsystem.
+      required:
+        - meshId
+      properties:
+        meshId:
+          type: string
+        materialId:
+          type: string
+
+    CameraComponent:
+      type: object
+      description: Camera settings for an entity that acts as a view into the scene.
+      properties:
+        isActive:
+          type: boolean
+          description: Whether this camera is currently active.
+        fovY:
+          type: number
+          format: float
+          description: Vertical field of view in degrees.
+        near:
+          type: number
+          format: float
+          description: Near clip plane distance.
+        far:
+          type: number
+          format: float
+          description: Far clip plane distance.
+
+    AudioSourceComponent:
+      type: object
+      description: Audio source attached to an entity for spatial sound.
+      properties:
+        clipId:
+          type: string
+          description: Identifier of the audio clip to play.
+        loop:
+          type: boolean
+          default: false
+        volume:
+          type: number
+          format: float
+          default: 1.0
+
+    ScriptComponent:
+      type: object
+      description: |
+        Script binding attached to an entity. Scripts implement game-specific
+        logic such as AI or triggers. The script id is resolved by the
+        scripting subsystem.
+      properties:
+        scriptId:
+          type: string
+        parameters:
+          type: object
+          additionalProperties: true
+          description: Optional script-specific parameters.
+
+    ComponentState:
+      type: object
+      description: |
+        A single component attached to an entity. The "kind" field selects
+        which component payload is present.
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - transform
+            - physicsBodyRef
+            - meshRef
+            - camera
+            - audioSource
+            - script
+        transform:
+          $ref: '#/components/schemas/TransformComponent'
+        physicsBodyRef:
+          $ref: '#/components/schemas/PhysicsBodyRefComponent'
+        meshRef:
+          $ref: '#/components/schemas/MeshRefComponent'
+        camera:
+          $ref: '#/components/schemas/CameraComponent'
+        audioSource:
+          $ref: '#/components/schemas/AudioSourceComponent'
+        script:
+          $ref: '#/components/schemas/ScriptComponent'
+
+    TickRequest:
+      type: object
+      description: |
+        Parameters controlling how the game session should advance on this tick.
+        The engine will advance time, update subsystems, and optionally return
+        snapshots of active scenes.
+      required:
+        - dt
+      properties:
+        dt:
+          type: number
+          format: float
+          description: Time delta in seconds to advance the session by.
+        maxSubsteps:
+          type: integer
+          minimum: 1
+          default: 1
+          description: |
+            Optional maximum number of internal substeps. This is forwarded to
+            subsystems such as physics when relevant.
+        scenes:
+          type: array
+          description: |
+            Optional list of scene ids to tick. If omitted, all active scenes
+            are ticked.
+          items:
+            type: string
+        returnSnapshots:
+          type: boolean
+          default: true
+          description: |
+            Whether to return scene and entity snapshots after the tick.
+
+    SceneSnapshot:
+      type: object
+      description: |
+        Snapshot of a scene after a tick, including a compact list of entities
+        and their component state. This is intended for inspection and tests,
+        not full-fidelity rendering.
+      required:
+        - scene
+        - entities
+      properties:
+        scene:
+          $ref: '#/components/schemas/Scene'
+        entities:
+          type: array
+          items:
+            $ref: '#/components/schemas/Entity'
+
+    TickResult:
+      type: object
+      description: |
+        Summary of a tick, including the new session time and optional scene
+        snapshots.
+      required:
+        - time
+      properties:
+        time:
+          type: number
+          format: float
+          description: New simulation time after the tick.
+        snapshots:
+          type: array
+          items:
+            $ref: '#/components/schemas/SceneSnapshot'
+
+    ErrorResponse:
+      type: object
+      description: Standard error response with a machine-readable code and message.
+      properties:
+        code:
+          type: string
+        message:
+          type: string

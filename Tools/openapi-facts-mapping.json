@@ -42,5 +42,6 @@
   { "spec": "infinity.yml", "agentId": "fountain.coach/agent/infinity/service" },
   { "spec": "teatro-prompt-factory.yml", "agentId": "fountain.coach/agent/teatro-prompt-factory/service" },
   { "spec": "svg-animation.yml", "agentId": "fountain.coach/agent/svg-animation/service" },
-  { "spec": "constellation-stage.yml", "agentId": "fountain.coach/agent/constellation-stage/service" }
+  { "spec": "constellation-stage.yml", "agentId": "fountain.coach/agent/constellation-stage/service" },
+  { "spec": "teatro-game-engine-core.yml", "agentId": "fountain.coach/agent/teatro-game-engine-core/service" }
 ]

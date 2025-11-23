@@ -47,5 +47,6 @@
   { "spec": "bullet-physics.yml", "agentId": "fountain.coach/agent/bullet-physics/service" },
   { "spec": "teatro-rendering.yml", "agentId": "fountain.coach/agent/teatro-rendering/service" },
   { "spec": "teatro-input.yml", "agentId": "fountain.coach/agent/teatro-input/service" },
-  { "spec": "teatro-assets.yml", "agentId": "fountain.coach/agent/teatro-assets/service" }
+  { "spec": "teatro-assets.yml", "agentId": "fountain.coach/agent/teatro-assets/service" },
+  { "spec": "teatro-audio.yml", "agentId": "fountain.coach/agent/teatro-audio/service" }
 ]

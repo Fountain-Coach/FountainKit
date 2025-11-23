@@ -56,6 +56,7 @@ For a repository‑wide index of OpenAPI coverage and adoption status, see [../O
 | Teatro Rendering Service | 0.1.0 | Contexter alias Benedikt Eickhoff | [v1/teatro-rendering.yml](v1/teatro-rendering.yml) |
 | Teatro Input Service | 0.1.0 | Contexter alias Benedikt Eickhoff | [v1/teatro-input.yml](v1/teatro-input.yml) |
 | Teatro Assets Service | 0.1.0 | Contexter alias Benedikt Eickhoff | [v1/teatro-assets.yml](v1/teatro-assets.yml) |
+| Teatro Audio Service | 0.1.0 | Contexter alias Benedikt Eickhoff | [v1/teatro-audio.yml](v1/teatro-audio.yml) |
 
 ## Coverage Status
 

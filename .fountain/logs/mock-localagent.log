@@ -2,10 +2,13 @@
 [0/1] Planning build
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'mock-localagent-server' complete! (13.86s)
-[mock-localagent] Failed to start: bind(descriptor:ptr:bytes:): Address already in use) (errno: 48)
-16.55s)
-[mock-localagent] Failed to start: bind(descriptor:ptr:bytes:): Address already in use) (errno: 48)
+Build of product 'mock-localagent-server' complete! (19.25s)
+ing module mock_localagent_server
+[3/6] Write Objects.LinkFileList
+[4/6] Linking mock-localagent-server
+[5/6] Applying mock-localagent-server
+Build of product 'mock-localagent-server' complete! (21.71s)
+ 48)
 cField.swift
 [8/15] Compiling RealModule ApproximateEquality.swift
 [9/15] Emitting module RealModule

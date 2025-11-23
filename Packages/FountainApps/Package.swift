@@ -158,7 +158,8 @@ let DEPENDENCIES: [Package.Dependency] = BLANK_VRT_ONLY ? [
     .package(path: "../FountainCore"),
     .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
     .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0")
-] : [
+ ] : [
+        .package(url: "https://github.com/Fountain-Coach/TeatroStageEngine.git", from: "0.4.0"),
         .package(path: "../FountainCore"),
         .package(path: "../FountainAIKit"),
         .package(path: "../FountainProviders"),
@@ -1780,6 +1781,15 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             path: "Tests/MetalComputeKitTests"
         ),
         .executableTarget(
+            name: "teatro-stage-app",
+            dependencies: [
+                "MetalViewKit",
+                .product(name: "TeatroPhysics", package: "TeatroStageEngine")
+            ],
+            path: "Sources/teatro-stage-app",
+            exclude: ["AGENTS.md"]
+        ),
+        .executableTarget(
             name: "metalview-demo-app",
             dependencies: [
                 "MetalViewKit",
@@ -1860,6 +1870,13 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
                 .product(name: "Yams", package: "Yams")
             ],
             path: "Sources/quietframe-orchestra-generate"
+        ),
+        .executableTarget(
+            name: "constellation-stage-seed",
+            dependencies: [
+                .product(name: "FountainStoreClient", package: "FountainCore")
+            ],
+            path: "Sources/constellation-stage-seed"
         ),
         .executableTarget(
             name: "die-maschine-teatro-seed",
@@ -2056,6 +2073,13 @@ let INFINITY_TARGETS: [Target] = USE_SDLKIT ? [
             .product(name: "FountainStoreClient", package: "FountainCore")
         ],
         path: "Sources/infinity"
+    ),
+    .executableTarget(
+        name: "teatro-engine-demo",
+        dependencies: [
+            .product(name: "SDLKit", package: "SDLKit")
+        ],
+        path: "Sources/teatro-engine-demo"
     )
 ] : []
 

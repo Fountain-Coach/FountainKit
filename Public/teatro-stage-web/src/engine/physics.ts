@@ -63,9 +63,11 @@ export class DistanceConstraint implements Constraint {
 export class GroundConstraint implements Constraint {
   private static groundBody: CANNON.Body | null = null;
   private readonly floorY: number;
+  private readonly restitution: number;
 
-  constructor(floorY = 0) {
+  constructor(floorY = 0, restitution = 0) {
     this.floorY = floorY;
+    this.restitution = restitution;
   }
 
   attach(world: World): void {
@@ -80,6 +82,15 @@ export class GroundConstraint implements Constraint {
         -Math.PI / 2
       );
       plane.position.set(0, this.floorY, 0);
+      if (this.restitution > 0) {
+        const floorMaterial = new CANNON.Material("floor");
+        plane.material = floorMaterial;
+        const ballMaterial = new CANNON.Material("ball");
+        const contact = new CANNON.ContactMaterial(ballMaterial, floorMaterial, {
+          restitution: this.restitution
+        });
+        world.world.addContactMaterial(contact);
+      }
       world.world.addBody(plane);
       GroundConstraint.groundBody = plane;
     }
@@ -123,4 +134,3 @@ export class World {
     this.world.step(fixedTimeStep, dt, 3);
   }
 }
-

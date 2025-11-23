@@ -1,9 +1,9 @@
 [0/1] Planning build
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'AgentService' complete! (0.41s)
-Swift/ErrorType.swift:254: Fatal error: Error raised at top level: bind(descriptor:ptr:bytes:): Address already in use) (errno: 48)
-a
+Build of product 'AgentService' complete! (0.47s)
+[AgentService] LlamaCppC module not available. Falling back to 'mock'.
+[AgentService] listening on 127.0.0.1:8080 using backend=llama
 se.swift
 [8/19] Emitting module AgentCore
 [9/19] Compiling AgentCore NIOHTTPServer.swift

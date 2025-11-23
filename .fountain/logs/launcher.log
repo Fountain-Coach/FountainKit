@@ -1,11 +1,21 @@
 [launcher] Starting Fountain services from /Users/benedikteickhoff/Development/Github-Desktop/FountainKit
 [0/3] Write swift-version--58304C5D6DBC2206.txt
+[1/4] Compiling _NumericsShims _NumericsShims.c
+[2/5] Compiling api.c
+[3/11] Compiling writer.c
+[4/11] Compiling reader.c
+[5/11] Compiling parser.c
+[6/11] Compiling emitter.c
+[7/11] Compiling scanner.c
+[8/11] Write Objects.LinkFileList
+[9/11] Linking swift-openapi-generator-tool
+[10/11] Applying swift-openapi-generator-tool
 [0/1] Planning build
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'local-agent-manager' complete! (13.70s)
+Build of product 'local-agent-manager' complete! (20.27s)
 Building for debugging...
 [0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'local-agent-manager' complete! (0.48s)
+Build of product 'local-agent-manager' complete! (0.67s)
 failed to become healthy after 30s; attempting fallback mock-localagent
-mock-localagent started pid 40485
+mock-localagent started pid 16651

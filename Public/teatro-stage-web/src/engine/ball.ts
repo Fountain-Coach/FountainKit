@@ -33,8 +33,9 @@ export class BallWorld {
     this.ballBody = new Body(initialPosition.clone(), mass, halfExtents);
     this.world.addBody(this.ballBody);
 
-    // Floor at y = 0.
-    this.world.addConstraint(new GroundConstraint(0));
+    // Floor at y = 0 with a bit of restitution so the ball bounces before
+    // settling under damping.
+    this.world.addConstraint(new GroundConstraint(0, 0.4));
   }
 
   step(dtSeconds: number): void {
@@ -59,4 +60,3 @@ export class BallWorld {
     this.ballBody.velocity.set(speed, 0, 0);
   }
 }
-

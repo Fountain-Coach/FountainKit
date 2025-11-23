@@ -1,0 +1,802 @@
+openapi: 3.1.0
+info:
+  title: Teatro Rendering Service
+  version: 0.1.0
+  summary: Declarative render worlds, cameras, mesh instances, and frame descriptions for the Teatro Game Engine.
+  description: |
+    The Teatro Rendering Service describes the rendering half of the Teatro Game Engine.
+    It does not stream pixels; instead it exposes a declarative model of render worlds,
+    cameras, mesh instances, and frame descriptions that a host (for example MetalViewKit
+    or an SDL-based renderer) can interpret.
+
+    This spec is written for humans and LLMs and explains what "rendering" means in the
+    context of a game engine:
+
+    - RenderWorld: a logical view of a scene suitable for rendering. It knows which scene
+      it is attached to, which cameras exist, and which mesh instances are visible.
+    - Camera: a viewpoint into the world with a transform and projection (field of view,
+      near/far planes). The active camera determines how the frame is rendered.
+    - MeshInstance: a reference to a geometric mesh and material attached to a specific
+      entity in the game engine core. It has its own transform override for rendering.
+    - Frame: a snapshot of what should be drawn this frame: which camera is used and
+      which mesh instances are visible with which transforms.
+
+    The Teatro Game Engine Core spec is responsible for scenes and entities. The
+    Rendering Service binds that logical world to a concrete render configuration that
+    can be consumed by one or more runtime hosts.
+  license:
+    name: FountainAI Internal
+    url: https://fountain.coach/internal
+servers:
+  - url: http://127.0.0.1:0
+    description: Logical Teatro Rendering host (embedded or via Tools Factory)
+
+tags:
+  - name: render-worlds
+    description: Manage render worlds and their attachment to game sessions and scenes.
+  - name: cameras
+    description: Manage cameras inside a render world.
+  - name: meshes
+    description: Manage mesh instances inside a render world.
+  - name: frames
+    description: Request frame descriptions for a render world.
+
+paths:
+  /render-worlds:
+    post:
+      tags: [render-worlds]
+      operationId: teatro.rendering.createRenderWorld
+      summary: Create a render world
+      description: |
+        Creates a new render world that is attached to a game session and, optionally,
+        a specific scene. A render world defines how the logical scene is viewed,
+        independent of the underlying rendering backend.
+      x-fountain.visibility: public
+      x-fountain.reason: define a render world attached to a game session and scene
+      x-fountain.allow-as-tool: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRenderWorldRequest'
+      responses:
+        '201':
+          description: Render world created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RenderWorld'
+        '400':
+          description: Invalid render world configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /render-worlds/{renderWorldId}:
+    parameters:
+      - $ref: '#/components/parameters/RenderWorldId'
+    get:
+      tags: [render-worlds]
+      operationId: teatro.rendering.getRenderWorld
+      summary: Get a render world
+      description: |
+        Returns configuration and state for a render world, including which
+        game session and scene it is attached to and which camera is active.
+      x-fountain.visibility: public
+      x-fountain.reason: inspect render world configuration and active camera
+      x-fountain.allow-as-tool: true
+      security: []
+      responses:
+        '200':
+          description: Render world details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RenderWorld'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [render-worlds]
+      operationId: teatro.rendering.deleteRenderWorld
+      summary: Delete a render world
+      description: |
+        Deletes a render world and all cameras and mesh instances associated
+        with it. This does not delete the underlying game session or scene.
+      x-fountain.visibility: public
+      x-fountain.reason: remove render configuration for a game session and scene
+      x-fountain.allow-as-tool: true
+      security: []
+      responses:
+        '204':
+          description: Render world deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /render-worlds/{renderWorldId}/cameras:
+    parameters:
+      - $ref: '#/components/parameters/RenderWorldId'
+    get:
+      tags: [cameras]
+      operationId: teatro.rendering.listCameras
+      summary: List cameras in a render world
+      description: |
+        Returns all cameras defined in the render world. Cameras define viewpoints
+        used when generating frame descriptions.
+      x-fountain.visibility: public
+      x-fountain.reason: inspect cameras configured for a render world
+      x-fountain.allow-as-tool: true
+      security: []
+      responses:
+        '200':
+          description: List of cameras
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cameras:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Camera'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [cameras]
+      operationId: teatro.rendering.createCamera
+      summary: Create a camera in a render world
+      description: |
+        Creates a new camera for the render world. A camera has a transform
+        and projection settings (field of view, near/far planes).
+      x-fountain.visibility: public
+      x-fountain.reason: add new camera viewpoint to a render world
+      x-fountain.allow-as-tool: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCameraRequest'
+      responses:
+        '201':
+          description: Camera created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Camera'
+        '400':
+          description: Invalid camera configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /render-worlds/{renderWorldId}/cameras/{cameraId}:
+    parameters:
+      - $ref: '#/components/parameters/RenderWorldId'
+      - $ref: '#/components/parameters/CameraId'
+    get:
+      tags: [cameras]
+      operationId: teatro.rendering.getCamera
+      summary: Get a camera
+      description: |
+        Returns configuration and current transform for a camera in the
+        render world.
+      x-fountain.visibility: public
+      x-fountain.reason: inspect camera configuration and transform
+      x-fountain.allow-as-tool: true
+      security: []
+      responses:
+        '200':
+          description: Camera details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Camera'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [cameras]
+      operationId: teatro.rendering.updateCamera
+      summary: Update a camera
+      description: |
+        Updates camera properties such as transform and projection settings.
+        This is typically called when the player moves or looks around.
+      x-fountain.visibility: public
+      x-fountain.reason: move camera or change projection in render world
+      x-fountain.allow-as-tool: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCameraRequest'
+      responses:
+        '200':
+          description: Updated camera
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Camera'
+        '400':
+          description: Invalid camera update
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [cameras]
+      operationId: teatro.rendering.deleteCamera
+      summary: Delete a camera
+      description: |
+        Deletes a camera from the render world. If it was the active camera,
+        the render world may select a different camera or become inactive.
+      x-fountain.visibility: public
+      x-fountain.reason: remove camera viewpoint from render world
+      x-fountain.allow-as-tool: true
+      security: []
+      responses:
+        '204':
+          description: Camera deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /render-worlds/{renderWorldId}/meshes:
+    parameters:
+      - $ref: '#/components/parameters/RenderWorldId'
+    get:
+      tags: [meshes]
+      operationId: teatro.rendering.listMeshInstances
+      summary: List mesh instances in a render world
+      description: |
+        Returns all mesh instances registered in the render world. Each mesh
+        instance references a mesh asset, material, and an entity from the
+        game engine core.
+      x-fountain.visibility: public
+      x-fountain.reason: inspect which mesh instances are visible in a render world
+      x-fountain.allow-as-tool: true
+      security: []
+      responses:
+        '200':
+          description: List of mesh instances
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  meshes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MeshInstance'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [meshes]
+      operationId: teatro.rendering.createMeshInstance
+      summary: Create a mesh instance
+      description: |
+        Registers a new mesh instance for the render world, binding an asset
+        (mesh + material) to a game engine entity. The transform for rendering
+        can either follow the entity's Transform component or override it.
+      x-fountain.visibility: public
+      x-fountain.reason: bind mesh asset and material to game entity for rendering
+      x-fountain.allow-as-tool: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMeshInstanceRequest'
+      responses:
+        '201':
+          description: Mesh instance created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeshInstance'
+        '400':
+          description: Invalid mesh instance configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /render-worlds/{renderWorldId}/meshes/{meshInstanceId}:
+    parameters:
+      - $ref: '#/components/parameters/RenderWorldId'
+      - $ref: '#/components/parameters/MeshInstanceId'
+    get:
+      tags: [meshes]
+      operationId: teatro.rendering.getMeshInstance
+      summary: Get a mesh instance
+      description: |
+        Returns configuration and current transform policy for a mesh
+        instance in the render world.
+      x-fountain.visibility: public
+      x-fountain.reason: inspect mesh instance binding to entity and assets
+      x-fountain.allow-as-tool: true
+      security: []
+      responses:
+        '200':
+          description: Mesh instance details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeshInstance'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [meshes]
+      operationId: teatro.rendering.updateMeshInstance
+      summary: Update a mesh instance
+      description: |
+        Updates mesh instance properties such as which assets it references
+        or whether it follows the entity's Transform or an override.
+      x-fountain.visibility: public
+      x-fountain.reason: tweak mesh instance transform or asset bindings
+      x-fountain.allow-as-tool: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMeshInstanceRequest'
+      responses:
+        '200':
+          description: Updated mesh instance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeshInstance'
+        '400':
+          description: Invalid mesh instance update
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [meshes]
+      operationId: teatro.rendering.deleteMeshInstance
+      summary: Delete a mesh instance
+      description: |
+        Deletes a mesh instance from the render world. The underlying entity
+        and assets remain unchanged.
+      x-fountain.visibility: public
+      x-fountain.reason: remove mesh instance from render world
+      x-fountain.allow-as-tool: true
+      security: []
+      responses:
+        '204':
+          description: Mesh instance deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /render-worlds/{renderWorldId}/frame:
+    parameters:
+      - $ref: '#/components/parameters/RenderWorldId'
+    post:
+      tags: [frames]
+      operationId: teatro.rendering.buildFrame
+      summary: Build a frame description
+      description: |
+        Builds a frame description for the render world. The frame records:
+        - which camera was used,
+        - the camera's view and projection matrices,
+        - which mesh instances are visible and their final transforms.
+
+        This endpoint models the rendering half of the game loop. Hosts such
+        as MetalViewKit can consume the FrameDescription to draw the frame,
+        and tests can inspect it to verify visibility and composition.
+      x-fountain.visibility: public
+      x-fountain.reason: compute logical frame description for rendering and tests
+      x-fountain.allow-as-tool: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FrameRequest'
+      responses:
+        '200':
+          description: Frame description for this render world
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrameDescription'
+        '400':
+          description: Invalid frame request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  parameters:
+    RenderWorldId:
+      name: renderWorldId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier of a render world.
+    CameraId:
+      name: cameraId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier of a camera within a render world.
+    MeshInstanceId:
+      name: meshInstanceId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier of a mesh instance within a render world.
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    Vector3:
+      type: object
+      description: 3D vector used for positions, scales, and directions.
+      required:
+        - x
+        - y
+        - z
+      properties:
+        x:
+          type: number
+          format: float
+        y:
+          type: number
+          format: float
+        z:
+          type: number
+          format: float
+
+    Quaternion:
+      type: object
+      description: Unit quaternion representing 3D orientation.
+      required:
+        - x
+        - y
+        - z
+        - w
+      properties:
+        x:
+          type: number
+          format: float
+        y:
+          type: number
+          format: float
+        z:
+          type: number
+          format: float
+        w:
+          type: number
+          format: float
+
+    Matrix4x4:
+      type: object
+      description: |
+        4x4 matrix represented in row-major order as a flat array of 16 numbers.
+        Used for view and projection matrices in frame descriptions.
+      required:
+        - values
+      properties:
+        values:
+          type: array
+          minItems: 16
+          maxItems: 16
+          items:
+            type: number
+            format: float
+
+    RenderWorld:
+      type: object
+      description: |
+        Represents a render world bound to a game session and, optionally,
+        a specific scene. A render world owns cameras and mesh instances.
+      required:
+        - id
+        - sessionId
+      properties:
+        id:
+          type: string
+        sessionId:
+          type: string
+          description: Identifier of the game session (from Teatro Game Engine Core).
+        sceneId:
+          type: string
+          description: Optional identifier of the scene this render world is attached to.
+        name:
+          type: string
+          description: Optional human-readable name for the render world.
+        activeCameraId:
+          type: string
+          description: Identifier of the camera used by default when building frames.
+
+    CreateRenderWorldRequest:
+      type: object
+      description: Parameters required to create a render world.
+      required:
+        - sessionId
+      properties:
+        sessionId:
+          type: string
+          description: Identifier of the owning game session.
+        sceneId:
+          type: string
+          description: Optional identifier of the scene to attach for rendering.
+        name:
+          type: string
+          description: Optional human-readable name.
+        activeCameraId:
+          type: string
+          description: Optional initial active camera id (may be set later).
+
+    Camera:
+      type: object
+      description: |
+        Represents a camera in a render world. Cameras have a transform and
+        projection parameters that define how the scene is viewed.
+      required:
+        - id
+        - renderWorldId
+      properties:
+        id:
+          type: string
+        renderWorldId:
+          type: string
+        name:
+          type: string
+          description: Optional human-readable name for the camera.
+        position:
+          $ref: '#/components/schemas/Vector3'
+        rotation:
+          $ref: '#/components/schemas/Quaternion'
+        fovY:
+          type: number
+          format: float
+          description: Vertical field of view in degrees.
+        near:
+          type: number
+          format: float
+          description: Near clip plane distance.
+        far:
+          type: number
+          format: float
+          description: Far clip plane distance.
+        isActive:
+          type: boolean
+          description: Whether this camera is currently active for the render world.
+
+    CreateCameraRequest:
+      type: object
+      description: Parameters required to create a camera.
+      required:
+        - position
+        - rotation
+      properties:
+        name:
+          type: string
+        position:
+          $ref: '#/components/schemas/Vector3'
+        rotation:
+          $ref: '#/components/schemas/Quaternion'
+        fovY:
+          type: number
+          format: float
+        near:
+          type: number
+          format: float
+        far:
+          type: number
+          format: float
+        isActive:
+          type: boolean
+          description: Whether to make this the active camera.
+
+    UpdateCameraRequest:
+      type: object
+      description: Fields that can be updated on a camera.
+      properties:
+        name:
+          type: string
+        position:
+          $ref: '#/components/schemas/Vector3'
+        rotation:
+          $ref: '#/components/schemas/Quaternion'
+        fovY:
+          type: number
+          format: float
+        near:
+          type: number
+          format: float
+        far:
+          type: number
+          format: float
+        isActive:
+          type: boolean
+
+    MeshInstance:
+      type: object
+      description: |
+        Represents a visible instance of a mesh in a render world. The instance
+        binds a mesh and material asset to a game engine entity and defines how
+        the final transform is derived.
+      required:
+        - id
+        - renderWorldId
+        - entityId
+        - meshId
+      properties:
+        id:
+          type: string
+        renderWorldId:
+          type: string
+        entityId:
+          type: string
+          description: Identifier of the entity in the game engine core.
+        meshId:
+          type: string
+          description: Identifier of the mesh asset.
+        materialId:
+          type: string
+          description: Optional identifier of the material asset.
+        followEntityTransform:
+          type: boolean
+          description: |
+            If true, the mesh instance's transform follows the entity's
+            Transform component. If false, an override transform is used.
+        overridePosition:
+          $ref: '#/components/schemas/Vector3'
+        overrideRotation:
+          $ref: '#/components/schemas/Quaternion'
+        overrideScale:
+          $ref: '#/components/schemas/Vector3'
+
+    CreateMeshInstanceRequest:
+      type: object
+      description: Parameters required to create a mesh instance.
+      required:
+        - entityId
+        - meshId
+      properties:
+        entityId:
+          type: string
+        meshId:
+          type: string
+        materialId:
+          type: string
+        followEntityTransform:
+          type: boolean
+          default: true
+        overridePosition:
+          $ref: '#/components/schemas/Vector3'
+        overrideRotation:
+          $ref: '#/components/schemas/Quaternion'
+        overrideScale:
+          $ref: '#/components/schemas/Vector3'
+
+    UpdateMeshInstanceRequest:
+      type: object
+      description: Fields that can be updated on a mesh instance.
+      properties:
+        meshId:
+          type: string
+        materialId:
+          type: string
+        followEntityTransform:
+          type: boolean
+        overridePosition:
+          $ref: '#/components/schemas/Vector3'
+        overrideRotation:
+          $ref: '#/components/schemas/Quaternion'
+        overrideScale:
+          $ref: '#/components/schemas/Vector3'
+
+    FrameRequest:
+      type: object
+      description: |
+        Parameters controlling which camera and mesh instances are used when
+        building a frame description.
+      properties:
+        cameraId:
+          type: string
+          description: |
+            Optional camera id to use. When omitted, the render world's active
+            camera is used.
+        includeInactiveMeshes:
+          type: boolean
+          description: |
+            If true, include mesh instances even if they would normally be
+            considered inactive (useful for debugging).
+
+    VisibleInstance:
+      type: object
+      description: |
+        A single visible mesh instance in a frame, including the final transform
+        that the renderer should use.
+      required:
+        - meshInstanceId
+        - entityId
+        - meshId
+        - position
+        - rotation
+        - scale
+      properties:
+        meshInstanceId:
+          type: string
+        entityId:
+          type: string
+        meshId:
+          type: string
+        materialId:
+          type: string
+        position:
+          $ref: '#/components/schemas/Vector3'
+        rotation:
+          $ref: '#/components/schemas/Quaternion'
+        scale:
+          $ref: '#/components/schemas/Vector3'
+
+    FrameDescription:
+      type: object
+      description: |
+        Logical description of a frame that a renderer can draw. It specifies
+        which camera is used, the camera's matrices, and which mesh instances
+        are visible with their final transforms.
+      required:
+        - renderWorldId
+        - cameraId
+        - viewMatrix
+        - projectionMatrix
+        - instances
+      properties:
+        renderWorldId:
+          type: string
+        cameraId:
+          type: string
+        viewMatrix:
+          $ref: '#/components/schemas/Matrix4x4'
+        projectionMatrix:
+          $ref: '#/components/schemas/Matrix4x4'
+        instances:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisibleInstance'
+
+    ErrorResponse:
+      type: object
+      description: Standard error response with human-readable message.
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+

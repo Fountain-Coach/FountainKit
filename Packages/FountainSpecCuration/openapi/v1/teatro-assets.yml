@@ -1,0 +1,569 @@
+openapi: 3.1.0
+info:
+  title: Teatro Assets Service
+  version: 0.1.0
+  summary: Mesh, material, texture, and audio clip assets for the Teatro Game Engine.
+  description: |
+    The Teatro Assets Service describes how reusable assets are organised and addressed
+    in the Teatro Game Engine. It does not transmit raw binary data; instead it provides
+    metadata and identifiers that rendering and audio subsystems use to locate assets.
+
+    This spec is written for humans and LLMs and explains the mental model of engine assets:
+
+    - AssetPack: a logical bundle of assets (meshes, materials, textures, audio clips)
+      that are loaded, versioned, and shipped together. Packs are the unit of loading.
+    - MeshAsset: a geometric mesh identified by id (for example a 3D model of a character
+      or prop). The actual vertex/index data lives in engine-specific storage.
+    - MaterialAsset: a description of how a mesh should be shaded (shader, parameters,
+      textures). It references textures by id.
+    - TextureAsset: an image resource (diffuse, normal map, etc.). Only metadata such
+      as resolution and format are exposed here.
+    - AudioClipAsset: an audio resource (sound effect, music loop, voice line).
+
+    Game engine components such as MeshRefComponent and AudioSourceComponent refer to
+    these assets by id. This service lets tools and agents browse and reason about the
+    available assets without dealing with low-level file formats.
+  license:
+    name: FountainAI Internal
+    url: https://fountain.coach/internal
+servers:
+  - url: http://127.0.0.1:0
+    description: Logical Teatro Assets host (embedded or via Tools Factory)
+
+tags:
+  - name: packs
+    description: Manage logical asset packs.
+  - name: meshes
+    description: Manage mesh assets.
+  - name: materials
+    description: Manage material assets.
+  - name: textures
+    description: Manage texture assets.
+  - name: audio
+    description: Manage audio clip assets.
+
+paths:
+  /asset-packs:
+    get:
+      tags: [packs]
+      operationId: teatro.assets.listPacks
+      summary: List asset packs
+      description: |
+        Returns all logical asset packs known to the engine. Packs group meshes,
+        materials, textures, and audio clips that are loaded and versioned together.
+      x-fountain.visibility: public
+      x-fountain.reason: inspect available asset packs and their versions
+      x-fountain.allow-as-tool: true
+      security: []
+      responses:
+        '200':
+          description: List of asset packs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  packs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AssetPack'
+    post:
+      tags: [packs]
+      operationId: teatro.assets.registerPack
+      summary: Register or update an asset pack
+      description: |
+        Registers an asset pack and its metadata. This does not upload the raw
+        asset data; it declares identifiers, versions, and categories for tools
+        and engine subsystems.
+      x-fountain.visibility: public
+      x-fountain.reason: declare asset pack metadata and logical id
+      x-fountain.allow-as-tool: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetPack'
+      responses:
+        '200':
+          description: Pack registered or updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetPack'
+        '400':
+          description: Invalid asset pack definition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /asset-packs/{packId}:
+    parameters:
+      - $ref: '#/components/parameters/PackId'
+    get:
+      tags: [packs]
+      operationId: teatro.assets.getPack
+      summary: Get an asset pack
+      description: |
+        Returns metadata for a single asset pack, including its version and
+        high-level categories (for example environment, characters).
+      x-fountain.visibility: public
+      x-fountain.reason: inspect metadata for a specific asset pack
+      x-fountain.allow-as-tool: true
+      security: []
+      responses:
+        '200':
+          description: Asset pack details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetPack'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /meshes:
+    get:
+      tags: [meshes]
+      operationId: teatro.assets.listMeshes
+      summary: List mesh assets
+      description: |
+        Returns mesh assets, optionally filtered by pack or tag. Mesh assets
+        represent geometric models used by the rendering system.
+      x-fountain.visibility: public
+      x-fountain.reason: browse mesh assets available to the engine
+      x-fountain.allow-as-tool: true
+      security: []
+      parameters:
+        - name: packId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Optional asset pack id to filter by.
+        - name: tag
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Optional tag to filter by (for example \"character\").
+      responses:
+        '200':
+          description: List of mesh assets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  meshes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MeshAsset'
+    post:
+      tags: [meshes]
+      operationId: teatro.assets.registerMesh
+      summary: Register or update a mesh asset
+      description: |
+        Registers a mesh asset and its metadata. The mesh id is used by
+        rendering components such as MeshRefComponent to select models.
+      x-fountain.visibility: public
+      x-fountain.reason: declare mesh asset id and metadata
+      x-fountain.allow-as-tool: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MeshAsset'
+      responses:
+        '200':
+          description: Mesh asset registered or updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeshAsset'
+        '400':
+          description: Invalid mesh asset definition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /materials:
+    get:
+      tags: [materials]
+      operationId: teatro.assets.listMaterials
+      summary: List material assets
+      description: |
+        Returns material assets. Materials describe how meshes are shaded and
+        which textures they use.
+      x-fountain.visibility: public
+      x-fountain.reason: browse material assets and their parameters
+      x-fountain.allow-as-tool: true
+      security: []
+      parameters:
+        - name: packId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Optional asset pack id to filter by.
+      responses:
+        '200':
+          description: List of materials
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  materials:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MaterialAsset'
+    post:
+      tags: [materials]
+      operationId: teatro.assets.registerMaterial
+      summary: Register or update a material asset
+      description: |
+        Registers a material asset. Materials reference textures by id and
+        expose a small set of parameters that tools and scripts can reason about.
+      x-fountain.visibility: public
+      x-fountain.reason: declare material asset id, textures, and parameters
+      x-fountain.allow-as-tool: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MaterialAsset'
+      responses:
+        '200':
+          description: Material asset registered or updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaterialAsset'
+        '400':
+          description: Invalid material asset definition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /textures:
+    get:
+      tags: [textures]
+      operationId: teatro.assets.listTextures
+      summary: List texture assets
+      description: |
+        Returns texture assets. Textures are images used by materials, for
+        example color maps or normal maps.
+      x-fountain.visibility: public
+      x-fountain.reason: browse texture assets available to materials
+      x-fountain.allow-as-tool: true
+      security: []
+      parameters:
+        - name: packId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Optional asset pack id to filter by.
+      responses:
+        '200':
+          description: List of textures
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  textures:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TextureAsset'
+    post:
+      tags: [textures]
+      operationId: teatro.assets.registerTexture
+      summary: Register or update a texture asset
+      description: |
+        Registers a texture asset and its metadata (resolution, format, usage).
+      x-fountain.visibility: public
+      x-fountain.reason: declare texture asset id and metadata
+      x-fountain.allow-as-tool: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TextureAsset'
+      responses:
+        '200':
+          description: Texture asset registered or updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TextureAsset'
+        '400':
+          description: Invalid texture asset definition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /audio-clips:
+    get:
+      tags: [audio]
+      operationId: teatro.assets.listAudioClips
+      summary: List audio clip assets
+      description: |
+        Returns audio clip assets. Clips are used by audio sources for sound
+        effects, music, or ambient loops.
+      x-fountain.visibility: public
+      x-fountain.reason: browse audio clips available for playback
+      x-fountain.allow-as-tool: true
+      security: []
+      parameters:
+        - name: packId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Optional asset pack id to filter by.
+      responses:
+        '200':
+          description: List of audio clips
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  clips:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AudioClipAsset'
+    post:
+      tags: [audio]
+      operationId: teatro.assets.registerAudioClip
+      summary: Register or update an audio clip asset
+      description: |
+        Registers an audio clip asset and its metadata (duration, channels,
+        usage hints).
+      x-fountain.visibility: public
+      x-fountain.reason: declare audio clip id and metadata for use by audio sources
+      x-fountain.allow-as-tool: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AudioClipAsset'
+      responses:
+        '200':
+          description: Audio clip asset registered or updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AudioClipAsset'
+        '400':
+          description: Invalid audio clip asset definition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  parameters:
+    PackId:
+      name: packId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier of an asset pack.
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    AssetPack:
+      type: object
+      description: |
+        Logical bundle of assets that are loaded and versioned together.
+        Packs are the main unit of content distribution for games.
+      required:
+        - id
+        - version
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the asset pack.
+        version:
+          type: string
+          description: |
+            Version label for the pack (for example semantic version or build id).
+        label:
+          type: string
+          description: Optional human-readable label (for example \"Demo Level 1\").
+        categories:
+          type: array
+          description: Optional list of semantic categories (for example [\"environment\",\"characters\"]).
+          items:
+            type: string
+
+    MeshAsset:
+      type: object
+      description: |
+        Metadata for a mesh asset. The actual vertex/index data lives in
+        engine-specific storage; this record exposes identifiers and tags.
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Unique identifier of this mesh asset.
+        packId:
+          type: string
+          description: Identifier of the asset pack that owns this mesh.
+        label:
+          type: string
+          description: Optional human-readable label (for example \"PlayerCharacter\").
+        tags:
+          type: array
+          items:
+            type: string
+          description: Arbitrary tags used for search and grouping.
+        lodCount:
+          type: integer
+          minimum: 0
+          description: Optional number of levels of detail (LODs) available.
+
+    MaterialParam:
+      type: object
+      description: |
+        Single material parameter binding. Parameters may be floats, colors,
+        or texture references.
+      required:
+        - name
+        - kind
+      properties:
+        name:
+          type: string
+        kind:
+          type: string
+          enum:
+            - float
+            - color
+            - texture
+        floatValue:
+          type: number
+          format: float
+        colorValue:
+          type: array
+          items:
+            type: number
+            format: float
+          minItems: 3
+          maxItems: 4
+          description: RGB or RGBA color components.
+        textureId:
+          type: string
+          description: Id of a TextureAsset when kind == texture.
+
+    MaterialAsset:
+      type: object
+      description: |
+        Metadata for a material. Materials are used by rendering to decide
+        how to shade a mesh and which textures to sample.
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Unique identifier of this material asset.
+        packId:
+          type: string
+        label:
+          type: string
+        shaderModel:
+          type: string
+          description: Optional identifier of the shader or shading model.
+        params:
+          type: array
+          items:
+            $ref: '#/components/schemas/MaterialParam'
+
+    TextureAsset:
+      type: object
+      description: |
+        Metadata for a texture asset. Textures are images used by materials.
+      required:
+        - id
+      properties:
+        id:
+          type: string
+        packId:
+          type: string
+        label:
+          type: string
+        width:
+          type: integer
+          minimum: 1
+        height:
+          type: integer
+          minimum: 1
+        format:
+          type: string
+          description: Optional pixel format hint (for example \"rgba8\").
+        usage:
+          type: string
+          description: Optional usage hint (for example \"albedo\", \"normalMap\").
+
+    AudioClipAsset:
+      type: object
+      description: |
+        Metadata for an audio clip asset. Clips are referenced by audio sources
+        for playback.
+      required:
+        - id
+      properties:
+        id:
+          type: string
+        packId:
+          type: string
+        label:
+          type: string
+        durationSeconds:
+          type: number
+          format: float
+          description: Approximate duration of the clip in seconds.
+        channels:
+          type: integer
+          minimum: 1
+          description: Number of audio channels (for example 1 = mono, 2 = stereo).
+        sampleRate:
+          type: integer
+          minimum: 1
+          description: Sample rate in Hz.
+        usage:
+          type: string
+          description: Optional usage hint (for example \"sfx\", \"music\", \"ambient\").
+
+    ErrorResponse:
+      type: object
+      description: Standard error response with human-readable message.
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+

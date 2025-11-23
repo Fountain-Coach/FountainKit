@@ -172,13 +172,22 @@ export const BallStageView: React.FC<BallStageViewProps> = ({ snapshot }) => {
   const rightWallPoints = rightWallScreen.map((p) => `${p.x},${p.y}`).join(" ");
   const doorPoints = doorScreen.map((p) => `${p.x},${p.y}`).join(" ");
 
-  const ballCenter = project({
+  // World-space ball radius matches the baseline (r = 1). We derive the
+  // screen-space placement from the projected bottom point so that, when the
+  // ball rests on the floor (bottom at y = 0), the circle visually sits on the
+  // drawn floor polygon instead of appearing to fall through it.
+  const ballRadiusWorld = 1;
+  const ballBottomWorld: Vec3 = {
     x: ball.position.x,
-    y: ball.position.y,
+    y: Math.max(0, ball.position.y - ballRadiusWorld),
     z: ball.position.z
-  });
-
+  };
+  const ballBottomScreen = project(ballBottomWorld);
   const ballRadius = 8;
+  const ballCenter = {
+    x: ballBottomScreen.x,
+    y: ballBottomScreen.y - ballRadius
+  };
 
   return (
     <svg
@@ -245,4 +254,3 @@ export const BallStageView: React.FC<BallStageViewProps> = ({ snapshot }) => {
     </svg>
   );
 };
-

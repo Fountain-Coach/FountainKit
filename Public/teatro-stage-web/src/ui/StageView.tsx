@@ -42,6 +42,16 @@ export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
   const headCenterX = worldToScreenX(puppet.head.x);
   const headCenterY = worldToScreenY(puppet.head.y);
 
+  const handLx = worldToScreenX(puppet.handL.x);
+  const handLy = worldToScreenY(puppet.handL.y);
+  const handRx = worldToScreenX(puppet.handR.x);
+  const handRy = worldToScreenY(puppet.handR.y);
+
+  const footLx = worldToScreenX(puppet.footL.x);
+  const footLy = worldToScreenY(puppet.footL.y);
+  const footRx = worldToScreenX(puppet.footR.x);
+  const footRy = worldToScreenY(puppet.footR.y);
+
   return (
     <svg
       viewBox={`0 0 ${width} ${height}`}
@@ -101,6 +111,44 @@ export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
         cx={headCenterX}
         cy={headCenterY}
         r={headRadius}
+        fill="#f4ead6"
+        stroke="#111111"
+        strokeWidth={1}
+      />
+
+      {/* Hands */}
+      <circle
+        cx={handLx}
+        cy={handLy}
+        r={4}
+        fill="#f4ead6"
+        stroke="#111111"
+        strokeWidth={1}
+      />
+      <circle
+        cx={handRx}
+        cy={handRy}
+        r={4}
+        fill="#f4ead6"
+        stroke="#111111"
+        strokeWidth={1}
+      />
+
+      {/* Feet */}
+      <rect
+        x={footLx - 6}
+        y={footLy - 3}
+        width={12}
+        height={6}
+        fill="#f4ead6"
+        stroke="#111111"
+        strokeWidth={1}
+      />
+      <rect
+        x={footRx - 6}
+        y={footRy - 3}
+        width={12}
+        height={6}
         fill="#f4ead6"
         stroke="#111111"
         strokeWidth={1}

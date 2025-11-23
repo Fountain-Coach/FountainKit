@@ -7,6 +7,7 @@ export const TeatroStageApp: React.FC = () => {
   const lastTimeRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
   const [snapshot, setSnapshot] = useState<StageSnapshot | null>(null);
+  const [isPlaying, setIsPlaying] = useState(true);
 
   useEffect(() => {
     engineRef.current = new StageEngine();
@@ -18,7 +19,7 @@ export const TeatroStageApp: React.FC = () => {
       lastTimeRef.current = now;
 
       const engine = engineRef.current;
-      if (engine) {
+      if (engine && isPlaying) {
         engine.step(dtSeconds);
         setSnapshot(engine.snapshot());
       }
@@ -33,7 +34,13 @@ export const TeatroStageApp: React.FC = () => {
         cancelAnimationFrame(rafRef.current);
       }
     };
-  }, []);
+  }, [isPlaying]);
+
+  const handleTogglePlay = () => {
+    setIsPlaying((prev) => !prev);
+  };
+
+  const timeSeconds = snapshot?.time ?? 0;
 
   return (
     <div
@@ -54,11 +61,48 @@ export const TeatroStageApp: React.FC = () => {
           borderBottom: "1px solid rgba(0,0,0,0.08)"
         }}
       >
-        Teatro Stage Engine — Web (rebuild in progress)
+        <span>Teatro Stage Engine — Web (rebuild in progress)</span>
+        <span style={{ marginLeft: 16, opacity: 0.7 }}>
+          t = {timeSeconds.toFixed(2)}s · {isPlaying ? "playing" : "paused"}
+        </span>
       </header>
       <main style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, position: "relative" }}>
           {snapshot && <StageView snapshot={snapshot} />}
+          <div
+            style={{
+              position: "absolute",
+              left: 12,
+              bottom: 12,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "4px 8px",
+              borderRadius: 999,
+              backgroundColor: "rgba(244, 234, 214, 0.85)",
+              border: "1px solid rgba(0,0,0,0.12)",
+              fontSize: 12,
+              fontFamily:
+                "system-ui, -apple-system, BlinkMacSystemFont, sans-serif"
+            }}
+          >
+            <button
+              type="button"
+              onClick={handleTogglePlay}
+              style={{
+                border: "none",
+                background: "transparent",
+                padding: "2px 6px",
+                cursor: "pointer",
+                fontSize: 12
+              }}
+            >
+              {isPlaying ? "Pause" : "Play"}
+            </button>
+            <span style={{ opacity: 0.7 }}>
+              t = {timeSeconds.toFixed(2)}s
+            </span>
+          </div>
         </div>
       </main>
     </div>

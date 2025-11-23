@@ -3,8 +3,8 @@
 This app is the browser implementation of the Teatro Stage Engine: a small Vite + TypeScript frontend that hosts the Teatro room and puppet as a web surface. We are rebuilding it from a clean slate: the original Cannon‑ES + Three.js implementation now lives under `Public/teatro-stage-web/src-legacy/**`, and the new `src/**` tree starts with a minimal SVG stage view that will be wired back up to the specs.
 
 What
-- Stage view (new path): Three‑sided Teatro room and a simple puppet silhouette rendered as SVG in React, following the paper‑stage style. The current implementation focuses on geometry and visual style; camera and rig controls will be reintroduced as the new engine wrapper lands.
-- Stage engine (legacy path): `src-legacy/**` contains the original Cannon‑ES + Three.js host (`World`, `Body`, constraints, `PuppetRig`, `StageView`, `TimeBar`). Use it as a reference when rebuilding the new engine wrapper; do not extend it for new features.
+- Stage view (new path): Three‑sided Teatro room and a puppet silhouette (head, torso, hands, feet) rendered as SVG in React, following the paper‑stage style. Positions come from a small Cannon‑ES‑backed `StageEngine` wrapper that mirrors the Fadenpuppe rest pose and world coordinates from `TeatroStageEngine/spec/**`. Camera orbit/zoom and richer authoring controls will be reintroduced incrementally.
+- Stage engine (legacy path): `src-legacy/**` contains the original Cannon‑ES + Three.js host (`World`, `Body`, constraints, `PuppetRig`, `StageView`, `TimeBar`). Use it as a reference when rebuilding or extending the new engine wrapper; do not extend it for new features.
 
 Why
 - Provide a portable, spec‑aligned reference implementation of the Teatro Stage Engine that runs without a macOS app. The rebuild aims to keep the web host very close to `TeatroStageEngine` specs and the Swift engine, with a clear separation between engine wrapper and UI.

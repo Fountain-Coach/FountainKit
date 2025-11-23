@@ -1,21 +1,28 @@
 import React, { useEffect, useRef, useState } from "react";
 import { StageView } from "./StageView";
-
-interface StageState {
-  time: number;
-}
+import { StageEngine, type StageSnapshot } from "../engine/stage";
 
 export const TeatroStageApp: React.FC = () => {
-  const [state, setState] = useState<StageState>({ time: 0 });
+  const engineRef = useRef<StageEngine | null>(null);
+  const lastTimeRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
+  const [snapshot, setSnapshot] = useState<StageSnapshot | null>(null);
 
   useEffect(() => {
-    const start = performance.now();
+    engineRef.current = new StageEngine();
 
     const loop = () => {
       const now = performance.now();
-      const t = (now - start) / 1000;
-      setState({ time: t });
+      const last = lastTimeRef.current ?? now;
+      const dtSeconds = (now - last) / 1000;
+      lastTimeRef.current = now;
+
+      const engine = engineRef.current;
+      if (engine) {
+        engine.step(dtSeconds);
+        setSnapshot(engine.snapshot());
+      }
+
       rafRef.current = requestAnimationFrame(loop);
     };
 
@@ -51,10 +58,9 @@ export const TeatroStageApp: React.FC = () => {
       </header>
       <main style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         <div style={{ flex: 1 }}>
-          <StageView time={state.time} />
+          {snapshot && <StageView snapshot={snapshot} />}
         </div>
       </main>
     </div>
   );
 };
-

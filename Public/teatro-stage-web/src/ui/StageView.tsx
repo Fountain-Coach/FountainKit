@@ -1,17 +1,16 @@
 import React from "react";
+import type { StageSnapshot } from "../engine/stage";
 
 interface StageViewProps {
-  time: number;
+  snapshot: StageSnapshot;
 }
 
-// Simple 2D stage sketch that mirrors the three‑sided room and a single puppet
-// body at a rough “waist height”. This is a placeholder while the new
-// Cannon‑backed engine wrapper is rebuilt from the TeatroStageEngine specs.
-export const StageView: React.FC<StageViewProps> = ({ time }) => {
-  // Gentle sway for the puppet to keep the scene alive without relying on the
-  // old physics wrapper. Numbers are intentionally small; the authoritative
-  // behaviour still lives in TeatroStageEngine.
-  const sway = Math.sin(time * 0.8) * 10;
+// Simple 2D projection of the Teatro room and puppet using the canonical world
+// coordinates from TeatroStageEngine specs. This stays intentionally minimal:
+// it draws a front‑on room and uses a linear mapping from world space
+// (X ∈ [-15, 15], Y ∈ [0, 20]) into SVG space.
+export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
+  const { puppet } = snapshot;
 
   const width = 480;
   const height = 320;
@@ -23,13 +22,25 @@ export const StageView: React.FC<StageViewProps> = ({ time }) => {
   const roomLeft = 60;
   const roomRight = width - 60;
 
-  const puppetX = (roomLeft + roomRight) / 2;
-  const puppetBaseY = floorTop;
-  const puppetTorsoHeight = 40;
-  const puppetHeadRadius = 10;
+  const roomWidthPx = roomRight - roomLeft;
 
-  const torsoTopY = puppetBaseY - puppetTorsoHeight + sway * 0.2;
-  const headCenterY = torsoTopY - puppetHeadRadius * 1.4;
+  const worldToScreenX = (x: number): number =>
+    roomLeft + ((x + 15) / 30) * roomWidthPx;
+
+  const worldToScreenY = (y: number): number =>
+    floorTop - (y / 20) * wallHeight;
+
+  const torsoWidth = 24;
+  const torsoHeight = 40;
+  const headRadius = 10;
+
+  const torsoCenterX = worldToScreenX(puppet.torso.x);
+  const torsoCenterY = worldToScreenY(puppet.torso.y);
+  const torsoTopY = torsoCenterY - torsoHeight / 2;
+  const torsoLeftX = torsoCenterX - torsoWidth / 2;
+
+  const headCenterX = worldToScreenX(puppet.head.x);
+  const headCenterY = worldToScreenY(puppet.head.y);
 
   return (
     <svg
@@ -63,12 +74,12 @@ export const StageView: React.FC<StageViewProps> = ({ time }) => {
         strokeWidth={1}
       />
 
-      {/* Simple door on the right wall */}
+      {/* Simple door on the right wall (height ≈ 8 units) */}
       <rect
         x={roomRight - 40}
-        y={floorTop - 60}
+        y={floorTop - (8 / 20) * wallHeight}
         width={24}
-        height={60}
+        height={(8 / 20) * wallHeight}
         fill="#f4ead6"
         stroke="#111111"
         strokeWidth={1}
@@ -76,10 +87,10 @@ export const StageView: React.FC<StageViewProps> = ({ time }) => {
 
       {/* Puppet torso */}
       <rect
-        x={puppetX - 12}
+        x={torsoLeftX}
         y={torsoTopY}
-        width={24}
-        height={puppetTorsoHeight}
+        width={torsoWidth}
+        height={torsoHeight}
         fill="#f4ead6"
         stroke="#111111"
         strokeWidth={1}
@@ -87,9 +98,9 @@ export const StageView: React.FC<StageViewProps> = ({ time }) => {
 
       {/* Puppet head */}
       <circle
-        cx={puppetX}
+        cx={headCenterX}
         cy={headCenterY}
-        r={puppetHeadRadius}
+        r={headRadius}
         fill="#f4ead6"
         stroke="#111111"
         strokeWidth={1}
@@ -97,7 +108,7 @@ export const StageView: React.FC<StageViewProps> = ({ time }) => {
 
       {/* Simple floor spotlight */}
       <ellipse
-        cx={puppetX}
+        cx={torsoCenterX}
         cy={floorTop + floorHeight - 6}
         rx={40}
         ry={10}
@@ -106,4 +117,3 @@ export const StageView: React.FC<StageViewProps> = ({ time }) => {
     </svg>
   );
 }
-

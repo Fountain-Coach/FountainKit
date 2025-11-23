@@ -52,6 +52,7 @@ For a repository‑wide index of OpenAPI coverage and adoption status, see [../O
 | SVG Animation Renderer Instrument | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/svg-animation.yml](v1/svg-animation.yml) |
 | Teatro Prompt Factory | 1.0.0 | Contexter alias Benedikt Eickhoff | [v1/teatro-prompt-factory.yml](v1/teatro-prompt-factory.yml) |
 | Teatro Game Engine Core | 0.1.0 | Contexter alias Benedikt Eickhoff | [v1/teatro-game-engine-core.yml](v1/teatro-game-engine-core.yml) |
+| Bullet Physics Engine Service | 0.1.0 | Contexter alias Benedikt Eickhoff | [v1/bullet-physics.yml](v1/bullet-physics.yml) |
 
 ## Coverage Status
 

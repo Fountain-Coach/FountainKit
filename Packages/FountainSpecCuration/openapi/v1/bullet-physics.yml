@@ -1,0 +1,849 @@
+openapi: 3.1.0
+info:
+  title: Bullet Physics Engine Service
+  version: 0.1.0
+  summary: 3D rigid-body physics worlds, bodies, forces, and queries backed by Bullet.
+  description: |
+    This service exposes a 3D rigid-body physics engine (backed by Bullet)
+    over HTTP. It lets you create "worlds" (independent simulations), add
+    "bodies" (rigid objects), apply forces and impulses, step the simulation
+    forward in time, and perform queries such as collision contacts and raycasts.
+
+    The spec is written as documentation for humans and LLMs. It explains
+    the mental model of a physics engine in natural language, not just as
+    CRUD endpoints.
+
+    Core concepts:
+
+    - World: a container for rigid bodies and constraints that advances in
+      discrete time steps. Each world has gravity, solver settings, and a
+      current simulation time in seconds.
+    - Rigid body: a solid object with mass, position, orientation, linear
+      and angular velocity. Bodies can be dynamic (affected by forces),
+      static (immovable), or kinematic (user-controlled transform).
+    - Collider shape: the geometric shape used for collision detection
+      (sphere, box, capsule, triangle mesh, etc.). Shapes define how bodies
+      touch and bounce, but do not directly store mass.
+    - Material: defines how bouncy and how slippery a surface is (restitution
+      and friction). Material properties influence how collisions are resolved.
+    - Forces and impulses: a force is a continuous influence applied over
+      time (for example gravity or wind), while an impulse is an instantaneous
+      change in velocity (for example a hit or explosion).
+    - Simulation step: advancing the world by a time delta dt (in seconds)
+      integrates all forces, updates body positions and velocities, and
+      resolves collisions and constraints.
+
+    All units are SI by default:
+    - length in meters
+    - mass in kilograms
+    - time in seconds
+    - gravity as acceleration in m/s^2 (for example (0, -9.81, 0))
+
+    This spec is intentionally explicit so that readers (including FountainAi)
+    can infer how a physics engine behaves by reading the endpoint and schema
+    descriptions.
+  license:
+    name: FountainAI Internal
+    url: https://fountain.coach/internal
+servers:
+  - url: http://127.0.0.1:0
+    description: Logical Bullet physics host (embedded or via Tools Factory)
+
+tags:
+  - name: worlds
+    description: Manage physics worlds (independent simulations).
+  - name: bodies
+    description: Manage rigid bodies inside a physics world.
+  - name: simulation
+    description: Advance the physics simulation and inspect results.
+  - name: queries
+    description: Physics queries that do not modify the world state.
+
+paths:
+  /worlds:
+    post:
+      tags: [worlds]
+      operationId: bullet.physics.createWorld
+      summary: Create a new physics world
+      description: |
+        Creates a new 3D physics world with configurable gravity and solver
+        settings. Each world advances independently and stores its own
+        simulation time.
+      x-fountain.visibility: public
+      x-fountain.reason: create isolated Bullet physics world with its own gravity and time
+      x-fountain.allow-as-tool: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorldRequest'
+      responses:
+        '201':
+          description: World created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/World'
+        '400':
+          description: Invalid world configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /worlds/{worldId}:
+    parameters:
+      - $ref: '#/components/parameters/WorldId'
+    get:
+      tags: [worlds]
+      operationId: bullet.physics.getWorld
+      summary: Get world settings and state
+      description: |
+        Returns metadata about a physics world, including gravity, solver
+        configuration, current simulation time, and counters.
+      x-fountain.visibility: public
+      x-fountain.reason: inspect Bullet physics world configuration and time
+      x-fountain.allow-as-tool: true
+      security: []
+      responses:
+        '200':
+          description: World details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/World'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [worlds]
+      operationId: bullet.physics.deleteWorld
+      summary: Destroy a physics world
+      description: |
+        Destroys a world and all bodies in it. After deletion, the world id
+        is no longer valid for any operation.
+      x-fountain.visibility: public
+      x-fountain.reason: clean up Bullet physics world and all rigid bodies it owns
+      x-fountain.allow-as-tool: true
+      security: []
+      responses:
+        '204':
+          description: World deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /worlds/{worldId}/bodies:
+    parameters:
+      - $ref: '#/components/parameters/WorldId'
+    post:
+      tags: [bodies]
+      operationId: bullet.physics.createBody
+      summary: Create a rigid body in a world
+      description: |
+        Adds a new rigid body to the given world. A body has mass, dynamic
+        type (dynamic, static, or kinematic), an initial transform, and one
+        collider shape used for collision detection.
+      x-fountain.visibility: public
+      x-fountain.reason: add rigid body to Bullet world with shape and mass
+      x-fountain.allow-as-tool: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBodyRequest'
+      responses:
+        '201':
+          description: Body created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Body'
+        '400':
+          description: Invalid body configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    get:
+      tags: [bodies]
+      operationId: bullet.physics.listBodies
+      summary: List bodies in a world
+      description: |
+        Returns a list of bodies currently registered in the world. For each
+        body, you can see its dynamic type, shape, and latest known state.
+      x-fountain.visibility: public
+      x-fountain.reason: inspect rigid bodies currently present in a Bullet world
+      x-fountain.allow-as-tool: true
+      security: []
+      responses:
+        '200':
+          description: List of bodies
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bodies:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Body'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /worlds/{worldId}/bodies/{bodyId}:
+    parameters:
+      - $ref: '#/components/parameters/WorldId'
+      - $ref: '#/components/parameters/BodyId'
+    get:
+      tags: [bodies]
+      operationId: bullet.physics.getBody
+      summary: Get a body and its current state
+      description: |
+        Returns detailed information about a body, including its initial
+        configuration and latest simulated state (position, orientation,
+        linear and angular velocity).
+      x-fountain.visibility: public
+      x-fountain.reason: inspect Bullet rigid body configuration and state
+      x-fountain.allow-as-tool: true
+      security: []
+      responses:
+        '200':
+          description: Body details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Body'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [bodies]
+      operationId: bullet.physics.updateBody
+      summary: Apply forces or update a body's properties
+      description: |
+        Applies impulses or forces to a body, or updates its configuration.
+        This is how you "poke" the physics world from the outside, for example
+        to apply a jump impulse or move a kinematic object.
+      x-fountain.visibility: public
+      x-fountain.reason: push forces or impulses into Bullet and tweak body state
+      x-fountain.allow-as-tool: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBodyRequest'
+      responses:
+        '200':
+          description: Body updated, returns new state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Body'
+        '400':
+          description: Invalid update payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [bodies]
+      operationId: bullet.physics.deleteBody
+      summary: Remove a body from the world
+      description: |
+        Removes a rigid body from the world. Any constraints involving this
+        body are also removed.
+      x-fountain.visibility: public
+      x-fountain.reason: remove Bullet rigid body and its constraints
+      x-fountain.allow-as-tool: true
+      security: []
+      responses:
+        '204':
+          description: Body deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /worlds/{worldId}/step:
+    parameters:
+      - $ref: '#/components/parameters/WorldId'
+    post:
+      tags: [simulation]
+      operationId: bullet.physics.stepWorld
+      summary: Advance the physics simulation in time
+      description: |
+        Advances the world by a time delta dt (in seconds). During a step,
+        the engine integrates forces, updates body positions and velocities,
+        and resolves collisions and constraints. The response can include a
+        snapshot of body states and contacts after the step.
+      x-fountain.visibility: public
+      x-fountain.reason: drive Bullet simulation forward and inspect resulting state
+      x-fountain.allow-as-tool: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - dt
+              properties:
+                dt:
+                  type: number
+                  format: float
+                  minimum: 0
+                  description: |
+                    Time delta in seconds to advance the world by.
+                    Typical values are 1/60 ≈ 0.0167 for 60 Hz.
+                substeps:
+                  type: integer
+                  minimum: 1
+                  default: 1
+                  description: |
+                    Number of internal substeps for numerical stability.
+                    Higher values improve accuracy at the cost of CPU time.
+                returnBodies:
+                  type: boolean
+                  default: true
+                  description: |
+                    Whether to return updated body states after stepping.
+      responses:
+        '200':
+          description: World advanced in time
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorldStepResult'
+        '400':
+          description: Invalid step request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /worlds/{worldId}/contacts:
+    parameters:
+      - $ref: '#/components/parameters/WorldId'
+    get:
+      tags: [simulation]
+      operationId: bullet.physics.listContacts
+      summary: List current collision contacts in a world
+      description: |
+        Returns the set of collision contacts detected in the most recent
+        simulation step. Each contact describes which bodies are touching,
+        where, and with what normal.
+      x-fountain.visibility: public
+      x-fountain.reason: inspect Bullet contact manifold for last simulation step
+      x-fountain.allow-as-tool: true
+      security: []
+      parameters:
+        - name: bodyId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Optional filter to only return contacts involving this body.
+      responses:
+        '200':
+          description: List of collision contacts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  contacts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Contact'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /worlds/{worldId}/raycast:
+    parameters:
+      - $ref: '#/components/parameters/WorldId'
+    post:
+      tags: [queries]
+      operationId: bullet.physics.raycast
+      summary: Cast a ray through the world and report hits
+      description: |
+        Performs a raycast (a line segment in 3D space) and reports which
+        bodies it hits, in order from nearest to farthest. This is useful
+        for picking, line-of-sight checks, or weapon traces.
+      x-fountain.visibility: public
+      x-fountain.reason: perform Bullet raycast for picking or line-of-sight checks
+      x-fountain.allow-as-tool: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RaycastRequest'
+      responses:
+        '200':
+          description: Ray hits, if any
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hits:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RaycastHit'
+        '400':
+          description: Invalid raycast request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  parameters:
+    WorldId:
+      name: worldId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: |
+        Identifier of the physics world. This is returned by createWorld
+        and is unique for each simulation.
+    BodyId:
+      name: bodyId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Identifier of a rigid body within a world.
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    Vector3:
+      type: object
+      description: 3D vector with x, y, z components in meters or meters/second.
+      required:
+        - x
+        - y
+        - z
+      properties:
+        x:
+          type: number
+          format: float
+        y:
+          type: number
+          format: float
+        z:
+          type: number
+          format: float
+
+    Quaternion:
+      type: object
+      description: |
+        Quaternion representing 3D orientation. The (x, y, z, w) components
+        form a unit quaternion (length 1).
+      required:
+        - x
+        - y
+        - z
+        - w
+      properties:
+        x:
+          type: number
+          format: float
+        y:
+          type: number
+          format: float
+        z:
+          type: number
+          format: float
+        w:
+          type: number
+          format: float
+
+    WorldSettings:
+      type: object
+      description: |
+        Configuration parameters that control the global behaviour of a
+        physics world, such as gravity and solver precision.
+      properties:
+        gravity:
+          $ref: '#/components/schemas/Vector3'
+        solverIterations:
+          type: integer
+          minimum: 1
+          default: 10
+          description: |
+            Number of iterations used by the constraint solver each step.
+            Higher values are more stable but slower.
+        allowSleeping:
+          type: boolean
+          default: true
+          description: |
+            If true, bodies that come to rest may go to sleep to save CPU.
+        broadphaseAlgorithm:
+          type: string
+          description: |
+            Hint for the broadphase collision algorithm (implementation detail).
+          enum:
+            - automatic
+            - axisSweep
+            - dynamicAABBTree
+
+    World:
+      type: object
+      description: |
+        Represents a 3D physics world. A world groups bodies and tracks
+        the current simulation time.
+      required:
+        - id
+        - time
+        - settings
+      properties:
+        id:
+          type: string
+          description: Unique identifier for this world.
+        time:
+          type: number
+          format: float
+          description: Current simulation time in seconds.
+        settings:
+          $ref: '#/components/schemas/WorldSettings'
+        bodyCount:
+          type: integer
+          minimum: 0
+          description: Number of bodies currently in the world.
+
+    CreateWorldRequest:
+      type: object
+      description: Request payload used when creating a world.
+      properties:
+        settings:
+          $ref: '#/components/schemas/WorldSettings'
+
+    BodyDynamicType:
+      type: string
+      description: |
+        Indicates how the body interacts with forces and collisions.
+        - dynamic: affected by forces, gravity, and collisions.
+        - static: immovable; other bodies collide with it.
+        - kinematic: moved manually; affects others but is not affected.
+      enum:
+        - dynamic
+        - static
+        - kinematic
+
+    ColliderShape:
+      type: object
+      description: |
+        Shape used for collision detection. Some fields are only relevant
+        for specific kinds of shapes.
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - sphere
+            - box
+            - capsule
+            - mesh
+          description: Type of shape.
+        radius:
+          type: number
+          format: float
+          description: Radius for sphere or capsule shapes (meters).
+        halfExtents:
+          $ref: '#/components/schemas/Vector3'
+        height:
+          type: number
+          format: float
+          description: Capsule height (excluding hemispherical caps).
+        mesh:
+          type: object
+          description: Triangle mesh data for static mesh colliders.
+          properties:
+            vertices:
+              type: array
+              items:
+                $ref: '#/components/schemas/Vector3'
+            indices:
+              type: array
+              items:
+                type: integer
+                format: int32
+
+    Material:
+      type: object
+      description: |
+        Physical material parameters used when resolving collisions between
+        bodies. These affect bounciness and friction.
+      properties:
+        restitution:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          default: 0
+          description: |
+            Bounciness factor. 0 = inelastic (no bounce), 1 = perfectly elastic.
+        friction:
+          type: number
+          format: float
+          minimum: 0
+          default: 0.5
+          description: |
+            Coefficient of friction. Higher values resist sliding motion.
+
+    BodyState:
+      type: object
+      description: |
+        Current simulated state of a body, including transform and velocities.
+      required:
+        - position
+        - orientation
+        - linearVelocity
+        - angularVelocity
+      properties:
+        position:
+          $ref: '#/components/schemas/Vector3'
+        orientation:
+          $ref: '#/components/schemas/Quaternion'
+        linearVelocity:
+          $ref: '#/components/schemas/Vector3'
+        angularVelocity:
+          $ref: '#/components/schemas/Vector3'
+        isSleeping:
+          type: boolean
+          description: Whether the body is currently sleeping (inactive).
+
+    Body:
+      type: object
+      description: |
+        A rigid body within a physics world. It combines configuration
+        (mass, shape, material) with its latest known simulated state.
+      required:
+        - id
+        - worldId
+        - dynamicType
+        - mass
+        - shape
+        - state
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the body.
+        worldId:
+          type: string
+          description: Identifier of the world that owns this body.
+        dynamicType:
+          $ref: '#/components/schemas/BodyDynamicType'
+        mass:
+          type: number
+          format: float
+          minimum: 0
+          description: Mass in kilograms. Zero mass implies static.
+        shape:
+          $ref: '#/components/schemas/ColliderShape'
+        material:
+          $ref: '#/components/schemas/Material'
+        state:
+          $ref: '#/components/schemas/BodyState'
+        userData:
+          type: object
+          additionalProperties: true
+          description: Optional caller-defined metadata associated with the body.
+
+    CreateBodyRequest:
+      type: object
+      description: Parameters required to create a new rigid body.
+      required:
+        - dynamicType
+        - mass
+        - shape
+        - state
+      properties:
+        dynamicType:
+          $ref: '#/components/schemas/BodyDynamicType'
+        mass:
+          type: number
+          format: float
+          minimum: 0
+        shape:
+          $ref: '#/components/schemas/ColliderShape'
+        material:
+          $ref: '#/components/schemas/Material'
+        state:
+          $ref: '#/components/schemas/BodyState'
+        userData:
+          type: object
+          additionalProperties: true
+          description: Optional caller-defined metadata associated with the body.
+
+    Force:
+      type: object
+      description: Continuous force applied to a body for the next step.
+      required:
+        - force
+      properties:
+        force:
+          $ref: '#/components/schemas/Vector3'
+        point:
+          $ref: '#/components/schemas/Vector3'
+          description: |
+            Optional point in world space where the force is applied.
+            If omitted, force is applied at the center of mass.
+
+    Impulse:
+      type: object
+      description: Instantaneous change in momentum for a body.
+      required:
+        - impulse
+      properties:
+        impulse:
+          $ref: '#/components/schemas/Vector3'
+        point:
+          $ref: '#/components/schemas/Vector3'
+          description: Optional application point in world space.
+
+    UpdateBodyRequest:
+      type: object
+      description: |
+        Describes how to update a body's configuration or apply forces /
+        impulses for the next simulation step.
+      properties:
+        dynamicType:
+          $ref: '#/components/schemas/BodyDynamicType'
+        mass:
+          type: number
+          format: float
+          minimum: 0
+        material:
+          $ref: '#/components/schemas/Material'
+        state:
+          $ref: '#/components/schemas/BodyState'
+        addForces:
+          type: array
+          description: Forces to accumulate for the next simulation step.
+          items:
+            $ref: '#/components/schemas/Force'
+        addImpulses:
+          type: array
+          description: Impulses to apply immediately.
+          items:
+            $ref: '#/components/schemas/Impulse'
+
+    Contact:
+      type: object
+      description: |
+        A single collision contact point between two bodies in the world.
+      required:
+        - bodyAId
+        - bodyBId
+        - position
+        - normal
+      properties:
+        bodyAId:
+          type: string
+        bodyBId:
+          type: string
+        position:
+          $ref: '#/components/schemas/Vector3'
+        normal:
+          $ref: '#/components/schemas/Vector3'
+        penetrationDepth:
+          type: number
+          format: float
+          description: Estimated overlap distance in meters.
+
+    WorldStepResult:
+      type: object
+      description: |
+        Summary of a simulation step, including new time, optional body
+        states, and collision contacts.
+      required:
+        - time
+      properties:
+        time:
+          type: number
+          format: float
+          description: New world simulation time after stepping.
+        bodies:
+          type: array
+          description: |
+            Updated body states, if requested via returnBodies.
+          items:
+            $ref: '#/components/schemas/Body'
+        contacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Contact'
+
+    RaycastRequest:
+      type: object
+      description: Ray to cast through the world.
+      required:
+        - origin
+        - direction
+        - maxDistance
+      properties:
+        origin:
+          $ref: '#/components/schemas/Vector3'
+        direction:
+          $ref: '#/components/schemas/Vector3'
+          description: Normalized direction vector of the ray.
+        maxDistance:
+          type: number
+          format: float
+          minimum: 0
+          description: Maximum distance to search for hits (meters).
+
+    RaycastHit:
+      type: object
+      description: |
+        A single raycast hit, including which body was hit and at which
+        position along the ray.
+      required:
+        - bodyId
+        - position
+        - normal
+        - distance
+      properties:
+        bodyId:
+          type: string
+        position:
+          $ref: '#/components/schemas/Vector3'
+        normal:
+          $ref: '#/components/schemas/Vector3'
+        distance:
+          type: number
+          format: float
+          description: Distance from ray origin to hit point (meters).
+
+    ErrorResponse:
+      type: object
+      description: Standard error response with human-readable message.
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+

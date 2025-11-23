@@ -140,6 +140,20 @@ export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
     { x: -15, y: 20, z: -10 }
   ];
 
+  const leftWallWorld: Vec3[] = [
+    { x: -15, y: 0, z: 10 },
+    { x: -15, y: 0, z: -10 },
+    { x: -15, y: 20, z: -10 },
+    { x: -15, y: 20, z: 10 }
+  ];
+
+  const rightWallWorld: Vec3[] = [
+    { x: 15, y: 0, z: -10 },
+    { x: 15, y: 0, z: 10 },
+    { x: 15, y: 20, z: 10 },
+    { x: 15, y: 20, z: -10 }
+  ];
+
   const doorWorld: Vec3[] = [
     { x: 15, y: 0, z: -4 },
     { x: 15, y: 0, z: -1 },
@@ -149,10 +163,14 @@ export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
 
   const floorScreen = floorWorld.map(project);
   const backWallScreen = backWallWorld.map(project);
+  const leftWallScreen = leftWallWorld.map(project);
+  const rightWallScreen = rightWallWorld.map(project);
   const doorScreen = doorWorld.map(project);
 
   const floorPoints = floorScreen.map((p) => `${p.x},${p.y}`).join(" ");
   const backWallPoints = backWallScreen.map((p) => `${p.x},${p.y}`).join(" ");
+  const leftWallPoints = leftWallScreen.map((p) => `${p.x},${p.y}`).join(" ");
+  const rightWallPoints = rightWallScreen.map((p) => `${p.x},${p.y}`).join(" ");
   const doorPoints = doorScreen.map((p) => `${p.x},${p.y}`).join(" ");
 
   // Puppet bodies at z = 0.
@@ -213,6 +231,20 @@ export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
       <polygon
         points={floorPoints}
         fill="#f2e3cc"
+        stroke="#111111"
+        strokeWidth={1}
+      />
+
+      {/* Side walls */}
+      <polygon
+        points={leftWallPoints}
+        fill="#f7efdd"
+        stroke="#111111"
+        strokeWidth={1}
+      />
+      <polygon
+        points={rightWallPoints}
+        fill="#f7efdd"
         stroke="#111111"
         strokeWidth={1}
       />

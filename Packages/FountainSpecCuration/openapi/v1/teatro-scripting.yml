@@ -1,0 +1,427 @@
+openapi: 3.1.0
+info:
+  title: Teatro Scripting Service
+  version: 0.1.0
+  summary: Script modules, behaviours, and hooks for the Teatro Game Engine.
+  description: |
+    The Teatro Scripting Service describes how game logic is packaged and attached
+    to the Teatro Game Engine. It focuses on *describing* scripts and behaviours
+    rather than evaluating code directly.
+
+    This spec is written for humans and LLMs and explains the mental model of
+    engine scripting:
+
+    - ScriptModule: a unit of game logic identified by id. It may live in Swift,
+      Lua, or another host language, but from the engine's perspective it exposes
+      a set of named hooks (for example onUpdate, onCollision, onAction) and a
+      parameter schema.
+    - Behaviour: a binding between a ScriptModule and a target (for example an
+      entity or scene). Each behaviour supplies concrete parameter values and
+      selects which hooks are active.
+    - HookKind: a named event that scripts can implement, such as:
+      - onUpdate(dt): called every tick for the behaviour's target.
+      - onCollision(event): called when a physics collision occurs.
+      - onAction(action): called when an input action changes state.
+
+    The Scripting Service does not execute script code via HTTP. Instead it
+    provides a structured catalogue of scripts and behaviours so tools and agents
+    can reason about which logic exists and how it is attached to the world.
+  license:
+    name: FountainAI Internal
+    url: https://fountain.coach/internal
+servers:
+  - url: http://127.0.0.1:0
+    description: Logical Teatro Scripting host (embedded or via Tools Factory)
+
+tags:
+  - name: scripts
+    description: Register and inspect script modules.
+  - name: behaviours
+    description: Bind scripts to entities, scenes, or global contexts.
+  - name: hooks
+    description: Enumerate and describe supported hook kinds.
+
+paths:
+  /scripts:
+    get:
+      tags: [scripts]
+      operationId: teatro.scripting.listScripts
+      summary: List script modules
+      description: |
+        Returns all script modules known to the engine. Script modules define
+        reusable behaviours and the hooks they implement.
+      x-fountain.visibility: public
+      x-fountain.reason: inspect available script modules and their hooks
+      x-fountain.allow-as-tool: true
+      security: []
+      responses:
+        '200':
+          description: List of script modules
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scripts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ScriptModule'
+    post:
+      tags: [scripts]
+      operationId: teatro.scripting.registerScript
+      summary: Register or update a script module
+      description: |
+        Registers a script module and its metadata. The module id, hooks, and
+        parameter schema are stored so tools and the engine can attach it as
+        behaviours later.
+      x-fountain.visibility: public
+      x-fountain.reason: declare script module id, hooks, and parameter schema
+      x-fountain.allow-as-tool: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScriptModule'
+      responses:
+        '200':
+          description: Script module registered or updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScriptModule'
+        '400':
+          description: Invalid script module definition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /scripts/{scriptId}:
+    parameters:
+      - $ref: '#/components/parameters/ScriptId'
+    get:
+      tags: [scripts]
+      operationId: teatro.scripting.getScript
+      summary: Get a script module
+      description: |
+        Returns metadata for a single script module, including which hooks
+        it implements and any declared parameters.
+      x-fountain.visibility: public
+      x-fountain.reason: inspect hook set and parameter schema for a script module
+      x-fountain.allow-as-tool: true
+      security: []
+      responses:
+        '200':
+          description: Script module details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScriptModule'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /behaviours:
+    get:
+      tags: [behaviours]
+      operationId: teatro.scripting.listBehaviours
+      summary: List behaviours
+      description: |
+        Returns all behaviours currently registered in the engine. Each behaviour
+        binds a script module to a target (entity, scene, or global).
+      x-fountain.visibility: public
+      x-fountain.reason: inspect where scripts are attached in the world
+      x-fountain.allow-as-tool: true
+      security: []
+      parameters:
+        - name: sessionId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Optional filter to a specific game session.
+        - name: sceneId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Optional filter to a specific scene.
+        - name: entityId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Optional filter to a specific entity.
+      responses:
+        '200':
+          description: List of behaviours
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  behaviours:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Behaviour'
+    post:
+      tags: [behaviours]
+      operationId: teatro.scripting.registerBehaviour
+      summary: Register or update a behaviour
+      description: |
+        Registers a behaviour that binds a script module to a specific target
+        (for example an entity) and activates selected hooks. Behaviours can
+        be used to express AI, triggers, or other game-specific logic.
+      x-fountain.visibility: public
+      x-fountain.reason: attach script modules as behaviours to entities or scenes
+      x-fountain.allow-as-tool: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Behaviour'
+      responses:
+        '200':
+          description: Behaviour registered or updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Behaviour'
+        '400':
+          description: Invalid behaviour definition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /behaviours/{behaviourId}:
+    parameters:
+      - $ref: '#/components/parameters/BehaviourId'
+    get:
+      tags: [behaviours]
+      operationId: teatro.scripting.getBehaviour
+      summary: Get a behaviour
+      description: |
+        Returns a single behaviour binding, including which script module is
+        used, which hooks are active, and what parameter values are configured.
+      x-fountain.visibility: public
+      x-fountain.reason: inspect behaviour binding between script and target
+      x-fountain.allow-as-tool: true
+      security: []
+      responses:
+        '200':
+          description: Behaviour details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Behaviour'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [behaviours]
+      operationId: teatro.scripting.deleteBehaviour
+      summary: Delete a behaviour
+      description: |
+        Deletes a behaviour binding. The underlying script module and target
+        entity or scene remain unchanged.
+      x-fountain.visibility: public
+      x-fountain.reason: remove behaviour binding from target
+      x-fountain.allow-as-tool: true
+      security: []
+      responses:
+        '204':
+          description: Behaviour deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /hooks:
+    get:
+      tags: [hooks]
+      operationId: teatro.scripting.listHooks
+      summary: List supported hook kinds
+      description: |
+        Returns the set of supported hook kinds and their semantics. This is
+        primarily documentation for tools and agents and defines how hook
+        names such as \"onUpdate\" or \"onCollision\" should be interpreted.
+      x-fountain.visibility: public
+      x-fountain.reason: document script hook kinds and payload semantics
+      x-fountain.allow-as-tool: true
+      security: []
+      responses:
+        '200':
+          description: List of hook kinds
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hooks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HookKind'
+
+components:
+  parameters:
+    ScriptId:
+      name: scriptId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier of a script module.
+    BehaviourId:
+      name: behaviourId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Unique identifier of a behaviour.
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    HookName:
+      type: string
+      description: |
+        Name of a script hook. Common hook names include:
+        - onUpdate: called every tick with dt (seconds).
+        - onCollision: called when a physics collision occurs.
+        - onAction: called when an input action changes state.
+
+    HookKind:
+      type: object
+      description: |
+        Describes a supported hook kind, its name, and the conceptual payload
+        it receives when invoked inside the engine.
+      required:
+        - name
+      properties:
+        name:
+          $ref: '#/components/schemas/HookName'
+        summary:
+          type: string
+          description: Short human-readable summary of the hook.
+        description:
+          type: string
+          description: Longer explanation of when the hook is triggered and what it can do.
+
+    ScriptParameter:
+      type: object
+      description: |
+        Describes a single parameter that a script module expects in its
+        behaviour configuration. Parameters configure how the script behaves.
+      required:
+        - name
+        - type
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          description: Primitive type name (for example \"string\", \"number\", \"bool\").
+        description:
+          type: string
+        default:
+          description: Optional default value for this parameter.
+
+    ScriptModule:
+      type: object
+      description: |
+        Represents a script module that can be attached as a behaviour. The
+        module id is stable across builds; the implementation lives in engine
+        code or a scripting runtime.
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the script module.
+        name:
+          type: string
+          description: Optional human-readable name (for example \"FollowTargetAI\").
+        language:
+          type: string
+          description: |
+            Implementation language or environment (for example \"swift\", \"lua\",
+            or \"native\").
+        summary:
+          type: string
+          description: Short description of what this script does.
+        description:
+          type: string
+          description: Longer description, including assumptions and usage notes.
+        hooks:
+          type: array
+          description: |
+            List of hook names that this script implements (for example [\"onUpdate\",\"onCollision\"]).
+          items:
+            $ref: '#/components/schemas/HookName'
+        parameters:
+          type: array
+          description: Optional parameter schema for behaviours using this script.
+          items:
+            $ref: '#/components/schemas/ScriptParameter'
+
+    BehaviourTargetKind:
+      type: string
+      description: Kind of target this behaviour is attached to.
+      enum:
+        - global
+        - scene
+        - entity
+
+    Behaviour:
+      type: object
+      description: |
+        Binds a ScriptModule to a specific target in the game world and
+        configures which hooks are active and which parameter values are used.
+      required:
+        - id
+        - scriptId
+        - targetKind
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the behaviour.
+        scriptId:
+          type: string
+          description: Identifier of the ScriptModule to use.
+        targetKind:
+          $ref: '#/components/schemas/BehaviourTargetKind'
+        sessionId:
+          type: string
+          description: Optional game session id this behaviour belongs to.
+        sceneId:
+          type: string
+          description: Optional scene id when targetKind is scene or entity.
+        entityId:
+          type: string
+          description: Optional entity id when targetKind is entity.
+        activeHooks:
+          type: array
+          description: Subset of script hooks that are active for this behaviour.
+          items:
+            $ref: '#/components/schemas/HookName'
+        parameters:
+          type: object
+          additionalProperties: true
+          description: Concrete parameter values keyed by parameter name.
+
+    ErrorResponse:
+      type: object
+      description: Standard error response with human-readable message.
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+

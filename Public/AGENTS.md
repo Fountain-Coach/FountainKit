@@ -4,7 +4,7 @@ The `Public/` area hosts the publishing frontend for FountainAI: static docs/ass
 
 What
 - Static pages and assets: `Public/index.html`, `Public/styles.css`, `Public/reports/**`, `Public/Audio/**`, `Public/Models/**`.
-- Web apps (TS/Node): `Public/baseline-patchbay-web` — three‑pane Baseline‑PatchBay mirror (left/center/right panes, draggable gutters, DnD items).
+- Web apps (TS/Node): `Public/baseline-patchbay-web` — three‑pane Baseline‑PatchBay mirror (left/center/right panes, draggable gutters, DnD items); `Public/teatro-stage-web` — Teatro Stage Engine web host (room + puppet SVG view, legacy Cannon/Three stack under `src-legacy/**`).
 - Runtime docs: `Public/docs/MVK-Runtime.md` (HTTP runtime overview) and `Public/docs/MIDI-Transport-Status.md` (transport status/choices).
 - Launchers live under `Scripts/apps/` and are listed in that area’s AGENTS.
 

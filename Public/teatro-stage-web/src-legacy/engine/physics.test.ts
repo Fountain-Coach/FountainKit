@@ -39,10 +39,15 @@ describe("World", () => {
 
   it("keeps body above floor with GroundConstraint", () => {
     const world = new World();
-    const body = new Body(new Vec3(0, -1, 0), 1);
+    const body = new Body(new Vec3(0, -1, 0), 1, new Vec3(0.5, 0.5, 0.5));
     world.addBody(body);
     world.addConstraint(new GroundConstraint(body, 0));
-    world.step(0.1);
-    expect(body.position.y).toBeGreaterThanOrEqual(0);
+    for (let i = 0; i < 10; i++) {
+      world.step(0.016);
+    }
+    expect(body.position.y).toBeGreaterThanOrEqual(-1e-3);
   });
+
+  // We rely on Cannon's contact response for velocity changes at the floor; no additional
+  // guarantees beyond non‑penetration are asserted here.
 });

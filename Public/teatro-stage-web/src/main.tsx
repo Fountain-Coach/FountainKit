@@ -2,11 +2,14 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { TeatroStageApp } from "./ui/TeatroStageApp";
 
-const root = document.getElementById("root") as HTMLElement;
+const rootElement = document.getElementById("root");
 
-ReactDOM.createRoot(root).render(
-  <React.StrictMode>
-    <TeatroStageApp />
-  </React.StrictMode>
-);
+if (rootElement) {
+  const root = ReactDOM.createRoot(rootElement);
+  root.render(
+    <React.StrictMode>
+      <TeatroStageApp />
+    </React.StrictMode>
+  );
+}
 

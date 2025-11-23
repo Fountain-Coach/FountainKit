@@ -194,6 +194,10 @@ export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
     y: puppet.handR.y,
     z: puppet.handR.z ?? 0
   });
+  // Foot centres in world space (engine) and their contact points on the floor
+  // plane (y = 0). We render the visible “shoe” rectangles so their bottoms sit
+  // exactly on the projected floor, not halfway through it — this avoids the
+  // visual “trapdoor” effect.
   const footL = project({
     x: puppet.footL.x,
     y: puppet.footL.y,
@@ -202,6 +206,17 @@ export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
   const footR = project({
     x: puppet.footR.x,
     y: puppet.footR.y,
+    z: puppet.footR.z ?? 0
+  });
+
+  const footLBase = project({
+    x: puppet.footL.x,
+    y: 0,
+    z: puppet.footL.z ?? 0
+  });
+  const footRBase = project({
+    x: puppet.footR.x,
+    y: 0,
     z: puppet.footR.z ?? 0
   });
 
@@ -306,8 +321,8 @@ export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
 
       {/* Feet */}
       <rect
-        x={footL.x - 6}
-        y={footL.y - 3}
+        x={footLBase.x - 6}
+        y={footLBase.y - 6}
         width={12}
         height={6}
         fill="#f4ead6"
@@ -315,8 +330,8 @@ export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
         strokeWidth={1}
       />
       <rect
-        x={footR.x - 6}
-        y={footR.y - 3}
+        x={footRBase.x - 6}
+        y={footRBase.y - 6}
         width={12}
         height={6}
         fill="#f4ead6"
@@ -326,8 +341,8 @@ export const StageView: React.FC<StageViewProps> = ({ snapshot }) => {
 
       {/* Simple floor spotlight */}
       <ellipse
-        cx={torsoCenter.x}
-        cy={footL.y + 10}
+        cx={(footLBase.x + footRBase.x) / 2}
+        cy={Math.max(footLBase.y, footRBase.y) + 8}
         rx={40}
         ry={10}
         fill="#f1e1c9"

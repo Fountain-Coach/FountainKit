@@ -1,5 +1,5 @@
 {
-  "originHash" : "ff46db5f3bdcf0c84bd93aa505231307bc847fc3ac7c704808c7e764d9bdf289",
+  "originHash" : "d6799d0c309012166fd5f664eb6efccb903869cd071fa739331ac002223cca61",
   "pins" : [
     {
       "identity" : "async-http-client",
@@ -80,6 +80,15 @@
       "state" : {
         "branch" : "main",
         "revision" : "73c1f2d0926bbce57b872ffc5d948b2f2ecd3f40"
+      }
+    },
+    {
+      "identity" : "sdlkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Fountain-Coach/SDLKit.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "b73137213d2669443d4337287fd9f898f1da885d"
       }
     },
     {

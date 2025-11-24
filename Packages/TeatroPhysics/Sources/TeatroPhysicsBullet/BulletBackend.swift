@@ -14,8 +14,8 @@ public struct BulletVec3: Sendable, Equatable {
 }
 
 public final class BulletBody: @unchecked Sendable {
-    let raw: UnsafeMutablePointer<BulletRigidBody>
-    init(raw: UnsafeMutablePointer<BulletRigidBody>) {
+    let raw: OpaquePointer
+    init(raw: OpaquePointer) {
         self.raw = raw
     }
 
@@ -37,7 +37,7 @@ public final class BulletBody: @unchecked Sendable {
 }
 
 public final class BulletWorld: @unchecked Sendable {
-    private let raw: UnsafeMutablePointer<BulletWorld>
+    private let raw: OpaquePointer
     public init(gravity: BulletVec3 = BulletVec3(x: 0, y: -9.81, z: 0)) {
         guard let w = BulletCreateWorld(gravity.x, gravity.y, gravity.z) else {
             fatalError("BulletCreateWorld returned nil")

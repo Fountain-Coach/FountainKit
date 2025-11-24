@@ -1,0 +1,62 @@
+{
+  "appId": "constellation-stage",
+  "sceneTitle": "Constellation Stage — Isometric Family Field",
+  "role": "systemic family constellation instrument",
+  "host": "SDLKit window on macOS; AppKit only via SDLKit internals",
+  "surface": "Single isometric family field filling the window; no side panes or text editors; only representatives, field, and camera/replay controls are visible.",
+  "cores": [
+    "Canvas2D",
+    "InfinityGraph",
+    "ConstellationStage"
+  ],
+  "properties": [
+    {
+      "name": "field.zoom",
+      "type": "float",
+      "min": 0.25,
+      "max": 3.0,
+      "default": 1.0
+    },
+    {
+      "name": "field.translation.x",
+      "type": "float",
+      "min": -10000.0,
+      "max": 10000.0,
+      "default": 0.0
+    },
+    {
+      "name": "field.translation.y",
+      "type": "float",
+      "min": -10000.0,
+      "max": 10000.0,
+      "default": 0.0
+    },
+    {
+      "name": "field.replay.t",
+      "type": "float",
+      "min": 0.0,
+      "max": 1.0,
+      "default": 0.0
+    },
+    {
+      "name": "field.replay.playing",
+      "type": "bool"
+    }
+  ],
+  "invariants": [
+    "cameraUnderUserControl",
+    "noAutoRearrange",
+    "replayDeterministic",
+    "representativesStayOnField"
+  ],
+  "tests": {
+    "modulePath": "Packages/FountainApps/Tests/InfinityTests",
+    "suites": [
+      "InfinityCanvasTests",
+      "InfinityGraphTests"
+    ]
+  },
+  "agentId": "fountain.coach/agent/constellation-stage/service",
+  "specName": "constellation-stage.yml"
+}
+

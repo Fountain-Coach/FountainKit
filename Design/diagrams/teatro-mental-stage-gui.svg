@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1440" height="900" viewBox="0 0 1440 900" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .label{font:14px -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif; fill:#444}
+    .title{font:18px -apple-system,BlinkMacSystemFont; font-weight:600; fill:#111}
+    .hint{font:12px -apple-system,BlinkMacSystemFont; fill:#888}
+  </style>
+
+  <!-- Background -->
+  <rect x="0" y="0" width="1440" height="900" fill="#f5f5f7"/>
+
+  <!-- Title -->
+  <text class="title" x="72" y="72">Isometric Stage — Systemic Family Constellation (mid‑scene)</text>
+  <text class="hint" x="72" y="96">
+    One snapshot from an ongoing constellation: relative positions, distances, and gaze directions carry meaning.
+  </text>
+
+  <!-- Stage frame -->
+  <rect x="64" y="116" width="1312" height="720" rx="16" fill="#ffffff" stroke="#e0e0e0"/>
+
+  <!-- Isometric floor (large diamond) -->
+  <polygon points="720,180 1240,450 720,720 200,450"
+           fill="#fafafa" stroke="#d0d0d0"/>
+  <text class="hint" x="704" y="170">Family field</text>
+
+  <!-- Axes labels -->
+  <text class="hint" x="708" y="746">Downstage / toward facilitator</text>
+  <text class="hint" x="198" y="452" transform="rotate(-90 198 452)">Left side of field</text>
+  <text class="hint" x="1242" y="452" transform="rotate(90 1242 452)">Right side of field</text>
+
+  <!-- Client (Protagonist) -->
+  <circle cx="720" cy="520" r="26" fill="#4f46e5"/>
+  <text class="label" x="720" y="524" text-anchor="middle" fill="#ffffff">K</text>
+  <text class="hint" x="750" y="522">Klient*in (feels pulled toward father, away from mother)</text>
+
+  <!-- Mother -->
+  <circle cx="560" cy="400" r="24" fill="#ec4899"/>
+  <text class="label" x="560" y="404" text-anchor="middle" fill="#ffffff">M</text>
+  <text class="hint" x="520" y="372">Mother</text>
+
+  <!-- Father (slightly distant, upstage-right) -->
+  <circle cx="920" cy="340" r="24" fill="#22c55e"/>
+  <text class="label" x="920" y="344" text-anchor="middle" fill="#ffffff">V</text>
+  <text class="hint" x="880" y="312">Father (emotionally distant, upstage‑right)</text>
+
+  <!-- Grandmother (behind mother, partly turned away) -->
+  <circle cx="480" cy="300" r="20" fill="#f97316"/>
+  <text class="label" x="480" y="304" text-anchor="middle" fill="#ffffff">GM</text>
+  <text class="hint" x="432" y="278">Grandmother (turned away)</text>
+
+  <!-- Younger sibling (close to mother, near edge) -->
+  <circle cx="610" cy="450" r="18" fill="#0ea5e9"/>
+  <text class="label" x="610" y="454" text-anchor="middle" fill="#ffffff">S</text>
+
+  <!-- Facilitator position (off the field, suggested) -->
+  <circle cx="720" cy="780" r="10" fill="#a3a3a3"/>
+  <text class="hint" x="736" y="784">Facilitator (off‑field anchor)</text>
+
+  <!-- Relationship lines -->
+  <!-- Strong pull from client to father -->
+  <line x1="720" y1="520" x2="920" y2="340"
+        stroke="#22c55e" stroke-width="3.5" stroke-dasharray="4 4"/>
+  <text class="hint" x="820" y="430">strong inner pull</text>
+
+  <!-- Strained connection to mother (shorter, tense line) -->
+  <line x1="720" y1="520" x2="560" y2="400"
+        stroke="#ec4899" stroke-width="2.5" stroke-dasharray="2 6"/>
+  <text class="hint" x="620" y="460">strained / interrupted</text>
+
+  <!-- Protective tie mother ↔ sibling -->
+  <line x1="560" y1="400" x2="610" y2="450"
+        stroke="#0ea5e9" stroke-width="3" />
+
+  <!-- Faded lineage line grandmother ↔ mother -->
+  <line x1="480" y1="300" x2="560" y2="400"
+        stroke="#f97316" stroke-width="2" stroke-opacity="0.4" stroke-dasharray="3 5"/>
+
+  <!-- Focus / gaze hints -->
+  <!-- Simple arrows drawn as small triangles near main vectors -->
+  <polygon points="842,402 852,392 854,406" fill="#22c55e" opacity="0.9"/>
+  <polygon points="640,452 628,444 626,458" fill="#ec4899" opacity="0.8"/>
+
+  <!-- Legend strip -->
+  <rect x="200" y="760" width="920" height="60" rx="8" fill="#fafafa" stroke="#e5e5e5"/>
+  <text class="hint" x="216" y="786">
+    Snapshot logic:
+    K = client; M = mother; V = father; GM = grandmother; S = sibling.
+    Position = relative place in the system, distance = emotional distance,
+    line style = quality of connection (solid = supportive, dashed = strained, faded = background lineage).
+  </text>
+
+</svg>
+

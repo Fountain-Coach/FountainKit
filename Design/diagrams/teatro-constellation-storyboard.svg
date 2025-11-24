@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1440" height="900" viewBox="0 0 1440 900" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .label{font:13px -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif; fill:#444}
+    .title{font:18px -apple-system,BlinkMacSystemFont; font-weight:600; fill:#111}
+    .hint{font:11px -apple-system,BlinkMacSystemFont; fill:#888}
+  </style>
+
+  <!-- Background -->
+  <rect x="0" y="0" width="1440" height="900" fill="#f5f5f7"/>
+
+  <!-- Title -->
+  <text class="title" x="72" y="60">Family Constellation — Storyboard of Isometric Snapshots</text>
+  <text class="hint" x="72" y="82">
+    Six comic‑style frames, each a frozen isometric constellation. Clicking “snapshot” would add one frame and advance to the next slot.
+  </text>
+
+  <!-- Layout: 3 columns x 2 rows of frames -->
+  <!-- Common frame dimensions -->
+  <!-- First row -->
+  <g id="row1">
+    <!-- Frame 1 -->
+    <g transform="translate(60,110)">
+      <rect x="0" y="0" width="400" height="260" rx="12" fill="#ffffff" stroke="#e0e0e0"/>
+      <text class="hint" x="12" y="18">Frame 1 — Initial placement</text>
+      <!-- Diamond floor -->
+      <polygon points="200,60 340,130 200,200 60,130"
+               fill="#fafafa" stroke="#d0d0d0"/>
+      <!-- Mother / Father / Client basic setup -->
+      <circle cx="200" cy="160" r="16" fill="#4f46e5"/><text class="label" x="200" y="164" text-anchor="middle" fill="#fff">K</text>
+      <circle cx="140" cy="120" r="14" fill="#ec4899"/><text class="label" x="140" y="124" text-anchor="middle" fill="#fff">M</text>
+      <circle cx="260" cy="110" r="14" fill="#22c55e"/><text class="label" x="260" y="114" text-anchor="middle" fill="#fff">V</text>
+    </g>
+
+    <!-- Frame 2 -->
+    <g transform="translate(520,110)">
+      <rect x="0" y="0" width="400" height="260" rx="12" fill="#ffffff" stroke="#e0e0e0"/>
+      <text class="hint" x="12" y="18">Frame 2 — Client steps toward father</text>
+      <polygon points="200,60 340,130 200,200 60,130"
+               fill="#fafafa" stroke="#d0d0d0"/>
+      <circle cx="220" cy="150" r="16" fill="#4f46e5"/><text class="label" x="220" y="154" text-anchor="middle" fill="#fff">K</text>
+      <circle cx="140" cy="120" r="14" fill="#ec4899"/><text class="label" x="140" y="124" text-anchor="middle" fill="#fff">M</text>
+      <circle cx="260" cy="110" r="14" fill="#22c55e"/><text class="label" x="260" y="114" text-anchor="middle" fill="#fff">V</text>
+      <!-- Arrow hint for movement -->
+      <polygon points="210,136 222,132 220,144" fill="#4f46e5" opacity="0.8"/>
+    </g>
+
+    <!-- Frame 3 -->
+    <g transform="translate(980,110)">
+      <rect x="0" y="0" width="400" height="260" rx="12" fill="#ffffff" stroke="#e0e0e0"/>
+      <text class="hint" x="12" y="18">Frame 3 — Mother turns away</text>
+      <polygon points="200,60 340,130 200,200 60,130"
+               fill="#fafafa" stroke="#d0d0d0"/>
+      <circle cx="230" cy="150" r="16" fill="#4f46e5"/><text class="label" x="230" y="154" text-anchor="middle" fill="#fff">K</text>
+      <circle cx="140" cy="120" r="14" fill="#ec4899"/><text class="label" x="140" y="124" text-anchor="middle" fill="#fff">M</text>
+      <circle cx="260" cy="110" r="14" fill="#22c55e"/><text class="label" x="260" y="114" text-anchor="middle" fill="#fff">V</text>
+      <!-- Simple “rotation” hint: small arc near M -->
+      <path d="M150 110 A18 18 0 0 1 130 110" fill="none" stroke="#ec4899" stroke-width="1.5" stroke-dasharray="3 3"/>
+    </g>
+  </g>
+
+  <!-- Second row -->
+  <g id="row2" transform="translate(0,340)">
+    <!-- Frame 4 -->
+    <g transform="translate(60,110)">
+      <rect x="0" y="0" width="400" height="260" rx="12" fill="#ffffff" stroke="#e0e0e0"/>
+      <text class="hint" x="12" y="18">Frame 4 — Grandmother steps in behind mother</text>
+      <polygon points="200,60 340,130 200,200 60,130"
+               fill="#fafafa" stroke="#d0d0d0"/>
+      <circle cx="230" cy="150" r="16" fill="#4f46e5"/><text class="label" x="230" y="154" text-anchor="middle" fill="#fff">K</text>
+      <circle cx="150" cy="120" r="14" fill="#ec4899"/><text class="label" x="150" y="124" text-anchor="middle" fill="#fff">M</text>
+      <circle cx="260" cy="110" r="14" fill="#22c55e"/><text class="label" x="260" y="114" text-anchor="middle" fill="#fff">V</text>
+      <circle cx="120" cy="90" r="12" fill="#f97316"/><text class="label" x="120" y="94" text-anchor="middle" fill="#fff">GM</text>
+    </g>
+
+    <!-- Frame 5 -->
+    <g transform="translate(520,110)">
+      <rect x="0" y="0" width="400" height="260" rx="12" fill="#ffffff" stroke="#e0e0e0"/>
+      <text class="hint" x="12" y="18">Frame 5 — Client turns back toward mother</text>
+      <polygon points="200,60 340,130 200,200 60,130"
+               fill="#fafafa" stroke="#d0d0d0"/>
+      <circle cx="210" cy="160" r="16" fill="#4f46e5"/><text class="label" x="210" y="164" text-anchor="middle" fill="#fff">K</text>
+      <circle cx="160" cy="130" r="14" fill="#ec4899"/><text class="label" x="160" y="134" text-anchor="middle" fill="#fff">M</text>
+      <circle cx="270" cy="110" r="14" fill="#22c55e"/><text class="label" x="270" y="114" text-anchor="middle" fill="#fff">V</text>
+      <circle cx="130" cy="100" r="12" fill="#f97316"/><text class="label" x="130" y="104" text-anchor="middle" fill="#fff">GM</text>
+      <polygon points="198,152 188,146 188,160" fill="#4f46e5" opacity="0.8"/>
+    </g>
+
+    <!-- Frame 6 -->
+    <g transform="translate(980,110)">
+      <rect x="0" y="0" width="400" height="260" rx="12" fill="#ffffff" stroke="#e0e0e0"/>
+      <text class="hint" x="12" y="18">Frame 6 — Temporary balance</text>
+      <polygon points="200,60 340,130 200,200 60,130"
+               fill="#fafafa" stroke="#d0d0d0"/>
+      <circle cx="210" cy="150" r="16" fill="#4f46e5"/><text class="label" x="210" y="154" text-anchor="middle" fill="#fff">K</text>
+      <circle cx="160" cy="120" r="14" fill="#ec4899"/><text class="label" x="160" y="124" text-anchor="middle" fill="#fff">M</text>
+      <circle cx="250" cy="120" r="14" fill="#22c55e"/><text class="label" x="250" y="124" text-anchor="middle" fill="#fff">V</text>
+      <circle cx="130" cy="100" r="12" fill="#f97316"/><text class="label" x="130" y="104" text-anchor="middle" fill="#fff">GM</text>
+      <!-- Soft “field” circle around all -->
+      <ellipse cx="205" cy="140" rx="110" ry="70"
+               fill="none" stroke="#a3a3a3" stroke-width="1.5" stroke-dasharray="4 4"/>
+    </g>
+  </g>
+
+  <!-- Footer hint -->
+  <text class="hint" x="72" y="840">
+    Each panel is a frozen isometric snapshot of the same constellation, taken at a different moment in the process.
+    A “snapshot” action in the live editor would copy the current stage state into the next free frame.
+  </text>
+</svg>
+

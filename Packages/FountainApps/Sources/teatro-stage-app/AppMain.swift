@@ -1,6 +1,7 @@
 import SwiftUI
 import MetalViewKit
 import TeatroPhysics
+import QuartzCore
 
 @main
 struct TeatroStageApp: App {
@@ -15,7 +16,7 @@ struct TeatroStageApp: App {
 
 struct TeatroStageView: View {
     @State private var scene = TeatroStageScene(
-        camera: TeatroCameraState(azimuth: 0.0, zoom: 1.0),
+        camera: TeatroCameraState(azimuth: .pi / 4, zoom: 1.0),
         roomSize: TeatroVec3(x: 10, y: 5, z: 10),
         reps: [
             TeatroRep(id: "client", position: TeatroVec3(x: -0.3, y: 0, z: 0.2), roleLabel: "Client"),
@@ -74,7 +75,7 @@ struct TeatroStageView: View {
                     let dt = max(0.0, now - last)
                     last = now
                     rig.step(dt: dt, time: now)
-                     ballScene.step(dt: dt)
+                    ballScene.step(dt: dt)
                     let snap = rig.snapshot()
                     let pose = TeatroStageMetalNode.TeatroPuppetPose(
                         bar: TeatroVec3(x: CGFloat(snap.bar.x), y: CGFloat(snap.bar.y), z: CGFloat(snap.bar.z)),

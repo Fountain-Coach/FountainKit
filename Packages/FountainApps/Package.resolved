@@ -1,5 +1,5 @@
 {
-  "originHash" : "43f05c3427164e39589d709d72a102bbeef15d80e3ba9ae514dd7e0abf91b9d1",
+  "originHash" : "ff46db5f3bdcf0c84bd93aa505231307bc847fc3ac7c704808c7e764d9bdf289",
   "pins" : [
     {
       "identity" : "async-http-client",
@@ -341,15 +341,6 @@
       "state" : {
         "revision" : "97ba8e113c318415be006e345c233022c5de8a4f",
         "version" : "0.2.0"
-      }
-    },
-    {
-      "identity" : "teatrostageengine",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Fountain-Coach/TeatroStageEngine.git",
-      "state" : {
-        "revision" : "5ef117eab1cdc39abb98556a6a51f6e2af6bd58d",
-        "version" : "0.4.0"
       }
     },
     {

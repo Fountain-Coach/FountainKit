@@ -155,12 +155,12 @@ let DEPENDENCIES: [Package.Dependency] = BLANK_VRT_ONLY ? [
     // no external deps
 ] : (EDITOR_VRT_ONLY ? [
     .package(path: "../FountainCore")
-] : (EDITOR_MINIMAL ? [
+ ] : (EDITOR_MINIMAL ? [
     .package(path: "../FountainCore"),
     .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.4.0"),
     .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.4.0")
  ] : [
-        .package(url: "https://github.com/Fountain-Coach/TeatroStageEngine.git", from: "0.4.0"),
+        .package(path: "../TeatroPhysics"),
         .package(path: "../FountainCore"),
         .package(path: "../FountainAIKit"),
         .package(path: "../FountainProviders"),
@@ -1785,7 +1785,7 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             name: "teatro-stage-app",
             dependencies: [
                 "MetalViewKit",
-                .product(name: "TeatroPhysics", package: "TeatroStageEngine")
+                .product(name: "TeatroPhysics", package: "TeatroPhysics")
             ],
             path: "Sources/teatro-stage-app",
             exclude: ["AGENTS.md"]
@@ -2002,7 +2002,7 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             dependencies: [
                 .product(name: "FountainRuntime", package: "FountainCore"),
                 .product(name: "LauncherSignature", package: "FountainCore"),
-                .product(name: "TeatroPhysics", package: "TeatroStageEngine")
+                .product(name: "TeatroPhysics", package: "TeatroPhysics")
             ],
             path: "Sources/teatro-stage-puppet-service",
             exclude: ["AGENTS.md"]

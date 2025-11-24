@@ -1,0 +1,631 @@
+openapi: 3.1.0
+info:
+  title: Teatro Engine API
+  version: 0.1.0
+  description: >
+    Control and query Teatro-style isometric stages, props, and marionette rigs.
+
+servers:
+  - url: https://teatro.example.com
+
+paths:
+  /v1/scenes:
+    post:
+      summary: Create a new Teatro scene
+      operationId: createScene
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSceneRequest'
+      responses:
+        '201':
+          description: Scene created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scene'
+    get:
+      summary: List scenes
+      operationId: listScenes
+      parameters:
+        - in: query
+          name: styleProfile
+          schema:
+            type: string
+            default: teatro-v1
+      responses:
+        '200':
+          description: List of scenes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SceneSummary'
+
+  /v1/scenes/{sceneId}:
+    get:
+      summary: Get full scene state
+      operationId: getScene
+      parameters:
+        - in: path
+          name: sceneId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Full scene description
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scene'
+    delete:
+      summary: Delete scene
+      operationId: deleteScene
+      parameters:
+        - in: path
+          name: sceneId
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+
+  /v1/scenes/{sceneId}/props:
+    post:
+      summary: Add a Teatro prop to the scene
+      operationId: addProp
+      parameters:
+        - in: path
+          name: sceneId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePropRequest'
+      responses:
+        '201':
+          description: Prop created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prop'
+    get:
+      summary: List props in scene
+      operationId: listProps
+      parameters:
+        - in: path
+          name: sceneId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: All props in scene
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Prop'
+
+  /v1/props/{propId}:
+    patch:
+      summary: Update a prop
+      operationId: updateProp
+      parameters:
+        - in: path
+          name: propId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePropRequest'
+      responses:
+        '200':
+          description: Updated prop
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prop'
+    delete:
+      summary: Remove a prop
+      operationId: deleteProp
+      parameters:
+        - in: path
+          name: propId
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+
+  /v1/scenes/{sceneId}/rigs/marionette:
+    post:
+      summary: Create a Fadenpuppe rig in a scene
+      operationId: createMarionetteRig
+      parameters:
+        - in: path
+          name: sceneId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PuppetRigConfig'
+      responses:
+        '201':
+          description: Puppet rig created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PuppetRig'
+
+  /v1/rigs/{rigId}:
+    get:
+      summary: Get current puppet rig state
+      operationId: getPuppetRig
+      parameters:
+        - in: path
+          name: rigId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Puppet rig state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PuppetRigState'
+
+  /v1/rigs/{rigId}/drive:
+    post:
+      summary: Drive puppet rig via bar movement / control params
+      operationId: drivePuppetRig
+      parameters:
+        - in: path
+          name: rigId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PuppetDriveInput'
+      responses:
+        '200':
+          description: Updated puppet rig state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PuppetRigState'
+
+  /v1/scenes/{sceneId}/snapshot:
+    post:
+      summary: Capture a logical snapshot of scene state
+      operationId: snapshotScene
+      parameters:
+        - in: path
+          name: sceneId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                includePhysics:
+                  type: boolean
+                  default: true
+      responses:
+        '200':
+          description: Scene snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SceneSnapshot'
+
+  /v1/scenes/{sceneId}/lights:
+    post:
+      summary: Add a Teatro light to the scene
+      operationId: addLight
+      parameters:
+        - in: path
+          name: sceneId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLightRequest'
+      responses:
+        '201':
+          description: Light created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Light'
+    get:
+      summary: List lights in scene
+      operationId: listLights
+      parameters:
+        - in: path
+          name: sceneId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: All lights in scene
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Light'
+
+  /v1/lights/{lightId}:
+    patch:
+      summary: Update a light
+      operationId: updateLight
+      parameters:
+        - in: path
+          name: lightId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLightRequest'
+      responses:
+        '200':
+          description: Updated light
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Light'
+    delete:
+      summary: Remove a light
+      operationId: deleteLight
+      parameters:
+        - in: path
+          name: lightId
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+
+components:
+  schemas:
+    Vec3:
+      type: object
+      properties:
+        x: { type: number }
+        y: { type: number }
+        z: { type: number }
+      required: [x, y, z]
+
+    Quaternion:
+      type: object
+      properties:
+        x: { type: number }
+        y: { type: number }
+        z: { type: number }
+        w: { type: number }
+      required: [x, y, z, w]
+
+    Transform3D:
+      type: object
+      properties:
+        position:
+          $ref: '#/components/schemas/Vec3'
+        rotation:
+          $ref: '#/components/schemas/Quaternion'
+        scale:
+          $ref: '#/components/schemas/Vec3'
+      required: [position, rotation]
+
+    CreateSceneRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        styleProfile:
+          type: string
+          description: Style profile ID (e.g. teatro-v1)
+          default: teatro-v1
+        projection:
+          type: string
+          enum: [ORTHOGRAPHIC_ISOMETRIC]
+          default: ORTHOGRAPHIC_ISOMETRIC
+        room:
+          $ref: '#/components/schemas/RoomConfig'
+      required: [name]
+
+    RoomConfig:
+      type: object
+      properties:
+        width:  { type: number, default: 30 }
+        depth:  { type: number, default: 20 }
+        height: { type: number, default: 20 }
+        doors:
+          type: array
+          items:
+            $ref: '#/components/schemas/DoorConfig'
+
+    DoorConfig:
+      type: object
+      properties:
+        wall:
+          type: string
+          enum: [LEFT, RIGHT, BACK]
+        width:  { type: number, default: 3 }
+        height: { type: number, default: 8 }
+        offset:
+          type: number
+          description: Offset along wall center line
+          default: 0
+
+    SceneSummary:
+      type: object
+      properties:
+        id:   { type: string }
+        name: { type: string }
+        styleProfile: { type: string }
+      required: [id, name]
+
+    Scene:
+      type: object
+      properties:
+        id:   { type: string }
+        name: { type: string }
+        styleProfile: { type: string }
+        projection:
+          type: string
+        room:
+          $ref: '#/components/schemas/RoomConfig'
+        props:
+          type: array
+          items:
+            $ref: '#/components/schemas/Prop'
+        rigs:
+          type: array
+          items:
+            $ref: '#/components/schemas/PuppetRig'
+        lights:
+          type: array
+          items:
+            $ref: '#/components/schemas/Light'
+      required: [id, name, styleProfile, projection]
+
+    PropType:
+      type: string
+      enum:
+        - CHAIR
+        - PLINTH
+        - FRAME
+        - STAIN
+        - MARKER
+
+    Prop:
+      type: object
+      properties:
+        id:   { type: string }
+        sceneId: { type: string }
+        type:
+          $ref: '#/components/schemas/PropType'
+        transform:
+          $ref: '#/components/schemas/Transform3D'
+        roleLabel:
+          type: string
+          description: Optional role label (CLIENT, MOTHER, etc.)
+      required: [id, sceneId, type, transform]
+
+    CreatePropRequest:
+      type: object
+      properties:
+        type:
+          $ref: '#/components/schemas/PropType'
+        transform:
+          $ref: '#/components/schemas/Transform3D'
+        roleLabel:
+          type: string
+      required: [type, transform]
+
+    UpdatePropRequest:
+      type: object
+      properties:
+        transform:
+          $ref: '#/components/schemas/Transform3D'
+        roleLabel:
+          type: string
+
+    PuppetRigConfig:
+      type: object
+      properties:
+        name:
+          type: string
+          default: main-puppet
+        barHeight:
+          type: number
+          default: 15
+        barWidth:
+          type: number
+          default: 10
+        gravityScale:
+          type: number
+          default: 1.0
+        stiffness:
+          type: number
+          default: 1.0
+        damping:
+          type: number
+          default: 0.5
+
+    PuppetRig:
+      type: object
+      properties:
+        id:      { type: string }
+        sceneId: { type: string }
+        name:    { type: string }
+        config:
+          $ref: '#/components/schemas/PuppetRigConfig'
+      required: [id, sceneId, config]
+
+    PuppetDriveInput:
+      type: object
+      description: High-level puppet controls for a single step or short segment.
+      properties:
+        barPosition:
+          $ref: '#/components/schemas/Vec3'
+        barVelocity:
+          $ref: '#/components/schemas/Vec3'
+        tension:
+          type: number
+          description: Additional string tension multiplier
+        timeStep:
+          type: number
+          description: Optional simulation time step override
+      required: [barPosition]
+
+    RigidBodyState:
+      type: object
+      properties:
+        id: { type: string }
+        transform:
+          $ref: '#/components/schemas/Transform3D'
+
+    PuppetRigState:
+      type: object
+      properties:
+        rigId: { type: string }
+        time:  { type: number }
+        bodies:
+          type: array
+          items:
+            $ref: '#/components/schemas/RigidBodyState'
+      required: [rigId, bodies]
+
+    SceneSnapshot:
+      type: object
+      properties:
+        sceneId: { type: string }
+        time:    { type: number }
+        camera:
+          type: object
+          properties:
+            position:
+              $ref: '#/components/schemas/Vec3'
+            azimuth:
+              type: number
+            elevation:
+              type: number
+            zoom:
+              type: number
+        props:
+          type: array
+          items:
+            $ref: '#/components/schemas/Prop'
+        puppetRigs:
+          type: array
+          items:
+            $ref: '#/components/schemas/PuppetRigState'
+        lights:
+          type: array
+          items:
+            $ref: '#/components/schemas/Light'
+      required: [sceneId, props]
+
+    LightType:
+      type: string
+      description: Abstract lighting type (focus shapes, not physical fixtures).
+      enum:
+        - SPOT
+        - WASH
+        - BACKLIGHT
+
+    Light:
+      type: object
+      description: Teatro light in a scene (spot, wash, or backlight).
+      properties:
+        id:
+          type: string
+        sceneId:
+          type: string
+        type:
+          $ref: '#/components/schemas/LightType'
+        origin:
+          $ref: '#/components/schemas/Vec3'
+        target:
+          $ref: '#/components/schemas/Vec3'
+        radius:
+          type: number
+          description: Footprint radius / half-width of the light on the stage.
+        intensity:
+          type: number
+          description: Normalised intensity (0–1).
+        label:
+          type: string
+          description: Optional label for dramaturgical use.
+      required: [id, sceneId, type, origin, target]
+
+    CreateLightRequest:
+      type: object
+      properties:
+        type:
+          $ref: '#/components/schemas/LightType'
+        origin:
+          $ref: '#/components/schemas/Vec3'
+        target:
+          $ref: '#/components/schemas/Vec3'
+        radius:
+          type: number
+        intensity:
+          type: number
+        label:
+          type: string
+      required: [type, origin, target]
+
+    UpdateLightRequest:
+      type: object
+      properties:
+        origin:
+          $ref: '#/components/schemas/Vec3'
+        target:
+          $ref: '#/components/schemas/Vec3'
+        radius:
+          type: number
+        intensity:
+          type: number
+        label:
+          type: string

@@ -3,6 +3,7 @@
 #if canImport(AppKit) && canImport(Metal) && canImport(MetalKit)
 import Foundation
 import CoreGraphics
+import QuartzCore
 import Metal
 import MetalKit
 

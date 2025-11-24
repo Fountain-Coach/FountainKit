@@ -1,0 +1,80 @@
+openapi: 3.1.0
+info:
+  title: Constellation Stage Instrument
+  version: 1.0.0
+  summary: Isometric family constellation field instrument.
+  description: |
+    Minimal spec for the Constellation Stage instrument: a single isometric
+    family field with a small set of properties (zoom, translation, replay
+    controls). It is used to derive MIDI 2.0 Property Exchange facts so the
+    constellation field can be addressed as an instrument over CI/PE.
+  x-fountain.port: 0
+  x-fountain.binary: constellation-stage-app
+  license:
+    name: FountainAI Internal
+servers: []
+paths:
+  /constellation/field:
+    get:
+      operationId: constellation.field.get
+      summary: Get current field camera and replay state
+      x-fountain.allow-as-tool: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConstellationFieldState'
+    post:
+      operationId: constellation.field.set
+      summary: Set field camera and replay state
+      x-fountain.allow-as-tool: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConstellationFieldState'
+      responses:
+        '204':
+          description: Applied
+
+components:
+  schemas:
+    ConstellationFieldState:
+      type: object
+      description: Logical transform and replay state for the constellation field.
+      properties:
+        field.zoom:
+          type: number
+          format: double
+          minimum: 0.25
+          maximum: 3.0
+          default: 1.0
+          description: Zoom factor for the isometric field.
+        field.translation.x:
+          type: number
+          format: double
+          minimum: -10000.0
+          maximum: 10000.0
+          default: 0.0
+          description: Horizontal translation (doc space) of the field.
+        field.translation.y:
+          type: number
+          format: double
+          minimum: -10000.0
+          maximum: 10000.0
+          default: 0.0
+          description: Vertical translation (doc space) of the field.
+        field.replay.t:
+          type: number
+          format: double
+          minimum: 0.0
+          maximum: 1.0
+          default: 0.0
+          description: Normalised replay time (0=start,1=end).
+        field.replay.playing:
+          type: boolean
+          description: Whether the field is currently replaying a movement trail.
+

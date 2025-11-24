@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Launches the Constellation Stage instrument:
+# 1) seeds the Teatro prompt + facts into FountainStore,
+# 2) starts the constellation-stage app (when available).
+#
+# Usage: Scripts/apps/constellation-stage [seed-only]
+
+ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+PKG_PATH="$ROOT_DIR/Packages/FountainApps"
+
+: "${FOUNTAINSTORE_DIR:=$ROOT_DIR/.fountain/store}"
+
+echo "[constellation-stage] Seeding Teatro prompt into corpus=constellation-stage (store=$FOUNTAINSTORE_DIR)…"
+(
+  cd "$ROOT_DIR"
+  FOUNTAINSTORE_DIR="$FOUNTAINSTORE_DIR" \
+    swift run --package-path "$PKG_PATH" -c debug constellation-stage-seed
+) || {
+  echo "[constellation-stage] WARN: seeding failed; continuing without updated prompt" >&2
+}
+
+if [[ "${1:-}" == "seed-only" ]]; then
+  echo "[constellation-stage] Seed-only mode; not starting app."
+  exit 0
+fi
+
+echo "[constellation-stage] No runtime app target is wired yet; this script currently seeds only."
+exit 0
+

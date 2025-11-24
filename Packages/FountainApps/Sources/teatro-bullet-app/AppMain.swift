@@ -46,6 +46,11 @@ struct TeatroBulletView: View {
                     node.bulletBodies = bulletBodies
                     node.hudText = hud
                     node.debugText = debug
+                    if scenario == 3 {
+                        node.constraintLines = makeConstraintLines(from: bulletBodies)
+                    } else {
+                        node.constraintLines = []
+                    }
                     return [node]
                 },
                 selected: { [] },
@@ -132,7 +137,7 @@ struct TeatroBulletView: View {
             var chain: [BulletBody] = []
             let count = 4
             for i in 0..<count {
-                let y = 9.0 + Double(i) * 1.6
+                let y = 2.0 + Double(i) * 1.4
                 chain.append(world.addBox(halfExtents: BulletVec3(x: 0.4, y: 0.4, z: 0.4),
                                           mass: 1.0,
                                           position: BulletVec3(x: 0.0, y: y, z: 0.0)))
@@ -187,4 +192,13 @@ struct TeatroBulletView: View {
         }
     }
     #endif
+
+    private func makeConstraintLines(from bodies: [TeatroStageMetalNode.BulletBodyRender]) -> [TeatroStageMetalNode.ConstraintLine] {
+        guard bodies.count >= 2 else { return [] }
+        var lines: [TeatroStageMetalNode.ConstraintLine] = []
+        for i in 0..<(bodies.count - 1) {
+            lines.append(.init(start: bodies[i].position, end: bodies[i + 1].position))
+        }
+        return lines
+    }
 }

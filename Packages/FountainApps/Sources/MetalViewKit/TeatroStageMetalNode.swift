@@ -18,6 +18,7 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
     public var hudText: String?
     public var overlayText: String?
     public var debugText: String?
+    public var constraintLines: [ConstraintLine] = []
 
     public init(id: String, frameDoc: CGRect, scene: TeatroStageScene) {
         self.id = id
@@ -56,6 +57,9 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
         }
         if !bulletBodies.isEmpty {
             drawBulletBodies(center: center, encoder: encoder, transform: transform)
+        }
+        if !constraintLines.isEmpty {
+            drawConstraintLines(center: center, encoder: encoder, transform: transform)
         }
 
         // Puppet silhouette in front of the back wall (if provided).
@@ -113,7 +117,7 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
 
     private func scaleFactor() -> CGFloat {
         let base = min(frameDoc.width, frameDoc.height)
-        return base * 0.02 * scene.camera.zoom
+        return base * 0.05 * scene.camera.zoom
     }
 
     private func projectDoc(x: CGFloat,
@@ -656,6 +660,15 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
         }
     }
 
+    public struct ConstraintLine: Sendable, Equatable {
+        public var start: BulletBodyRender.BodyVec3
+        public var end: BulletBodyRender.BodyVec3
+        public init(start: BulletBodyRender.BodyVec3, end: BulletBodyRender.BodyVec3) {
+            self.start = start
+            self.end = end
+        }
+    }
+
     private func drawBulletBodies(center: CGPoint,
                                   encoder: MTLRenderCommandEncoder,
                                   transform: MetalCanvasTransform) {
@@ -667,6 +680,29 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
                 drawBulletBox(body: body, halfExtents: half, center: center, encoder: encoder, transform: transform)
             }
         }
+    }
+
+    private func drawConstraintLines(center: CGPoint,
+                                     encoder: MTLRenderCommandEncoder,
+                                     transform: MetalCanvasTransform) {
+        var verts: [SIMD2<Float>] = []
+        for line in constraintLines {
+            let a = isoProject(line.start, center: center)
+            let b = isoProject(line.end, center: center)
+            verts.append(contentsOf: [
+                transform.docToNDC(x: a.x, y: a.y),
+                transform.docToNDC(x: b.x, y: b.y)
+            ])
+        }
+        guard !verts.isEmpty else { return }
+        encoder.setVertexBytes(verts,
+                               length: verts.count * MemoryLayout<SIMD2<Float>>.stride,
+                               index: 0)
+        var col = SIMD4<Float>(0.45, 0.42, 0.38, 1.0)
+        encoder.setFragmentBytes(&col,
+                                 length: MemoryLayout<SIMD4<Float>>.size,
+                                 index: 0)
+        encoder.drawPrimitives(type: .line, vertexStart: 0, vertexCount: verts.count)
     }
 
     private func drawBulletSphere(body: BulletBodyRender,

@@ -42,13 +42,13 @@
   "instrumentSpecs": [],
   "scenarios": [
     {
-      "id": "ballOnFloor",
-      "description": "A dynamic ball above a static stage floor must fall, collide with the floor, and come to rest near the surface instead of falling into the abyss.",
+      "id": "ballBouncesOnFloor",
+      "description": "A dynamic ball above a static stage floor must fall under gravity, bounce at least once with a realistic rebound, and then settle near the floor instead of falling into the abyss or exploding numerically.",
       "apiNotes": [
         "bullet-physics.createWorld",
         "bullet-physics.createBody (static floor and dynamic sphere)",
-        "bullet-physics.stepWorld (multiple small dt steps)",
-        "bullet-physics.listContacts to verify a floor contact exists"
+        "bullet-physics.stepWorld (multiple small dt steps to observe bounces and decay)",
+        "bullet-physics.listContacts to verify a floor contact exists during impacts"
       ],
       "tests": [
         {
@@ -79,4 +79,3 @@
   ],
   "notes": "This profile treats TeatroStageEngine as a concrete instance of the generic Teatro Game Engine. Behavioural semantics remain owned by the referenced specs and the TeatroPhysics reference implementation."
 }
-

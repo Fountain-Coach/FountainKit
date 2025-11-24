@@ -15,6 +15,7 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
     public var ballPosition: TeatroVec3?
     public var bulletBodies: [BulletBodyRender] = []
     public var showRoomGrid: Bool = true
+    public var hudText: String?
 
     public init(id: String, frameDoc: CGRect, scene: TeatroStageScene) {
         self.id = id
@@ -72,6 +73,10 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
         if showRoomGrid {
             drawGrid(center: center, encoder: encoder, transform: transform)
         }
+
+        if let hud = hudText {
+            drawHUD(text: hud, encoder: encoder, transform: transform)
+        }
     }
 
     // MARK: - Isometric helpers
@@ -123,13 +128,22 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
 
         let color = SIMD4<Float>(0.07, 0.07, 0.07, 1.0)
 
-        // Floor rectangle
+        // Floor rectangle with subtle fill
         var lines: [SIMD2<Float>] = []
         let f1 = p(-floorHalfW, 0, -floorHalfD)
         let f2 = p(floorHalfW, 0, -floorHalfD)
         let f3 = p(floorHalfW, 0, floorHalfD)
         let f4 = p(-floorHalfW, 0, floorHalfD)
         lines.append(contentsOf: [f1, f2, f2, f3, f3, f4, f4, f1])
+        let floorFill: [SIMD2<Float>] = [f1, f4, f2, f2, f4, f3]
+        encoder.setVertexBytes(floorFill,
+                               length: floorFill.count * MemoryLayout<SIMD2<Float>>.stride,
+                               index: 0)
+        var floorColor = SIMD4<Float>(0.98, 0.965, 0.93, 1.0)
+        encoder.setFragmentBytes(&floorColor,
+                                 length: MemoryLayout<SIMD4<Float>>.size,
+                                 index: 0)
+        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: floorFill.count)
 
         // Back wall
         let bw1 = p(-floorHalfW, 0, -floorHalfD)
@@ -305,6 +319,32 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
                           transform: MetalCanvasTransform) {
         let radius: CGFloat = 1.0
         let color = SIMD4<Float>(0.07, 0.07, 0.07, 1.0)
+        // Shadow on floor
+        let shadowSegments = 24
+        var shadowVerts: [SIMD2<Float>] = []
+        let shadowR = radius * 0.8
+        var prevShadow = isoProject(rotateY(TeatroVec3(x: position.x + shadowR, y: 0.01, z: position.z),
+                                            azimuth: scene.camera.azimuth),
+                                   center: center)
+        for i in 1...shadowSegments {
+            let angle = (CGFloat(i) / CGFloat(shadowSegments)) * 2 * .pi
+            let w = TeatroVec3(x: position.x + shadowR * cos(angle), y: 0.01, z: position.z + shadowR * sin(angle))
+            let pt = isoProject(rotateY(w, azimuth: scene.camera.azimuth), center: center)
+            shadowVerts.append(contentsOf: [
+                transform.docToNDC(x: prevShadow.x, y: prevShadow.y),
+                transform.docToNDC(x: pt.x, y: pt.y)
+            ])
+            prevShadow = pt
+        }
+        encoder.setVertexBytes(shadowVerts,
+                               length: shadowVerts.count * MemoryLayout<SIMD2<Float>>.stride,
+                               index: 0)
+        var shadowColor = SIMD4<Float>(0.93, 0.90, 0.85, 1.0)
+        encoder.setFragmentBytes(&shadowColor,
+                                 length: MemoryLayout<SIMD4<Float>>.size,
+                                 index: 0)
+        encoder.drawPrimitives(type: .line, vertexStart: 0, vertexCount: shadowVerts.count)
+
         let base = TeatroVec3(x: position.x, y: position.y, z: position.z)
         var verts: [SIMD2<Float>] = []
         let segments = 24
@@ -431,6 +471,27 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
         encoder.drawPrimitives(type: .line, vertexStart: 0, vertexCount: washVerts.count)
     }
 
+    private func drawHUD(text: String,
+                         encoder: MTLRenderCommandEncoder,
+                         transform: MetalCanvasTransform) {
+        // HUD background rectangle (no text rendering; reserved space only)
+        let origin = CGPoint(x: frameDoc.minX + 16, y: frameDoc.minY + 24)
+        let size = CGSize(width: CGFloat(max(10, text.count)) * 7 + 12, height: 18)
+        let tl = transform.docToNDC(x: origin.x, y: origin.y)
+        let tr = transform.docToNDC(x: origin.x + size.width, y: origin.y)
+        let bl = transform.docToNDC(x: origin.x, y: origin.y + size.height)
+        let br = transform.docToNDC(x: origin.x + size.width, y: origin.y + size.height)
+        let verts: [SIMD2<Float>] = [tl, bl, tr, tr, bl, br]
+        encoder.setVertexBytes(verts,
+                               length: verts.count * MemoryLayout<SIMD2<Float>>.stride,
+                               index: 0)
+        var color = SIMD4<Float>(0.96, 0.95, 0.93, 0.9)
+        encoder.setFragmentBytes(&color,
+                                 length: MemoryLayout<SIMD4<Float>>.size,
+                                 index: 0)
+        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: verts.count)
+    }
+
     // MARK: - Bullet overlay
 
     public struct BulletBodyRender: Sendable, Equatable {
@@ -513,30 +574,59 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
                                encoder: MTLRenderCommandEncoder,
                                transform: MetalCanvasTransform) {
         let pos = body.position
-        let corners: [TeatroVec3] = [
+        let topCorners: [TeatroVec3] = [
             TeatroVec3(x: pos.x - halfExtents.x, y: pos.y + halfExtents.y, z: pos.z - halfExtents.z),
             TeatroVec3(x: pos.x + halfExtents.x, y: pos.y + halfExtents.y, z: pos.z - halfExtents.z),
             TeatroVec3(x: pos.x + halfExtents.x, y: pos.y + halfExtents.y, z: pos.z + halfExtents.z),
             TeatroVec3(x: pos.x - halfExtents.x, y: pos.y + halfExtents.y, z: pos.z + halfExtents.z)
         ]
-        var verts: [SIMD2<Float>] = []
-        var projected = corners.map { pt -> SIMD2<Float> in
-            let rotated = rotateY(pt, azimuth: scene.camera.azimuth)
+        let bottomCorners: [TeatroVec3] = topCorners.map { TeatroVec3(x: $0.x, y: $0.y - 2 * halfExtents.y, z: $0.z) }
+
+        func proj(_ v: TeatroVec3) -> SIMD2<Float> {
+            let rotated = rotateY(v, azimuth: scene.camera.azimuth)
             let p = isoProject(rotated, center: center)
             return transform.docToNDC(x: p.x, y: p.y)
         }
-        projected.append(projected.first!)
-        for i in 0..<(projected.count - 1) {
-            verts.append(contentsOf: [projected[i], projected[i+1]])
-        }
-        encoder.setVertexBytes(verts,
-                               length: verts.count * MemoryLayout<SIMD2<Float>>.stride,
+
+        // Top face fill
+        let topFill: [SIMD2<Float>] = [proj(topCorners[0]), proj(topCorners[1]), proj(topCorners[2]),
+                                       proj(topCorners[2]), proj(topCorners[3]), proj(topCorners[0])]
+        encoder.setVertexBytes(topFill,
+                               length: topFill.count * MemoryLayout<SIMD2<Float>>.stride,
+                               index: 0)
+        var topColor = SIMD4<Float>(0.92, 0.90, 0.86, 1.0)
+        encoder.setFragmentBytes(&topColor, length: MemoryLayout<SIMD4<Float>>.size, index: 0)
+        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: topFill.count)
+
+        // Side face (front) fill
+        let frontFace: [SIMD2<Float>] = [proj(bottomCorners[2]), proj(bottomCorners[3]), proj(topCorners[2]),
+                                         proj(topCorners[2]), proj(topCorners[3]), proj(bottomCorners[2])]
+        encoder.setVertexBytes(frontFace,
+                               length: frontFace.count * MemoryLayout<SIMD2<Float>>.stride,
+                               index: 0)
+        var sideColor = SIMD4<Float>(0.89, 0.87, 0.82, 1.0)
+        encoder.setFragmentBytes(&sideColor, length: MemoryLayout<SIMD4<Float>>.size, index: 0)
+        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: frontFace.count)
+
+        // Wireframe edges
+        var edges: [SIMD2<Float>] = []
+        let pts = topCorners + bottomCorners
+        let projected = pts.map(proj)
+        // Top loop
+        edges.append(contentsOf: [projected[0], projected[1], projected[1], projected[2], projected[2], projected[3], projected[3], projected[0]])
+        // Bottom loop
+        edges.append(contentsOf: [projected[4], projected[5], projected[5], projected[6], projected[6], projected[7], projected[7], projected[4]])
+        // Vertical edges
+        edges.append(contentsOf: [projected[0], projected[4], projected[1], projected[5], projected[2], projected[6], projected[3], projected[7]])
+
+        encoder.setVertexBytes(edges,
+                               length: edges.count * MemoryLayout<SIMD2<Float>>.stride,
                                index: 0)
         var col = body.color
         encoder.setFragmentBytes(&col,
                                  length: MemoryLayout<SIMD4<Float>>.size,
                                  index: 0)
-        encoder.drawPrimitives(type: .line, vertexStart: 0, vertexCount: verts.count)
+        encoder.drawPrimitives(type: .line, vertexStart: 0, vertexCount: edges.count)
     }
 
     // Legacy helpers removed: circles and ellipses are now handled via the isometric drawing paths above.

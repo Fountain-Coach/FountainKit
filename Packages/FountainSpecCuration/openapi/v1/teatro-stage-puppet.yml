@@ -11,10 +11,9 @@ info:
 
     This spec is written for humans and LLMs and explains the mental model:
 
-    - Puppet rig: a Fadenpuppe with named bodies (controller, bar, torso, head,
-      left/right hands, left/right feet) connected by distance constraints.
-      The exact structure is defined in the TeatroStageEngine specs and the
-      `TPPuppetRig` Swift type.
+    - Puppet rig: a Fadenpuppe with a fixed set of named bodies (controller, bar,
+      torso, head, left/right hands, left/right feet) connected by distance
+      constraints, as exposed by this API via `PuppetBodyId` and `PuppetPose`.
     - Pose: the current world-space position of each puppet body at a given time.
       Poses can be sampled to drive rendering, logging, or tests.
     - Gesture: a high-level motion pattern (for example “nod”, “bow”, “wave”) that
@@ -314,4 +313,3 @@ components:
           type: string
         message:
           type: string
-

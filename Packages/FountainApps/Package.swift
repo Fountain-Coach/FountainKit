@@ -34,6 +34,7 @@ let PRODUCTS: [Product] = BLANK_VRT_ONLY ? [
         
     ] : [
         .executable(name: "gateway-server", targets: ["gateway-server"]),
+        .executable(name: "bullet-physics-demo", targets: ["bullet-physics-demo"]),
         .executable(name: "instrument-catalog-server", targets: ["instrument-catalog-server"]),
         .executable(name: "store-apply-seed", targets: ["store-apply-seed"]),
         .executable(name: "mpe-pad-app-seed", targets: ["mpe-pad-app-seed"]),
@@ -1780,6 +1781,13 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             name: "MetalComputeKitTests",
             dependencies: ["MetalComputeKit"],
             path: "Tests/MetalComputeKitTests"
+        ),
+        .executableTarget(
+            name: "bullet-physics-demo",
+            dependencies: [
+                .product(name: "TeatroPhysicsBullet", package: "TeatroPhysics")
+            ],
+            path: "Sources/bullet-physics-demo"
         ),
         .executableTarget(
             name: "teatro-stage-app",

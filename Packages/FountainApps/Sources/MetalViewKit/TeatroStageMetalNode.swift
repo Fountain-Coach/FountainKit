@@ -169,6 +169,42 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
                                  index: 0)
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: bwFill.count)
 
+        // Left wall fill
+        let lwFill: [SIMD2<Float>] = [
+            p(-floorHalfW, 0, -floorHalfD),
+            p(-floorHalfW, 0, floorHalfD),
+            p(-floorHalfW, h, floorHalfD),
+            p(-floorHalfW, h, floorHalfD),
+            p(-floorHalfW, h, -floorHalfD),
+            p(-floorHalfW, 0, -floorHalfD)
+        ]
+        encoder.setVertexBytes(lwFill,
+                               length: lwFill.count * MemoryLayout<SIMD2<Float>>.stride,
+                               index: 0)
+        var lwColor = SIMD4<Float>(0.975, 0.95, 0.91, 1.0)
+        encoder.setFragmentBytes(&lwColor,
+                                 length: MemoryLayout<SIMD4<Float>>.size,
+                                 index: 0)
+        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: lwFill.count)
+
+        // Right wall fill
+        let rwFill: [SIMD2<Float>] = [
+            p(floorHalfW, 0, -floorHalfD),
+            p(floorHalfW, 0, floorHalfD),
+            p(floorHalfW, h, floorHalfD),
+            p(floorHalfW, h, floorHalfD),
+            p(floorHalfW, h, -floorHalfD),
+            p(floorHalfW, 0, -floorHalfD)
+        ]
+        encoder.setVertexBytes(rwFill,
+                               length: rwFill.count * MemoryLayout<SIMD2<Float>>.stride,
+                               index: 0)
+        var rwColor = SIMD4<Float>(0.975, 0.95, 0.91, 1.0)
+        encoder.setFragmentBytes(&rwColor,
+                                 length: MemoryLayout<SIMD4<Float>>.size,
+                                 index: 0)
+        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: rwFill.count)
+
         // Back wall
         let bw1 = p(-floorHalfW, 0, -floorHalfD)
         let bw2 = p(floorHalfW, 0, -floorHalfD)

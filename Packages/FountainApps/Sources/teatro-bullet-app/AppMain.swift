@@ -23,7 +23,7 @@ struct TeatroBulletView: View {
     @State private var bulletBodies: [TeatroStageMetalNode.BulletBodyRender] = []
     @State private var cameraAzimuth: CGFloat = .pi / 4
     @State private var scenario: Int = 1
-    @State private var hud: String = "1: ball+box  2: stack  3: chain (stub)  A/D orbit  W/S zoom  R reset"
+    @State private var hud: String = "1: ball+box  2: stack  3: chain  A/D orbit  W/S zoom  R reset"
     @State private var debug: String = ""
 
     var body: some View {
@@ -128,6 +128,24 @@ struct TeatroBulletView: View {
                 world.addBox(halfExtents: BulletVec3(x: 0.6, y: 0.6, z: 0.6), mass: 2.0, position: BulletVec3(x: 0.0, y: 8.0, z: 0.0)),
                 world.addBox(halfExtents: BulletVec3(x: 0.6, y: 0.6, z: 0.6), mass: 2.0, position: BulletVec3(x: 0.0, y: 10.0, z: 0.0))
             ]
+        case 3:
+            var chain: [BulletBody] = []
+            let count = 4
+            for i in 0..<count {
+                let y = 9.0 + Double(i) * 1.6
+                chain.append(world.addBox(halfExtents: BulletVec3(x: 0.4, y: 0.4, z: 0.4),
+                                          mass: 1.0,
+                                          position: BulletVec3(x: 0.0, y: y, z: 0.0)))
+            }
+            for i in 0..<(chain.count - 1) {
+                _ = world.addPointConstraint(
+                    bodyA: chain[i],
+                    bodyB: chain[i + 1],
+                    anchorA: BulletVec3(x: 0, y: -0.4, z: 0),
+                    anchorB: BulletVec3(x: 0, y: 0.4, z: 0)
+                )
+            }
+            return chain
         default:
             return [
                 world.addSphere(radius: 0.8, mass: 1.0, position: BulletVec3(x: 0, y: 8, z: 0)),

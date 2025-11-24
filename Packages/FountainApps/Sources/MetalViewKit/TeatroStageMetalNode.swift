@@ -98,17 +98,22 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
     }
 
     private func isoProject(_ p: TeatroVec3, center: CGPoint) -> CGPoint {
-        let scale: CGFloat = 13.0 * scene.camera.zoom
+        let scale: CGFloat = scaleFactor()
         let u = (p.x - p.z) * scale
         let v = (p.x + p.z) * scale * 0.5 - p.y * scale
         return CGPoint(x: center.x + u, y: center.y + v)
     }
 
     private func isoProject(_ p: BulletBodyRender.BodyVec3, center: CGPoint) -> CGPoint {
-        let scale: CGFloat = 13.0 * scene.camera.zoom
+        let scale: CGFloat = scaleFactor()
         let u = (p.x - p.z) * scale
         let v = (p.x + p.z) * scale * 0.5 - p.y * scale
         return CGPoint(x: center.x + u, y: center.y + v)
+    }
+
+    private func scaleFactor() -> CGFloat {
+        let base = min(frameDoc.width, frameDoc.height)
+        return base * 0.02 * scene.camera.zoom
     }
 
     private func projectDoc(x: CGFloat,

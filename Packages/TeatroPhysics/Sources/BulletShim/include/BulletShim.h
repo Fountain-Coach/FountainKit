@@ -6,6 +6,7 @@ extern "C" {
 
 typedef struct BulletWorld BulletWorld;
 typedef struct BulletRigidBody BulletRigidBody;
+typedef struct BulletConstraint BulletConstraint;
 
 BulletWorld *BulletCreateWorld(double gravityX, double gravityY, double gravityZ);
 void BulletDestroyWorld(BulletWorld *world);
@@ -36,6 +37,12 @@ void BulletStepWorld(BulletWorld *world,
                      double timeStep,
                      int maxSubSteps,
                      double fixedTimeStep);
+
+BulletConstraint *BulletAddPointConstraint(BulletWorld *world,
+                                           BulletRigidBody *bodyA,
+                                           BulletRigidBody *bodyB,
+                                           double anchorAX, double anchorAY, double anchorAZ,
+                                           double anchorBX, double anchorBY, double anchorBZ);
 
 void BulletGetBodyPosition(const BulletRigidBody *body, double *outX, double *outY, double *outZ);
 void BulletGetBodyLinearVelocity(const BulletRigidBody *body, double *outX, double *outY, double *outZ);

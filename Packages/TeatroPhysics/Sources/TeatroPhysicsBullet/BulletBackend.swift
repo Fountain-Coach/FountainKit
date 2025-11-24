@@ -36,6 +36,13 @@ public final class BulletBody: @unchecked Sendable {
     }
 }
 
+public final class BulletConstraint: @unchecked Sendable {
+    let raw: OpaquePointer
+    init(raw: OpaquePointer) {
+        self.raw = raw
+    }
+}
+
 public final class BulletWorld: @unchecked Sendable {
     private let raw: OpaquePointer
     public init(gravity: BulletVec3 = BulletVec3(x: 0, y: -9.81, z: 0)) {
@@ -71,6 +78,17 @@ public final class BulletWorld: @unchecked Sendable {
             fatalError("BulletCreateBox failed")
         }
         return BulletBody(raw: body)
+    }
+
+    @discardableResult
+    public func addPointConstraint(bodyA: BulletBody, bodyB: BulletBody, anchorA: BulletVec3, anchorB: BulletVec3) -> BulletConstraint {
+        guard let c = BulletAddPointConstraint(raw,
+                                               bodyA.raw, bodyB.raw,
+                                               anchorA.x, anchorA.y, anchorA.z,
+                                               anchorB.x, anchorB.y, anchorB.z) else {
+            fatalError("BulletAddPointConstraint failed")
+        }
+        return BulletConstraint(raw: c)
     }
 
     public func step(timeStep: Double, maxSubSteps: Int = 4, fixedTimeStep: Double = 1.0 / 240.0) {

@@ -13,10 +13,15 @@ struct BulletWorld {
     std::unique_ptr<btDiscreteDynamicsWorld> world;
     std::vector<std::unique_ptr<btCollisionShape>> shapes;
     std::vector<std::unique_ptr<btRigidBody>> bodies;
+    std::vector<std::unique_ptr<btTypedConstraint>> constraints;
 };
 
 struct BulletRigidBody {
     btRigidBody *body;
+};
+
+struct BulletConstraint {
+    btTypedConstraint *constraint;
 };
 
 static BulletRigidBody *wrapBody(std::unique_ptr<btRigidBody> body, BulletWorld *world) {
@@ -24,6 +29,14 @@ static BulletRigidBody *wrapBody(std::unique_ptr<btRigidBody> body, BulletWorld 
     wrapper->body = body.get();
     world->world->addRigidBody(wrapper->body);
     world->bodies.push_back(std::move(body));
+    return wrapper;
+}
+
+static BulletConstraint *wrapConstraint(std::unique_ptr<btTypedConstraint> c, BulletWorld *world) {
+    auto *wrapper = new BulletConstraint();
+    wrapper->constraint = c.get();
+    world->world->addConstraint(wrapper->constraint);
+    world->constraints.push_back(std::move(c));
     return wrapper;
 }
 
@@ -107,6 +120,21 @@ BulletRigidBody *BulletCreateBox(BulletWorld *world,
     return wrapBody(std::move(body), world);
 }
 
+BulletConstraint *BulletAddPointConstraint(BulletWorld *world,
+                                           BulletRigidBody *bodyA,
+                                           BulletRigidBody *bodyB,
+                                           double anchorAX, double anchorAY, double anchorAZ,
+                                           double anchorBX, double anchorBY, double anchorBZ) {
+    if (!world || !bodyA || !bodyB) { return nullptr; }
+    auto constraint = std::make_unique<btPoint2PointConstraint>(
+        *bodyA->body,
+        *bodyB->body,
+        btVector3(anchorAX, anchorAY, anchorAZ),
+        btVector3(anchorBX, anchorBY, anchorBZ)
+    );
+    return wrapConstraint(std::move(constraint), world);
+}
+
 void BulletStepWorld(BulletWorld *world,
                      double timeStep,
                      int maxSubSteps,
@@ -135,3 +163,4 @@ int BulletBodyIsActive(const BulletRigidBody *body) {
     if (!body || !body->body) { return 0; }
     return body->body->isActive() ? 1 : 0;
 }
+

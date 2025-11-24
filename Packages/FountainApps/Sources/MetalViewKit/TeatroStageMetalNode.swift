@@ -14,6 +14,7 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
     public var puppetPose: TeatroPuppetPose?
     public var ballPosition: TeatroVec3?
     public var bulletBodies: [BulletBodyRender] = []
+    public var showRoomGrid: Bool = true
 
     public init(id: String, frameDoc: CGRect, scene: TeatroStageScene) {
         self.id = id
@@ -66,6 +67,11 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
 
         // Simple lights: a spot on the floor and a wash on the back wall.
         drawLights(center: center, time: CACurrentMediaTime(), encoder: encoder, transform: transform)
+
+        // Optional HUD grid overlay for depth cues.
+        if showRoomGrid {
+            drawGrid(center: center, encoder: encoder, transform: transform)
+        }
     }
 
     // MARK: - Isometric helpers
@@ -157,6 +163,40 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
             rwTop, rwTopFront
         ])
 
+        encoder.setVertexBytes(lines,
+                               length: lines.count * MemoryLayout<SIMD2<Float>>.stride,
+                               index: 0)
+        var col = color
+        encoder.setFragmentBytes(&col,
+                                 length: MemoryLayout<SIMD4<Float>>.size,
+                                 index: 0)
+        encoder.drawPrimitives(type: .line, vertexStart: 0, vertexCount: lines.count)
+    }
+
+    private func drawGrid(center: CGPoint,
+                          encoder: MTLRenderCommandEncoder,
+                          transform: MetalCanvasTransform) {
+        let color = SIMD4<Float>(0.88, 0.86, 0.82, 1.0)
+        var lines: [SIMD2<Float>] = []
+        let step: CGFloat = 2
+        let maxRange: CGFloat = 20
+        let z: CGFloat = 0.001 // slightly above floor
+        for x in stride(from: -maxRange, through: maxRange, by: step) {
+            let p1 = projectDoc(x: x, y: z, z: -maxRange, center: center)
+            let p2 = projectDoc(x: x, y: z, z: maxRange, center: center)
+            lines.append(contentsOf: [
+                transform.docToNDC(x: p1.x, y: p1.y),
+                transform.docToNDC(x: p2.x, y: p2.y)
+            ])
+        }
+        for zVal in stride(from: -maxRange, through: maxRange, by: step) {
+            let p1 = projectDoc(x: -maxRange, y: z, z: zVal, center: center)
+            let p2 = projectDoc(x: maxRange, y: z, z: zVal, center: center)
+            lines.append(contentsOf: [
+                transform.docToNDC(x: p1.x, y: p1.y),
+                transform.docToNDC(x: p2.x, y: p2.y)
+            ])
+        }
         encoder.setVertexBytes(lines,
                                length: lines.count * MemoryLayout<SIMD2<Float>>.stride,
                                index: 0)

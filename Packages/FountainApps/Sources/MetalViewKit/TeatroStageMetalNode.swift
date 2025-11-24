@@ -151,6 +151,24 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
                                  index: 0)
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: floorFill.count)
 
+        // Back wall fill
+        let bwFill: [SIMD2<Float>] = [
+            p(-floorHalfW, 0, -floorHalfD),
+            p(floorHalfW, 0, -floorHalfD),
+            p(floorHalfW, h, -floorHalfD),
+            p(floorHalfW, h, -floorHalfD),
+            p(-floorHalfW, h, -floorHalfD),
+            p(-floorHalfW, 0, -floorHalfD)
+        ]
+        encoder.setVertexBytes(bwFill,
+                               length: bwFill.count * MemoryLayout<SIMD2<Float>>.stride,
+                               index: 0)
+        var wallColor = SIMD4<Float>(0.97, 0.94, 0.90, 1.0)
+        encoder.setFragmentBytes(&wallColor,
+                                 length: MemoryLayout<SIMD4<Float>>.size,
+                                 index: 0)
+        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: bwFill.count)
+
         // Back wall
         let bw1 = p(-floorHalfW, 0, -floorHalfD)
         let bw2 = p(floorHalfW, 0, -floorHalfD)
@@ -357,7 +375,7 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
         let segments = 24
         var prevPoint = isoProject(rotateY(TeatroVec3(x: base.x + radius, y: base.y, z: base.z),
                                            azimuth: scene.camera.azimuth),
-                                   center: center)
+                                  center: center)
         for i in 1...segments {
             let angle = (CGFloat(i) / CGFloat(segments)) * 2 * .pi
             let world = TeatroVec3(
@@ -379,6 +397,35 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
                                  length: MemoryLayout<SIMD4<Float>>.size,
                                  index: 0)
         encoder.drawPrimitives(type: .line, vertexStart: 0, vertexCount: verts.count)
+
+        // Highlight rim
+        var rimVerts: [SIMD2<Float>] = []
+        let rimR = radius * 0.9
+        var prevRim = isoProject(rotateY(TeatroVec3(x: base.x + rimR, y: base.y + 0.1, z: base.z),
+                                         azimuth: scene.camera.azimuth),
+                                 center: center)
+        for i in 1...segments {
+            let angle = (CGFloat(i) / CGFloat(segments)) * 2 * .pi
+            let world = TeatroVec3(
+                x: base.x + rimR * cos(angle),
+                y: base.y + 0.1,
+                z: base.z + rimR * sin(angle)
+            )
+            let pt = isoProject(rotateY(world, azimuth: scene.camera.azimuth), center: center)
+            rimVerts.append(contentsOf: [
+                transform.docToNDC(x: prevRim.x, y: prevRim.y),
+                transform.docToNDC(x: pt.x, y: pt.y)
+            ])
+            prevRim = pt
+        }
+        encoder.setVertexBytes(rimVerts,
+                               length: rimVerts.count * MemoryLayout<SIMD2<Float>>.stride,
+                               index: 0)
+        var rimColor = SIMD4<Float>(0.82, 0.80, 0.75, 1.0)
+        encoder.setFragmentBytes(&rimColor,
+                                 length: MemoryLayout<SIMD4<Float>>.size,
+                                 index: 0)
+        encoder.drawPrimitives(type: .line, vertexStart: 0, vertexCount: rimVerts.count)
     }
 
     private func drawReps(center: CGPoint,
@@ -676,6 +723,32 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
                                  length: MemoryLayout<SIMD4<Float>>.size,
                                  index: 0)
         encoder.drawPrimitives(type: .line, vertexStart: 0, vertexCount: edges.count)
+
+        // Shadow on floor
+        let shadowR: CGFloat = max(halfExtents.x, halfExtents.z) * 1.1
+        let shadowSegments = 20
+        var shadowVerts: [SIMD2<Float>] = []
+        var prev = isoProject(rotateY(TeatroVec3(x: pos.x + shadowR, y: 0.01, z: pos.z),
+                                      azimuth: scene.camera.azimuth),
+                              center: center)
+        for i in 1...shadowSegments {
+            let angle = (CGFloat(i) / CGFloat(shadowSegments)) * 2 * .pi
+            let w = TeatroVec3(x: pos.x + shadowR * cos(angle), y: 0.01, z: pos.z + shadowR * sin(angle))
+            let pt = isoProject(rotateY(w, azimuth: scene.camera.azimuth), center: center)
+            shadowVerts.append(contentsOf: [
+                transform.docToNDC(x: prev.x, y: prev.y),
+                transform.docToNDC(x: pt.x, y: pt.y)
+            ])
+            prev = pt
+        }
+        encoder.setVertexBytes(shadowVerts,
+                               length: shadowVerts.count * MemoryLayout<SIMD2<Float>>.stride,
+                               index: 0)
+        var shadowColor = SIMD4<Float>(0.93, 0.90, 0.85, 1.0)
+        encoder.setFragmentBytes(&shadowColor,
+                                 length: MemoryLayout<SIMD4<Float>>.size,
+                                 index: 0)
+        encoder.drawPrimitives(type: .line, vertexStart: 0, vertexCount: shadowVerts.count)
     }
 
     // Legacy helpers removed: circles and ellipses are now handled via the isometric drawing paths above.

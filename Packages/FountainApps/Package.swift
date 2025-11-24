@@ -145,7 +145,8 @@ let PRODUCTS: [Product] = BLANK_VRT_ONLY ? [
         .executable(name: "quietframe-companion-app", targets: ["quietframe-companion-app"]),
         // removed: quietframe-smoke (CoreMIDI)
         .executable(name: "metalviewkit-runtime-server", targets: ["metalviewkit-runtime-server"]),
-        .executable(name: "fountain-gui-demo-app", targets: ["fountain-gui-demo-app"])
+        .executable(name: "fountain-gui-demo-app", targets: ["fountain-gui-demo-app"]),
+        .executable(name: "teatro-stage-puppet-service", targets: ["teatro-stage-puppet-service"])
         
     ])))
 
@@ -1994,6 +1995,16 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
                 .product(name: "SVGAnimationKit", package: "SVGAnimationKit")
             ],
             path: "Sources/svg-animation-service",
+            exclude: ["AGENTS.md"]
+        ),
+        .executableTarget(
+            name: "teatro-stage-puppet-service",
+            dependencies: [
+                .product(name: "FountainRuntime", package: "FountainCore"),
+                .product(name: "LauncherSignature", package: "FountainCore"),
+                .product(name: "TeatroPhysics", package: "TeatroStageEngine")
+            ],
+            path: "Sources/teatro-stage-puppet-service",
             exclude: ["AGENTS.md"]
         ),
         .executableTarget(

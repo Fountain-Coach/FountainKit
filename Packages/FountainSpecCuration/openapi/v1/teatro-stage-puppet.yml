@@ -1,0 +1,317 @@
+openapi: 3.1.0
+info:
+  title: Teatro Stage Puppet Service
+  version: 0.1.0
+  summary: Puppet rig pose, gestures, and health for the Teatro Stage Engine.
+  description: |
+    The Teatro Stage Puppet Service exposes the Teatro puppet rig as a focused instrument.
+    It describes what a “puppet” means in the Teatro Stage Engine and provides
+    a small, explicit API for inspecting pose, triggering gestures, and checking
+    basic health invariants.
+
+    This spec is written for humans and LLMs and explains the mental model:
+
+    - Puppet rig: a Fadenpuppe with named bodies (controller, bar, torso, head,
+      left/right hands, left/right feet) connected by distance constraints.
+      The exact structure is defined in the TeatroStageEngine specs and the
+      `TPPuppetRig` Swift type.
+    - Pose: the current world-space position of each puppet body at a given time.
+      Poses can be sampled to drive rendering, logging, or tests.
+    - Gesture: a high-level motion pattern (for example “nod”, “bow”, “wave”) that
+      animates the puppet rig over time according to engine-defined rules.
+    - Health: a small set of invariants that should hold during normal operation
+      (for example feet stay near the floor, rig remains within stage bounds).
+
+    The puppet service does not define physics or rendering. Physics behaviour
+    comes from the Teatro Stage Engine (TeatroPhysics / Bullet) and game engine
+    specs; this service is a thin, named surface for “the puppet” as an instrument.
+  license:
+    name: FountainAI Internal
+    url: https://fountain.coach/internal
+servers:
+  - url: http://127.0.0.1:0
+    description: Logical Teatro Stage Puppet host (embedded or via Tools Factory)
+
+tags:
+  - name: puppet
+    description: Inspect and control the Teatro puppet rig as a whole.
+  - name: gestures
+    description: List and trigger high-level puppet gestures.
+  - name: health
+    description: Check high-level puppet invariants for tests and tools.
+
+paths:
+  /puppet/pose:
+    get:
+      tags: [puppet]
+      operationId: teatro.stage.puppet.getPose
+      summary: Get the current puppet pose
+      description: |
+        Returns the current world-space pose of the Teatro puppet rig. The pose
+        lists the positions of the controller, bar, torso, head, hands, and feet
+        at the time of the query.
+      x-fountain.visibility: public
+      x-fountain.reason: inspect puppet pose for rendering, logging, or tests
+      x-fountain.allow-as-tool: true
+      security: []
+      responses:
+        '200':
+          description: Current puppet pose
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PuppetPose'
+
+  /puppet/reset:
+    post:
+      tags: [puppet]
+      operationId: teatro.stage.puppet.reset
+      summary: Reset the puppet rig to its rest pose
+      description: |
+        Resets the puppet rig to the canonical rest pose described in the
+        TeatroStageEngine specs. This is typically used to return the puppet
+        to a stable starting state.
+      x-fountain.visibility: public
+      x-fountain.reason: reset puppet to canonical rest pose from spec
+      x-fountain.allow-as-tool: true
+      security: []
+      responses:
+        '204':
+          description: Puppet rig reset to rest pose
+
+  /puppet/gestures:
+    get:
+      tags: [gestures]
+      operationId: teatro.stage.puppet.listGestures
+      summary: List available puppet gestures
+      description: |
+        Returns the set of high-level gestures the puppet supports (for example
+        "nod", "bow", "wave"). Each gesture entry describes what the motion
+        should communicate and how long it typically lasts.
+      x-fountain.visibility: public
+      x-fountain.reason: enumerate puppet gestures for tools and prompts
+      x-fountain.allow-as-tool: true
+      security: []
+      responses:
+        '200':
+          description: List of gestures
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  gestures:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PuppetGesture'
+
+  /puppet/gestures/play:
+    post:
+      tags: [gestures]
+      operationId: teatro.stage.puppet.playGesture
+      summary: Trigger a puppet gesture
+      description: |
+        Triggers a high-level puppet gesture by id. The engine animates the rig
+        according to its internal rules; callers can poll the pose or subscribe
+        to host-specific updates to see the motion unfold.
+      x-fountain.visibility: public
+      x-fountain.reason: trigger named puppet motion such as nod or bow
+      x-fountain.allow-as-tool: true
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlayGestureRequest'
+      responses:
+        '202':
+          description: Gesture accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActiveGestureState'
+        '400':
+          description: Invalid gesture request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /puppet/health:
+    get:
+      tags: [health]
+      operationId: teatro.stage.puppet.getHealth
+      summary: Get high-level puppet health indicators
+      description: |
+        Returns a small set of health indicators for the puppet rig, such as
+        whether the feet are near the stage floor, whether bodies remain within
+        the stage bounds, and whether constraints remain within stretch bands.
+        This is intended for tests and monitoring, not for fine-grained control.
+      x-fountain.visibility: public
+      x-fountain.reason: check puppet invariants (on-stage, strings stable, no explosions)
+      x-fountain.allow-as-tool: true
+      security: []
+      responses:
+        '200':
+          description: Puppet health summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PuppetHealth'
+
+components:
+  schemas:
+    Vector3:
+      type: object
+      description: 3D vector used for puppet body positions.
+      required:
+        - x
+        - y
+        - z
+      properties:
+        x:
+          type: number
+          format: float
+        y:
+          type: number
+          format: float
+        z:
+          type: number
+          format: float
+
+    PuppetBodyId:
+      type: string
+      description: Named body in the Teatro puppet rig.
+      enum:
+        - controller
+        - bar
+        - torso
+        - head
+        - handL
+        - handR
+        - footL
+        - footR
+
+    PuppetBodyPose:
+      type: object
+      description: Position of a single puppet body.
+      required:
+        - id
+        - position
+      properties:
+        id:
+          $ref: '#/components/schemas/PuppetBodyId'
+        position:
+          $ref: '#/components/schemas/Vector3'
+
+    PuppetPose:
+      type: object
+      description: |
+        World-space pose of the entire puppet at a given time. Each body in
+        the rig has a position; hosts and tools can use these for rendering
+        or analysis.
+      required:
+        - time
+        - bodies
+      properties:
+        time:
+          type: number
+          format: float
+          description: Simulation time in seconds when this pose was sampled.
+        bodies:
+          type: array
+          items:
+            $ref: '#/components/schemas/PuppetBodyPose'
+
+    PuppetGesture:
+      type: object
+      description: |
+        High-level puppet gesture that the engine can perform, such as "nod",
+        "wave", or "bow". The exact motion is defined by the engine; this
+        record documents its intent and rough characteristics.
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: Stable gesture id to use in PlayGestureRequest.
+        name:
+          type: string
+          description: Short human-readable name (for example "nod").
+        description:
+          type: string
+          description: Longer explanation of what the gesture communicates.
+        typicalDuration:
+          type: number
+          format: float
+          description: Typical duration in seconds.
+
+    PlayGestureRequest:
+      type: object
+      description: Request payload to trigger a gesture.
+      required:
+        - gestureId
+      properties:
+        gestureId:
+          type: string
+        intensity:
+          type: number
+          format: float
+          description: Optional intensity/scalar for the gesture (1.0 = default).
+        loop:
+          type: boolean
+          description: Whether to loop the gesture until cancelled by the host.
+
+    ActiveGestureState:
+      type: object
+      description: |
+        Minimal state for a gesture that has been accepted by the engine.
+        Hosts may track this id to correlate with future pose changes.
+      required:
+        - gestureId
+      properties:
+        gestureId:
+          type: string
+        startedAt:
+          type: number
+          format: float
+          description: Simulation time (seconds) when the gesture started, if known.
+
+    PuppetHealth:
+      type: object
+      description: |
+        High-level health indicators for the puppet rig. These are not detailed
+        diagnostics; they summarise whether the rig is behaving within expected
+        bounds for tools and tests.
+      required:
+        - ok
+      properties:
+        ok:
+          type: boolean
+          description: Overall health flag; false when any invariant fails.
+        feetOnStage:
+          type: boolean
+          description: Whether both feet are near the stage floor plane.
+        withinStageBounds:
+          type: boolean
+          description: Whether all bodies remain within the stage room bounds.
+        stringsStable:
+          type: boolean
+          description: Whether string lengths stay within expected stretch bands.
+        notes:
+          type: array
+          description: Optional human-readable notes about any violated invariants.
+          items:
+            type: string
+
+    ErrorResponse:
+      type: object
+      description: Standard error response with human-readable message.
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+

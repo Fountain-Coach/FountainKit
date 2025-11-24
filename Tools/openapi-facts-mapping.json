@@ -50,5 +50,6 @@
   { "spec": "teatro-input.yml", "agentId": "fountain.coach/agent/teatro-input/service" },
   { "spec": "teatro-assets.yml", "agentId": "fountain.coach/agent/teatro-assets/service" },
   { "spec": "teatro-audio.yml", "agentId": "fountain.coach/agent/teatro-audio/service" },
-  { "spec": "teatro-scripting.yml", "agentId": "fountain.coach/agent/teatro-scripting/service" }
+  { "spec": "teatro-scripting.yml", "agentId": "fountain.coach/agent/teatro-scripting/service" },
+  { "spec": "teatro-stage-puppet.yml", "agentId": "fountain.coach/agent/teatro-stage-puppet/service" }
 ]

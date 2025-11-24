@@ -13,6 +13,7 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
     public var scene: TeatroStageScene
     public var puppetPose: TeatroPuppetPose?
     public var ballPosition: TeatroVec3?
+    public var bulletBodies: [BulletBodyRender] = []
 
     public init(id: String, frameDoc: CGRect, scene: TeatroStageScene) {
         self.id = id
@@ -51,6 +52,10 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
             drawBall(center: center, position: ball, encoder: encoder, transform: transform)
         }
 
+        if !bulletBodies.isEmpty {
+            drawBulletBodies(center: center, encoder: encoder, transform: transform)
+        }
+
         // Puppet silhouette in front of the back wall (if provided).
         if let pose = puppetPose {
             drawPuppet(center: center, pose: pose, encoder: encoder, transform: transform)
@@ -76,6 +81,13 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
     }
 
     private func isoProject(_ p: TeatroVec3, center: CGPoint) -> CGPoint {
+        let scale: CGFloat = 13.0 * scene.camera.zoom
+        let u = (p.x - p.z) * scale
+        let v = (p.x + p.z) * scale * 0.5 - p.y * scale
+        return CGPoint(x: center.x + u, y: center.y + v)
+    }
+
+    private func isoProject(_ p: BulletBodyRender.BodyVec3, center: CGPoint) -> CGPoint {
         let scale: CGFloat = 13.0 * scene.camera.zoom
         let u = (p.x - p.z) * scale
         let v = (p.x + p.z) * scale * 0.5 - p.y * scale
@@ -377,6 +389,114 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
                                  length: MemoryLayout<SIMD4<Float>>.size,
                                  index: 0)
         encoder.drawPrimitives(type: .line, vertexStart: 0, vertexCount: washVerts.count)
+    }
+
+    // MARK: - Bullet overlay
+
+    public struct BulletBodyRender: Sendable, Equatable {
+        public struct BodyVec3: Sendable, Equatable {
+            public var x: CGFloat
+            public var y: CGFloat
+            public var z: CGFloat
+            public init(x: CGFloat, y: CGFloat, z: CGFloat) {
+                self.x = x
+                self.y = y
+                self.z = z
+            }
+        }
+        public enum Shape: Sendable, Equatable {
+            case sphere(radius: CGFloat)
+            case box(halfExtents: BodyVec3)
+        }
+        public var position: BodyVec3
+        public var shape: Shape
+        public var color: SIMD4<Float>
+        public init(position: BodyVec3, shape: Shape, color: SIMD4<Float> = SIMD4<Float>(0.07, 0.07, 0.07, 1.0)) {
+            self.position = position
+            self.shape = shape
+            self.color = color
+        }
+    }
+
+    private func drawBulletBodies(center: CGPoint,
+                                  encoder: MTLRenderCommandEncoder,
+                                  transform: MetalCanvasTransform) {
+        for body in bulletBodies {
+            switch body.shape {
+            case .sphere(let radius):
+                drawBulletSphere(body: body, radius: radius, center: center, encoder: encoder, transform: transform)
+            case .box(let half):
+                drawBulletBox(body: body, halfExtents: half, center: center, encoder: encoder, transform: transform)
+            }
+        }
+    }
+
+    private func drawBulletSphere(body: BulletBodyRender,
+                                  radius: CGFloat,
+                                  center: CGPoint,
+                                  encoder: MTLRenderCommandEncoder,
+                                  transform: MetalCanvasTransform) {
+        let pos = body.position
+        let segments = 24
+        var verts: [SIMD2<Float>] = []
+        var prevPoint = isoProject(rotateY(TeatroVec3(x: pos.x + radius, y: pos.y, z: pos.z),
+                                           azimuth: scene.camera.azimuth),
+                                   center: center)
+        for i in 1...segments {
+            let angle = (CGFloat(i) / CGFloat(segments)) * 2 * .pi
+            let world = BulletBodyRender.BodyVec3(
+                x: pos.x + radius * cos(angle),
+                y: pos.y,
+                z: pos.z + radius * sin(angle)
+            )
+            let pt = isoProject(rotateY(TeatroVec3(x: world.x, y: world.y, z: world.z),
+                                        azimuth: scene.camera.azimuth),
+                                center: center)
+            let v0 = transform.docToNDC(x: prevPoint.x, y: prevPoint.y)
+            let v1 = transform.docToNDC(x: pt.x, y: pt.y)
+            verts.append(contentsOf: [v0, v1])
+            prevPoint = pt
+        }
+        encoder.setVertexBytes(verts,
+                               length: verts.count * MemoryLayout<SIMD2<Float>>.stride,
+                               index: 0)
+        var col = body.color
+        encoder.setFragmentBytes(&col,
+                                 length: MemoryLayout<SIMD4<Float>>.size,
+                                 index: 0)
+        encoder.drawPrimitives(type: .line, vertexStart: 0, vertexCount: verts.count)
+    }
+
+    private func drawBulletBox(body: BulletBodyRender,
+                               halfExtents: BulletBodyRender.BodyVec3,
+                               center: CGPoint,
+                               encoder: MTLRenderCommandEncoder,
+                               transform: MetalCanvasTransform) {
+        let pos = body.position
+        let corners: [TeatroVec3] = [
+            TeatroVec3(x: pos.x - halfExtents.x, y: pos.y + halfExtents.y, z: pos.z - halfExtents.z),
+            TeatroVec3(x: pos.x + halfExtents.x, y: pos.y + halfExtents.y, z: pos.z - halfExtents.z),
+            TeatroVec3(x: pos.x + halfExtents.x, y: pos.y + halfExtents.y, z: pos.z + halfExtents.z),
+            TeatroVec3(x: pos.x - halfExtents.x, y: pos.y + halfExtents.y, z: pos.z + halfExtents.z)
+        ]
+        var verts: [SIMD2<Float>] = []
+        var projected = corners.map { pt -> SIMD2<Float> in
+            let rotated = rotateY(pt, azimuth: scene.camera.azimuth)
+            let p = isoProject(rotated, center: center)
+            return transform.docToNDC(x: p.x, y: p.y)
+        }
+        projected.append(projected.first!)
+        for i in 0..<(projected.count - 1) {
+            verts.append(contentsOf: [projected[i], projected[i+1]])
+        }
+        encoder.setVertexBytes(verts,
+                               length: verts.count * MemoryLayout<SIMD2<Float>>.stride,
+                               index: 0)
+        var col = body.color
+        encoder.setFragmentBytes(&col,
+                                 length: MemoryLayout<SIMD4<Float>>.size,
+                                 index: 0)
+        encoder.drawPrimitives(type: .line, vertexStart: 0, vertexCount: verts.count)
     }
 
     // Legacy helpers removed: circles and ellipses are now handled via the isometric drawing paths above.

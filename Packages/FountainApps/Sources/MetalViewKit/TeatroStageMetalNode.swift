@@ -16,6 +16,7 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
     public var bulletBodies: [BulletBodyRender] = []
     public var showRoomGrid: Bool = true
     public var hudText: String?
+    public var overlayText: String?
 
     public init(id: String, frameDoc: CGRect, scene: TeatroStageScene) {
         self.id = id
@@ -49,11 +50,9 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
         // Draw room edges in isometric projection, mirroring the SDL demo.
         drawRoom(center: center, encoder: encoder, transform: transform)
 
-        // Ball baseline demo (if provided).
         if let ball = ballPosition {
             drawBall(center: center, position: ball, encoder: encoder, transform: transform)
         }
-
         if !bulletBodies.isEmpty {
             drawBulletBodies(center: center, encoder: encoder, transform: transform)
         }
@@ -76,6 +75,9 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
 
         if let hud = hudText {
             drawHUD(text: hud, encoder: encoder, transform: transform)
+        }
+        if let overlay = overlayText {
+            drawOverlay(text: overlay, encoder: encoder, transform: transform)
         }
     }
 
@@ -486,6 +488,27 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
                                length: verts.count * MemoryLayout<SIMD2<Float>>.stride,
                                index: 0)
         var color = SIMD4<Float>(0.96, 0.95, 0.93, 0.9)
+        encoder.setFragmentBytes(&color,
+                                 length: MemoryLayout<SIMD4<Float>>.size,
+                                 index: 0)
+        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: verts.count)
+    }
+
+    private func drawOverlay(text: String,
+                             encoder: MTLRenderCommandEncoder,
+                             transform: MetalCanvasTransform) {
+        // Center overlay box (text not rendered; reserved space)
+        let size = CGSize(width: CGFloat(max(10, text.count)) * 7 + 12, height: 18)
+        let origin = CGPoint(x: frameDoc.midX - size.width / 2, y: frameDoc.minY + 20)
+        let tl = transform.docToNDC(x: origin.x, y: origin.y)
+        let tr = transform.docToNDC(x: origin.x + size.width, y: origin.y)
+        let bl = transform.docToNDC(x: origin.x, y: origin.y + size.height)
+        let br = transform.docToNDC(x: origin.x + size.width, y: origin.y + size.height)
+        let verts: [SIMD2<Float>] = [tl, bl, tr, tr, bl, br]
+        encoder.setVertexBytes(verts,
+                               length: verts.count * MemoryLayout<SIMD2<Float>>.stride,
+                               index: 0)
+        var color = SIMD4<Float>(0.94, 0.93, 0.91, 0.92)
         encoder.setFragmentBytes(&color,
                                  length: MemoryLayout<SIMD4<Float>>.size,
                                  index: 0)

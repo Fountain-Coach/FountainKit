@@ -17,6 +17,7 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
     public var showRoomGrid: Bool = true
     public var hudText: String?
     public var overlayText: String?
+    public var debugText: String?
 
     public init(id: String, frameDoc: CGRect, scene: TeatroStageScene) {
         self.id = id
@@ -78,6 +79,9 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
         }
         if let overlay = overlayText {
             drawOverlay(text: overlay, encoder: encoder, transform: transform)
+        }
+        if let dbg = debugText {
+            drawDebug(text: dbg, encoder: encoder, transform: transform)
         }
     }
 
@@ -195,19 +199,20 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
         let color = SIMD4<Float>(0.88, 0.86, 0.82, 1.0)
         var lines: [SIMD2<Float>] = []
         let step: CGFloat = 2
-        let maxRange: CGFloat = 20
+        let maxRangeX: CGFloat = 15
+        let maxRangeZ: CGFloat = 10
         let z: CGFloat = 0.001 // slightly above floor
-        for x in stride(from: -maxRange, through: maxRange, by: step) {
-            let p1 = projectDoc(x: x, y: z, z: -maxRange, center: center)
-            let p2 = projectDoc(x: x, y: z, z: maxRange, center: center)
+        for x in stride(from: -maxRangeX, through: maxRangeX, by: step) {
+            let p1 = projectDoc(x: x, y: z, z: -maxRangeZ, center: center)
+            let p2 = projectDoc(x: x, y: z, z: maxRangeZ, center: center)
             lines.append(contentsOf: [
                 transform.docToNDC(x: p1.x, y: p1.y),
                 transform.docToNDC(x: p2.x, y: p2.y)
             ])
         }
-        for zVal in stride(from: -maxRange, through: maxRange, by: step) {
-            let p1 = projectDoc(x: -maxRange, y: z, z: zVal, center: center)
-            let p2 = projectDoc(x: maxRange, y: z, z: zVal, center: center)
+        for zVal in stride(from: -maxRangeZ, through: maxRangeZ, by: step) {
+            let p1 = projectDoc(x: -maxRangeX, y: z, z: zVal, center: center)
+            let p2 = projectDoc(x: maxRangeX, y: z, z: zVal, center: center)
             lines.append(contentsOf: [
                 transform.docToNDC(x: p1.x, y: p1.y),
                 transform.docToNDC(x: p2.x, y: p2.y)
@@ -509,6 +514,27 @@ public final class TeatroStageMetalNode: MetalCanvasNode {
                                length: verts.count * MemoryLayout<SIMD2<Float>>.stride,
                                index: 0)
         var color = SIMD4<Float>(0.94, 0.93, 0.91, 0.92)
+        encoder.setFragmentBytes(&color,
+                                 length: MemoryLayout<SIMD4<Float>>.size,
+                                 index: 0)
+        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: verts.count)
+    }
+
+    private func drawDebug(text: String,
+                           encoder: MTLRenderCommandEncoder,
+                           transform: MetalCanvasTransform) {
+        // Bottom-left debug box (text not rendered)
+        let size = CGSize(width: CGFloat(max(10, text.count)) * 7 + 12, height: 18)
+        let origin = CGPoint(x: frameDoc.minX + 16, y: frameDoc.maxY - size.height - 24)
+        let tl = transform.docToNDC(x: origin.x, y: origin.y)
+        let tr = transform.docToNDC(x: origin.x + size.width, y: origin.y)
+        let bl = transform.docToNDC(x: origin.x, y: origin.y + size.height)
+        let br = transform.docToNDC(x: origin.x + size.width, y: origin.y + size.height)
+        let verts: [SIMD2<Float>] = [tl, bl, tr, tr, bl, br]
+        encoder.setVertexBytes(verts,
+                               length: verts.count * MemoryLayout<SIMD2<Float>>.stride,
+                               index: 0)
+        var color = SIMD4<Float>(0.94, 0.93, 0.91, 0.9)
         encoder.setFragmentBytes(&color,
                                  length: MemoryLayout<SIMD4<Float>>.size,
                                  index: 0)

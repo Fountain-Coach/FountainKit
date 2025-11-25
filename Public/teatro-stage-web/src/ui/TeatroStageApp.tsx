@@ -29,6 +29,7 @@ export const TeatroStageApp: React.FC = () => {
     upDownAmp: 0.5,
     upDownRate: 0.9
   });
+  const prevBarRef = useRef<{ x: number; t: number }>({ x: 0, t: 0 });
 
   useEffect(() => {
     engineRef.current = new StageEngine();
@@ -46,7 +47,21 @@ export const TeatroStageApp: React.FC = () => {
       const engine = engineRef.current;
       if (engine && isPlaying) {
         engine.step(dtSeconds);
-        setSnapshot(engine.snapshot());
+        const snap = engine.snapshot();
+        setSnapshot(snap);
+
+        // Map physics → sound (bar motion drives drone).
+        if (audioEnabled && synthRef.current) {
+          const dt = Math.max(1e-3, snap.time - prevBarRef.current.t || dtSeconds);
+          const dx = snap.puppet.bar.position.x - prevBarRef.current.x;
+          const vel = dx / dt;
+          const gain = Math.min(0.3, Math.abs(vel) / 5);
+          const freq = 220 + snap.puppet.bar.position.y * 4 + vel * 10;
+          synthRef.current.setDrone(freq, gain);
+        } else {
+          synthRef.current?.stopDrone();
+        }
+        prevBarRef.current = { x: snap.puppet.bar.position.x, t: snap.time };
       }
 
       rafRef.current = requestAnimationFrame(loop);

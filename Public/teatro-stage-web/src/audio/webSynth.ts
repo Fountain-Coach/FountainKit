@@ -11,12 +11,18 @@ type Voice = {
   stop: () => void;
 };
 
+type Drone = {
+  osc: OscillatorNode;
+  gain: GainNode;
+};
+
 // Minimal Web Audio poly synth for browser use. Not for production audio,
 // just to demo stage + sound controlled via Web MIDI.
 export class WebSynth {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private voices: Map<string, Voice> = new Map();
+  private drone: Drone | null = null;
   private params: SynthParams = {
     masterGain: 0.1,
     wave: "sine",
@@ -55,11 +61,43 @@ export class WebSynth {
   stopAll(): void {
     this.voices.forEach((v) => v.stop());
     this.voices.clear();
+    this.stopDrone();
   }
 
   testNote(): void {
     this.noteOn(60, 80);
     setTimeout(() => this.noteOff(60), 300);
+  }
+
+  setDrone(freqHz: number, gainValue: number): void {
+    this.ensureContext();
+    if (!this.ctx || !this.master) return;
+    const g = Math.max(0, Math.min(1, gainValue));
+    if (!this.drone) {
+      const osc = this.ctx.createOscillator();
+      osc.type = this.params.wave;
+      osc.frequency.value = freqHz;
+      const gain = this.ctx.createGain();
+      gain.gain.value = g;
+      osc.connect(gain).connect(this.master);
+      osc.start();
+      this.drone = { osc, gain };
+    } else {
+      this.drone.osc.type = this.params.wave;
+      this.drone.osc.frequency.setTargetAtTime(freqHz, this.ctx.currentTime, 0.05);
+      this.drone.gain.gain.setTargetAtTime(g, this.ctx.currentTime, 0.05);
+    }
+  }
+
+  stopDrone(): void {
+    if (!this.drone || !this.ctx) return;
+    this.drone.gain.gain.setValueAtTime(0, this.ctx.currentTime);
+    this.drone.osc.stop(this.ctx.currentTime + 0.05);
+    setTimeout(() => {
+      this.drone?.osc.disconnect();
+      this.drone?.gain.disconnect();
+      this.drone = null;
+    }, 100);
   }
 
   noteOn(note: number, velocity: number): void {

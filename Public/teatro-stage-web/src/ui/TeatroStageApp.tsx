@@ -9,10 +9,17 @@ export const TeatroStageApp: React.FC = () => {
   const [snapshot, setSnapshot] = useState<StageSnapshot | null>(null);
   const [isPlaying, setIsPlaying] = useState(true);
   const [windStrength, setWindStrength] = useState(0.6);
+  const barMotionRef = useRef({
+    swayAmp: 2.0,
+    swayRate: 0.7,
+    upDownAmp: 0.5,
+    upDownRate: 0.9
+  });
 
   useEffect(() => {
     engineRef.current = new StageEngine();
     engineRef.current.setWindStrength(windStrength);
+    engineRef.current.setBarMotion(barMotionRef.current);
 
     const loop = () => {
       const now = performance.now();
@@ -47,6 +54,61 @@ export const TeatroStageApp: React.FC = () => {
     setWindStrength(value);
     engineRef.current?.setWindStrength(value);
   };
+
+  // Web MIDI: map CC to stage params if available.
+  useEffect(() => {
+    let access: WebMidi.MIDIAccess | null = null;
+    const onMIDIMessage = (e: WebMidi.MIDIMessageEvent) => {
+      const [status, data1, data2] = e.data;
+      const isCC = (status & 0xf0) === 0xb0;
+      if (!isCC) return;
+      const cc = data1;
+      const val = data2 ?? 0;
+      const norm = val / 127;
+      if (cc === 1) {
+        const w = 1.5 * norm;
+        setWindStrength(w);
+        engineRef.current?.setWindStrength(w);
+      } else if (cc === 2) {
+        barMotionRef.current = { ...barMotionRef.current, swayAmp: 4 * norm };
+        engineRef.current?.setBarMotion({ swayAmp: 4 * norm });
+      } else if (cc === 3) {
+        barMotionRef.current = { ...barMotionRef.current, upDownAmp: 2 * norm };
+        engineRef.current?.setBarMotion({ upDownAmp: 2 * norm });
+      } else if (cc === 4) {
+        barMotionRef.current = { ...barMotionRef.current, swayRate: 1.5 * norm };
+        engineRef.current?.setBarMotion({ swayRate: 1.5 * norm });
+      }
+    };
+
+    if ("requestMIDIAccess" in navigator) {
+      (navigator as any)
+        .requestMIDIAccess()
+        .then((a: WebMidi.MIDIAccess) => {
+          access = a;
+          access.inputs.forEach((input) => {
+            input.addEventListener("midimessage", onMIDIMessage as any);
+          });
+          access.onstatechange = () => {
+            access?.inputs.forEach((input) => {
+              input.removeEventListener("midimessage", onMIDIMessage as any);
+              input.addEventListener("midimessage", onMIDIMessage as any);
+            });
+          };
+        })
+        .catch(() => {
+          // ignore if MIDI not available/denied
+        });
+    }
+
+    return () => {
+      if (access) {
+        access.inputs.forEach((input) => {
+          input.removeEventListener("midimessage", onMIDIMessage as any);
+        });
+      }
+    };
+  }, []);
 
   const timeSeconds = snapshot?.time ?? 0;
 

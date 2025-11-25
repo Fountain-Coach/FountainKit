@@ -46,6 +46,10 @@ export class PuppetRig {
   private readonly stringConstraints: CANNON.DistanceConstraint[];
   private readonly barBase: CANNON.Vec3;
   private windStrength = 1.0;
+  private swayAmp = 2.0;
+  private swayRate = 0.7;
+  private upDownAmp = 0.5;
+  private upDownRate = 0.9;
 
   constructor() {
     this.world = new CANNON.World();
@@ -113,8 +117,8 @@ export class PuppetRig {
   step(dtSeconds: number, timeSeconds: number): void {
     if (dtSeconds <= 0) return;
     // Drive bar motion (same as demo1).
-    const sway = Math.sin(timeSeconds * 0.7) * 2.0;
-    const upDown = Math.sin(timeSeconds * 0.9) * 0.5;
+    const sway = Math.sin(timeSeconds * this.swayRate) * this.swayAmp;
+    const upDown = Math.sin(timeSeconds * this.upDownRate) * this.upDownAmp;
     this.barBody.position.x = this.barBase.x + sway;
     this.barBody.position.y = this.barBase.y + upDown;
     this.barBody.position.z = this.barBase.z;
@@ -182,5 +186,17 @@ export class PuppetRig {
 
   setWindStrength(strength: number): void {
     this.windStrength = Math.max(0, strength);
+  }
+
+  setBarMotion(params: {
+    swayAmp?: number;
+    swayRate?: number;
+    upDownAmp?: number;
+    upDownRate?: number;
+  }): void {
+    if (params.swayAmp !== undefined) this.swayAmp = Math.max(0, params.swayAmp);
+    if (params.swayRate !== undefined) this.swayRate = Math.max(0, params.swayRate);
+    if (params.upDownAmp !== undefined) this.upDownAmp = Math.max(0, params.upDownAmp);
+    if (params.upDownRate !== undefined) this.upDownRate = Math.max(0, params.upDownRate);
   }
 }

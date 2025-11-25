@@ -67,6 +67,11 @@ export class PuppetRig {
     };
 
     this.barBody = makeBoxBody(RIG.bar.size, RIG.bar.mass, RIG.bar.pos);
+    this.barBody.type = CANNON.Body.KINEMATIC;
+    this.barBody.updateMassProperties();
+    this.barBody.allowSleep = false;
+    this.barBody.angularDamping = 1.0;
+    this.barBody.linearDamping = 1.0;
     this.torsoBody = makeBoxBody(RIG.torso.size, RIG.torso.mass, RIG.torso.pos);
     this.headBody = makeBoxBody(RIG.head.size, RIG.head.mass, RIG.head.pos);
     this.handLBody = makeBoxBody(RIG.handL.size, RIG.handL.mass, RIG.handL.pos);
@@ -110,6 +115,10 @@ export class PuppetRig {
     const upDown = Math.sin(timeSeconds * 0.9) * 0.5;
     this.barBody.position.x = this.barBase.x + sway;
     this.barBody.position.y = this.barBase.y + upDown;
+    this.barBody.position.z = this.barBase.z;
+    this.barBody.quaternion.set(0, 0, 0, 1);
+    this.barBody.velocity.set(0, 0, 0);
+    this.barBody.angularVelocity.set(0, 0, 0);
 
     // Clamp dt like the demo to avoid instability.
     const dtClamped = Math.min(dtSeconds, 1 / 30);

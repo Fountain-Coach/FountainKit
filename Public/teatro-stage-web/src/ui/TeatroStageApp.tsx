@@ -146,7 +146,7 @@ export const TeatroStageApp: React.FC = () => {
             </label>
           </div>
         </div>
-        <DiagPanel snapshot={snapshot} audioEnabled={audioEnabled} />
+        <DiagPanel snapshot={snapshot} />
       </main>
     </div>
   );

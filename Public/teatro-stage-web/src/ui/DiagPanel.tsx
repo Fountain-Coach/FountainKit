@@ -3,10 +3,9 @@ import type { StageSnapshot } from "../engine/stage";
 
 interface DiagPanelProps {
   snapshot: StageSnapshot | null;
-  audioEnabled: boolean;
 }
 
-export const DiagPanel: React.FC<DiagPanelProps> = ({ snapshot, audioEnabled }) => {
+export const DiagPanel: React.FC<DiagPanelProps> = ({ snapshot }) => {
   const lines: string[] = [];
   if (snapshot) {
     lines.push(`t=${snapshot.time.toFixed(3)}`);
@@ -15,7 +14,6 @@ export const DiagPanel: React.FC<DiagPanelProps> = ({ snapshot, audioEnabled }) 
   } else {
     lines.push("no snapshot");
   }
-  lines.push(`audio=${audioEnabled ? "on" : "off"}`);
 
   return (
     <div

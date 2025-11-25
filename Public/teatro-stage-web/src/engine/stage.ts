@@ -17,8 +17,9 @@ export class StageEngine {
 
   step(dtSeconds: number): void {
     if (dtSeconds <= 0) return;
-    this.timeSeconds += dtSeconds;
-    this.rig.step(dtSeconds, this.timeSeconds);
+    const dtClamped = Math.min(dtSeconds, 1 / 30);
+    this.timeSeconds += dtClamped;
+    this.rig.step(dtClamped, this.timeSeconds);
   }
 
   snapshot(): StageSnapshot {
@@ -28,4 +29,3 @@ export class StageEngine {
     };
   }
 }
-

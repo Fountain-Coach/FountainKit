@@ -6,7 +6,7 @@ interface ThreeStageViewProps {
   snapshot: StageSnapshot;
 }
 
-// Dimensions pulled from TeatroStageEngine specs / legacy threejs demo.
+// Stage geometry (matches demo1.html).
 const ROOM_HALF_WIDTH = 15;
 const ROOM_HALF_DEPTH = 10;
 const ROOM_HEIGHT = 20;
@@ -15,10 +15,19 @@ const DOOR_MAX_Y = 8;
 const DOOR_MIN_Z = -4;
 const DOOR_MAX_Z = -1;
 
+// Puppet geometry (matches demo1.html).
+const RIG = {
+  bar: { size: { x: 10, y: 0.2, z: 0.2 } },
+  torso: { size: { x: 1.6, y: 3.0, z: 0.8 } },
+  head: { size: { x: 1.1, y: 1.1, z: 0.8 } },
+  hand: { size: { x: 0.4, y: 2.0, z: 0.4 } },
+  foot: { size: { x: 0.5, y: 2.2, z: 0.5 } }
+} as const;
+
 // Camera setup aligned with the canonical orthographic view.
 const FRUSTUM_SIZE = 40;
 const CAMERA_ELEVATION = Math.atan(1 / Math.sqrt(2)); // ~35°
-const CAMERA_DISTANCE = 50;
+const CAMERA_DISTANCE = 60;
 const LOOK_AT = new THREE.Vector3(0, 5, 0);
 
 export const ThreeStageView: React.FC<ThreeStageViewProps> = ({ snapshot }) => {
@@ -53,13 +62,19 @@ export const ThreeStageView: React.FC<ThreeStageViewProps> = ({ snapshot }) => {
       0.1,
       200
     );
-    const azimuth = Math.PI / 4;
-    camera.position.set(
-      CAMERA_DISTANCE * Math.cos(azimuth),
-      CAMERA_DISTANCE * Math.sin(CAMERA_ELEVATION),
-      CAMERA_DISTANCE * Math.sin(azimuth)
-    );
-    camera.lookAt(LOOK_AT);
+    const azimuthRef = { value: Math.PI / 4 };
+    const zoomRef = { value: 1 };
+    const updateCameraPosition = () => {
+      camera.position.set(
+        CAMERA_DISTANCE * Math.cos(azimuthRef.value),
+        CAMERA_DISTANCE * Math.sin(CAMERA_ELEVATION),
+        CAMERA_DISTANCE * Math.sin(azimuthRef.value)
+      );
+      camera.lookAt(LOOK_AT);
+      camera.zoom = zoomRef.value;
+      camera.updateProjectionMatrix();
+    };
+    updateCameraPosition();
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio || 1);
@@ -122,22 +137,43 @@ export const ThreeStageView: React.FC<ThreeStageViewProps> = ({ snapshot }) => {
     const stageLines = new THREE.LineSegments(stageGeometry, lineMat);
     scene.add(stageLines);
 
-    // Puppet meshes (simple boxes/circle)
+    // Puppet meshes with outlines to match the demo look.
     const black = 0x111111;
+    const outlineColor = 0xf4ead6;
     const mat = new THREE.MeshBasicMaterial({ color: black });
-    const box = (hx: number, hy: number, hz: number) =>
-      new THREE.BoxGeometry(hx * 2, hy * 2, hz * 2);
+    const addOutline = (geo: THREE.BufferGeometry, mesh: THREE.Mesh) => {
+      const edges = new THREE.EdgesGeometry(geo);
+      const outline = new THREE.LineSegments(
+        edges,
+        new THREE.LineBasicMaterial({ color: outlineColor, linewidth: 2 })
+      );
+      mesh.add(outline);
+    };
 
-    const torso = new THREE.Mesh(box(0.6, 1.2, 0.4), mat);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.6, 16, 12), mat);
-    const bar = new THREE.Mesh(box(1.6, 0.1, 0.2), mat);
-    const handL = new THREE.Mesh(box(0.3, 0.3, 0.2), mat);
+    const box = (w: number, h: number, d: number) => new THREE.BoxGeometry(w, h, d);
+
+    const bar = new THREE.Mesh(box(RIG.bar.size.x, RIG.bar.size.y, RIG.bar.size.z), mat);
+    addOutline(bar.geometry as THREE.BufferGeometry, bar);
+
+    const torso = new THREE.Mesh(box(RIG.torso.size.x, RIG.torso.size.y, RIG.torso.size.z), mat);
+    addOutline(torso.geometry as THREE.BufferGeometry, torso);
+
+    const headGeom = box(RIG.head.size.x, RIG.head.size.y, RIG.head.size.z);
+    const head = new THREE.Mesh(headGeom, mat);
+    addOutline(headGeom, head);
+
+    const handGeom = box(RIG.hand.size.x, RIG.hand.size.y, RIG.hand.size.z);
+    const handL = new THREE.Mesh(handGeom, mat);
+    addOutline(handGeom, handL);
     const handR = handL.clone();
-    const footL = new THREE.Mesh(box(0.4, 0.3, 0.2), mat);
+
+    const footGeom = box(RIG.foot.size.x, RIG.foot.size.y, RIG.foot.size.z);
+    const footL = new THREE.Mesh(footGeom, mat);
+    addOutline(footGeom, footL);
     const footR = footL.clone();
 
     const stringGeom = new THREE.BufferGeometry();
-    stringGeom.setAttribute("position", new THREE.Float32BufferAttribute(16 * 3, 3)); // 8 segments → 16 points
+    stringGeom.setAttribute("position", new THREE.Float32BufferAttribute(3 * 2 * 3, 3)); // 3 strings
     const strings = new THREE.LineSegments(stringGeom, lineMat);
 
     scene.add(torso, head, bar, handL, handR, footL, footR, strings);
@@ -166,15 +202,54 @@ export const ThreeStageView: React.FC<ThreeStageViewProps> = ({ snapshot }) => {
       cam.right = (FRUSTUM_SIZE * aspectResize) / 2;
       cam.top = FRUSTUM_SIZE / 2;
       cam.bottom = -FRUSTUM_SIZE / 2;
-      cam.updateProjectionMatrix();
+      updateCameraPosition();
       rendererRef.current.setSize(clientWidth, clientHeight);
     };
+
+    // Orbit + zoom controls
+    let dragging = false;
+    let lastX = 0;
+    const handlePointerDown = (e: PointerEvent) => {
+      dragging = true;
+      lastX = e.clientX;
+      renderer.domElement.setPointerCapture(e.pointerId);
+    };
+    const handlePointerMove = (e: PointerEvent) => {
+      if (!dragging) return;
+      const dx = e.clientX - lastX;
+      lastX = e.clientX;
+      azimuthRef.value += dx * 0.003;
+      updateCameraPosition();
+    };
+    const handlePointerUp = (e: PointerEvent) => {
+      dragging = false;
+      try {
+        renderer.domElement.releasePointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+    };
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const factor = e.deltaY > 0 ? 0.9 : 1.1;
+      zoomRef.value = Math.max(0.5, Math.min(3, zoomRef.value * factor));
+      updateCameraPosition();
+    };
+
+    renderer.domElement.addEventListener("pointerdown", handlePointerDown, { passive: false });
+    renderer.domElement.addEventListener("pointermove", handlePointerMove, { passive: false });
+    renderer.domElement.addEventListener("pointerup", handlePointerUp, { passive: false });
+    renderer.domElement.addEventListener("wheel", handleWheel, { passive: false });
 
     window.addEventListener("resize", handleResize);
     handleResize();
 
     return () => {
       window.removeEventListener("resize", handleResize);
+      renderer.domElement.removeEventListener("pointerdown", handlePointerDown);
+      renderer.domElement.removeEventListener("pointermove", handlePointerMove);
+      renderer.domElement.removeEventListener("pointerup", handlePointerUp);
+      renderer.domElement.removeEventListener("wheel", handleWheel);
       renderer.dispose();
     };
   }, []);
@@ -188,36 +263,31 @@ export const ThreeStageView: React.FC<ThreeStageViewProps> = ({ snapshot }) => {
 
     const { puppet } = snapshot;
 
-    meshes.torso.position.set(puppet.torso.x, puppet.torso.y, puppet.torso.z ?? 0);
-    meshes.head.position.set(puppet.head.x, puppet.head.y, puppet.head.z ?? 0);
-    meshes.bar.position.set(puppet.bar.x, puppet.bar.y, puppet.bar.z ?? 0);
-    meshes.handL.position.set(puppet.handL.x, puppet.handL.y, puppet.handL.z ?? 0);
-    meshes.handR.position.set(puppet.handR.x, puppet.handR.y, puppet.handR.z ?? 0);
-    meshes.footL.position.set(puppet.footL.x, puppet.footL.y, puppet.footL.z ?? 0);
-    meshes.footR.position.set(puppet.footR.x, puppet.footR.y, puppet.footR.z ?? 0);
-
-    // Strings: controller→bar, controller→hands, bar→head, torso→hands/feet/head
-    const positions = meshes.strings.geometry.getAttribute(
-      "position"
-    ) as THREE.BufferAttribute;
-    const setSegment = (i: number, a: THREE.Vector3, b: THREE.Vector3) => {
-      const offset = i * 6;
-      positions.setXYZ(offset / 3 + 0, a.x, a.y, a.z);
-      positions.setXYZ(offset / 3 + 1, b.x, b.y, b.z);
+    const setPose = (
+      mesh: THREE.Mesh,
+      pose: { position: { x: number; y: number; z: number }; quaternion: { x: number; y: number; z: number; w: number } }
+    ) => {
+      mesh.position.set(pose.position.x, pose.position.y, pose.position.z);
+      mesh.quaternion.set(pose.quaternion.x, pose.quaternion.y, pose.quaternion.z, pose.quaternion.w);
     };
-    const controller = new THREE.Vector3(
-      puppet.controller.x,
-      puppet.controller.y,
-      puppet.controller.z ?? 0
-    );
-    setSegment(0, controller, meshes.bar.position);
-    setSegment(1, controller, meshes.handL.position);
-    setSegment(2, controller, meshes.handR.position);
-    setSegment(3, meshes.bar.position, meshes.head.position);
-    setSegment(4, meshes.torso.position, meshes.handL.position);
-    setSegment(5, meshes.torso.position, meshes.handR.position);
-    setSegment(6, meshes.torso.position, meshes.footL.position);
-    setSegment(7, meshes.torso.position, meshes.footR.position);
+
+    setPose(meshes.torso, puppet.torso);
+    setPose(meshes.head, puppet.head);
+    setPose(meshes.bar, puppet.bar);
+    setPose(meshes.handL, puppet.handL);
+    setPose(meshes.handR, puppet.handR);
+    setPose(meshes.footL, puppet.footL);
+    setPose(meshes.footR, puppet.footR);
+
+    const strings = puppet.strings ?? [];
+    const positions = meshes.strings.geometry.getAttribute("position") as THREE.BufferAttribute;
+    if (positions.count !== strings.length * 2) {
+      meshes.strings.geometry.setAttribute("position", new THREE.Float32BufferAttribute(strings.length * 2 * 3, 3));
+    }
+    strings.forEach((s, idx) => {
+      positions.setXYZ(idx * 2 + 0, s.a.x, s.a.y, s.a.z);
+      positions.setXYZ(idx * 2 + 1, s.b.x, s.b.y, s.b.z);
+    });
     positions.needsUpdate = true;
 
     renderer.render(scene, camera);

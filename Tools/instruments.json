@@ -1,18 +1,5 @@
 [
   {
-    "appId": "fountain-gui-demo",
-    "agentId": "fountain.coach/agent/fountain-gui-demo/service",
-    "corpusId": "fountain-gui-demo",
-    "spec": "fountain-gui-demo.yml",
-    "runtimeAgentId": "fountain.coach/agent/metalviewkit-runtime/service",
-    "testModulePath": "Packages/FountainApps/Tests/FountainGUIDemoTests",
-    "snapshotBaselinesDir": "Packages/FountainApps/Tests/FountainGUIDemoTests/Baselines",
-    "requiredTestSymbols": [
-      "FountainGUIDemoTests",
-      "FountainGUIDemoSnapshotTests"
-    ]
-  },
-  {
     "appId": "llm-chat",
     "agentId": "fountain.coach/agent/llm-chat/service",
     "corpusId": "llm-chat",
@@ -23,19 +10,6 @@
     "requiredTestSymbols": [
       "LLMChatAppTests",
       "LLMChatAppSnapshotTests"
-    ]
-  },
-  {
-    "appId": "infinity",
-    "agentId": "fountain.coach/agent/infinity/service",
-    "corpusId": "infinity",
-    "spec": "infinity.yml",
-    "runtimeAgentId": null,
-    "testModulePath": "Packages/FountainApps/Tests/InfinityTests",
-    "snapshotBaselinesDir": null,
-    "requiredTestSymbols": [
-      "InfinityCanvasTests",
-      "InfinityGraphTests"
     ]
   }
 ]

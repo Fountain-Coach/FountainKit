@@ -17,14 +17,13 @@ Welcome to FountainKit, the modular SwiftPM workspace for the Fountain Coach org
 
 - Prompts + facts: Teatro prompts and PE facts live only in FountainStore, never in ad‑hoc files. Apps must seed via small `*-seed` executables and read/print prompts from the store on boot.
 - Baseline: `baseline-patchbay` (grid‑dev‑app) is the canonical UI baseline for viewport math and robot invariants. Any change to the baseline must ship a matching MRTS Teatro prompt and keep robot tests green.
-- Engines: CoreMIDI and UIKit are banned; new interactive work (Infinity and successors) must use SDLKit for windowing/events and our own canvas core (`Canvas2D` + node/edge graph). AppKit/SwiftUI remain only for legacy surfaces.
-- Infinity: the “Infinity” app is the forward workbench surface — an SDLKit‑backed, instant‑start, offline‑capable canvas that runs directly on our graph; no servers or control‑plane boot are required to sketch.
+- Engines: CoreMIDI and UIKit are banned. Native SDL/Metal tracks are retired; new interactive work must target web surfaces only.
 - OpenAPI‑first: every HTTP surface and instrument capability surface is defined by curated OpenAPI under `Packages/FountainSpecCuration/openapi`; server/client types and PE facts are always generated from these specs.
 - Store + secrets: FountainStore is the only authority for prompts, facts, graphs, and secrets. Secrets must be seeded via store tools, not environment variables.
 - Dependencies: third‑party code comes via SwiftPM `.package(url:)` from the Fountain Coach org; `External/` path imports are being removed and must not be reintroduced.
 - Build/test discipline: changes must compile with `swift build` at the root and pass focused `swift test --package-path Packages/<Package>` on touched packages before they are considered “green”.
-- 3D hard rule: across FountainAI, the only allowed 3D stack is `three.js` + `cannon.js`. Do not add or extend any other 3D/WebGL/WebGPU/Metal/D3D/Vulkan frameworks; existing non‑Three/Cannon 3D paths are frozen and must be removed or replaced with the Three + Cannon pair.
-- Native 3D gating: SwiftPM manifest now drops Metal/SDL native 3D products/targets by default. Set `FK_ALLOW_NATIVE_3D=1` only if temporarily needed while migrating; otherwise native 3D code is out of the build.
+- 3D hard rule: across FountainAI, the only allowed 3D stack is `three.js` + `cannon.js`. Do not add or extend any other 3D/WebGL/WebGPU/Metal/D3D/Vulkan frameworks; native Metal/SDL paths have been removed and must stay retired.
+- Native 3D gating: SwiftPM manifest drops native 3D products/targets; `FK_ALLOW_NATIVE_3D=1` should not be used now that those sources are removed.
 
 ## Quick Start
 - Bring the workspace up: `Scripts/dev/dev-up` (UI auto‑launches). Add `--check` for readiness probes.
@@ -36,10 +35,9 @@ Welcome to FountainKit, the modular SwiftPM workspace for the Fountain Coach org
 - Unified Master Plan — embedded below in this file (authoritative).
 - ML × MIDI 2.0 plan — `Plans/ML-MIDI2-Plan.md` (models, runners, CI/PE, integration).
 - PatchBay Node = Stage — `Plans/PatchBay-NodeStage-FeaturePlan.md` (capacity from baselines; in-node feedback; ports HUD). To be discussed.
-- Infinity workbench — `Plans/Infinity-Plan.md` (SDLKit infinite canvas instrument; keep this plan current as Infinity evolves).
+- Infinity/Metal plans are retired; do not revive native SDL/Metal tracks.
 - Instrument requirements — `Design/INSTRUMENT_REQUIREMENTS.md` (what every instrument must provide: prompt, spec, facts, MIDI host wiring, tests).
-- FountainGUIKit demo integration — `Plans/FountainGUIKit-Demo-Plan.md` (NSView host, gestures, MIDI 2.0, MRTS/PB‑VRT).
-- MetalViewKit runtime instrument state — `Plans/MetalViewKitRuntime-InstrumentStatePlan.md` (generic instrument state API, facts integration, MIDI host wiring).
+- FountainGUIKit demo integration — `Plans/FountainGUIKit-Demo-Plan.md` (legacy NSView host; archived).
 - Instrument template and generator — `Plans/instrument-new-plan.md` (canonical `instrument-new` template and workflow).
 - Hybrid Semantic Audio System — `Plans/Legacy/The Hybrid Semantic Audio System within FountainKit.pdf` (whitepaper; legacy background).
 - Studio plan — `Packages/FountainApps/Sources/FountainLauncherUI/AGENTS.md` (Control workspace).

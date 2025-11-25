@@ -45,6 +45,7 @@ Welcome to FountainKit, the modular SwiftPM workspace for the Fountain Coach org
 - Spec curation norms — `Packages/FountainSpecCuration/openapi/AGENTS.md`.
 - Scripts lifecycle — `Scripts/AGENTS.md`.
 - Composer Studio design — `Design/COMPOSER_STUDIO_STORY.md` (full story + SVG prompts). SVGs live in `Design/` and are the UI source of truth.
+ - 3D stack focus — `Design/3D-Stack-Focus.md` (why we enforce Three.js + Cannon.js only).
  - Teatro Stage instruments map — `Design/TeatroStage-Instruments-Map.md` (how the Teatro Stage Engine maps into FountainKit instruments and hosts).
 
 ## Baseline App — Baseline‑PatchBay

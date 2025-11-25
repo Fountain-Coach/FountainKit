@@ -120,6 +120,22 @@ export class PuppetRig {
     this.barBody.velocity.set(0, 0, 0);
     this.barBody.angularVelocity.set(0, 0, 0);
 
+    // Soft wind gusts: slow envelope plus gentle oscillation, tending back to stillness.
+    const envelope = 0.5 + 0.5 * Math.sin(timeSeconds * 0.05); // very slow swell 0..1
+    const wobbleX = Math.sin(timeSeconds * 0.37);
+    const wobbleZ = Math.cos(timeSeconds * 0.23);
+    const magnitude = 6 * envelope; // tune the gust strength
+    const wind = new CANNON.Vec3(magnitude * wobbleX, 0, magnitude * wobbleZ);
+    const applyWind = (body: CANNON.Body) => {
+      body.applyForce(wind, body.position);
+    };
+    applyWind(this.torsoBody);
+    applyWind(this.headBody);
+    applyWind(this.handLBody);
+    applyWind(this.handRBody);
+    applyWind(this.footLBody);
+    applyWind(this.footRBody);
+
     // Clamp dt like the demo to avoid instability.
     const dtClamped = Math.min(dtSeconds, 1 / 30);
     this.world.step(1 / 60, dtClamped, 3);

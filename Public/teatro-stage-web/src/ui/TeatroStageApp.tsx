@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import { StageEngine, type StageSnapshot } from "../engine/stage";
 import { ThreeStageView } from "./ThreeStageView";
+import { WebSynth } from "../audio/webSynth";
 
 export const TeatroStageApp: React.FC = () => {
   const engineRef = useRef<StageEngine | null>(null);
   const lastTimeRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
+  const synthRef = useRef<WebSynth | null>(null);
   const [snapshot, setSnapshot] = useState<StageSnapshot | null>(null);
   const [isPlaying, setIsPlaying] = useState(true);
   const [windStrength, setWindStrength] = useState(0.6);
@@ -20,6 +22,7 @@ export const TeatroStageApp: React.FC = () => {
     engineRef.current = new StageEngine();
     engineRef.current.setWindStrength(windStrength);
     engineRef.current.setBarMotion(barMotionRef.current);
+    synthRef.current = new WebSynth();
 
     const loop = () => {
       const now = performance.now();
@@ -60,7 +63,11 @@ export const TeatroStageApp: React.FC = () => {
     let access: WebMidi.MIDIAccess | null = null;
     const onMIDIMessage = (e: WebMidi.MIDIMessageEvent) => {
       const [status, data1, data2] = e.data;
+      const cmd = status & 0xf0;
       const isCC = (status & 0xf0) === 0xb0;
+      const isNoteOn = cmd === 0x90 && data2 > 0;
+      const isNoteOff = cmd === 0x80 || (cmd === 0x90 && data2 === 0);
+
       if (!isCC) return;
       const cc = data1;
       const val = data2 ?? 0;
@@ -69,6 +76,7 @@ export const TeatroStageApp: React.FC = () => {
         const w = 1.5 * norm;
         setWindStrength(w);
         engineRef.current?.setWindStrength(w);
+        synthRef.current?.setParams({ masterGain: 0.05 + 0.15 * norm });
       } else if (cc === 2) {
         barMotionRef.current = { ...barMotionRef.current, swayAmp: 4 * norm };
         engineRef.current?.setBarMotion({ swayAmp: 4 * norm });
@@ -78,6 +86,16 @@ export const TeatroStageApp: React.FC = () => {
       } else if (cc === 4) {
         barMotionRef.current = { ...barMotionRef.current, swayRate: 1.5 * norm };
         engineRef.current?.setBarMotion({ swayRate: 1.5 * norm });
+      } else if (cc === 5) {
+        // Change waveform (coarse): 0..0.49 => sine, 0.5..0.99 => triangle
+        const wave: OscillatorType = norm < 0.5 ? "sine" : "triangle";
+        synthRef.current?.setParams({ wave });
+      }
+
+      if (isNoteOn) {
+        synthRef.current?.noteOn(data1, data2 ?? 100);
+      } else if (isNoteOff) {
+        synthRef.current?.noteOff(data1);
       }
     };
 

@@ -84,14 +84,15 @@ export const TeatroStageApp: React.FC = () => {
               bottom: 12,
               display: "inline-flex",
               alignItems: "center",
-              gap: 8,
-              padding: "4px 8px",
-              borderRadius: 999,
-              backgroundColor: "rgba(244, 234, 214, 0.85)",
+              gap: 10,
+              padding: "6px 10px",
+              borderRadius: 10,
+              backgroundColor: "rgba(244, 234, 214, 0.9)",
               border: "1px solid rgba(0,0,0,0.12)",
               fontSize: 12,
               fontFamily:
-                "system-ui, -apple-system, BlinkMacSystemFont, sans-serif"
+                "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+              fontVariantNumeric: "tabular-nums"
             }}
           >
             <button
@@ -101,13 +102,20 @@ export const TeatroStageApp: React.FC = () => {
                 border: "none",
                 background: "transparent",
                 padding: "2px 6px",
-                cursor: "pointer",
-                fontSize: 12
-              }}
-            >
+              cursor: "pointer",
+              fontSize: 12
+            }}
+          >
               {isPlaying ? "Pause" : "Play"}
             </button>
-            <span style={{ opacity: 0.7 }}>
+            <span
+              style={{
+                opacity: 0.7,
+                minWidth: 68,
+                textAlign: "right",
+                display: "inline-block"
+              }}
+            >
               t = {timeSeconds.toFixed(2)}s
             </span>
             <label style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
@@ -120,7 +128,7 @@ export const TeatroStageApp: React.FC = () => {
                 value={windStrength}
                 onChange={handleWindChange}
               />
-              <span style={{ width: 32, textAlign: "right" }}>
+              <span style={{ width: 36, textAlign: "right" }}>
                 {windStrength.toFixed(2)}
               </span>
             </label>

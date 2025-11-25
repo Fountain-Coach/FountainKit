@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import { StageEngine, type StageSnapshot } from "../engine/stage";
 import { ThreeStageView } from "./ThreeStageView";
 import { WebSynth } from "../audio/webSynth";
-import { MidiDebugOverlay, type MidiEventInfo } from "./MidiDebugOverlay";
 
 export const TeatroStageApp: React.FC = () => {
   const engineRef = useRef<StageEngine | null>(null);
@@ -15,14 +14,6 @@ export const TeatroStageApp: React.FC = () => {
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [masterGain, setMasterGain] = useState(0.1);
   const [wave, setWave] = useState<OscillatorType>("sine");
-  const [showMidiLog, setShowMidiLog] = useState(false);
-  const [midiStatus, setMidiStatus] = useState<{
-    supported: boolean;
-    state: "pending" | "granted" | "denied" | "unsupported";
-    inputs: number;
-  }>({ supported: true, state: "pending", inputs: 0 });
-  const midiLogRef = useRef<MidiEventInfo[]>([]);
-  const [, forceTick] = useState(0);
   const barMotionRef = useRef({
     swayAmp: 2.0,
     swayRate: 0.7,
@@ -114,96 +105,6 @@ export const TeatroStageApp: React.FC = () => {
     synthRef.current?.setParams({ wave: value });
   };
 
-  // Web MIDI: map CC to stage params if available.
-  useEffect(() => {
-    if (!("requestMIDIAccess" in navigator)) {
-      setMidiStatus({ supported: false, state: "unsupported", inputs: 0 });
-      return;
-    }
-    let access: WebMidi.MIDIAccess | null = null;
-    const onMIDIMessage = (e: WebMidi.MIDIMessageEvent) => {
-      const [status, data1, data2] = e.data;
-      const cmd = status & 0xf0;
-      const isCC = (status & 0xf0) === 0xb0;
-      const isNoteOn = cmd === 0x90 && data2 > 0;
-      const isNoteOff = cmd === 0x80 || (cmd === 0x90 && data2 === 0);
-
-      const type: MidiEventInfo["type"] = isNoteOn
-        ? "noteon"
-        : isNoteOff
-        ? "noteoff"
-        : isCC
-        ? "cc"
-        : "other";
-      midiLogRef.current = [
-        { ts: performance.now() / 1000, status, data1, data2: data2 ?? 0, type },
-        ...midiLogRef.current
-      ].slice(0, 50);
-      forceTick((x) => x + 1);
-
-      if (!isCC) {
-        if (isNoteOn) synthRef.current?.noteOn(data1, data2 ?? 100);
-        else if (isNoteOff) synthRef.current?.noteOff(data1);
-        return;
-      }
-      const cc = data1;
-      const val = data2 ?? 0;
-      const norm = val / 127;
-      if (cc === 1) {
-        const w = 1.5 * norm;
-        setWindStrength(w);
-        engineRef.current?.setWindStrength(w);
-        synthRef.current?.setParams({ masterGain: 0.05 + 0.15 * norm });
-      } else if (cc === 2) {
-        barMotionRef.current = { ...barMotionRef.current, swayAmp: 4 * norm };
-        engineRef.current?.setBarMotion({ swayAmp: 4 * norm });
-      } else if (cc === 3) {
-        barMotionRef.current = { ...barMotionRef.current, upDownAmp: 2 * norm };
-        engineRef.current?.setBarMotion({ upDownAmp: 2 * norm });
-      } else if (cc === 4) {
-        barMotionRef.current = { ...barMotionRef.current, swayRate: 1.5 * norm };
-        engineRef.current?.setBarMotion({ swayRate: 1.5 * norm });
-      } else if (cc === 5) {
-        // Change waveform (coarse): 0..0.49 => sine, 0.5..0.99 => triangle
-        const w: OscillatorType = norm < 0.5 ? "sine" : "triangle";
-        synthRef.current?.setParams({ wave: w });
-      }
-    };
-
-    if ("requestMIDIAccess" in navigator) {
-      (navigator as any)
-        .requestMIDIAccess()
-        .then((a: WebMidi.MIDIAccess) => {
-          access = a;
-          setMidiStatus({ supported: true, state: "granted", inputs: a.inputs.size });
-          access.inputs.forEach((input) => {
-            input.addEventListener("midimessage", onMIDIMessage as any);
-          });
-          access.onstatechange = () => {
-            setMidiStatus({
-              supported: true,
-              state: "granted",
-              inputs: access ? access.inputs.size : 0
-            });
-            access?.inputs.forEach((input) => {
-              input.removeEventListener("midimessage", onMIDIMessage as any);
-              input.addEventListener("midimessage", onMIDIMessage as any);
-            });
-          };
-        })
-        .catch(() => {
-          setMidiStatus({ supported: true, state: "denied", inputs: 0 });
-        });
-    }
-
-    return () => {
-      if (access) {
-        access.inputs.forEach((input) => {
-          input.removeEventListener("midimessage", onMIDIMessage as any);
-        });
-      }
-    };
-  }, []);
 
   const timeSeconds = snapshot?.time ?? 0;
 
@@ -247,11 +148,11 @@ export const TeatroStageApp: React.FC = () => {
               backgroundColor: "rgba(244, 234, 214, 0.9)",
         border: "1px solid rgba(0,0,0,0.12)",
           fontSize: 12,
-          fontFamily:
-            "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
-          fontVariantNumeric: "tabular-nums"
-        }}
-          >
+            fontFamily:
+              "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            fontVariantNumeric: "tabular-nums"
+          }}
+        >
             <button
               type="button"
               onClick={handleTogglePlay}
@@ -274,9 +175,6 @@ export const TeatroStageApp: React.FC = () => {
               }}
             >
               t = {timeSeconds.toFixed(2)}s
-            </span>
-            <span style={{ opacity: 0.7, minWidth: 100 }}>
-              MIDI: {midiStatus.state} ({midiStatus.inputs})
             </span>
             <label style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
               wind

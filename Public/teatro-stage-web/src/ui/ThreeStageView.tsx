@@ -140,13 +140,24 @@ export const ThreeStageView: React.FC<ThreeStageViewProps> = ({ snapshot }) => {
     // Puppet meshes with outlines to match the demo look.
     const black = 0x111111;
     const outlineColor = 0xf4ead6;
-    const mat = new THREE.MeshBasicMaterial({ color: black });
+    const mat = new THREE.MeshBasicMaterial({
+      color: black,
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 1
+    });
     const addOutline = (geo: THREE.BufferGeometry, mesh: THREE.Mesh) => {
       const edges = new THREE.EdgesGeometry(geo);
       const outline = new THREE.LineSegments(
         edges,
-        new THREE.LineBasicMaterial({ color: outlineColor, linewidth: 2 })
+        new THREE.LineBasicMaterial({
+          color: outlineColor,
+          linewidth: 2,
+          depthTest: false,
+          depthWrite: false
+        })
       );
+      outline.renderOrder = 1;
       mesh.add(outline);
     };
 

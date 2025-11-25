@@ -242,29 +242,7 @@ export const TeatroStageApp: React.FC = () => {
             >
               Test tone
             </button>
-            <button
-              type="button"
-              onClick={() => setShowMidiLog((v) => !v)}
-              style={{
-                border: "1px solid rgba(0,0,0,0.2)",
-                borderRadius: 6,
-                background: "transparent",
-                padding: "2px 8px",
-                cursor: "pointer",
-                fontSize: 12
-              }}
-            >
-              {showMidiLog ? "Hide MIDI" : "Show MIDI"}
-            </button>
           </div>
-          <MidiDebugOverlay
-            events={midiLogRef.current}
-            visible={showMidiLog}
-            onClear={() => {
-              midiLogRef.current = [];
-              forceTick((x) => x + 1);
-            }}
-          />
         </div>
         <DiagPanel snapshot={snapshot} audioEnabled={audioEnabled} />
       </main>

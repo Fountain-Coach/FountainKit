@@ -1,20 +1,15 @@
 import React, { useEffect, useRef, useState } from "react";
 import { StageEngine, type StageSnapshot } from "../engine/stage";
 import { ThreeStageView } from "./ThreeStageView";
-import { WebSynth } from "../audio/webSynth";
 import { DiagPanel } from "./DiagPanel";
 
 export const TeatroStageApp: React.FC = () => {
   const engineRef = useRef<StageEngine | null>(null);
   const lastTimeRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
-  const synthRef = useRef<WebSynth | null>(null);
   const [snapshot, setSnapshot] = useState<StageSnapshot | null>(null);
   const [isPlaying, setIsPlaying] = useState(true);
   const [windStrength, setWindStrength] = useState(0.6);
-  const [audioEnabled, setAudioEnabled] = useState(false);
-  const [masterGain, setMasterGain] = useState(0.1);
-  const [wave, setWave] = useState<OscillatorType>("sine");
   const barMotionRef = useRef({
     swayAmp: 2.0,
     swayRate: 0.7,
@@ -27,8 +22,6 @@ export const TeatroStageApp: React.FC = () => {
     engineRef.current = new StageEngine();
     engineRef.current.setWindStrength(windStrength);
     engineRef.current.setBarMotion(barMotionRef.current);
-    synthRef.current = new WebSynth();
-    synthRef.current.setParams({ masterGain, wave });
 
     const loop = () => {
       const now = performance.now();
@@ -42,17 +35,6 @@ export const TeatroStageApp: React.FC = () => {
         const snap = engine.snapshot();
         setSnapshot(snap);
 
-        // Map physics → sound (bar motion drives drone).
-        if (audioEnabled && synthRef.current) {
-          const dt = Math.max(1e-3, snap.time - prevBarRef.current.t || dtSeconds);
-          const dx = snap.puppet.bar.position.x - prevBarRef.current.x;
-          const vel = dx / dt;
-          const gain = Math.min(0.3, Math.abs(vel) / 5);
-          const freq = 220 + snap.puppet.bar.position.y * 4 + vel * 10;
-          synthRef.current.setDrone(freq, gain);
-        } else {
-          synthRef.current?.stopDrone();
-        }
         prevBarRef.current = { x: snap.puppet.bar.position.x, t: snap.time };
       }
 
@@ -77,35 +59,6 @@ export const TeatroStageApp: React.FC = () => {
     setWindStrength(value);
     engineRef.current?.setWindStrength(value);
   };
-
-  const handleEnableAudio = () => {
-    const synth = synthRef.current;
-    if (!synth) return;
-    if (!audioEnabled) {
-      synth.resume();
-      synth.setParams({ masterGain, wave });
-      setAudioEnabled(true);
-    } else {
-      synth.stopAll();
-      synth.mute();
-      setAudioEnabled(false);
-    }
-  };
-
-  const handleGainChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseFloat(e.target.value);
-    setMasterGain(value);
-    if (audioEnabled) {
-      synthRef.current?.setParams({ masterGain: value });
-    }
-  };
-
-  const handleWaveChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value as OscillatorType;
-    setWave(value);
-    synthRef.current?.setParams({ wave: value });
-  };
-
 
   const timeSeconds = snapshot?.time ?? 0;
 
@@ -191,57 +144,6 @@ export const TeatroStageApp: React.FC = () => {
                 {windStrength.toFixed(2)}
               </span>
             </label>
-            <button
-              type="button"
-              onClick={handleEnableAudio}
-              style={{
-                border: "1px solid rgba(0,0,0,0.2)",
-                borderRadius: 6,
-                background: audioEnabled ? "rgba(0,0,0,0.1)" : "transparent",
-                padding: "2px 8px",
-                cursor: "pointer",
-                fontSize: 12
-              }}
-            >
-              {audioEnabled ? "Audio on" : "Audio off"}
-            </button>
-            <label style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-              gain
-              <input
-                type="range"
-                min="0"
-                max="0.5"
-                step="0.01"
-                value={masterGain}
-                onChange={handleGainChange}
-                disabled={!audioEnabled}
-              />
-              <span style={{ width: 36, textAlign: "right" }}>
-                {masterGain.toFixed(2)}
-              </span>
-            </label>
-            <label style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-              wave
-              <select value={wave} onChange={handleWaveChange} disabled={!audioEnabled} style={{ fontSize: 12 }}>
-                <option value="sine">sine</option>
-                <option value="triangle">triangle</option>
-              </select>
-            </label>
-            <button
-              type="button"
-              onClick={() => synthRef.current?.testNote()}
-              disabled={!audioEnabled}
-              style={{
-                border: "1px solid rgba(0,0,0,0.2)",
-                borderRadius: 6,
-                background: "transparent",
-                padding: "2px 8px",
-                cursor: audioEnabled ? "pointer" : "not-allowed",
-                fontSize: 12
-              }}
-            >
-              Test tone
-            </button>
           </div>
         </div>
         <DiagPanel snapshot={snapshot} audioEnabled={audioEnabled} />

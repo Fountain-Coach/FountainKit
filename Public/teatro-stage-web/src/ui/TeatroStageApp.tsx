@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { StageEngine, type StageSnapshot } from "../engine/stage";
 import { ThreeStageView } from "./ThreeStageView";
 import { WebSynth } from "../audio/webSynth";
+import { DiagPanel } from "./DiagPanel";
 
 export const TeatroStageApp: React.FC = () => {
   const engineRef = useRef<StageEngine | null>(null);
@@ -265,6 +266,7 @@ export const TeatroStageApp: React.FC = () => {
             }}
           />
         </div>
+        <DiagPanel snapshot={snapshot} audioEnabled={audioEnabled} />
       </main>
     </div>
   );

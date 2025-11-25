@@ -251,6 +251,10 @@ export const ThreeStageView: React.FC<ThreeStageViewProps> = ({ snapshot }) => {
       renderer.domElement.removeEventListener("pointerup", handlePointerUp);
       renderer.domElement.removeEventListener("wheel", handleWheel);
       renderer.dispose();
+      // React 18 StrictMode mounts/unmounts twice; ensure we remove the canvas to avoid duplicate scenes.
+      if (mount.contains(renderer.domElement)) {
+        mount.removeChild(renderer.domElement);
+      }
     };
   }, []);
 

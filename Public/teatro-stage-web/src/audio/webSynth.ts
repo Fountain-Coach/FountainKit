@@ -47,6 +47,21 @@ export class WebSynth {
     this.ensureContext();
   }
 
+  mute(): void {
+    this.ensureContext();
+    if (this.master) this.master.gain.value = 0;
+  }
+
+  stopAll(): void {
+    this.voices.forEach((v) => v.stop());
+    this.voices.clear();
+  }
+
+  testNote(): void {
+    this.noteOn(60, 80);
+    setTimeout(() => this.noteOff(60), 300);
+  }
+
   noteOn(note: number, velocity: number): void {
     this.ensureContext();
     if (!this.ctx || !this.master) return;

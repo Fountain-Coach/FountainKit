@@ -63,14 +63,25 @@ export const TeatroStageApp: React.FC = () => {
   };
 
   const handleEnableAudio = () => {
-    synthRef.current?.resume();
-    setAudioEnabled(true);
+    const synth = synthRef.current;
+    if (!synth) return;
+    if (!audioEnabled) {
+      synth.resume();
+      synth.setParams({ masterGain, wave });
+      setAudioEnabled(true);
+    } else {
+      synth.stopAll();
+      synth.mute();
+      setAudioEnabled(false);
+    }
   };
 
   const handleGainChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseFloat(e.target.value);
     setMasterGain(value);
-    synthRef.current?.setParams({ masterGain: value });
+    if (audioEnabled) {
+      synthRef.current?.setParams({ masterGain: value });
+    }
   };
 
   const handleWaveChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -239,13 +250,13 @@ export const TeatroStageApp: React.FC = () => {
               style={{
                 border: "1px solid rgba(0,0,0,0.2)",
                 borderRadius: 6,
-                background: audioEnabled ? "rgba(0,0,0,0.08)" : "transparent",
+                background: audioEnabled ? "rgba(0,0,0,0.1)" : "transparent",
                 padding: "2px 8px",
                 cursor: "pointer",
                 fontSize: 12
               }}
             >
-              {audioEnabled ? "Audio on" : "Enable audio"}
+              {audioEnabled ? "Audio on" : "Audio off"}
             </button>
             <label style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
               gain
@@ -269,6 +280,21 @@ export const TeatroStageApp: React.FC = () => {
                 <option value="triangle">triangle</option>
               </select>
             </label>
+            <button
+              type="button"
+              onClick={() => synthRef.current?.testNote()}
+              disabled={!audioEnabled}
+              style={{
+                border: "1px solid rgba(0,0,0,0.2)",
+                borderRadius: 6,
+                background: "transparent",
+                padding: "2px 8px",
+                cursor: audioEnabled ? "pointer" : "not-allowed",
+                fontSize: 12
+              }}
+            >
+              Test tone
+            </button>
           </div>
         </div>
       </main>

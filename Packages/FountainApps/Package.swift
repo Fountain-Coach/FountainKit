@@ -5,6 +5,7 @@ import Foundation
 let ROBOT_ONLY = ProcessInfo.processInfo.environment["ROBOT_ONLY"] == "1" || ProcessInfo.processInfo.environment["FK_ROBOT_ONLY"] == "1"
 
 let USE_SDLKIT = ProcessInfo.processInfo.environment["FK_USE_SDLKIT"] == "1"
+let ALLOW_NATIVE_3D = ProcessInfo.processInfo.environment["FK_ALLOW_NATIVE_3D"] == "1"
 
 let FK_DISABLE_QFCELLS = ProcessInfo.processInfo.environment["FK_DISABLE_QFCELLS"] == "1"
 let FK_SKIP_NOISY = ProcessInfo.processInfo.environment["FK_SKIP_NOISY_TARGETS"] == "1" || ProcessInfo.processInfo.environment["FK_EDITOR_MINIMAL"] == "1"
@@ -34,8 +35,6 @@ let PRODUCTS: [Product] = BLANK_VRT_ONLY ? [
         
     ] : [
         .executable(name: "gateway-server", targets: ["gateway-server"]),
-        .executable(name: "bullet-physics-demo", targets: ["bullet-physics-demo"]),
-        .executable(name: "teatro-bullet-app", targets: ["teatro-bullet-app"]),
         .executable(name: "instrument-catalog-server", targets: ["instrument-catalog-server"]),
         .executable(name: "store-apply-seed", targets: ["store-apply-seed"]),
         .executable(name: "mpe-pad-app-seed", targets: ["mpe-pad-app-seed"]),
@@ -108,7 +107,6 @@ let PRODUCTS: [Product] = BLANK_VRT_ONLY ? [
         .executable(name: "ml-basicpitch2midi", targets: ["ml-basicpitch2midi"]),
         .executable(name: "ml-yamnet2midi", targets: ["ml-yamnet2midi"]),
         .executable(name: "ml-sampler-smoke", targets: ["ml-sampler-smoke"]),
-        .executable(name: "metalview-demo-app", targets: ["metalview-demo-app"]),
         .executable(name: "fk", targets: ["fk"])
         ,
         .executable(name: "composer-studio", targets: ["composer-studio"]),
@@ -1784,21 +1782,6 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             path: "Tests/MetalComputeKitTests"
         ),
         .executableTarget(
-            name: "teatro-bullet-app",
-            dependencies: [
-                "MetalViewKit",
-                .product(name: "TeatroPhysicsBullet", package: "TeatroPhysics")
-            ],
-            path: "Sources/teatro-bullet-app"
-        ),
-        .executableTarget(
-            name: "bullet-physics-demo",
-            dependencies: [
-                .product(name: "TeatroPhysicsBullet", package: "TeatroPhysics")
-            ],
-            path: "Sources/bullet-physics-demo"
-        ),
-        .executableTarget(
             name: "teatro-stage-app",
             dependencies: [
                 "MetalViewKit",
@@ -1807,18 +1790,6 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             path: "Sources/teatro-stage-app",
             exclude: ["AGENTS.md"]
         ),
-        .executableTarget(
-            name: "metalview-demo-app",
-            dependencies: [
-                "MetalViewKit",
-                .product(name: "MIDI2Transports", package: "FountainTelemetryKit"),
-                .product(name: "Teatro", package: "TeatroFull"),
-                .product(name: "MIDI2CI", package: "midi2")
-            ],
-            path: "Sources/metalview-demo-app",
-            exclude: ["AGENTS.md"]
-        ),
-        
         .executableTarget(
             name: "replay-export",
             dependencies: ["patchbay-app"],
@@ -2108,23 +2079,56 @@ let INFINITY_TARGETS: [Target] = USE_SDLKIT ? [
             .product(name: "SDLKit", package: "SDLKit")
         ],
         path: "Sources/teatro-engine-demo"
-    ),
-    .executableTarget(
-        name: "bullet-physics-instrument",
-        dependencies: [
-            .product(name: "SDLKit", package: "SDLKit"),
-            .product(name: "TeatroPhysicsBullet", package: "TeatroPhysics")
-        ],
-        path: "Sources/bullet-physics-instrument"
     )
 ] : []
+
+private let NATIVE_3D_PRODUCTS: Set<String> = [
+    "MetalViewKit",
+    "MetalComputeKit",
+    "metalviewkit-runtime-server",
+    "grid-dev-app",
+    "grid-dev-seed",
+    "patchbay-app",
+    "patchbay-snapshots",
+    "patchbay-test-scene-seed",
+    "bullet-physics-demo",
+    "bullet-physics-instrument",
+    "teatro-bullet-app",
+    "metalview-demo-app",
+    "metalviewkit-cc-fuzz",
+    "infinity",
+    "infinity-seed",
+    "fountain-gui-demo",
+    "fountain-gui-demo-seed",
+    "teatro-stage-app",
+    "teatro-stage-puppet-service"
+]
+
+private let NATIVE_3D_TARGETS_SET: Set<String> = NATIVE_3D_PRODUCTS
+    .union([
+        "MetalViewKitCore",
+        "MetalViewKitRuntimeServerKit",
+        "metalcompute-demo",
+        "metalcompute-tests",
+        "MetalComputeKitTests",
+        "MetalInstrumentSysExTests",
+        "MetalInstrumentRTPTests",
+        "MetalInstrumentCoreMIDITests",
+        "PatchBayAppUITests"
+    ])
+
+private let PRODUCTS_PRUNED: [Product] = ALLOW_NATIVE_3D ? PRODUCTS : PRODUCTS.filter { !NATIVE_3D_PRODUCTS.contains($0.name) }
+private let TARGETS_PRUNED: [Target] = {
+    let combined = TARGETS + INFINITY_TARGETS
+    return ALLOW_NATIVE_3D ? combined : combined.filter { !NATIVE_3D_TARGETS_SET.contains($0.name) }
+}()
 
 let package = Package(
     name: "FountainApps",
     platforms: [
         .macOS(.v14)
     ],
-    products: PRODUCTS,
+    products: PRODUCTS_PRUNED,
     dependencies: DEPENDENCIES,
-    targets: TARGETS + INFINITY_TARGETS
+    targets: TARGETS_PRUNED
 )

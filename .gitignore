@@ -3,6 +3,7 @@ Workspace/chatkit-dev/node_modules/
 Workspace/chatkit-dev/dist/
 Workspace/chatkit-dev/.vite/
 Workspace/chatkit-dev/package-lock.json
+Public/**/node_modules/
 
 # Demo logs
 Workspace/demos/chatkit-web/.demo-logs/

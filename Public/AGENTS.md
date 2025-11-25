@@ -7,6 +7,7 @@ What
 - Web apps (TS/Node): `Public/baseline-patchbay-web` — three‑pane Baseline‑PatchBay mirror (left/center/right panes, draggable gutters, DnD items); `Public/teatro-stage-web` — Teatro Stage Engine web host (room + puppet SVG view, legacy Cannon/Three stack under `src-legacy/**`).
 - Runtime docs: `Public/docs/MVK-Runtime.md` (HTTP runtime overview) and `Public/docs/MIDI-Transport-Status.md` (transport status/choices).
 - Launchers live under `Scripts/apps/` and are listed in that area’s AGENTS.
+- 3D stack hard rule: only `three.js` + `cannon.js` are allowed for any 3D in Public surfaces. No other 3D/WebGL/WebGPU frameworks (e.g., Babylon, Cesium, Pixi, PlayCanvas, WebGPU renderers) may be added; new work must stay on the Three + Cannon pair.
 
 Why
 - Provide a portable, deterministic frontend for publishing and demos without requiring the macOS app runtime.

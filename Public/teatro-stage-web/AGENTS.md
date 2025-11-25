@@ -19,5 +19,6 @@ Conventions
 - Specs‑first: room, rig, camera, and authoring behaviour follow the documents under `TeatroStageEngine/spec/**`. When behaviour changes, update specs first, then align both the Swift engine and this web host. The new engine wrapper should treat the specs as authoritative and avoid ad‑hoc parameters.
 - No secrets: the app should not embed credentials or call private APIs; it runs purely client‑side or against public/demo endpoints.
 - No generated clients: if the app later talks to a TeatroStageEngine HTTP surface, use lightweight hand‑rolled fetches or a small TS client, but do not commit generated code without a clear need.
+- 3D stack hard rule: this host and any follow‑on web stage work must use only `three.js` + `cannon.js` for 3D/physics; adding other WebGL/WebGPU frameworks (Babylon, Cesium, Pixi, PlayCanvas, WebGPU renderers, etc.) is prohibited.
 
 For how this web app fits into the broader “Teatro Stage as instruments” story (Stage World, Puppet, Camera, Style, Recording), see `Design/TeatroStage-Instruments-Map.md`. That document explains how engine specs, FountainKit instruments, and hosts like this one line up.

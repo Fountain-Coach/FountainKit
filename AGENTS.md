@@ -23,6 +23,8 @@ Welcome to FountainKit, the modular SwiftPM workspace for the Fountain Coach org
 - Store + secrets: FountainStore is the only authority for prompts, facts, graphs, and secrets. Secrets must be seeded via store tools, not environment variables.
 - Dependencies: third‑party code comes via SwiftPM `.package(url:)` from the Fountain Coach org; `External/` path imports are being removed and must not be reintroduced.
 - Build/test discipline: changes must compile with `swift build` at the root and pass focused `swift test --package-path Packages/<Package>` on touched packages before they are considered “green”.
+- 3D hard rule: across FountainAI, the only allowed 3D stack is `three.js` + `cannon.js`. Do not add or extend any other 3D/WebGL/WebGPU/Metal/D3D/Vulkan frameworks; existing non‑Three/Cannon 3D paths are frozen and must be removed or replaced with the Three + Cannon pair.
+- Native 3D gating: SwiftPM manifest now drops Metal/SDL native 3D products/targets by default. Set `FK_ALLOW_NATIVE_3D=1` only if temporarily needed while migrating; otherwise native 3D code is out of the build.
 
 ## Quick Start
 - Bring the workspace up: `Scripts/dev/dev-up` (UI auto‑launches). Add `--check` for readiness probes.

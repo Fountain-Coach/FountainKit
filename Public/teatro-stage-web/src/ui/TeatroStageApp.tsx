@@ -1,19 +1,16 @@
 import React, { useEffect, useRef, useState } from "react";
-import { BallStageView } from "./BallStageView";
-import {
-  BallStageEngine,
-  type BallStageSnapshot
-} from "../engine/ballStage";
+import { StageEngine, type StageSnapshot } from "../engine/stage";
+import { ThreeStageView } from "./ThreeStageView";
 
 export const TeatroStageApp: React.FC = () => {
-  const engineRef = useRef<BallStageEngine | null>(null);
+  const engineRef = useRef<StageEngine | null>(null);
   const lastTimeRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
-  const [snapshot, setSnapshot] = useState<BallStageSnapshot | null>(null);
+  const [snapshot, setSnapshot] = useState<StageSnapshot | null>(null);
   const [isPlaying, setIsPlaying] = useState(true);
 
   useEffect(() => {
-    engineRef.current = new BallStageEngine("drop");
+    engineRef.current = new StageEngine();
 
     const loop = () => {
       const now = performance.now();
@@ -71,7 +68,7 @@ export const TeatroStageApp: React.FC = () => {
       </header>
       <main style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         <div style={{ flex: 1, position: "relative" }}>
-          {snapshot && <BallStageView snapshot={snapshot} />}
+          {snapshot && <ThreeStageView snapshot={snapshot} />}
           <div
             style={{
               position: "absolute",

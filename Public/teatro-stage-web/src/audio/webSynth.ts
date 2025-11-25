@@ -31,6 +31,9 @@ export class WebSynth {
       this.master.gain.value = this.params.masterGain;
       this.master.connect(this.ctx.destination);
     }
+    if (this.ctx.state === "suspended") {
+      void this.ctx.resume();
+    }
   }
 
   setParams(params: Partial<SynthParams>): void {
@@ -38,6 +41,10 @@ export class WebSynth {
     if (this.master) {
       this.master.gain.value = this.params.masterGain;
     }
+  }
+
+  resume(): void {
+    this.ensureContext();
   }
 
   noteOn(note: number, velocity: number): void {

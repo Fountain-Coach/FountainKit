@@ -11,6 +11,9 @@ export const TeatroStageApp: React.FC = () => {
   const [snapshot, setSnapshot] = useState<StageSnapshot | null>(null);
   const [isPlaying, setIsPlaying] = useState(true);
   const [windStrength, setWindStrength] = useState(0.6);
+  const [audioEnabled, setAudioEnabled] = useState(false);
+  const [masterGain, setMasterGain] = useState(0.1);
+  const [wave, setWave] = useState<OscillatorType>("sine");
   const barMotionRef = useRef({
     swayAmp: 2.0,
     swayRate: 0.7,
@@ -23,6 +26,7 @@ export const TeatroStageApp: React.FC = () => {
     engineRef.current.setWindStrength(windStrength);
     engineRef.current.setBarMotion(barMotionRef.current);
     synthRef.current = new WebSynth();
+    synthRef.current.setParams({ masterGain, wave });
 
     const loop = () => {
       const now = performance.now();
@@ -46,7 +50,7 @@ export const TeatroStageApp: React.FC = () => {
         cancelAnimationFrame(rafRef.current);
       }
     };
-  }, [isPlaying, windStrength]);
+  }, [isPlaying, windStrength, masterGain, wave]);
 
   const handleTogglePlay = () => {
     setIsPlaying((prev) => !prev);
@@ -56,6 +60,23 @@ export const TeatroStageApp: React.FC = () => {
     const value = parseFloat(e.target.value);
     setWindStrength(value);
     engineRef.current?.setWindStrength(value);
+  };
+
+  const handleEnableAudio = () => {
+    synthRef.current?.resume();
+    setAudioEnabled(true);
+  };
+
+  const handleGainChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseFloat(e.target.value);
+    setMasterGain(value);
+    synthRef.current?.setParams({ masterGain: value });
+  };
+
+  const handleWaveChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value as OscillatorType;
+    setWave(value);
+    synthRef.current?.setParams({ wave: value });
   };
 
   // Web MIDI: map CC to stage params if available.
@@ -211,6 +232,42 @@ export const TeatroStageApp: React.FC = () => {
               <span style={{ width: 36, textAlign: "right" }}>
                 {windStrength.toFixed(2)}
               </span>
+            </label>
+            <button
+              type="button"
+              onClick={handleEnableAudio}
+              style={{
+                border: "1px solid rgba(0,0,0,0.2)",
+                borderRadius: 6,
+                background: audioEnabled ? "rgba(0,0,0,0.08)" : "transparent",
+                padding: "2px 8px",
+                cursor: "pointer",
+                fontSize: 12
+              }}
+            >
+              {audioEnabled ? "Audio on" : "Enable audio"}
+            </button>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              gain
+              <input
+                type="range"
+                min="0"
+                max="0.5"
+                step="0.01"
+                value={masterGain}
+                onChange={handleGainChange}
+                disabled={!audioEnabled}
+              />
+              <span style={{ width: 36, textAlign: "right" }}>
+                {masterGain.toFixed(2)}
+              </span>
+            </label>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              wave
+              <select value={wave} onChange={handleWaveChange} disabled={!audioEnabled} style={{ fontSize: 12 }}>
+                <option value="sine">sine</option>
+                <option value="triangle">triangle</option>
+              </select>
             </label>
           </div>
         </div>

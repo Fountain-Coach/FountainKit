@@ -14,6 +14,7 @@ export interface PuppetSnapshot {
   footL: BodyPose;
   footR: BodyPose;
   strings: Array<{ a: { x: number; y: number; z: number }; b: { x: number; y: number; z: number } }>;
+  windStrength: number;
 }
 
 // Canonical rig constants lifted from demo1.html (Three.js + Cannon).
@@ -44,6 +45,7 @@ export class PuppetRig {
   private readonly footRBody: CANNON.Body;
   private readonly stringConstraints: CANNON.DistanceConstraint[];
   private readonly barBase: CANNON.Vec3;
+  private windStrength = 1.0;
 
   constructor() {
     this.world = new CANNON.World();
@@ -124,7 +126,7 @@ export class PuppetRig {
     const driftEnvelope = 0.1 + 0.1 * Math.sin(timeSeconds * 0.02);
     const wobbleX = Math.sin(timeSeconds * 0.11);
     const wobbleZ = Math.cos(timeSeconds * 0.07);
-    const magnitude = 0.6 * driftEnvelope;
+    const magnitude = 0.6 * driftEnvelope * this.windStrength;
     const drift = new CANNON.Vec3(magnitude * wobbleX, 0, magnitude * wobbleZ);
     const applyDrift = (body: CANNON.Body) => {
       body.applyForce(drift, body.position);
@@ -173,7 +175,12 @@ export class PuppetRig {
       handR: pose(this.handRBody),
       footL: pose(this.footLBody),
       footR: pose(this.footRBody),
-      strings
+      strings,
+      windStrength: this.windStrength
     };
+  }
+
+  setWindStrength(strength: number): void {
+    this.windStrength = Math.max(0, strength);
   }
 }

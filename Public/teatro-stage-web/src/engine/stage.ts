@@ -10,6 +10,7 @@ export interface StageSnapshot {
 export class StageEngine {
   private readonly rig: PuppetRig;
   private timeSeconds = 0;
+  windStrength = 1;
 
   constructor() {
     this.rig = new PuppetRig();
@@ -27,5 +28,10 @@ export class StageEngine {
       time: this.timeSeconds,
       puppet: this.rig.snapshot()
     };
+  }
+
+  setWindStrength(strength: number): void {
+    this.windStrength = Math.max(0, strength);
+    this.rig.setWindStrength(this.windStrength);
   }
 }

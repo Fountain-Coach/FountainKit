@@ -8,9 +8,11 @@ export const TeatroStageApp: React.FC = () => {
   const rafRef = useRef<number | null>(null);
   const [snapshot, setSnapshot] = useState<StageSnapshot | null>(null);
   const [isPlaying, setIsPlaying] = useState(true);
+  const [windStrength, setWindStrength] = useState(0.6);
 
   useEffect(() => {
     engineRef.current = new StageEngine();
+    engineRef.current.setWindStrength(windStrength);
 
     const loop = () => {
       const now = performance.now();
@@ -34,10 +36,16 @@ export const TeatroStageApp: React.FC = () => {
         cancelAnimationFrame(rafRef.current);
       }
     };
-  }, [isPlaying]);
+  }, [isPlaying, windStrength]);
 
   const handleTogglePlay = () => {
     setIsPlaying((prev) => !prev);
+  };
+
+  const handleWindChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseFloat(e.target.value);
+    setWindStrength(value);
+    engineRef.current?.setWindStrength(value);
   };
 
   const timeSeconds = snapshot?.time ?? 0;
@@ -102,6 +110,20 @@ export const TeatroStageApp: React.FC = () => {
             <span style={{ opacity: 0.7 }}>
               t = {timeSeconds.toFixed(2)}s
             </span>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              wind
+              <input
+                type="range"
+                min="0"
+                max="1.5"
+                step="0.05"
+                value={windStrength}
+                onChange={handleWindChange}
+              />
+              <span style={{ width: 32, textAlign: "right" }}>
+                {windStrength.toFixed(2)}
+              </span>
+            </label>
           </div>
         </div>
       </main>

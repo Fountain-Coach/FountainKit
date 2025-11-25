@@ -16,6 +16,11 @@ export const TeatroStageApp: React.FC = () => {
   const [masterGain, setMasterGain] = useState(0.1);
   const [wave, setWave] = useState<OscillatorType>("sine");
   const [showMidiLog, setShowMidiLog] = useState(false);
+  const [midiStatus, setMidiStatus] = useState<{
+    supported: boolean;
+    state: "pending" | "granted" | "denied" | "unsupported";
+    inputs: number;
+  }>({ supported: true, state: "pending", inputs: 0 });
   const midiLogRef = useRef<MidiEventInfo[]>([]);
   const [, forceTick] = useState(0);
   const barMotionRef = useRef({
@@ -96,6 +101,10 @@ export const TeatroStageApp: React.FC = () => {
 
   // Web MIDI: map CC to stage params if available.
   useEffect(() => {
+    if (!("requestMIDIAccess" in navigator)) {
+      setMidiStatus({ supported: false, state: "unsupported", inputs: 0 });
+      return;
+    }
     let access: WebMidi.MIDIAccess | null = null;
     const onMIDIMessage = (e: WebMidi.MIDIMessageEvent) => {
       const [status, data1, data2] = e.data;
@@ -151,10 +160,16 @@ export const TeatroStageApp: React.FC = () => {
         .requestMIDIAccess()
         .then((a: WebMidi.MIDIAccess) => {
           access = a;
+          setMidiStatus({ supported: true, state: "granted", inputs: a.inputs.size });
           access.inputs.forEach((input) => {
             input.addEventListener("midimessage", onMIDIMessage as any);
           });
           access.onstatechange = () => {
+            setMidiStatus({
+              supported: true,
+              state: "granted",
+              inputs: access ? access.inputs.size : 0
+            });
             access?.inputs.forEach((input) => {
               input.removeEventListener("midimessage", onMIDIMessage as any);
               input.addEventListener("midimessage", onMIDIMessage as any);
@@ -162,7 +177,7 @@ export const TeatroStageApp: React.FC = () => {
           };
         })
         .catch(() => {
-          // ignore if MIDI not available/denied
+          setMidiStatus({ supported: true, state: "denied", inputs: 0 });
         });
     }
 
@@ -216,11 +231,11 @@ export const TeatroStageApp: React.FC = () => {
               borderRadius: 10,
               backgroundColor: "rgba(244, 234, 214, 0.9)",
         border: "1px solid rgba(0,0,0,0.12)",
-        fontSize: 12,
-        fontFamily:
-          "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
-        fontVariantNumeric: "tabular-nums"
-            }}
+          fontSize: 12,
+          fontFamily:
+            "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+          fontVariantNumeric: "tabular-nums"
+        }}
           >
             <button
               type="button"
@@ -244,6 +259,9 @@ export const TeatroStageApp: React.FC = () => {
               }}
             >
               t = {timeSeconds.toFixed(2)}s
+            </span>
+            <span style={{ opacity: 0.7, minWidth: 100 }}>
+              MIDI: {midiStatus.state} ({midiStatus.inputs})
             </span>
             <label style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
               wind

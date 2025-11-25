@@ -120,21 +120,21 @@ export class PuppetRig {
     this.barBody.velocity.set(0, 0, 0);
     this.barBody.angularVelocity.set(0, 0, 0);
 
-    // Soft wind gusts: slow envelope plus gentle oscillation, tending back to stillness.
-    const envelope = 0.5 + 0.5 * Math.sin(timeSeconds * 0.05); // very slow swell 0..1
-    const wobbleX = Math.sin(timeSeconds * 0.37);
-    const wobbleZ = Math.cos(timeSeconds * 0.23);
-    const magnitude = 6 * envelope; // tune the gust strength
-    const wind = new CANNON.Vec3(magnitude * wobbleX, 0, magnitude * wobbleZ);
-    const applyWind = (body: CANNON.Body) => {
-      body.applyForce(wind, body.position);
+    // Subtle drift: extremely light, slow “breathing” to avoid a static feel.
+    const driftEnvelope = 0.1 + 0.1 * Math.sin(timeSeconds * 0.02);
+    const wobbleX = Math.sin(timeSeconds * 0.11);
+    const wobbleZ = Math.cos(timeSeconds * 0.07);
+    const magnitude = 0.6 * driftEnvelope;
+    const drift = new CANNON.Vec3(magnitude * wobbleX, 0, magnitude * wobbleZ);
+    const applyDrift = (body: CANNON.Body) => {
+      body.applyForce(drift, body.position);
     };
-    applyWind(this.torsoBody);
-    applyWind(this.headBody);
-    applyWind(this.handLBody);
-    applyWind(this.handRBody);
-    applyWind(this.footLBody);
-    applyWind(this.footRBody);
+    applyDrift(this.torsoBody);
+    applyDrift(this.headBody);
+    applyDrift(this.handLBody);
+    applyDrift(this.handRBody);
+    applyDrift(this.footLBody);
+    applyDrift(this.footRBody);
 
     // Clamp dt like the demo to avoid instability.
     const dtClamped = Math.min(dtSeconds, 1 / 30);

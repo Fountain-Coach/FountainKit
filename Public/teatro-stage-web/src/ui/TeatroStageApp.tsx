@@ -48,7 +48,7 @@ export const TeatroStageApp: React.FC = () => {
         cancelAnimationFrame(rafRef.current);
       }
     };
-  }, [isPlaying, windStrength, masterGain, wave]);
+  }, [isPlaying, windStrength]);
 
   const handleTogglePlay = () => {
     setIsPlaying((prev) => !prev);

@@ -4,6 +4,7 @@ import { type StageSnapshot } from "../engine/stage";
 
 interface ThreeStageViewProps {
   snapshot: StageSnapshot;
+  showRestOverlay?: boolean;
 }
 
 // Stage geometry (matches demo1.html).
@@ -30,11 +31,12 @@ const CAMERA_ELEVATION = Math.atan(1 / Math.sqrt(2)); // ~35°
 const CAMERA_DISTANCE = 60;
 const LOOK_AT = new THREE.Vector3(0, 5, 0);
 
-export const ThreeStageView: React.FC<ThreeStageViewProps> = ({ snapshot }) => {
+export const ThreeStageView: React.FC<ThreeStageViewProps> = ({ snapshot, showRestOverlay }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer>();
   const sceneRef = useRef<THREE.Scene>();
   const cameraRef = useRef<THREE.OrthographicCamera>();
+  const restGroupRef = useRef<THREE.Group>();
   const puppetMeshesRef = useRef<{
     torso: THREE.Mesh;
     head: THREE.Mesh;
@@ -189,6 +191,103 @@ export const ThreeStageView: React.FC<ThreeStageViewProps> = ({ snapshot }) => {
 
     scene.add(torso, head, bar, handL, handR, footL, footR, strings);
 
+    // Rest pose overlay (wireframe boxes + strings) for quick visual parity checks.
+    const REST_POSE = {
+      controller: new THREE.Vector3(0, 19, 0),
+      bar: new THREE.Vector3(0, 15, 0),
+      torso: new THREE.Vector3(0, 8, 0),
+      head: new THREE.Vector3(0, 10, 0),
+      handL: new THREE.Vector3(-1.8, 8, 0),
+      handR: new THREE.Vector3(1.8, 8, 0),
+      footL: new THREE.Vector3(-0.6, 5, 0),
+      footR: new THREE.Vector3(0.6, 5, 0)
+    };
+
+    const restGroup = new THREE.Group();
+    const restBoxMat = new THREE.LineBasicMaterial({
+      color: 0x1b6cff,
+      linewidth: 2,
+      transparent: true,
+      opacity: 0.8
+    });
+    const restStringMat = new THREE.LineBasicMaterial({
+      color: 0x1b6cff,
+      linewidth: 2,
+      transparent: true,
+      opacity: 0.6
+    });
+
+    const restBox = (size: { x: number; y: number; z: number }, center: THREE.Vector3) => {
+      const geo = new THREE.BoxGeometry(size.x, size.y, size.z);
+      const edges = new THREE.EdgesGeometry(geo);
+      const wire = new THREE.LineSegments(edges, restBoxMat);
+      wire.position.copy(center);
+      restGroup.add(wire);
+    };
+
+    restBox(RIG.bar.size, REST_POSE.bar);
+    restBox(RIG.torso.size, REST_POSE.torso);
+    restBox(RIG.head.size, REST_POSE.head);
+    restBox(RIG.hand.size, REST_POSE.handL);
+    restBox(RIG.hand.size, REST_POSE.handR);
+    restBox(RIG.foot.size, REST_POSE.footL);
+    restBox(RIG.foot.size, REST_POSE.footR);
+
+    // Controller indicator (small cross)
+    const ctrlGeom = new THREE.BufferGeometry();
+    ctrlGeom.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(
+        [
+          -0.8, 0, 0, 0.8, 0, 0, // horizontal
+          0, -0.8, 0, 0, 0.8, 0 // vertical
+        ],
+        3
+      )
+    );
+    const ctrlLines = new THREE.LineSegments(ctrlGeom, restBoxMat);
+    ctrlLines.position.copy(REST_POSE.controller);
+    restGroup.add(ctrlLines);
+
+    // Strings at rest (controller ↔ bar / hands, bar ↔ head)
+    const stringVerts = new Float32Array([
+      REST_POSE.controller.x,
+      REST_POSE.controller.y,
+      REST_POSE.controller.z,
+      REST_POSE.bar.x,
+      REST_POSE.bar.y,
+      REST_POSE.bar.z,
+
+      REST_POSE.controller.x,
+      REST_POSE.controller.y,
+      REST_POSE.controller.z,
+      REST_POSE.handL.x,
+      REST_POSE.handL.y,
+      REST_POSE.handL.z,
+
+      REST_POSE.controller.x,
+      REST_POSE.controller.y,
+      REST_POSE.controller.z,
+      REST_POSE.handR.x,
+      REST_POSE.handR.y,
+      REST_POSE.handR.z,
+
+      REST_POSE.bar.x,
+      REST_POSE.bar.y,
+      REST_POSE.bar.z,
+      REST_POSE.head.x,
+      REST_POSE.head.y,
+      REST_POSE.head.z
+    ]);
+    const restStringsGeom = new THREE.BufferGeometry();
+    restStringsGeom.setAttribute("position", new THREE.BufferAttribute(stringVerts, 3));
+    const restStrings = new THREE.LineSegments(restStringsGeom, restStringMat);
+    restGroup.add(restStrings);
+
+    restGroup.visible = false;
+    scene.add(restGroup);
+    restGroupRef.current = restGroup;
+
     puppetMeshesRef.current = {
       torso,
       head,
@@ -268,6 +367,18 @@ export const ThreeStageView: React.FC<ThreeStageViewProps> = ({ snapshot }) => {
       }
     };
   }, []);
+
+  useEffect(() => {
+    // Toggle rest overlay visibility and force a render so the change is immediate.
+    if (!restGroupRef.current) return;
+    restGroupRef.current.visible = !!showRestOverlay;
+    const renderer = rendererRef.current;
+    const scene = sceneRef.current;
+    const camera = cameraRef.current;
+    if (renderer && scene && camera) {
+      renderer.render(scene, camera);
+    }
+  }, [showRestOverlay]);
 
   useEffect(() => {
     const renderer = rendererRef.current;

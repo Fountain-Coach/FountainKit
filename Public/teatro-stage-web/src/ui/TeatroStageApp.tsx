@@ -52,6 +52,7 @@ export const TeatroStageApp: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState(true);
   const [windStrength] = useState(0.6);
   const [showDiag, setShowDiag] = useState(false);
+  const [showRestOverlay, setShowRestOverlay] = useState(false);
   const midiOutputsRef = useRef<WebMidi.MIDIOutput[]>([]);
   const barMotionRef = useRef({
     swayAmp: 2.0,
@@ -127,27 +128,54 @@ export const TeatroStageApp: React.FC = () => {
     >
       <main style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         <div style={{ flex: 1, position: "relative" }}>
-          {snapshot && <ThreeStageView snapshot={snapshot} />}
-          <button
-            type="button"
-            aria-label="Info"
-            onClick={() => setShowDiag(true)}
+          {snapshot && <ThreeStageView snapshot={snapshot} showRestOverlay={showRestOverlay} />}
+          <div
             style={{
               position: "absolute",
               right: 12,
               top: 12,
-              width: 28,
-              height: 28,
-              borderRadius: "50%",
-              border: "1px solid rgba(0,0,0,0.3)",
-              background: "rgba(0,0,0,0.05)",
-              cursor: "pointer",
-              fontSize: 14,
-              fontWeight: 600
+              display: "flex",
+              gap: 8
             }}
           >
-            i
-          </button>
+            <button
+              type="button"
+              aria-label="Toggle rest pose overlay"
+              aria-pressed={showRestOverlay}
+              onClick={() => setShowRestOverlay((prev) => !prev)}
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: "50%",
+                border: "1px solid rgba(0,0,0,0.3)",
+                background: showRestOverlay ? "rgba(30, 136, 229, 0.15)" : "rgba(0,0,0,0.05)",
+                cursor: "pointer",
+                fontSize: 14,
+                fontWeight: 600,
+                color: "#0d47a1"
+              }}
+              title="Rest pose overlay"
+            >
+              ⧉
+            </button>
+            <button
+              type="button"
+              aria-label="Info"
+              onClick={() => setShowDiag(true)}
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: "50%",
+                border: "1px solid rgba(0,0,0,0.3)",
+                background: "rgba(0,0,0,0.05)",
+                cursor: "pointer",
+                fontSize: 14,
+                fontWeight: 600
+              }}
+            >
+              i
+            </button>
+          </div>
           {showDiag && <DiagPanel snapshot={snapshot} onHide={() => setShowDiag(false)} />}
         </div>
       </main>

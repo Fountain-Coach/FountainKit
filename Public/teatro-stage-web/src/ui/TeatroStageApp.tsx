@@ -3,6 +3,47 @@ import { StageEngine, type StageSnapshot } from "../engine/stage";
 import { ThreeStageView } from "./ThreeStageView";
 import { DiagPanel } from "./DiagPanel";
 
+function clamp(v: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, v));
+}
+
+function sendCC(outputs: WebMidi.MIDIOutput[], cc: number, value01: number, channel = 0) {
+  const v = clamp(value01, 0, 1);
+  const data2 = Math.round(v * 127);
+  const status = 0xb0 | (channel & 0x0f);
+  for (const out of outputs) {
+    out.send([status, cc & 0x7f, data2]);
+  }
+}
+
+function emitMidiForSnapshot(
+  snap: StageSnapshot,
+  prev: StageSnapshot | null,
+  outputs: WebMidi.MIDIOutput[]
+) {
+  if (!prev || outputs.length === 0) return;
+  const dt = Math.max(1e-3, snap.time - prev.time);
+  const velBarX = (snap.puppet.bar.position.x - prev.puppet.bar.position.x) / dt;
+  const velBarY = (snap.puppet.bar.position.y - prev.puppet.bar.position.y) / dt;
+  const velMag = Math.sqrt(velBarX * velBarX + velBarY * velBarY);
+  const vel01 = clamp(velMag / 5, 0, 1);
+  sendCC(outputs, 1, vel01); // mod depth
+  const height01 = clamp((snap.puppet.bar.position.y - 5) / 20, 0, 1);
+  sendCC(outputs, 74, height01); // brightness
+  // simple energy: sum of hand/foot speeds
+  const limbs = ["handL", "handR", "footL", "footR"] as const;
+  let energy = 0;
+  for (const limb of limbs) {
+    const dx =
+      (snap.puppet[limb].position.x - (prev.puppet as any)[limb].position.x) / dt;
+    const dy =
+      (snap.puppet[limb].position.y - (prev.puppet as any)[limb].position.y) / dt;
+    energy += Math.sqrt(dx * dx + dy * dy);
+  }
+  const energy01 = clamp(energy / 10, 0, 1);
+  sendCC(outputs, 7, energy01); // volume proxy
+}
+
 export const TeatroStageApp: React.FC = () => {
   const engineRef = useRef<StageEngine | null>(null);
   const lastTimeRef = useRef<number | null>(null);
@@ -11,13 +52,14 @@ export const TeatroStageApp: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState(true);
   const [windStrength] = useState(0.6);
   const [showDiag, setShowDiag] = useState(false);
+  const midiOutputsRef = useRef<WebMidi.MIDIOutput[]>([]);
   const barMotionRef = useRef({
     swayAmp: 2.0,
     swayRate: 0.7,
     upDownAmp: 0.5,
     upDownRate: 0.9
   });
-  const prevBarRef = useRef<{ x: number; t: number }>({ x: 0, t: 0 });
+  const prevSnapshotRef = useRef<StageSnapshot | null>(null);
 
   useEffect(() => {
     engineRef.current = new StageEngine();
@@ -36,7 +78,8 @@ export const TeatroStageApp: React.FC = () => {
         const snap = engine.snapshot();
         setSnapshot(snap);
 
-        prevBarRef.current = { x: snap.puppet.bar.position.x, t: snap.time };
+        emitMidiForSnapshot(snap, prevSnapshotRef.current, midiOutputsRef.current);
+        prevSnapshotRef.current = snap;
       }
 
       rafRef.current = requestAnimationFrame(loop);
@@ -56,6 +99,22 @@ export const TeatroStageApp: React.FC = () => {
   };
 
   const timeSeconds = snapshot?.time ?? 0;
+
+  // Web MIDI setup (outputs only).
+  useEffect(() => {
+    if (!("requestMIDIAccess" in navigator)) return;
+    (navigator as any)
+      .requestMIDIAccess()
+      .then((access: WebMidi.MIDIAccess) => {
+        midiOutputsRef.current = Array.from(access.outputs.values());
+        access.onstatechange = () => {
+          midiOutputsRef.current = Array.from(access.outputs.values());
+        };
+      })
+      .catch(() => {
+        midiOutputsRef.current = [];
+      });
+  }, []);
 
   return (
     <div

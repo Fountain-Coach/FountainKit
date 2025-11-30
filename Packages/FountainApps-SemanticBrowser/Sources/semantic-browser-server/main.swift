@@ -5,6 +5,8 @@ import SemanticBrowserService
 import FountainStoreClient
 import Dispatch
 import JavaScriptCore
+import NIO
+import NIOHTTP1
 
 /// Simple static file helper for serving the teatro-stage landing bundle.
 internal func serveStatic(root: URL, path: String) -> HTTPResponse? {

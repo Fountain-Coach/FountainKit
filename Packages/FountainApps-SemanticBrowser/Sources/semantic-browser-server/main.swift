@@ -5,6 +5,41 @@ import SemanticBrowserService
 import FountainStoreClient
 import Dispatch
 
+/// Simple static file helper for serving the teatro-stage landing bundle.
+private func serveStatic(root: URL, path: String) -> HTTPResponse? {
+    // Normalize path; default route falls back to index.html.
+    let trimmedPath = path.split(separator: "?").first.map(String.init) ?? path
+    let relative = trimmedPath == "/" ? "index.html" : trimmedPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    // Prevent directory traversal by resolving against the root.
+    let candidate = root.appendingPathComponent(relative).standardizedFileURL
+    guard candidate.path.hasPrefix(root.standardizedFileURL.path) else { return nil }
+    var isDir: ObjCBool = false
+    guard FileManager.default.fileExists(atPath: candidate.path, isDirectory: &isDir) else { return nil }
+    let resolvedURL = isDir.boolValue ? candidate.appendingPathComponent("index.html") : candidate
+    guard let data = try? Data(contentsOf: resolvedURL) else { return nil }
+    let mime: String
+    switch resolvedURL.pathExtension.lowercased() {
+    case "html": mime = "text/html; charset=utf-8"
+    case "js": mime = "application/javascript"
+    case "css": mime = "text/css"
+    case "json": mime = "application/json"
+    case "wasm": mime = "application/wasm"
+    case "svg": mime = "image/svg+xml"
+    case "png": mime = "image/png"
+    case "jpg", "jpeg": mime = "image/jpeg"
+    case "ico": mime = "image/x-icon"
+    default: mime = "application/octet-stream"
+    }
+    return HTTPResponse(
+        status: 200,
+        headers: [
+            "Content-Type": mime,
+            "Cache-Control": "no-cache"
+        ],
+        body: data
+    )
+}
+
 verifyLauncherSignature()
 
 final class FountainStoreBackend: SemanticMemoryService.Backend, @unchecked Sendable {
@@ -209,8 +244,10 @@ Task {
     let env = ProcessInfo.processInfo.environment
     let backend = makeFountainStoreBackend(from: env)
     let service = buildService(backend: backend)
+    let stageRoot = URL(fileURLWithPath: env["SB_STAGE_ROOT"] ?? "Public/teatro-stage-web/dist", isDirectory: true)
     // Serve generated OpenAPI handlers via a lightweight NIO transport.
     let fallback = FountainRuntime.HTTPKernel { req in
+        if let resp = serveStatic(root: stageRoot, path: req.path) { return resp }
         if req.method == "GET" && req.path == "/metrics" {
             return HTTPResponse(status: 200, headers: ["Content-Type": "text/plain"], body: Data("ok\n".utf8))
         }

@@ -7,6 +7,7 @@ How
 - Provide a fallback `HTTPKernel` for non‑API endpoints like `/metrics` and `/openapi.yaml`.
 - Engine selection envs: `SB_CDP_URL` (CDP), `SB_BROWSER_CLI`/`SB_BROWSER_ARGS` (CLI engine); otherwise use `URLFetchBrowserEngine`.
 - Persistence envs: `SB_STORE_PATH` or `FOUNTAINSTORE_DIR` for store root; `SB_STORE_CORPUS`, `SB_PAGES_COLLECTION`, `SB_SEGMENTS_COLLECTION`, `SB_ENTITIES_COLLECTION`, `SB_VISUALS_COLLECTION` for collection names. Index-on-browse respects `index.enabled` in the request payload.
+- Static landing: serve `Public/teatro-stage-web/dist` (override with `SB_STAGE_ROOT`) as the default web surface; root `/` returns the stage `index.html` and static assets.
 
 Build/run
 - Build: `swift build --package-path Packages/FountainApps-SemanticBrowser -c debug`

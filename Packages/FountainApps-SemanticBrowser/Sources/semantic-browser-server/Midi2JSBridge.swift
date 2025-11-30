@@ -24,8 +24,27 @@ final class Midi2JSBridge {
     /// - Parameter bundlePath: path to a JS bundle (e.g., bundled midi2.js build) to load.
     func loadBundle(at bundlePath: String) {
         let url = URL(fileURLWithPath: bundlePath)
-        guard let data = try? Data(contentsOf: url), let script = String(data: data, encoding: .utf8) else { return }
+        guard let data = try? Data(contentsOf: url), var script = String(data: data, encoding: .utf8) else { return }
+        // Basic CommonJS wrapper support for midi2 CJS builds.
+        if url.pathExtension.lowercased() == "cjs" || script.contains("module.exports") {
+            script = """
+            var module = { exports: {} };
+            var exports = module.exports;
+            (function() {
+            \(script)
+            })();
+            if (typeof midi2 === 'undefined') { midi2 = module.exports.default || module.exports; }
+            """
+        }
         _ = context.evaluateScript(script)
+        // Normalize global `midi2` binding when the bundle uses export default.
+        if context.objectForKeyedSubscript("midi2") == nil,
+           let module = context.objectForKeyedSubscript("module"),
+           let exports = module.objectForKeyedSubscript("exports"),
+           exports.isObject {
+            let exported = exports.objectForKeyedSubscript("default") ?? exports
+            context.setObject(exported, forKeyedSubscript: "midi2" as NSString)
+        }
         bundleLoaded = true
     }
 
@@ -43,10 +62,11 @@ final class Midi2JSBridge {
     }
 
     func capabilities() -> [String: Any] {
-        guard let caps = context.objectForKeyedSubscript("midi2")?.invokeMethod("capabilities", withArguments: []) else {
-            return [:]
+        guard let midi2 = context.objectForKeyedSubscript("midi2") else { return [:] }
+        if let caps = midi2.invokeMethod("capabilities", withArguments: []) {
+            return caps.toDictionary() as? [String: Any] ?? [:]
         }
-        return caps.toDictionary() as? [String: Any] ?? [:]
+        return [:]
     }
 
     @discardableResult

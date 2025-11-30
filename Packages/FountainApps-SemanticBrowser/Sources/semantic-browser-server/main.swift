@@ -109,6 +109,20 @@ final class Midi2Runtime {
         }
     }
 
+    func capabilitiesResponse() -> HTTPResponse {
+        queue.sync {
+            guard let bridge else {
+                let body = Data(#"{"ok":false,"error":"js_context_init_failed"}"#.utf8)
+                return HTTPResponse(status: 500, headers: ["Content-Type": "application/json"], body: body)
+            }
+            let caps = bridge.capabilities()
+            var json: [String: Any] = caps
+            json["ok"] = true
+            let data = (try? JSONSerialization.data(withJSONObject: json, options: [])) ?? Data("{}".utf8)
+            return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: data)
+        }
+    }
+
     func scheduleResponse(body: Data) -> HTTPResponse {
         queue.sync {
             guard let bridge else {
@@ -344,6 +358,9 @@ Task {
         }
         if req.method == "GET" && req.path == "/midi2/status" {
             return midi2Runtime.statusResponse()
+        }
+        if req.method == "GET" && req.path == "/midi2/capabilities" {
+            return midi2Runtime.capabilitiesResponse()
         }
         if req.method == "POST" && req.path == "/midi2/schedule" {
             return midi2Runtime.scheduleResponse(body: req.body)

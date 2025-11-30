@@ -39,6 +39,22 @@ final class Midi2StatusTests: XCTestCase {
         XCTAssertTrue(decoded.ok)
         XCTAssertEqual(decoded.logSize, 1)
     }
+
+    func testCapabilitiesEndpointUsesBridge() throws {
+        let js = """
+        if (typeof midi2 === 'undefined') { midi2 = {}; }
+        midi2.capabilities = function() { return { version: "caps-test", scheduler: "bridge" }; };
+        """
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("midi2caps.js")
+        try js.data(using: .utf8)!.write(to: tmp)
+        let runtime = Midi2Runtime(env: ["SB_MIDI2_BUNDLE": tmp.path])
+        let resp = runtime.capabilitiesResponse()
+        XCTAssertEqual(resp.status, 200)
+        let decoded = try JSONDecoder().decode(CapabilitiesResponse.self, from: resp.body)
+        XCTAssertTrue(decoded.ok)
+        XCTAssertEqual(decoded.scheduler, "bridge")
+        XCTAssertEqual(decoded.version, "caps-test")
+    }
 }
 
 private struct Status: Codable {
@@ -57,4 +73,10 @@ private struct Status: Codable {
 private struct ScheduleStatus: Codable {
     let ok: Bool
     let logSize: Int
+}
+
+private struct CapabilitiesResponse: Codable {
+    let ok: Bool
+    let scheduler: String?
+    let version: String?
 }

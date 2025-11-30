@@ -17,13 +17,13 @@ Welcome to FountainKit, the modular SwiftPM workspace for the Fountain Coach org
 
 - Prompts + facts: Teatro prompts and PE facts live only in FountainStore, never in ad‑hoc files. Apps must seed via small `*-seed` executables and read/print prompts from the store on boot.
 - Baseline: `baseline-patchbay` (grid‑dev‑app) is the canonical UI baseline for viewport math and robot invariants. Any change to the baseline must ship a matching MRTS Teatro prompt and keep robot tests green.
-- Engines: CoreMIDI and UIKit are banned. Native SDL/Metal tracks are retired; new interactive work must target web surfaces only.
+- Engines: CoreMIDI and UIKit are banned. Native Metal is allowed again only via our own MetalViewKit layer for deterministic instruments/sonification; avoid new native UI stacks beyond that.
 - OpenAPI‑first: every HTTP surface and instrument capability surface is defined by curated OpenAPI under `Packages/FountainSpecCuration/openapi`; server/client types and PE facts are always generated from these specs.
 - Store + secrets: FountainStore is the only authority for prompts, facts, graphs, and secrets. Secrets must be seeded via store tools, not environment variables.
 - Dependencies: third‑party code comes via SwiftPM `.package(url:)` from the Fountain Coach org; `External/` path imports are being removed and must not be reintroduced.
 - Build/test discipline: changes must compile with `swift build` at the root and pass focused `swift test --package-path Packages/<Package>` on touched packages before they are considered “green”.
-- 3D hard rule: across FountainAI, the only allowed 3D stack is `three.js` + `cannon.js`. Do not add or extend any other 3D/WebGL/WebGPU/Metal/D3D/Vulkan frameworks; native Metal/SDL paths have been removed and must stay retired.
-- Native 3D gating: SwiftPM manifest drops native 3D products/targets; `FK_ALLOW_NATIVE_3D=1` should not be used now that those sources are removed.
+- 3D hard rule: the primary 3D stack is `three.js` + `cannon.js` for stage/world visuals. MetalViewKit is the single sanctioned native layer (macOS) for deterministic instruments and sonification; do not add other 3D/WebGL/WebGPU/Metal/D3D/Vulkan frameworks.
+- Native 3D gating: the manifest still gates legacy/heavy native 3D apps (PatchBay, Infinity, Bullet) behind `FK_ALLOW_NATIVE_3D=1`. MetalViewKit and its runtime are now always available; keep other native stacks off unless explicitly needed and gated.
 
 ## Quick Start
 - Bring the workspace up: `Scripts/dev/dev-up` (UI auto‑launches). Add `--check` for readiness probes.
@@ -35,7 +35,7 @@ Welcome to FountainKit, the modular SwiftPM workspace for the Fountain Coach org
 - Unified Master Plan — embedded below in this file (authoritative).
 - ML × MIDI 2.0 plan — `Plans/ML-MIDI2-Plan.md` (models, runners, CI/PE, integration).
 - PatchBay Node = Stage — `Plans/PatchBay-NodeStage-FeaturePlan.md` (capacity from baselines; in-node feedback; ports HUD). To be discussed.
-- Infinity/Metal plans are retired; do not revive native SDL/Metal tracks.
+- Infinity/Metal plans remain paused; use MetalViewKit only for sanctioned instrument/sonification work, and keep broader native SDL/Metal tracks dormant.
 - Instrument requirements — `Design/INSTRUMENT_REQUIREMENTS.md` (what every instrument must provide: prompt, spec, facts, MIDI host wiring, tests).
 - FountainGUIKit demo integration — `Plans/FountainGUIKit-Demo-Plan.md` (legacy NSView host; archived).
 - Instrument template and generator — `Plans/instrument-new-plan.md` (canonical `instrument-new` template and workflow).

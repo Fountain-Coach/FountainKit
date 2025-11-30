@@ -85,4 +85,21 @@ public struct ToolsFactoryOpenAPI: APIProtocol, @unchecked Sendable {
         let body = "tools_factory_up 1\n"
         return .ok(.init(body: .plainText(HTTPBody(body))))
     }
+
+    // Stub implementations to satisfy generated APIProtocol; real logic lives in tools-factory-server.
+    public func agentFacts_fromOpenAPI(_ input: Operations.agentFacts_fromOpenAPI.Input) async throws -> Operations.agentFacts_fromOpenAPI.Output {
+        let err = Components.Schemas.ErrorResponse(
+            error_code: "not_implemented",
+            message: "agentFacts_fromOpenAPI not implemented in ToolsFactoryService stub; run tools-factory-server instead."
+        )
+        return .internalServerError(.init(body: .json(err)))
+    }
+
+    public func agentFacts_get(_ input: Operations.agentFacts_get.Input) async throws -> Operations.agentFacts_get.Output {
+        let err = Components.Schemas.ErrorResponse(
+            error_code: "not_found",
+            message: "agentFacts_get stubbed; facts served by tools-factory-server runtime."
+        )
+        return .notFound(.init(body: .json(err)))
+    }
 }

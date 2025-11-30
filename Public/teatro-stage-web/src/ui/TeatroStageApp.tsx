@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { StageEngine, type StageSnapshot } from "../engine/stage";
 import { ThreeStageView } from "./ThreeStageView";
 import { DiagPanel } from "./DiagPanel";
@@ -137,6 +137,40 @@ export const TeatroStageApp: React.FC = () => {
       cancelled = true;
     };
   }, []);
+
+  // Minimal window hook for midi2 schedules (e.g., driven by planner/server bridge).
+  const applyMidi2 = useCallback(
+    (bytes: number[]) => {
+      if (bytes.length < 3) return;
+      const status = bytes[0] & 0xf0;
+      const data1 = bytes[1] & 0x7f;
+      const data2 = bytes[2] & 0x7f;
+      // Treat channel voice like MIDI 1 for simple controls.
+      if (status === 0xb0) {
+        // CC mappings: 1 -> swayAmp, 2 -> swayRate, 3 -> upDownAmp, 4 -> upDownRate.
+        const norm = data2 / 127;
+        if (data1 === 1) barMotionRef.current.swayAmp = 0.5 + norm * 4;
+        if (data1 === 2) barMotionRef.current.swayRate = 0.2 + norm * 1.5;
+        if (data1 === 3) barMotionRef.current.upDownAmp = 0.1 + norm * 2;
+        if (data1 === 4) barMotionRef.current.upDownRate = 0.2 + norm * 1.5;
+        engineRef.current?.setBarMotion(barMotionRef.current);
+      }
+      if (status === 0x90) {
+        // Note on velocity toggles play/pause; vel 0 pauses.
+        setIsPlaying(data2 > 0);
+      }
+    },
+    [setIsPlaying]
+  );
+
+  useEffect(() => {
+    (window as any).midi2Schedule = (bytes: number[], _ts?: number) => {
+      applyMidi2(bytes);
+    };
+    return () => {
+      delete (window as any).midi2Schedule;
+    };
+  }, [applyMidi2]);
 
   // Fetch midi2 capabilities for planner/diag visibility.
   useEffect(() => {

@@ -40,6 +40,44 @@ private func serveStatic(root: URL, path: String) -> HTTPResponse? {
     )
 }
 
+/// Returns a WebGPU capability manifest, optionally loaded from disk via `SB_WEBGPU_CAPABILITIES_PATH`.
+private func webGPUCapabilitiesResponse(env: [String: String]) -> HTTPResponse {
+    if let path = env["SB_WEBGPU_CAPABILITIES_PATH"], !path.isEmpty {
+        let url = URL(fileURLWithPath: path)
+        if let data = try? Data(contentsOf: url) {
+            return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: data)
+        }
+    }
+    struct Cap: Codable {
+        let backend: String
+        let version: String
+        let supported: Bool
+        let features: [String]
+        let limits: [String: Int]
+        let timestampQuery: Bool
+        let notes: String
+    }
+    let defaults = Cap(
+        backend: "metal",
+        version: "0.1",
+        supported: true,
+        features: ["timestamp_query", "indirect_first_instance", "bgra8unorm_storage"],
+        limits: [
+            "maxTextureDimension2D": 8192,
+            "maxBindGroups": 4,
+            "maxComputeWorkgroupSizeX": 256,
+            "maxComputeWorkgroupSizeY": 256,
+            "maxComputeWorkgroupSizeZ": 64,
+            "maxComputeInvocationsPerWorkgroup": 256,
+            "maxBufferSize": 268435456
+        ],
+        timestampQuery: true,
+        notes: "Static WebGPU capability snapshot for macOS Metal; override via SB_WEBGPU_CAPABILITIES_PATH."
+    )
+    let data = (try? JSONEncoder().encode(defaults)) ?? Data("{}".utf8)
+    return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: data)
+}
+
 verifyLauncherSignature()
 
 final class FountainStoreBackend: SemanticMemoryService.Backend, @unchecked Sendable {
@@ -247,6 +285,9 @@ Task {
     let stageRoot = URL(fileURLWithPath: env["SB_STAGE_ROOT"] ?? "Public/teatro-stage-web/dist", isDirectory: true)
     // Serve generated OpenAPI handlers via a lightweight NIO transport.
     let fallback = FountainRuntime.HTTPKernel { req in
+        if req.method == "GET" && req.path == "/webgpu/capabilities" {
+            return webGPUCapabilitiesResponse(env: env)
+        }
         if let resp = serveStatic(root: stageRoot, path: req.path) { return resp }
         if req.method == "GET" && req.path == "/metrics" {
             return HTTPResponse(status: 200, headers: ["Content-Type": "text/plain"], body: Data("ok\n".utf8))

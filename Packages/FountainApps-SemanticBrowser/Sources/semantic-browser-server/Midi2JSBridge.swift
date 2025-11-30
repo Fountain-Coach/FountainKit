@@ -68,7 +68,8 @@ final class Midi2JSBridge {
         let candidates = [
             "Public/midi2-browser/vendor/midi2/dist/midi2.js",
             "Public/midi2-browser/vendor/midi2/dist/midi2.umd.js",
-            "Public/midi2-browser/vendor/midi2/dist/index.js"
+            "Public/midi2-browser/vendor/midi2/dist/index.js",
+            "Public/midi2-browser/vendor/midi2/dist/index.cjs"
         ]
         for path in candidates {
             if FileManager.default.fileExists(atPath: path) {

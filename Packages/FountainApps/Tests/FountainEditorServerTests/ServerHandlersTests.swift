@@ -2,6 +2,7 @@ import XCTest
 @testable import fountain_editor_service_server
 import FountainStoreClient
 import OpenAPIRuntime
+import FountainRuntime
 
 final class FountainEditorServerHandlersTests: XCTestCase {
     private func makeKernel() throws -> (HTTPKernel, String) {
@@ -70,8 +71,8 @@ final class FountainEditorServerHandlersTests: XCTestCase {
             let resp = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/structure"))
             XCTAssertEqual(resp.status, 200)
             // We expect 1 act with 1 scene
-            if let data = resp.body, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let acts = json["acts"] as? [[String: Any]], let first = acts.first,
+            let json = try JSONSerialization.jsonObject(with: resp.body) as? [String: Any]
+            if let acts = json?["acts"] as? [[String: Any]], let first = acts.first,
                let scenes = first["scenes"] as? [[String: Any]] {
                 XCTAssertEqual(acts.count, 1)
                 XCTAssertEqual(scenes.count, 1)
@@ -89,7 +90,7 @@ final class FountainEditorServerHandlersTests: XCTestCase {
                 "Content-Length": String(data.count)
             ], body: data))
             XCTAssertEqual(resp.status, 201)
-            if let b = resp.body, let json = try? JSONSerialization.jsonObject(with: b) as? [String: Any] {
+            if let json = try? JSONSerialization.jsonObject(with: resp.body) as? [String: Any] {
                 placementId = (json["placementId"] as? String) ?? ""
             }
             XCTAssertFalse(placementId.isEmpty)
@@ -97,7 +98,7 @@ final class FountainEditorServerHandlersTests: XCTestCase {
         do { // list
             let resp = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/placements?anchor=act1.scene1"))
             XCTAssertEqual(resp.status, 200)
-            if let b = resp.body, let arr = try? JSONSerialization.jsonObject(with: b) as? [[String: Any]] {
+            if let arr = try? JSONSerialization.jsonObject(with: resp.body) as? [[String: Any]] {
                 XCTAssertEqual(arr.count, 1)
             } else { XCTFail("invalid placements json") }
         }

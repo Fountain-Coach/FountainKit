@@ -1,3 +1,4 @@
+#if !ROBOT_ONLY
 import XCTest
 @testable import EngraverChatCore
 @testable import EngraverStudio
@@ -19,5 +20,3 @@ final class EngraverStudioSmokeTests: XCTestCase {
 }
 
 #endif // !ROBOT_ONLY
-// Robot-only mode: exclude this suite when building robot tests
-#if !ROBOT_ONLY

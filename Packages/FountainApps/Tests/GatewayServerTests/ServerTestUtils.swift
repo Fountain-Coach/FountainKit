@@ -1,3 +1,4 @@
+#if !ROBOT_ONLY
 import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
@@ -14,8 +15,14 @@ enum ServerTestUtils {
 
     static func startGateway(on port: Int = 18111, plugins: [any GatewayPlugin] = []) async -> RunningServer {
         let server = await GatewayServer(plugins: plugins)
-        try? await server.start(port: port)
-        return RunningServer(server: server, port: port)
+        do {
+            let bound = try await server.startAndReturnPort(port: port)
+            return RunningServer(server: server, port: bound)
+        } catch {
+            // Fallback to ephemeral port if the requested port is busy.
+            let bound = (try? await server.startAndReturnPort(port: 0)) ?? port
+            return RunningServer(server: server, port: bound)
+        }
     }
 
     static func httpJSON(_ method: String, _ url: URL, headers: [String: String] = [:], body: Any? = nil) async throws -> (Data, HTTPURLResponse) {
@@ -34,5 +41,3 @@ enum ServerTestUtils {
 }
 
 #endif // !ROBOT_ONLY
-// Robot-only mode: exclude helpers when building robot tests
-#if !ROBOT_ONLY

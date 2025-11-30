@@ -4,7 +4,10 @@ import FoundationNetworking
 #endif
 import XCTest
 import FountainRuntime
+import gateway_service
 @testable import gateway_server
+
+private typealias GatewayComponents = gateway_service.Components
 
 final class GatewayServerTests: XCTestCase {
     override class func setUp() {
@@ -26,7 +29,7 @@ final class GatewayServerTests: XCTestCase {
 
     func testIssueAuthToken() async throws {
         let api = await makeAPI()
-        let creds = Components.Schemas.CredentialRequest(clientId: "test", clientSecret: "secret")
+        let creds = GatewayComponents.Schemas.CredentialRequest(clientId: "test", clientSecret: "secret")
         let out = try await api.issueAuthToken(.init(headers: .init(), body: .json(creds)))
         guard case let .ok(ok) = out, case let .json(tok) = ok.body else {
             return XCTFail("expected token response")
@@ -37,7 +40,7 @@ final class GatewayServerTests: XCTestCase {
     func testRoutesCRUD() async throws {
         let api = await makeAPI()
         // Create
-        let route = Components.Schemas.RouteInfo(
+        let route = GatewayComponents.Schemas.RouteInfo(
             id: "t1",
             path: "/api",
             target: "http://localhost:8000",
@@ -55,7 +58,7 @@ final class GatewayServerTests: XCTestCase {
         XCTAssertTrue((routesPayload ?? []).contains(where: { $0.id == "t1" }))
 
         // Update
-        let routeUpd = Components.Schemas.RouteInfo(
+        let routeUpd = GatewayComponents.Schemas.RouteInfo(
             id: "t1",
             path: "/api",
             target: "http://localhost:8000",
@@ -160,7 +163,7 @@ final class GatewayServerTests: XCTestCase {
         // List routes
         let (ld, lr) = try await ServerTestUtils.httpJSON("GET", routesURL, headers: auth)
         XCTAssertEqual(lr.statusCode, 200)
-        let list = try JSONDecoder().decode([Components.Schemas.RouteInfo].self, from: ld)
+        let list = try JSONDecoder().decode([GatewayComponents.Schemas.RouteInfo].self, from: ld)
         XCTAssertTrue(list.contains(where: { $0.id == "e2e" }))
 
         // Update route
@@ -201,7 +204,7 @@ final class GatewayServerTests: XCTestCase {
         await server.reloadRoutes()
         let resp = await server.listRoutes()
         XCTAssertEqual(resp.status, 200)
-        let list = try JSONDecoder().decode([Components.Schemas.RouteInfo].self, from: resp.body)
+        let list = try JSONDecoder().decode([GatewayComponents.Schemas.RouteInfo].self, from: resp.body)
         XCTAssertTrue(list.contains(where: { $0.id == "file1" }))
     }
 
@@ -245,7 +248,3 @@ final class GatewayServerTests: XCTestCase {
         XCTAssertEqual(notFound.status, 404)
     }
 }
-
-#endif // !ROBOT_ONLY
-// Robot-only mode: exclude this suite when building robot tests
-#if !ROBOT_ONLY

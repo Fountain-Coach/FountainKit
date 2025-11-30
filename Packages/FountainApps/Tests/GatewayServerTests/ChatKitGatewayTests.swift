@@ -23,8 +23,6 @@ private struct StubResponder: ChatResponder {
     }
 }
 
-#endif // !ROBOT_ONLY
-
 private actor InMemoryUploadStore: ChatKitUploadStoring {
     private var attachments: [String: ChatKitUploadStore.StoredAttachment] = [:]
     private let corpusId: String
@@ -965,5 +963,3 @@ private extension ChatKitGatewayTests {
         return repoRoot.appendingPathComponent("Public").path
     }
 }
-// Robot-only mode: exclude this suite when building robot tests
-#if !ROBOT_ONLY

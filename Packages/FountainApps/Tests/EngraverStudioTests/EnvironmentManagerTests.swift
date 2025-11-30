@@ -1,5 +1,8 @@
+#if !ROBOT_ONLY
 import XCTest
 @testable import EngraverChatCore
+@testable import FountainDevHarness
+import Foundation
 
 final class EnvironmentManagerTests: XCTestCase {
     func testRefreshStatusParsesOutput() async throws {
@@ -43,16 +46,15 @@ final class EnvironmentManagerTests: XCTestCase {
         let statusScript = """
         #!/bin/bash
         cat <<'EOF'
-        SERVICE             PORT     STATUS   PID
-        baseline-awareness  8001     up       111
-        bootstrap           8002     up       112
-        planner             8003     up       113
-        function-caller     8004     up       114
-        persist             8005     up       115
-        gateway             8010     up       116
-        semantic-browser    8007     down
-        tools-factory       8011     down
-        tool-server         8012     down
+        baseline-awareness:8001:up:111
+        bootstrap:8002:up:112
+        planner:8003:up:113
+        function-caller:8004:up:114
+        persist:8005:up:115
+        gateway:8010:up:116
+        semantic-browser:8007:down:
+        tools-factory:8011:down:
+        tool-server:8012:down:
         EOF
         """
 
@@ -95,5 +97,3 @@ final class EnvironmentManagerTests: XCTestCase {
 }
 
 #endif // !ROBOT_ONLY
-// Robot-only mode: exclude this suite when building robot tests
-#if !ROBOT_ONLY

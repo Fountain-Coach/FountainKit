@@ -30,14 +30,14 @@ final class FountainEditorHTTPPlacementsTests: XCTestCase {
         ], body: createBody)
         let createResp = try await kernel.handle(createReq)
         XCTAssertEqual(createResp.status, 201)
-        let created = try JSONSerialization.jsonObject(with: createResp.body ?? Data()) as? [String: Any]
+        let created = try JSONSerialization.jsonObject(with: createResp.body) as? [String: Any]
         let pid = created?["placementId"] as? String
         XCTAssertNotNil(pid)
 
         // List by anchor -> 1
         let listResp = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/placements?anchor=\(anchor)"))
         XCTAssertEqual(listResp.status, 200)
-        let list = try JSONSerialization.jsonObject(with: listResp.body ?? Data()) as? [[String: Any]]
+        let list = try JSONSerialization.jsonObject(with: listResp.body) as? [[String: Any]]
         XCTAssertEqual(list?.count, 1)
 
         // Update order -> 2
@@ -53,7 +53,7 @@ final class FountainEditorHTTPPlacementsTests: XCTestCase {
         // List again -> order 2
         let listResp2 = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/placements?anchor=\(anchor)"))
         XCTAssertEqual(listResp2.status, 200)
-        let list2 = try JSONSerialization.jsonObject(with: listResp2.body ?? Data()) as? [[String: Any]]
+        let list2 = try JSONSerialization.jsonObject(with: listResp2.body) as? [[String: Any]]
         XCTAssertEqual(list2?.count, 1)
         XCTAssertEqual(list2?.first?["order"] as? Int, 2)
 
@@ -64,7 +64,7 @@ final class FountainEditorHTTPPlacementsTests: XCTestCase {
         // List again -> empty
         let listResp3 = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/placements?anchor=\(anchor)"))
         XCTAssertEqual(listResp3.status, 200)
-        let list3 = try JSONSerialization.jsonObject(with: listResp3.body ?? Data()) as? [[String: Any]]
+        let list3 = try JSONSerialization.jsonObject(with: listResp3.body) as? [[String: Any]]
         XCTAssertEqual(list3?.count, 0)
 
         // Confirm persisted segment exists (array is empty after delete)

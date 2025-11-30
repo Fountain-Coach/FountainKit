@@ -3,47 +3,46 @@ import XCTest
 import FountainEditorMiniCore
 import Teatro
 
-final class FountainEditorAlignmentTests: XCTestCase {
-    private func fixture(_ name: String) -> String {
-        // Test bundle current directory is package root in SwiftPM tests; resource copied into test bundle dir
-        let path = "Packages/FountainApps/Tests/FountainEditorAlignmentTests/Fixtures/" + name
-        return (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""
-    }
-    // Map Teatro nodes to acts/scenes anchors like production does.
-    private func structureFromTeatro(text: String, rules: RuleSet) -> (acts: [[String]], etag: String) {
-        let parser = FountainParser(rules: rules)
-        let nodes = parser.parse(text)
-        var acts: [[String]] = []
-        var actIndex = 0
-        var sceneIndex = 0
-        var current: [String] = []
-        func pushAct() {
-            if actIndex > 0 { acts.append(current) }
-            actIndex += 1
-            sceneIndex = 0
-            current = []
-        }
-        func pushScene() {
-            sceneIndex += 1
-            current.append("act\(actIndex).scene\(sceneIndex)")
-        }
-        for n in nodes {
-            switch n.type {
-            case .section(let level):
-                if level == 1 { pushAct() }
-                else if level == 2 { if actIndex == 0 { pushAct() }; pushScene() }
-            case .sceneHeading:
-                if actIndex == 0 { pushAct() }
-                pushScene()
-            default: continue
-            }
-        }
-        if actIndex == 0 { pushAct() }
-        acts.append(current)
-        let etag = FountainEditorCore.computeETag(for: text)
-        return (acts, etag)
-    }
+fileprivate func loadFixture(_ name: String) -> String {
+    let path = "Packages/FountainApps/Tests/FountainEditorAlignmentTests/Fixtures/" + name
+    return (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""
+}
 
+fileprivate func structureFromTeatro(text: String, rules: RuleSet) -> (acts: [[String]], etag: String) {
+    let parser = FountainParser(rules: rules)
+    let nodes = parser.parse(text)
+    var acts: [[String]] = []
+    var actIndex = 0
+    var sceneIndex = 0
+    var current: [String] = []
+    func pushAct() {
+        if actIndex > 0 { acts.append(current) }
+        actIndex += 1
+        sceneIndex = 0
+        current = []
+    }
+    func pushScene() {
+        sceneIndex += 1
+        current.append("act\(actIndex).scene\(sceneIndex)")
+    }
+    for n in nodes {
+        switch n.type {
+        case .section(let level):
+            if level == 1 { pushAct() }
+            else if level == 2 { if actIndex == 0 { pushAct() }; pushScene() }
+        case .sceneHeading:
+            if actIndex == 0 { pushAct() }
+            pushScene()
+        default: continue
+        }
+    }
+    if actIndex == 0 { pushAct() }
+    acts.append(current)
+    let etag = FountainEditorCore.computeETag(for: text)
+    return (acts, etag)
+}
+
+final class FountainEditorAlignmentTests: XCTestCase {
     func testAlignment_extendedDefaults() {
         let text = """
         Title: X
@@ -92,19 +91,19 @@ final class FountainEditorFixtureMatrixTests: XCTestCase {
         return s.acts.flatMap { act in act.scenes.map { $0.anchor } }
     }
     private func anchorsTeatro(_ text: String, rules: RuleSet) -> [String] {
-        let parsed = FountainEditorAlignmentTests().structureFromTeatro(text: text, rules: rules)
+        let parsed = structureFromTeatro(text: text, rules: rules)
         return parsed.acts.flatMap { $0 }
     }
 
     func testExtendedFixture_alignment() {
-        let text = fixture("extended1.fountain")
+        let text = loadFixture("extended1.fountain")
         let mini = anchorsMini(text, extended: true)
         let full = anchorsTeatro(text, rules: RuleSet())
         XCTAssertEqual(mini, full)
     }
 
     func testMixedSectionsGatesSlug_detection() {
-        let text = fixture("mixed_sections_slugs.fountain")
+        let text = loadFixture("mixed_sections_slugs.fountain")
         let mini = anchorsMini(text, extended: true)
         let full = anchorsTeatro(text, rules: RuleSet())
         // Only the two section scenes should appear
@@ -113,7 +112,7 @@ final class FountainEditorFixtureMatrixTests: XCTestCase {
     }
 
     func testTransitionsDialogue_noScenes() {
-        let text = fixture("transitions_dialogue.fountain")
+        let text = loadFixture("transitions_dialogue.fountain")
         let miniExt = anchorsMini(text, extended: true)
         let full = anchorsTeatro(text, rules: RuleSet())
         XCTAssertEqual(miniExt.count, 0)
@@ -121,21 +120,21 @@ final class FountainEditorFixtureMatrixTests: XCTestCase {
     }
 
     func testCaseSpacingHyphen_alignment() {
-        let text = fixture("case_spacing_hyphen.fountain")
+        let text = loadFixture("case_spacing_hyphen.fountain")
         let mini = anchorsMini(text, extended: true)
         let full = anchorsTeatro(text, rules: RuleSet())
         XCTAssertEqual(mini, full)
     }
 
     func testSimpleSections_alignment() {
-        let text = fixture("simple_sections.fountain")
+        let text = loadFixture("simple_sections.fountain")
         let mini = anchorsMini(text, extended: true)
         let full = anchorsTeatro(text, rules: RuleSet())
         XCTAssertEqual(mini, full)
     }
 
     func testStrictRejectsExtendedForms_alignment() {
-        let text = fixture("extended1.fountain")
+        let text = loadFixture("extended1.fountain")
         // strict mini rejects numbered + I/E
         let mini = anchorsMini(text, extended: false)
         var rules = RuleSet()

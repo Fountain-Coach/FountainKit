@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Fountain-Coach/midi2.git",
       "state" : {
-        "revision" : "fec93dae9efbb4f1d56984eb0889983962a1dbab",
-        "version" : "0.3.1"
+        "revision" : "d6af5d1916c6258cb4619d3f1080097c7b5c0e89",
+        "version" : "0.7.0"
       }
     },
     {

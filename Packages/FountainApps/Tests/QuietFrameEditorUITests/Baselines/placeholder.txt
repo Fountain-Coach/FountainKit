@@ -1,0 +1,1 @@
+Placeholder resource for SwiftPM; UI snapshots generated in CI.

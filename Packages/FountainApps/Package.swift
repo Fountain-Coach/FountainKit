@@ -27,7 +27,6 @@ let PRODUCTS: [Product] = BLANK_VRT_ONLY ? [
 ] : (ROBOT_ONLY ? [
         // Robot-only: expose just what PatchBay tests need
         .executable(name: "patchbay-app", targets: ["patchbay-app"]),
-        .executable(name: "replay-export", targets: ["replay-export"]),
         .executable(name: "midi-instrument-host", targets: ["midi-instrument-host"]),
         .library(name: "MetalViewKit", targets: ["MetalViewKit"]) ,
         .library(name: "FountainEditorCoreKit", targets: ["fountain-editor-service-core"]) ,
@@ -58,6 +57,7 @@ let PRODUCTS: [Product] = BLANK_VRT_ONLY ? [
         // removed: add-instruments-seed (context menu removed from baseline)
         .executable(name: "store-dump", targets: ["store-dump"]),
         .executable(name: "service-minimal-seed", targets: ["service-minimal-seed"]),
+        .executable(name: "teatro-stage-sonify", targets: ["teatro-stage-sonify"]),
         .executable(name: "FountainLauncherUI", targets: ["FountainLauncherUI"]),
         .executable(name: "local-agent-manager", targets: ["local-agent-manager"]),
         .executable(name: "mock-localagent-server", targets: ["mock-localagent-server"]),
@@ -115,7 +115,6 @@ let PRODUCTS: [Product] = BLANK_VRT_ONLY ? [
         .executable(name: "qcmockcore-tests", targets: ["qcmockcore-tests"]),
         .executable(name: "patchbay-service-server", targets: ["patchbay-service-server"]),
         .executable(name: "patchbay-app", targets: ["patchbay-app"]),
-        .executable(name: "replay-export", targets: ["replay-export"]),
         // Baseline app alias for PatchBay UI (default starting point for FountainAI apps)
         .executable(name: "baseline-patchbay", targets: ["grid-dev-app"]),
         .executable(name: "grid-dev-app", targets: ["grid-dev-app"]),
@@ -205,7 +204,7 @@ let DEPENDENCIES: [Package.Dependency] = BLANK_VRT_ONLY ? [
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.0"),
         .package(url: "https://github.com/apple/swift-openapi-urlsession.git", from: "1.0.0"),
         // MIDI 2.0 + MIDI-CI helpers (Discovery, Property Exchange)
-        .package(url: "https://github.com/Fountain-Coach/midi2.git", from: "0.3.1"),
+        .package(url: "https://github.com/Fountain-Coach/midi2.git", from: "0.7.0"),
         // MIDI2 Instrument Bridge (sampler) — pin to released tag
         .package(url: "https://github.com/Fountain-Coach/midi2sampler.git", exact: "0.1.1")
     ]
@@ -734,7 +733,10 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
                 .product(name: "X509", package: "swift-certificates"),
                 "Yams"
             ],
-            exclude: ["README.md"]
+            exclude: ["README.md"],
+            resources: [
+                .process("openapi.yaml")
+            ]
         ),
         .executableTarget(
             name: "midi-service-server",
@@ -1759,7 +1761,13 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
         ),
         .testTarget(
             name: "EngraverStudioTests",
-            dependencies: ["EngraverStudio", "EngraverChatCore", "engraver-chat-tui"],
+            dependencies: [
+                "EngraverStudio",
+                "EngraverChatCore",
+                "engraver-chat-tui",
+                .product(name: "FountainAIKit", package: "FountainAIKit"),
+                .product(name: "FountainDevHarness", package: "FountainDevHarness")
+            ],
             path: "Tests/EngraverStudioTests"
         ),
         .testTarget(
@@ -1790,12 +1798,6 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             path: "Sources/teatro-stage-app",
             exclude: ["AGENTS.md"]
         ),
-        .executableTarget(
-            name: "replay-export",
-            dependencies: ["patchbay-app"],
-            path: "Sources/replay-export"
-        )
-        ,
         .executableTarget(
             name: "patchbay-saliency-seed",
             dependencies: [
@@ -2021,6 +2023,8 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             dependencies: [
                 "metalviewkit-runtime-server",
                 "MetalViewKit",
+                "midi-instrument-host",
+                .product(name: "MIDI2", package: "MIDI2"),
                 .product(name: "FountainRuntime", package: "FountainCore")
             ],
             path: "Tests/MVKRuntimeServerTests"
@@ -2054,6 +2058,14 @@ let TARGETS: [Target] = BLANK_VRT_ONLY ? [
             ]
         ),
         .testTarget(
+            name: "TeatroStageSonifyTests",
+            dependencies: [
+                "teatro-stage-sonify-support",
+                .product(name: "TeatroPhysics", package: "TeatroPhysics")
+            ],
+            path: "Tests/TeatroStageSonifyTests"
+        ),
+        .testTarget(
             name: "InfinityTests",
             dependencies: [
                 "MetalViewKit"
@@ -2083,9 +2095,10 @@ let INFINITY_TARGETS: [Target] = USE_SDLKIT ? [
 ] : []
 
 private let NATIVE_3D_PRODUCTS: Set<String> = [
-    "MetalViewKit",
+    "baseline-patchbay",
     "MetalComputeKit",
-    "metalviewkit-runtime-server",
+    "metalcompute-demo",
+    "metalcompute-tests",
     "grid-dev-app",
     "grid-dev-seed",
     "patchbay-app",
@@ -2095,10 +2108,10 @@ private let NATIVE_3D_PRODUCTS: Set<String> = [
     "bullet-physics-instrument",
     "teatro-bullet-app",
     "metalview-demo-app",
-    "metalviewkit-cc-fuzz",
     "infinity",
     "infinity-seed",
     "fountain-gui-demo",
+    "fountain-gui-demo-app",
     "fountain-gui-demo-seed",
     "teatro-stage-app",
     "teatro-stage-puppet-service"
@@ -2106,11 +2119,12 @@ private let NATIVE_3D_PRODUCTS: Set<String> = [
 
 private let NATIVE_3D_TARGETS_SET: Set<String> = NATIVE_3D_PRODUCTS
     .union([
+        "MetalComputeKit",
         "MetalViewKitCore",
-        "MetalViewKitRuntimeServerKit",
         "metalcompute-demo",
         "metalcompute-tests",
         "MetalComputeKitTests",
+        "FountainGUIDemoTests",
         "MetalInstrumentSysExTests",
         "MetalInstrumentRTPTests",
         "MetalInstrumentCoreMIDITests",
@@ -2119,7 +2133,26 @@ private let NATIVE_3D_TARGETS_SET: Set<String> = NATIVE_3D_PRODUCTS
 
 private let PRODUCTS_PRUNED: [Product] = ALLOW_NATIVE_3D ? PRODUCTS : PRODUCTS.filter { !NATIVE_3D_PRODUCTS.contains($0.name) }
 private let TARGETS_PRUNED: [Target] = {
-    let combined = TARGETS + INFINITY_TARGETS
+    var combined = TARGETS + INFINITY_TARGETS
+    combined.append(
+        .target(
+            name: "teatro-stage-sonify-support",
+            dependencies: [
+                "FountainAudioEngine",
+                .product(name: "TeatroPhysics", package: "TeatroPhysics")
+            ],
+            path: "Sources/teatro-stage-sonify-support"
+        )
+    )
+    combined.append(
+        .executableTarget(
+            name: "teatro-stage-sonify",
+            dependencies: [
+                "teatro-stage-sonify-support"
+            ],
+            path: "Sources/teatro-stage-sonify"
+        )
+    )
     return ALLOW_NATIVE_3D ? combined : combined.filter { !NATIVE_3D_TARGETS_SET.contains($0.name) }
 }()
 

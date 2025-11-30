@@ -33,21 +33,21 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         ], body: createBody)
         let createResp = try await kernel.handle(createReq)
         XCTAssertEqual(createResp.status, 201)
-        let created = try JSONSerialization.jsonObject(with: createResp.body ?? Data()) as? [String: Any]
+        let created = try JSONSerialization.jsonObject(with: createResp.body) as? [String: Any]
         let instrumentId = created?["instrumentId"] as? String
         XCTAssertNotNil(instrumentId)
 
         // List
         let listResp = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/instruments"))
         XCTAssertEqual(listResp.status, 200)
-        let list = try JSONSerialization.jsonObject(with: listResp.body ?? Data()) as? [[String: Any]]
+        let list = try JSONSerialization.jsonObject(with: listResp.body) as? [[String: Any]]
         XCTAssertNotNil(list)
         XCTAssertTrue(list!.contains { ($0["instrumentId"] as? String) == instrumentId })
 
         // Get by id
         let getResp = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/instruments/\(instrumentId!)"))
         XCTAssertEqual(getResp.status, 200)
-        let got = try JSONSerialization.jsonObject(with: getResp.body ?? Data()) as? [String: Any]
+        let got = try JSONSerialization.jsonObject(with: getResp.body) as? [String: Any]
         XCTAssertEqual(got?["name"] as? String, "Piano")
 
         // Patch name + programBase
@@ -66,7 +66,7 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         // Verify patch
         let getResp2 = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/instruments/\(instrumentId!)"))
         XCTAssertEqual(getResp2.status, 200)
-        let got2 = try JSONSerialization.jsonObject(with: getResp2.body ?? Data()) as? [String: Any]
+        let got2 = try JSONSerialization.jsonObject(with: getResp2.body) as? [String: Any]
         XCTAssertEqual(got2?["name"] as? String, "Grand Piano")
         XCTAssertEqual(got2?["programBase"] as? Int, 1)
     }
@@ -90,7 +90,7 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         ], body: pBody)
         let pResp = try await kernel.handle(pReq)
         XCTAssertEqual(pResp.status, 201)
-        let created = try JSONSerialization.jsonObject(with: pResp.body ?? Data()) as? [String: Any]
+        let created = try JSONSerialization.jsonObject(with: pResp.body) as? [String: Any]
         XCTAssertEqual(created?["authorPersona"] as? String, "Planner")
         XCTAssertEqual(created?["rationale"] as? String, "Append a greeting")
     }
@@ -115,24 +115,24 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         // List default order desc -> 2 items
         let listResp = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/proposals"))
         XCTAssertEqual(listResp.status, 200)
-        let list = try JSONSerialization.jsonObject(with: listResp.body ?? Data()) as? [[String: Any]]
+        let list = try JSONSerialization.jsonObject(with: listResp.body) as? [[String: Any]]
         XCTAssertEqual(list?.count, 2)
         guard let firstId = list?.first?["proposalId"] as? String else { XCTFail("missing id"); return }
 
         // Get by id
         let getResp = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/proposals/\(firstId)"))
         XCTAssertEqual(getResp.status, 200)
-        let detail = try JSONSerialization.jsonObject(with: getResp.body ?? Data()) as? [String: Any]
+        let detail = try JSONSerialization.jsonObject(with: getResp.body) as? [String: Any]
         XCTAssertEqual(detail?["proposalId"] as? String, firstId)
 
         // Limit and offset
         let listLimit1 = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/proposals?limit=1"))
         XCTAssertEqual(listLimit1.status, 200)
-        let arr1 = try JSONSerialization.jsonObject(with: listLimit1.body ?? Data()) as? [[String: Any]]
+        let arr1 = try JSONSerialization.jsonObject(with: listLimit1.body) as? [[String: Any]]
         XCTAssertEqual(arr1?.count, 1)
         let listOffset1 = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/proposals?offset=1&limit=1"))
         XCTAssertEqual(listOffset1.status, 200)
-        let arr2 = try JSONSerialization.jsonObject(with: listOffset1.body ?? Data()) as? [[String: Any]]
+        let arr2 = try JSONSerialization.jsonObject(with: listOffset1.body) as? [[String: Any]]
         XCTAssertEqual(arr2?.count, 1)
     }
 
@@ -147,12 +147,12 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         let pObj: [String: Any] = ["op": "applyPatch", "params": ["edits": [["start": 0, "end": 99, "text": "X"]]]]
         let pBody = try JSONSerialization.data(withJSONObject: pObj)
         let pResp = try await kernel.handle(HTTPRequest(method: "POST", path: "/editor/\(cid)/proposals", headers: ["Content-Type": "application/json", "Content-Length": String(pBody.count)], body: pBody))
-        let created = try JSONSerialization.jsonObject(with: pResp.body ?? Data()) as? [String: Any]
+        let created = try JSONSerialization.jsonObject(with: pResp.body) as? [String: Any]
         let proposalId = created?["proposalId"] as? String
         let dBody = try JSONSerialization.data(withJSONObject: ["decision": "accept"])
         let dResp = try await kernel.handle(HTTPRequest(method: "POST", path: "/editor/\(cid)/proposals/\(proposalId!)", headers: ["Content-Type": "application/json", "Content-Length": String(dBody.count)], body: dBody))
         XCTAssertEqual(dResp.status, 200)
-        let result = try JSONSerialization.jsonObject(with: dResp.body ?? Data()) as? [String: Any]
+        let result = try JSONSerialization.jsonObject(with: dResp.body) as? [String: Any]
         XCTAssertEqual(result?["applied"] as? Bool, false)
     }
 
@@ -176,7 +176,7 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         // GET ETag
         let getResp = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/script"))
         XCTAssertEqual(getResp.status, 200)
-        let etag1 = getResp.headers["ETag"]?.first ?? ""
+        let etag1 = getResp.headers["ETag"] ?? ""
         XCTAssertEqual(etag1.count, 8)
 
         // Create proposal composeBlock
@@ -192,7 +192,7 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         ], body: pBody)
         let pResp = try await kernel.handle(pReq)
         XCTAssertEqual(pResp.status, 201)
-        let created = try JSONSerialization.jsonObject(with: pResp.body ?? Data()) as? [String: Any]
+        let created = try JSONSerialization.jsonObject(with: pResp.body) as? [String: Any]
         let proposalId = created?["proposalId"] as? String
         XCTAssertNotNil(proposalId)
 
@@ -205,15 +205,15 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         ], body: dBody)
         let dResp = try await kernel.handle(dReq)
         XCTAssertEqual(dResp.status, 200)
-        let result = try JSONSerialization.jsonObject(with: dResp.body ?? Data()) as? [String: Any]
+        let result = try JSONSerialization.jsonObject(with: dResp.body) as? [String: Any]
         XCTAssertEqual(result?["applied"] as? Bool, true)
 
         // GET again -> ETag changed and text appended
         let getResp2 = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/script"))
         XCTAssertEqual(getResp2.status, 200)
-        let etag2 = getResp2.headers["ETag"]?.first ?? ""
+        let etag2 = getResp2.headers["ETag"] ?? ""
         XCTAssertNotEqual(etag2, etag1)
-        let text2 = String(decoding: getResp2.body ?? Data(), as: UTF8.self)
+        let text2 = String(decoding: getResp2.body, as: UTF8.self)
         XCTAssertTrue(text2.contains("Hello"))
         XCTAssertTrue(text2.contains("World"))
     }
@@ -250,7 +250,7 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         ], body: pBody)
         let pResp = try await kernel.handle(pReq)
         XCTAssertEqual(pResp.status, 201)
-        let created = try JSONSerialization.jsonObject(with: pResp.body ?? Data()) as? [String: Any]
+        let created = try JSONSerialization.jsonObject(with: pResp.body) as? [String: Any]
         let proposalId = created?["proposalId"] as? String
         XCTAssertNotNil(proposalId)
 
@@ -267,7 +267,7 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         // Verify new heading appears after the first scene heading
         let getResp2 = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/script"))
         XCTAssertEqual(getResp2.status, 200)
-        let text = String(decoding: getResp2.body ?? Data(), as: UTF8.self)
+        let text = String(decoding: getResp2.body, as: UTF8.self)
         let idx1 = text.range(of: "## Scene One")?.lowerBound
         let idx2 = text.range(of: "## Inserted")?.lowerBound
         XCTAssertNotNil(idx1)
@@ -304,7 +304,7 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         ], body: pBody)
         let pResp = try await kernel.handle(pReq)
         XCTAssertEqual(pResp.status, 201)
-        let created = try JSONSerialization.jsonObject(with: pResp.body ?? Data()) as? [String: Any]
+        let created = try JSONSerialization.jsonObject(with: pResp.body) as? [String: Any]
         let proposalId = created?["proposalId"] as? String
         XCTAssertNotNil(proposalId)
 
@@ -321,7 +321,7 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         // Verify heading changed
         let getResp2 = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/script"))
         XCTAssertEqual(getResp2.status, 200)
-        let text = String(decoding: getResp2.body ?? Data(), as: UTF8.self)
+        let text = String(decoding: getResp2.body, as: UTF8.self)
         XCTAssertTrue(text.contains("## New Title"))
         XCTAssertFalse(text.contains("## Scene One"))
     }
@@ -354,7 +354,7 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         ], body: pBody)
         let pResp = try await kernel.handle(pReq)
         XCTAssertEqual(pResp.status, 201)
-        let created = try JSONSerialization.jsonObject(with: pResp.body ?? Data()) as? [String: Any]
+        let created = try JSONSerialization.jsonObject(with: pResp.body) as? [String: Any]
         let proposalId = created?["proposalId"] as? String
         XCTAssertNotNil(proposalId)
 
@@ -371,7 +371,7 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         // Verify text changed
         let getResp2 = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/script"))
         XCTAssertEqual(getResp2.status, 200)
-        let text = String(decoding: getResp2.body ?? Data(), as: UTF8.self)
+        let text = String(decoding: getResp2.body, as: UTF8.self)
         XCTAssertEqual(text, "Hello Editor")
     }
 
@@ -404,7 +404,7 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         ], body: pBody)
         let pResp = try await kernel.handle(pReq)
         XCTAssertEqual(pResp.status, 201)
-        let created = try JSONSerialization.jsonObject(with: pResp.body ?? Data()) as? [String: Any]
+        let created = try JSONSerialization.jsonObject(with: pResp.body) as? [String: Any]
         let proposalId = created?["proposalId"] as? String
         XCTAssertNotNil(proposalId)
 
@@ -421,7 +421,7 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         // Verify order: B before A
         let getResp2 = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/script"))
         XCTAssertEqual(getResp2.status, 200)
-        let text = String(decoding: getResp2.body ?? Data(), as: UTF8.self)
+        let text = String(decoding: getResp2.body, as: UTF8.self)
         let idxA = text.range(of: "## A")?.lowerBound
         let idxB = text.range(of: "## B")?.lowerBound
         XCTAssertNotNil(idxA)
@@ -458,7 +458,7 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         ], body: pBody)
         let pResp = try await kernel.handle(pReq)
         XCTAssertEqual(pResp.status, 201)
-        let created = try JSONSerialization.jsonObject(with: pResp.body ?? Data()) as? [String: Any]
+        let created = try JSONSerialization.jsonObject(with: pResp.body) as? [String: Any]
         let proposalId = created?["proposalId"] as? String
         XCTAssertNotNil(proposalId)
 
@@ -475,7 +475,7 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         // Verify headings and content distribution
         let getResp2 = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/script"))
         XCTAssertEqual(getResp2.status, 200)
-        let text = String(decoding: getResp2.body ?? Data(), as: UTF8.self)
+        let text = String(decoding: getResp2.body, as: UTF8.self)
         // Alpha then Beta
         let idxAlpha = text.range(of: "## Alpha")?.lowerBound
         let idxBeta = text.range(of: "## Beta")?.lowerBound
@@ -516,7 +516,7 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         ], body: pBody)
         let pResp = try await kernel.handle(pReq)
         XCTAssertEqual(pResp.status, 201)
-        let created = try JSONSerialization.jsonObject(with: pResp.body ?? Data()) as? [String: Any]
+        let created = try JSONSerialization.jsonObject(with: pResp.body) as? [String: Any]
         let proposalId = created?["proposalId"] as? String
         XCTAssertNotNil(proposalId)
 
@@ -532,7 +532,7 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
 
         let getResp2 = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/script"))
         XCTAssertEqual(getResp2.status, 200)
-        let textOut = String(decoding: getResp2.body ?? Data(), as: UTF8.self)
+        let textOut = String(decoding: getResp2.body, as: UTF8.self)
         XCTAssertEqual(textOut, "Hello Editor")
     }
 
@@ -546,7 +546,7 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         let cBody = try JSONSerialization.data(withJSONObject: cObj)
         let cResp = try await kernel.handle(HTTPRequest(method: "POST", path: "/editor/sessions", headers: ["Content-Type": "application/json", "Content-Length": String(cBody.count)], body: cBody))
         XCTAssertEqual(cResp.status, 201)
-        let created = try JSONSerialization.jsonObject(with: cResp.body ?? Data()) as? [String: Any]
+        let created = try JSONSerialization.jsonObject(with: cResp.body) as? [String: Any]
         let sid = created?["sessionId"] as? String
         XCTAssertNotNil(sid)
 
@@ -593,13 +593,13 @@ final class FountainEditorHTTPInstrumentsAndProposalsTests: XCTestCase {
         // Proposal not found
         let p = try await kernel.handle(HTTPRequest(method: "GET", path: "/editor/\(cid)/proposals/00000000-0000-0000-0000-000000000000"))
         XCTAssertEqual(p.status, 404)
-        if let b = p.body { XCTAssertNotNil(try JSONSerialization.jsonObject(with: b) as? [String: Any]) }
+        XCTAssertNotNil(try JSONSerialization.jsonObject(with: p.body) as? [String: Any])
 
         // Session not found
         let now = ISO8601DateFormatter().string(from: Date())
         let sBody = try JSONSerialization.data(withJSONObject: ["lastMessageAt": now])
         let s = try await kernel.handle(HTTPRequest(method: "PATCH", path: "/editor/sessions/00000000-0000-0000-0000-000000000000", headers: ["Content-Type": "application/json", "Content-Length": String(sBody.count)], body: sBody))
         XCTAssertEqual(s.status, 404)
-        if let b = s.body { XCTAssertNotNil(try JSONSerialization.jsonObject(with: b) as? [String: Any]) }
+        XCTAssertNotNil(try JSONSerialization.jsonObject(with: s.body) as? [String: Any])
     }
 }

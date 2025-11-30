@@ -36,9 +36,9 @@ final class FountainEditorHTTPETagTests: XCTestCase {
         let getReq = HTTPRequest(method: "GET", path: "/editor/\(cid)/script")
         let getResp = try await kernel.handle(getReq)
         XCTAssertEqual(getResp.status, 200)
-        let etag1 = getResp.headers["ETag"]?.first ?? ""
+        let etag1 = getResp.headers["ETag"] ?? ""
         XCTAssertEqual(etag1.count, 8)
-        let text1 = String(decoding: getResp.body ?? Data(), as: UTF8.self)
+        let text1 = String(decoding: getResp.body, as: UTF8.self)
         XCTAssertEqual(text1, "Hello")
 
         // 3) Mismatched If-Match -> 412
@@ -64,10 +64,10 @@ final class FountainEditorHTTPETagTests: XCTestCase {
         // 5) GET again -> ETag changed and body updated
         let getResp2 = try await kernel.handle(getReq)
         XCTAssertEqual(getResp2.status, 200)
-        let etag2 = getResp2.headers["ETag"]?.first ?? ""
+        let etag2 = getResp2.headers["ETag"] ?? ""
         XCTAssertEqual(etag2.count, 8)
         XCTAssertNotEqual(etag2, etag1)
-        let text2 = String(decoding: getResp2.body ?? Data(), as: UTF8.self)
+        let text2 = String(decoding: getResp2.body, as: UTF8.self)
         XCTAssertEqual(text2, "Hello world!")
     }
 
@@ -83,9 +83,7 @@ final class FountainEditorHTTPETagTests: XCTestCase {
         ], body: body)
         let resp = try await kernel.handle(req)
         XCTAssertEqual(resp.status, 400)
-        if let body = resp.body {
-            let obj = try JSONSerialization.jsonObject(with: body) as? [String: Any]
-            XCTAssertEqual(obj?["message"] as? String, "If-Match header required")
-        }
+        let obj = try JSONSerialization.jsonObject(with: resp.body) as? [String: Any]
+        XCTAssertEqual(obj?["message"] as? String, "If-Match header required")
     }
 }

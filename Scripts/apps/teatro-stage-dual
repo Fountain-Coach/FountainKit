@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+APP_DIR="$ROOT/Public/teatro-stage-web"
+
+echo "[teatro-stage-dual] Starting teatro-stage-sonify (Swift)…"
+(
+  cd "$ROOT"
+  # Default to CoreAudio so it's audible on stock macOS; set FK_SONIFY_BACKEND=fountain to force SDLKit.
+  FK_SONIFY_BACKEND=${FK_SONIFY_BACKEND:-simple} FK_USE_SDLKIT=${FK_USE_SDLKIT:-0} swift run --package-path Packages/FountainApps teatro-stage-sonify
+) &
+SONIFY_PID=$!
+
+cleanup() {
+  echo "[teatro-stage-dual] Stopping sonifier (pid $SONIFY_PID)…"
+  kill "$SONIFY_PID" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+echo "[teatro-stage-dual] Starting teatro-stage-web dev server…"
+(
+  cd "$APP_DIR"
+  npm install
+  npm run dev
+) &
+WEB_PID=$!
+
+wait "$WEB_PID"

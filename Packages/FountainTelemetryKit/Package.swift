@@ -16,7 +16,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../FountainCore"),
-        .package(url: "https://github.com/Fountain-Coach/midi2.git", from: "0.3.1")
+        .package(url: "https://github.com/Fountain-Coach/midi2.git", from: "0.7.0")
     ],
     targets: [
         .target(

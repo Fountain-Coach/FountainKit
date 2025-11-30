@@ -1,7 +1,7 @@
 import XCTest
 import Foundation
 import MIDI2
-@testable import metalviewkit_runtime_server
+import MetalViewKitRuntimeServerKit
 @testable import midi_instrument_host
 import MetalViewKit
 import FountainRuntime
@@ -18,7 +18,7 @@ final class MVKRuntimeServerTests: XCTestCase {
     }
 
     // Boot the runtime server on an ephemeral port
-    private func startServer() async throws -> RunningServer {
+    private static func startServer() async throws -> RunningServer {
         // Serve spec at /openapi.yaml as fallback
         let fallback = HTTPKernel { req in
             if req.path == "/openapi.yaml" {
@@ -26,6 +26,9 @@ final class MVKRuntimeServerTests: XCTestCase {
                 if let data = try? Data(contentsOf: url) {
                     return HTTPResponse(status: 200, headers: ["Content-Type": "application/yaml"], body: data)
                 }
+            } else if req.path == "/v1/midi/events" {
+                let empty = try? JSONSerialization.data(withJSONObject: ["events": []])
+                return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: empty ?? Data())
             }
             return HTTPResponse(status: 404)
         }
@@ -38,8 +41,22 @@ final class MVKRuntimeServerTests: XCTestCase {
 
     private func url(_ port: Int, _ path: String) -> URL { URL(string: "http://127.0.0.1:\(port)\(path)")! }
 
+    @MainActor
+    private func loadFactsData(agentId: String, corpus: String) async -> Data? {
+        guard let facts = await MIDIInstrumentHost.loadFacts(agentId: agentId, corpus: corpus) else { return nil }
+        return try? JSONSerialization.data(withJSONObject: facts)
+    }
+}
+
+actor WordCollector {
+    private var items: [[UInt32]] = []
+    func append(_ words: [UInt32]) { items.append(words) }
+    func snapshot() -> [[UInt32]] { items }
+}
+
+extension MVKRuntimeServerTests {
     func testHealth() async throws {
-        let running = try await startServer()
+        let running = try await Self.startServer()
         defer { Task { try? await running.server.stop() } }
         let (data, resp) = try await URLSession.shared.data(from: url(running.port, "/health"))
         XCTAssertEqual((resp as? HTTPURLResponse)?.statusCode, 200)
@@ -49,7 +66,7 @@ final class MVKRuntimeServerTests: XCTestCase {
     }
 
     func testMidiEventsForwardingByDisplayName() async throws {
-        let running = try await startServer()
+        let running = try await Self.startServer()
         defer { Task { try? await running.server.stop() } }
 
         // Create a loopback instrument session that will receive UMP
@@ -60,15 +77,15 @@ final class MVKRuntimeServerTests: XCTestCase {
             displayName: "QuietFrame Canvas",
             midiGroup: 0
         )
-        var received: [[UInt32]] = []
+        let collector = WordCollector()
         let session = try LoopbackMetalInstrumentTransport.shared.makeSession(descriptor: descriptor) { words in
-            received.append(words)
+            Task { await collector.append(words) }
         }
         defer { session.close() }
 
         // Build a simple NoteOn UMP (two words)
         let w0: UInt32 = (0x4 << 28) | (0 << 24) | (0x9 << 20) | (0 << 16) | (60 << 8)
-        let w1: UInt32 = UInt32(UInt16(100) * 65535 / 127) << 16
+        let w1: UInt32 = UInt32((Double(100) * 65535.0 / 127.0).rounded()) << 16
         let body: [String: Any] = [
             "events": [[
                 "tNs": "0",
@@ -85,13 +102,14 @@ final class MVKRuntimeServerTests: XCTestCase {
         XCTAssertEqual((postResp as? HTTPURLResponse)?.statusCode, 202)
 
         // Allow loopback dispatch
-        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        try await Task.sleep(nanoseconds: 50_000_000)
+        let received = await collector.snapshot()
         XCTAssertEqual(received.count, 1)
         XCTAssertEqual(received.first!, [w0, w1])
     }
 
     func testMidiEventsForwardingByInstanceId() async throws {
-        let running = try await startServer()
+        let running = try await Self.startServer()
         defer { Task { try? await running.server.stop() } }
 
         let iid = UUID().uuidString
@@ -102,9 +120,9 @@ final class MVKRuntimeServerTests: XCTestCase {
             displayName: "Canvas#\(iid)",
             midiGroup: 0
         )
-        var received: [[UInt32]] = []
+        let collector = WordCollector()
         let session = try LoopbackMetalInstrumentTransport.shared.makeSession(descriptor: descriptor) { words in
-            received.append(words)
+            Task { await collector.append(words) }
         }
         defer { session.close() }
 
@@ -125,13 +143,14 @@ final class MVKRuntimeServerTests: XCTestCase {
         let (_, postResp) = try await URLSession.shared.data(for: req)
         XCTAssertEqual((postResp as? HTTPURLResponse)?.statusCode, 202)
 
-        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        try await Task.sleep(nanoseconds: 50_000_000)
+        let received = await collector.snapshot()
         XCTAssertEqual(received.count, 1)
         XCTAssertEqual(received.first!, [w0, w1])
     }
 
     func testEndpointsCRUD() async throws {
-        let running = try await startServer()
+        let running = try await Self.startServer()
         defer { Task { try? await running.server.stop() } }
 
         // Initially empty
@@ -166,7 +185,7 @@ final class MVKRuntimeServerTests: XCTestCase {
     }
 
     func testReadMidiEventsStub() async throws {
-        let running = try await startServer()
+        let running = try await Self.startServer()
         defer { Task { try? await running.server.stop() } }
         let (data, resp) = try await URLSession.shared.data(from: url(running.port, "/v1/midi/events"))
         XCTAssertEqual((resp as? HTTPURLResponse)?.statusCode, 200)
@@ -175,7 +194,7 @@ final class MVKRuntimeServerTests: XCTestCase {
     }
 
     func testLiveLoopbackListing() async throws {
-        let running = try await startServer()
+        let running = try await Self.startServer()
         defer { Task { try? await running.server.stop() } }
 
         // Create a loopback instrument session
@@ -197,14 +216,17 @@ final class MVKRuntimeServerTests: XCTestCase {
     /// End-to-end bridge: MIDI Instrument Host PE -> HTTP -> runtime instrument state (using the FountainGUIKit demo agent id).
     @MainActor
     func testInstrumentStateViaMidiHostPropertyExchange() async throws {
-        let running = try await startServer()
+        let running = try await Self.startServer()
         defer { Task { try? await running.server.stop() } }
 
         // Load facts for the FountainGUIKit demo agent (seeded via openapi-to-facts from both
         // fountain-gui-demo.yml and metalviewkit-runtime.yml).
         let agentId = "fountain.coach/agent/fountain-gui-demo/service"
         let corpus = "agents"
-        guard let facts = await MIDIInstrumentHost.loadFacts(agentId: agentId, corpus: corpus) else {
+        guard
+            let factsData = await loadFactsData(agentId: agentId, corpus: corpus),
+            let facts = try? JSONSerialization.jsonObject(with: factsData) as? [String: Any]
+        else {
             XCTFail("missing facts for \(agentId)")
             return
         }
@@ -220,12 +242,12 @@ final class MVKRuntimeServerTests: XCTestCase {
         let routes = MIDIInstrumentHost.buildPropertyRoutes(agentId: agentId, facts: facts, env: env)
 
         // Find the POST route that maps to /v1/instruments/{id}/state.
-        guard let (propName, _) = routes.first(where: { _, r in
-            r.method == "POST" && r.path == "/v1/instruments/{id}/state"
-        }) else {
-            XCTFail("no runtime instrument state route found in property routes")
-            return
+        var propName: String?
+        for (name, route) in routes where route.method == "POST" && route.path == "/v1/instruments/{id}/state" {
+            propName = name
+            break
         }
+        guard let propName else { XCTFail("no runtime instrument state route found in property routes"); return }
 
         // Compose a PE SET body targeting the generic instrument state operation.
         let instrumentId = "demo-pe"

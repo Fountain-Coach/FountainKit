@@ -1,8 +1,11 @@
+#if !ROBOT_ONLY
 import XCTest
 @testable import EngraverChatCore
 @testable import engraver_chat_tui
+@testable import FountainAIKit
 import FountainAIAdapters
 import ApiClientsCore
+import Foundation
 
 final class TranscriptFormatterTests: XCTestCase {
     func testFormatterSplitsMultilineMessages() {
@@ -17,13 +20,10 @@ final class TranscriptFormatterTests: XCTestCase {
             provider: "mock-provider",
             model: "mock-model",
             tokens: [],
-            response: GatewayChatResponse(
+            response: ChatResponse(
                 answer: "First answer line\nSecond answer line",
                 provider: "mock-provider",
-                model: "mock-model",
-                usage: nil,
-                raw: nil,
-                functionCall: nil
+                model: "mock-model"
             )
         )
         let snapshot = ChatSnapshot(
@@ -43,9 +43,9 @@ final class TranscriptFormatterTests: XCTestCase {
 
         let lines = formatter.lines(for: snapshot)
         XCTAssertTrue(lines.contains(where: { $0.contains("You ▸ Line one") }))
-        XCTAssertTrue(lines.contains(where: { $0.trimmingCharacters(in: .whitespaces) == "Line two" }))
+        XCTAssertTrue(lines.contains(where: { $0.trimmingCharacters(in: CharacterSet.whitespaces) == "Line two" }))
         XCTAssertTrue(lines.contains(where: { $0.contains("mock-provider ▸ First answer line") }))
-        XCTAssertTrue(lines.contains(where: { $0.trimmingCharacters(in: .whitespaces) == "Second answer line" }))
+        XCTAssertTrue(lines.contains(where: { $0.trimmingCharacters(in: CharacterSet.whitespaces) == "Second answer line" }))
     }
 
     func testFormatterWrapsLongLinesToWidth() {
@@ -60,13 +60,10 @@ final class TranscriptFormatterTests: XCTestCase {
             provider: "mock-provider",
             model: "mock-model",
             tokens: [],
-            response: GatewayChatResponse(
+            response: ChatResponse(
                 answer: "",
                 provider: "mock-provider",
-                model: "mock-model",
-                usage: nil,
-                raw: nil,
-                functionCall: nil
+                model: "mock-model"
             )
         )
         let snapshot = ChatSnapshot(
@@ -88,12 +85,10 @@ final class TranscriptFormatterTests: XCTestCase {
         XCTAssertTrue(lines.count >= 2)
         XCTAssertTrue(lines.contains(where: { $0.contains("You ▸ This is a line") }))
         XCTAssertTrue(lines.dropFirst().contains { line in
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            let trimmed = line.trimmingCharacters(in: CharacterSet.whitespaces)
             return !trimmed.isEmpty && line.first == " "
         })
     }
 }
 
 #endif // !ROBOT_ONLY
-// Robot-only mode: exclude this suite when building robot tests
-#if !ROBOT_ONLY

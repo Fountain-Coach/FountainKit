@@ -51,8 +51,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Fountain-Coach/midi2.git",
       "state" : {
-        "revision" : "138895967519bbe50c8f9c3751f2aae2723cd5ba",
-        "version" : "0.6.1"
+        "revision" : "d6af5d1916c6258cb4619d3f1080097c7b5c0e89",
+        "version" : "0.7.0"
       }
     },
     {
@@ -323,15 +323,6 @@
       "state" : {
         "revision" : "97ba8e113c318415be006e345c233022c5de8a4f",
         "version" : "0.2.0"
-      }
-    },
-    {
-      "identity" : "typesense-swift",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/typesense/typesense-swift.git",
-      "state" : {
-        "revision" : "0f6c550c627433d82b2f9698b1ed5c59490b56d2",
-        "version" : "1.0.1"
       }
     },
     {

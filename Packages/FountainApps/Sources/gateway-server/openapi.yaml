@@ -1,0 +1,61 @@
+openapi: 3.0.3
+info:
+  title: Gateway Server (ChatKit subset)
+  version: "0.0.1"
+paths:
+  /chatkit/session:
+    post:
+      summary: Create ChatKit session
+      responses:
+        "201":
+          description: created
+  /chatkit/messages:
+    post:
+      summary: Send ChatKit message
+      responses:
+        "200":
+          description: ok
+  /chatkit/upload:
+    post:
+      summary: Upload ChatKit attachment
+      responses:
+        "201":
+          description: created
+  /chatkit/attachments/{attachmentId}:
+    get:
+      summary: Download ChatKit attachment
+      parameters:
+        - name: attachmentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: ok
+    delete:
+      summary: Delete ChatKit attachment
+      parameters:
+        - name: attachmentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: deleted
+  /chatkit/threads:
+    get:
+      summary: List ChatKit threads
+      responses:
+        "200":
+          description: ok
+  /chatkit/threads/{threadId}:
+    get:
+      summary: Get ChatKit thread
+      parameters:
+        - name: threadId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: ok

@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage: Scripts/apps/midi2-browser [--port <vitePort>] [--semantic <url>] [--midi <url>]
+
+Launches the midi2-browser web app (Vite). Defaults:
+  semantic-browser: http://127.0.0.1:8007
+  midi-service:     http://127.0.0.1:7180
+  port:             4173
+
+Examples:
+  Scripts/apps/midi2-browser
+  Scripts/apps/midi2-browser --semantic http://localhost:8007 --midi http://localhost:7180 --port 4175
+USAGE
+}
+
+VITE_PORT=${VITE_PORT:-4173}
+VITE_SEMANTIC_BROWSER_URL=${VITE_SEMANTIC_BROWSER_URL:-http://127.0.0.1:8007}
+VITE_MIDI_SERVICE_URL=${VITE_MIDI_SERVICE_URL:-http://127.0.0.1:7180}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --port) VITE_PORT=${2:?}; shift 2 ;;
+    --semantic) VITE_SEMANTIC_BROWSER_URL=${2:?}; shift 2 ;;
+    --midi) VITE_MIDI_SERVICE_URL=${2:?}; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown arg: $1"; usage; exit 1 ;;
+  esac
+done
+
+pushd Public/midi2-browser >/dev/null
+
+echo "[midi2-browser] Installing deps…"
+if [[ -f package-lock.json ]]; then npm ci; else npm install; fi
+
+echo "[midi2-browser] Launching Vite on port $VITE_PORT (semantic=$VITE_SEMANTIC_BROWSER_URL midi=$VITE_MIDI_SERVICE_URL)…"
+VITE_PORT=$VITE_PORT \
+VITE_SEMANTIC_BROWSER_URL=$VITE_SEMANTIC_BROWSER_URL \
+VITE_MIDI_SERVICE_URL=$VITE_MIDI_SERVICE_URL \
+npm run dev -- --host --port "$VITE_PORT"
+
+popd >/dev/null

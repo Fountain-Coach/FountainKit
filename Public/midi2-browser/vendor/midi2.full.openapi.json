@@ -1,0 +1,1954 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "MIDI 2.0 \u2014 Full Spec API (Expanded, Closed)",
+    "version": "1.0.0",
+    "description": "OpenAPI 3.1 generated from the fully closed, expanded MIDI 2.0 JSON Schema."
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "paths": {
+    "/validate/ump": {
+      "post": {
+        "summary": "Validate a single UMP packet",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UmpPacket"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/ingest/stream": {
+      "post": {
+        "summary": "Submit an array of UMP packets (stream order)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/UmpPacket"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "UmpPacket": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/UmpPacket32"
+          },
+          {
+            "$ref": "#/components/schemas/UmpPacket64"
+          },
+          {
+            "$ref": "#/components/schemas/UmpPacket128"
+          }
+        ]
+      },
+      "Uint4": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 15
+      },
+      "Uint7": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 127
+      },
+      "Uint8": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 255
+      },
+      "Uint14": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 16383
+      },
+      "Uint16": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 65535
+      },
+      "Uint21": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 2097151
+      },
+      "Uint28": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 268435455
+      },
+      "Uint32": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 4294967295
+      },
+      "Int32": {
+        "type": "integer",
+        "minimum": -2147483648,
+        "maximum": 2147483647
+      },
+      "ByteArray": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/Uint8"
+        }
+      },
+      "UmpMessageType": {
+        "type": "integer",
+        "enum": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          13,
+          15
+        ],
+        "description": "UMP Message Type nibble: 0=Utility,1=System,2=MIDI1 Ch Voice,3=SysEx7,4=MIDI2 Ch Voice,5=SysEx8/MDS,13=Flex,15=Stream."
+      },
+      "Group": {
+        "$ref": "#/$defs/Uint4",
+        "description": "MIDI Group (0-15). Utility (0x0) and Stream (0xF) are groupless in v1.1+; set 0."
+      },
+      "UmpHeader32": {
+        "type": "object",
+        "required": [
+          "messageType"
+        ],
+        "properties": {
+          "messageType": {
+            "enum": [
+              0,
+              1,
+              2,
+              3,
+              15
+            ]
+          },
+          "group": {
+            "$ref": "#/$defs/Group"
+          }
+        },
+        "description": "Common 32-bit UMP header (messageType + optional group).",
+        "additionalProperties": false
+      },
+      "UmpHeader64": {
+        "type": "object",
+        "required": [
+          "messageType",
+          "group",
+          "statusNibble",
+          "channel"
+        ],
+        "properties": {
+          "messageType": {
+            "const": 4
+          },
+          "group": {
+            "$ref": "#/$defs/Group"
+          },
+          "statusNibble": {
+            "type": "integer",
+            "minimum": 8,
+            "maximum": 15
+          },
+          "channel": {
+            "$ref": "#/$defs/Uint4"
+          }
+        },
+        "description": "64-bit UMP header for MIDI 2.0 Channel Voice.",
+        "additionalProperties": false
+      },
+      "UmpHeader128": {
+        "type": "object",
+        "required": [
+          "messageType"
+        ],
+        "properties": {
+          "messageType": {
+            "enum": [
+              5,
+              13
+            ]
+          },
+          "group": {
+            "$ref": "#/$defs/Group"
+          }
+        },
+        "description": "128-bit UMP header for Data (SysEx8/MDS) and Flex Data.",
+        "additionalProperties": false
+      },
+      "UtilityOpcode": {
+        "type": "integer",
+        "enum": [
+          0,
+          1,
+          2
+        ],
+        "description": "0=NOOP,1=JR Clock,2=JR Timestamp"
+      },
+      "UtilityBody": {
+        "type": "object",
+        "required": [
+          "opcode"
+        ],
+        "properties": {
+          "opcode": {
+            "$ref": "#/$defs/UtilityOpcode"
+          },
+          "jrClock": {
+            "type": "object",
+            "required": [
+              "timestamp32"
+            ],
+            "properties": {
+              "timestamp32": {
+                "$ref": "#/$defs/Uint32"
+              }
+            },
+            "description": "Present when opcode=1",
+            "additionalProperties": false
+          },
+          "jrTimestamp": {
+            "type": "object",
+            "required": [
+              "time15"
+            ],
+            "properties": {
+              "time15": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 32767
+              }
+            },
+            "description": "Present when opcode=2",
+            "additionalProperties": false
+          }
+        },
+        "description": "UMP Type 0x0 Utility messages (groupless).",
+        "additionalProperties": false
+      },
+      "SystemStatus": {
+        "type": "integer",
+        "enum": [
+          241,
+          242,
+          243,
+          246,
+          248,
+          250,
+          251,
+          252,
+          254,
+          255
+        ],
+        "description": "MIDI System Common/Real-Time per UMP."
+      },
+      "SystemCommonRealtimeBody": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "$ref": "#/$defs/SystemStatus"
+          },
+          "data1": {
+            "$ref": "#/$defs/Uint8"
+          },
+          "data2": {
+            "$ref": "#/$defs/Uint8"
+          }
+        },
+        "description": "UMP 0x1 System Common & Real-Time.",
+        "additionalProperties": false
+      },
+      "Midi1StatusNibble": {
+        "type": "integer",
+        "enum": [
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14
+        ],
+        "description": "0x8..0xE"
+      },
+      "Midi1ChannelVoiceBody": {
+        "type": "object",
+        "required": [
+          "statusNibble",
+          "channel"
+        ],
+        "properties": {
+          "statusNibble": {
+            "$ref": "#/$defs/Midi1StatusNibble"
+          },
+          "channel": {
+            "$ref": "#/$defs/Uint4"
+          },
+          "noteNumber": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "velocity7": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "pressure7": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "control": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "value7": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "program": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "pitchBend14": {
+            "$ref": "#/$defs/Uint14"
+          }
+        },
+        "description": "Messages share this body, with relevant fields set based on status.",
+        "additionalProperties": false
+      },
+      "SysEx7Packet": {
+        "type": "object",
+        "required": [
+          "streamStatus",
+          "payload"
+        ],
+        "properties": {
+          "streamStatus": {
+            "type": "string",
+            "enum": [
+              "single",
+              "start",
+              "continue",
+              "end"
+            ]
+          },
+          "payload": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Uint8"
+            },
+            "maxItems": 6,
+            "minItems": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "SysEx7Body": {
+        "type": "object",
+        "required": [
+          "manufacturerId",
+          "packets"
+        ],
+        "properties": {
+          "manufacturerId": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Uint8"
+                },
+                "minItems": 1,
+                "maxItems": 1
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Uint8"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              }
+            ]
+          },
+          "packets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/SysEx7Packet"
+            },
+            "minItems": 1
+          }
+        },
+        "description": "7-bit clean stream framed in 32-bit UMP words (up to 6 bytes per word).",
+        "additionalProperties": false
+      },
+      "Midi2StatusNibble": {
+        "type": "integer",
+        "enum": [
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ]
+      },
+      "NoteAttributeType": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 255
+      },
+      "Midi2ChannelVoiceBody": {
+        "type": "object",
+        "required": [
+          "statusNibble",
+          "channel"
+        ],
+        "properties": {
+          "statusNibble": {
+            "$ref": "#/$defs/Midi2StatusNibble"
+          },
+          "channel": {
+            "$ref": "#/$defs/Uint4"
+          },
+          "noteNumber": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "velocity16": {
+            "$ref": "#/$defs/Uint16"
+          },
+          "attributeType": {
+            "$ref": "#/$defs/NoteAttributeType"
+          },
+          "attributeData16": {
+            "$ref": "#/$defs/Uint16"
+          },
+          "polyPressure32": {
+            "$ref": "#/$defs/Uint32"
+          },
+          "control": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "controlValue32": {
+            "$ref": "#/$defs/Uint32"
+          },
+          "program": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "bankMsb": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "bankLsb": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "bankValid": {
+            "type": "boolean"
+          },
+          "channelPressure32": {
+            "$ref": "#/$defs/Uint32"
+          },
+          "pitchBend32": {
+            "$ref": "#/$defs/Uint32"
+          },
+          "rpnIndexMsb": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "rpnIndexLsb": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "rpnData32": {
+            "$ref": "#/$defs/Uint32"
+          },
+          "nrpnIndexMsb": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "nrpnIndexLsb": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "nrpnData32": {
+            "$ref": "#/$defs/Uint32"
+          },
+          "rpnDelta32": {
+            "$ref": "#/$defs/Int32"
+          },
+          "nrpnDelta32": {
+            "$ref": "#/$defs/Int32"
+          },
+          "perNoteMgmt": {
+            "type": "object",
+            "properties": {
+              "noteNumber": {
+                "$ref": "#/$defs/Uint7"
+              },
+              "detach": {
+                "type": "boolean",
+                "description": "D bit"
+              },
+              "reset": {
+                "type": "boolean",
+                "description": "S bit"
+              }
+            },
+            "additionalProperties": false
+          },
+          "regPerNoteCtrlIndex": {
+            "$ref": "#/$defs/Uint8"
+          },
+          "regPerNoteCtrlValue32": {
+            "$ref": "#/$defs/Uint32"
+          },
+          "assignPerNoteCtrlIndex": {
+            "$ref": "#/$defs/Uint8"
+          },
+          "assignPerNoteCtrlValue32": {
+            "$ref": "#/$defs/Uint32"
+          }
+        },
+        "description": "Only fields relevant to the specific status are present.",
+        "additionalProperties": false
+      },
+      "DataMessageKind": {
+        "type": "string",
+        "enum": [
+          "sysex8",
+          "mds"
+        ]
+      },
+      "DataMessageBody": {
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "#/$defs/DataMessageKind"
+          },
+          "sysex8": {
+            "type": "object",
+            "required": [
+              "manufacturerId",
+              "length",
+              "data"
+            ],
+            "properties": {
+              "manufacturerId": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/Uint8"
+                    },
+                    "minItems": 1,
+                    "maxItems": 1
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/$defs/Uint8"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  }
+                ]
+              },
+              "length": {
+                "$ref": "#/$defs/Uint28"
+              },
+              "data": {
+                "$ref": "#/$defs/ByteArray"
+              }
+            },
+            "description": "8-bit clean SysEx8 payload",
+            "additionalProperties": false
+          },
+          "mds": {
+            "type": "object",
+            "required": [
+              "messageId",
+              "totalChunks",
+              "chunks"
+            ],
+            "properties": {
+              "messageId": {
+                "$ref": "#/$defs/Uint16"
+              },
+              "totalChunks": {
+                "$ref": "#/$defs/Uint16"
+              },
+              "chunks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "index",
+                    "validByteCount",
+                    "payload"
+                  ],
+                  "properties": {
+                    "index": {
+                      "$ref": "#/$defs/Uint16"
+                    },
+                    "validByteCount": {
+                      "$ref": "#/$defs/Uint8"
+                    },
+                    "payload": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/$defs/Uint8"
+                      },
+                      "maxItems": 14
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            },
+            "description": "Mixed Data Set chunking for large transfers",
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "FlexDataBody": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/Flex.Tempo"
+          },
+          {
+            "$ref": "#/$defs/Flex.TimeSignature"
+          },
+          {
+            "$ref": "#/$defs/Flex.Metronome"
+          },
+          {
+            "$ref": "#/$defs/Flex.KeySignature"
+          },
+          {
+            "$ref": "#/$defs/Flex.ChordName"
+          },
+          {
+            "$ref": "#/$defs/Flex.Text"
+          },
+          {
+            "$ref": "#/$defs/Flex.Lyric"
+          },
+          {
+            "$ref": "#/$defs/Flex.Ruby"
+          }
+        ]
+      },
+      "StreamOpcode": {
+        "type": "integer",
+        "enum": [
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      "StreamBody": {
+        "type": "object",
+        "required": [
+          "opcode"
+        ],
+        "properties": {
+          "opcode": {
+            "$ref": "#/$defs/StreamOpcode"
+          },
+          "endpointDiscovery": {
+            "type": "object",
+            "properties": {
+              "majorVersion": {
+                "$ref": "#/$defs/Uint8"
+              },
+              "minorVersion": {
+                "$ref": "#/$defs/Uint8"
+              },
+              "maxGroups": {
+                "$ref": "#/$defs/Uint4"
+              }
+            },
+            "additionalProperties": false
+          },
+          "streamConfigRequest": {
+            "type": "object",
+            "properties": {
+              "protocol": {
+                "type": "string",
+                "enum": [
+                  "midi1",
+                  "midi2"
+                ]
+              },
+              "jrTimestampsTx": {
+                "type": "boolean"
+              },
+              "jrTimestampsRx": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "streamConfigNotification": {
+            "type": "object",
+            "properties": {
+              "protocol": {
+                "type": "string",
+                "enum": [
+                  "midi1",
+                  "midi2"
+                ]
+              },
+              "jrTimestampsTx": {
+                "type": "boolean"
+              },
+              "jrTimestampsRx": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "functionBlockDiscovery": {
+            "type": "object",
+            "properties": {
+              "filterBitmap": {
+                "$ref": "#/$defs/Uint32"
+              }
+            },
+            "additionalProperties": false
+          },
+          "functionBlockInfo": {
+            "type": "object",
+            "properties": {
+              "index": {
+                "$ref": "#/$defs/Uint8"
+              },
+              "firstGroup": {
+                "$ref": "#/$defs/Uint4"
+              },
+              "groupCount": {
+                "$ref": "#/$defs/Uint4"
+              }
+            },
+            "additionalProperties": false
+          },
+          "processInquiry": {
+            "type": "object",
+            "properties": {
+              "functionBlock": {
+                "$ref": "#/components/schemas/Uint7"
+              },
+              "part": {
+                "$ref": "#/components/schemas/Uint4"
+              }
+            },
+            "additionalProperties": false
+          },
+          "processInquiryReply": {
+            "type": "object",
+            "properties": {
+              "functionBlock": {
+                "$ref": "#/components/schemas/Uint7"
+              },
+              "part": {
+                "$ref": "#/components/schemas/Uint4"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "description": "Endpoint discovery, protocol selection, and FB info.",
+        "additionalProperties": false
+      },
+      "DeltaClockstampConfig": {
+        "type": "object",
+        "properties": {
+          "dctpq": {
+            "$ref": "#/$defs/Uint16",
+            "description": "Ticks per quarter note"
+          },
+          "initialTempoMicrosecPerQN": {
+            "$ref": "#/$defs/Uint32"
+          },
+          "timeSignature": {
+            "type": "object",
+            "properties": {
+              "numerator": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "denominatorPow2": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "description": "Clip configuration timing as used in MIDI Clip Files.",
+        "additionalProperties": false
+      },
+      "ClipEnvelope": {
+        "type": "object",
+        "properties": {
+          "startOfClip": {
+            "type": "boolean"
+          },
+          "endOfClip": {
+            "type": "boolean"
+          },
+          "pickupBars": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MidiCiEnvelope": {
+        "type": "object",
+        "required": [
+          "scope",
+          "subId1",
+          "subId2",
+          "version",
+          "body"
+        ],
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "nonRealtime",
+              "realtime"
+            ],
+            "description": "0x7E or 0x7F"
+          },
+          "subId1": {
+            "const": 13
+          },
+          "subId2": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "version": {
+            "$ref": "#/$defs/Uint8"
+          },
+          "body": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/MidiCiDiscoveryBody"
+              },
+              {
+                "$ref": "#/$defs/MidiCiProfilesBody"
+              },
+              {
+                "$ref": "#/$defs/MidiCiPropertyExchangeBody"
+              },
+              {
+                "$ref": "#/$defs/MidiCiProcessInquiryBody"
+              },
+              {
+                "$ref": "#/$defs/MidiCiAckNakBody"
+              }
+            ]
+          }
+        },
+        "description": "SysEx(7/8) payload for MIDI-CI transactions.",
+        "additionalProperties": false
+      },
+      "MidiCiDiscoveryBody": {
+        "type": "object",
+        "properties": {
+          "muid": {
+            "$ref": "#/$defs/Uint32"
+          },
+          "manufacturerId": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Uint8"
+                },
+                "minItems": 1,
+                "maxItems": 1
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/Uint8"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              }
+            ]
+          },
+          "deviceFamily": {
+            "$ref": "#/$defs/Uint16"
+          },
+          "deviceModel": {
+            "$ref": "#/$defs/Uint16"
+          },
+          "softwareRev": {
+            "$ref": "#/$defs/Uint32"
+          },
+          "categories": {
+            "type": "object",
+            "properties": {
+              "profiles": {
+                "type": "boolean"
+              },
+              "propertyExchange": {
+                "type": "boolean"
+              },
+              "processInquiry": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "maxSysEx": {
+            "$ref": "#/$defs/Uint32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MidiCiAckNakBody": {
+        "type": "object",
+        "properties": {
+          "ack": {
+            "type": "boolean"
+          },
+          "statusCode": {
+            "$ref": "#/$defs/Uint8"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MidiCiProfilesBody": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "inquiry",
+              "reply",
+              "addedReport",
+              "removedReport",
+              "setOn",
+              "setOff",
+              "enabledReport",
+              "disabledReport",
+              "detailsInquiry",
+              "detailsReply",
+              "profileSpecificData"
+            ]
+          },
+          "profileId": {
+            "type": "string",
+            "description": "As per MA/AMEI allocation"
+          },
+          "target": {
+            "type": "string",
+            "enum": [
+              "channel",
+              "group",
+              "functionBlock"
+            ]
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/Uint4"
+            }
+          },
+          "details": {
+            "type": "object",
+            "description": "Profile Details Inquiry fields (e.g., maxChannels, noteRange, optional features)",
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "MidiCiPropertyExchangeBody": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "capInquiry",
+              "capReply",
+              "get",
+              "getReply",
+              "set",
+              "setReply",
+              "subscribe",
+              "subscribeReply",
+              "notify",
+              "terminate"
+            ]
+          },
+          "requestId": {
+            "$ref": "#/$defs/Uint32"
+          },
+          "encoding": {
+            "type": "string",
+            "enum": [
+              "json",
+              "binary",
+              "json+zlib",
+              "binary+zlib",
+              "mcoded7"
+            ]
+          },
+          "header": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "data": {
+            "description": "JSON or encoded non-JSON; when JSON, schema may be referenced via header.schema",
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false
+              },
+              {
+                "$ref": "#/$defs/ByteArray"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "MidiCiProcessInquiryBody": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "capInquiry",
+              "capReply",
+              "messageReport",
+              "messageReportReply",
+              "endReport"
+            ]
+          },
+          "filters": {
+            "type": "object",
+            "description": "Bitmap/filters for message classes reported",
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "UmpPacket32": {
+        "type": "object",
+        "required": [
+          "messageType",
+          "body"
+        ],
+        "properties": {
+          "messageType": {
+            "enum": [
+              0,
+              1,
+              2,
+              3,
+              15
+            ]
+          },
+          "group": {
+            "$ref": "#/$defs/Group"
+          },
+          "body": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/UtilityBody"
+              },
+              {
+                "$ref": "#/$defs/SystemCommonRealtimeBody"
+              },
+              {
+                "$ref": "#/$defs/Midi1ChannelVoiceBody"
+              },
+              {
+                "$ref": "#/$defs/SysEx7Body"
+              },
+              {
+                "$ref": "#/$defs/StreamBody"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "UmpPacket64": {
+        "type": "object",
+        "required": [
+          "messageType",
+          "group",
+          "statusNibble",
+          "channel",
+          "body"
+        ],
+        "properties": {
+          "messageType": {
+            "const": 4
+          },
+          "group": {
+            "$ref": "#/$defs/Group"
+          },
+          "statusNibble": {
+            "$ref": "#/$defs/Midi2StatusNibble"
+          },
+          "channel": {
+            "$ref": "#/$defs/Uint4"
+          },
+          "body": {
+            "$ref": "#/$defs/Midi2ChannelVoiceVariants"
+          }
+        },
+        "additionalProperties": false
+      },
+      "UmpPacket128": {
+        "type": "object",
+        "required": [
+          "messageType",
+          "body"
+        ],
+        "properties": {
+          "messageType": {
+            "enum": [
+              5,
+              13
+            ]
+          },
+          "group": {
+            "$ref": "#/$defs/Group"
+          },
+          "body": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/DataMessageBody"
+              },
+              {
+                "$ref": "#/$defs/FlexDataBody"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "Midi2.NoteOff": {
+        "type": "object",
+        "required": [
+          "noteNumber",
+          "velocity16"
+        ],
+        "properties": {
+          "noteNumber": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "velocity16": {
+            "$ref": "#/$defs/Uint16"
+          },
+          "attributeType": {
+            "$ref": "#/$defs/NoteAttributeType"
+          },
+          "attributeData16": {
+            "$ref": "#/$defs/Uint16"
+          }
+        },
+        "description": "Status 0x8 (Note Off).",
+        "additionalProperties": false
+      },
+      "Midi2.NoteOn": {
+        "type": "object",
+        "required": [
+          "noteNumber",
+          "velocity16"
+        ],
+        "properties": {
+          "noteNumber": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "velocity16": {
+            "$ref": "#/$defs/Uint16"
+          },
+          "attributeType": {
+            "$ref": "#/$defs/NoteAttributeType"
+          },
+          "attributeData16": {
+            "$ref": "#/$defs/Uint16"
+          }
+        },
+        "description": "Status 0x9 (Note On).",
+        "additionalProperties": false
+      },
+      "Midi2.PolyPressure": {
+        "type": "object",
+        "required": [
+          "noteNumber",
+          "polyPressure32"
+        ],
+        "properties": {
+          "noteNumber": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "polyPressure32": {
+            "$ref": "#/$defs/Uint32"
+          }
+        },
+        "description": "Status 0xA (Polyphonic Key Pressure).",
+        "additionalProperties": false
+      },
+      "Midi2.ControlChange": {
+        "type": "object",
+        "required": [
+          "control",
+          "controlValue32"
+        ],
+        "properties": {
+          "control": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "controlValue32": {
+            "$ref": "#/$defs/Uint32"
+          }
+        },
+        "description": "Status 0xB (CC).",
+        "additionalProperties": false
+      },
+      "Midi2.ProgramChange": {
+        "type": "object",
+        "required": [
+          "program"
+        ],
+        "properties": {
+          "program": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "bankMsb": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "bankLsb": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "bankValid": {
+            "type": "boolean"
+          }
+        },
+        "description": "Status 0xC (Program Change).",
+        "additionalProperties": false
+      },
+      "Midi2.ChannelPressure": {
+        "type": "object",
+        "required": [
+          "channelPressure32"
+        ],
+        "properties": {
+          "channelPressure32": {
+            "$ref": "#/$defs/Uint32"
+          }
+        },
+        "description": "Status 0xD (Channel Pressure).",
+        "additionalProperties": false
+      },
+      "Midi2.PitchBend": {
+        "type": "object",
+        "required": [
+          "pitchBend32"
+        ],
+        "properties": {
+          "pitchBend32": {
+            "$ref": "#/$defs/Uint32"
+          }
+        },
+        "description": "Status 0xE (Pitch Bend).",
+        "additionalProperties": false
+      },
+      "Midi2.RPN": {
+        "type": "object",
+        "required": [
+          "rpnIndexMsb",
+          "rpnIndexLsb",
+          "rpnData32"
+        ],
+        "properties": {
+          "rpnIndexMsb": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "rpnIndexLsb": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "rpnData32": {
+            "$ref": "#/$defs/Uint32"
+          }
+        },
+        "description": "Registered Controller (absolute).",
+        "additionalProperties": false
+      },
+      "Midi2.NRPN": {
+        "type": "object",
+        "required": [
+          "nrpnIndexMsb",
+          "nrpnIndexLsb",
+          "nrpnData32"
+        ],
+        "properties": {
+          "nrpnIndexMsb": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "nrpnIndexLsb": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "nrpnData32": {
+            "$ref": "#/$defs/Uint32"
+          }
+        },
+        "description": "Assignable Controller (absolute).",
+        "additionalProperties": false
+      },
+      "Midi2.RPNRelative": {
+        "type": "object",
+        "required": [
+          "rpnIndexMsb",
+          "rpnIndexLsb",
+          "rpnDelta32"
+        ],
+        "properties": {
+          "rpnIndexMsb": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "rpnIndexLsb": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "rpnDelta32": {
+            "$ref": "#/$defs/Int32"
+          }
+        },
+        "description": "Registered Controller (relative).",
+        "additionalProperties": false
+      },
+      "Midi2.NRPNRelative": {
+        "type": "object",
+        "required": [
+          "nrpnIndexMsb",
+          "nrpnIndexLsb",
+          "nrpnDelta32"
+        ],
+        "properties": {
+          "nrpnIndexMsb": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "nrpnIndexLsb": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "nrpnDelta32": {
+            "$ref": "#/$defs/Int32"
+          }
+        },
+        "description": "Assignable Controller (relative).",
+        "additionalProperties": false
+      },
+      "Midi2.PerNoteManagement": {
+        "type": "object",
+        "required": [
+          "noteNumber",
+          "detach",
+          "reset"
+        ],
+        "properties": {
+          "noteNumber": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "detach": {
+            "type": "boolean"
+          },
+          "reset": {
+            "type": "boolean"
+          }
+        },
+        "description": "Per-Note Management (D/S flags).",
+        "additionalProperties": false
+      },
+      "Midi2.RegPerNoteController": {
+        "type": "object",
+        "required": [
+          "noteNumber",
+          "regPerNoteCtrlIndex",
+          "regPerNoteCtrlValue32"
+        ],
+        "properties": {
+          "noteNumber": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "regPerNoteCtrlIndex": {
+            "$ref": "#/$defs/Uint8"
+          },
+          "regPerNoteCtrlValue32": {
+            "$ref": "#/$defs/Uint32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Midi2.AssignPerNoteController": {
+        "type": "object",
+        "required": [
+          "noteNumber",
+          "assignPerNoteCtrlIndex",
+          "assignPerNoteCtrlValue32"
+        ],
+        "properties": {
+          "noteNumber": {
+            "$ref": "#/$defs/Uint7"
+          },
+          "assignPerNoteCtrlIndex": {
+            "$ref": "#/$defs/Uint8"
+          },
+          "assignPerNoteCtrlValue32": {
+            "$ref": "#/$defs/Uint32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "Midi2ChannelVoiceVariants": {
+        "type": "object",
+        "required": [
+          "statusNibble",
+          "channel"
+        ],
+        "properties": {
+          "statusNibble": {
+            "$ref": "#/$defs/Midi2StatusNibble"
+          },
+          "channel": {
+            "$ref": "#/$defs/Uint4"
+          }
+        },
+        "oneOf": [
+          {
+            "properties": {
+              "statusNibble": {
+                "const": 8
+              },
+              "body": {
+                "$ref": "#/$defs/Midi2.NoteOff"
+              }
+            }
+          },
+          {
+            "properties": {
+              "statusNibble": {
+                "const": 9
+              },
+              "body": {
+                "$ref": "#/$defs/Midi2.NoteOn"
+              }
+            }
+          },
+          {
+            "properties": {
+              "statusNibble": {
+                "const": 10
+              },
+              "body": {
+                "$ref": "#/$defs/Midi2.PolyPressure"
+              }
+            }
+          },
+          {
+            "properties": {
+              "statusNibble": {
+                "const": 11
+              },
+              "body": {
+                "$ref": "#/$defs/Midi2.ControlChange"
+              }
+            }
+          },
+          {
+            "properties": {
+              "statusNibble": {
+                "const": 12
+              },
+              "body": {
+                "$ref": "#/$defs/Midi2.ProgramChange"
+              }
+            }
+          },
+          {
+            "properties": {
+              "statusNibble": {
+                "const": 13
+              },
+              "body": {
+                "$ref": "#/$defs/Midi2.ChannelPressure"
+              }
+            }
+          },
+          {
+            "properties": {
+              "statusNibble": {
+                "const": 14
+              },
+              "body": {
+                "$ref": "#/$defs/Midi2.PitchBend"
+              }
+            }
+          },
+          {
+            "properties": {
+              "statusNibble": {
+                "const": 15
+              },
+              "body": {
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/Midi2.RPN"
+                  },
+                  {
+                    "$ref": "#/$defs/Midi2.NRPN"
+                  },
+                  {
+                    "$ref": "#/$defs/Midi2.RPNRelative"
+                  },
+                  {
+                    "$ref": "#/$defs/Midi2.NRPNRelative"
+                  },
+                  {
+                    "$ref": "#/$defs/Midi2.PerNoteManagement"
+                  },
+                  {
+                    "$ref": "#/$defs/Midi2.RegPerNoteController"
+                  },
+                  {
+                    "$ref": "#/$defs/Midi2.AssignPerNoteController"
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "additionalProperties": false
+      },
+      "Flex.Tempo": {
+        "type": "object",
+        "required": [
+          "statusClass",
+          "status",
+          "data"
+        ],
+        "properties": {
+          "statusClass": {
+            "const": 16
+          },
+          "status": {
+            "const": 1
+          },
+          "address": {
+            "type": "object",
+            "properties": {
+              "scope": {
+                "enum": [
+                  "group",
+                  "channel"
+                ]
+              },
+              "group": {
+                "$ref": "#/$defs/Uint4"
+              },
+              "channel": {
+                "$ref": "#/$defs/Uint4"
+              }
+            },
+            "additionalProperties": false
+          },
+          "data": {
+            "type": "object",
+            "required": [
+              "bpm"
+            ],
+            "properties": {
+              "bpm": {
+                "type": "number",
+                "minimum": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "description": "Flex: Set Tempo (heuristic mapping to BPM).",
+        "additionalProperties": false
+      },
+      "Flex.TimeSignature": {
+        "type": "object",
+        "required": [
+          "statusClass",
+          "status",
+          "data"
+        ],
+        "properties": {
+          "statusClass": {
+            "const": 16
+          },
+          "status": {
+            "const": 2
+          },
+          "address": {
+            "type": "object",
+            "properties": {
+              "scope": {
+                "enum": [
+                  "group",
+                  "channel"
+                ]
+              },
+              "group": {
+                "$ref": "#/$defs/Uint4"
+              },
+              "channel": {
+                "$ref": "#/$defs/Uint4"
+              }
+            },
+            "additionalProperties": false
+          },
+          "data": {
+            "type": "object",
+            "required": [
+              "numerator",
+              "denominatorPow2"
+            ],
+            "properties": {
+              "numerator": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "denominatorPow2": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "description": "Flex: Set Time Signature (n / 2^d).",
+        "additionalProperties": false
+      },
+      "Flex.Metronome": {
+        "type": "object",
+        "required": [
+          "statusClass",
+          "status",
+          "data"
+        ],
+        "properties": {
+          "statusClass": {
+            "const": 16
+          },
+          "status": {
+            "const": 3
+          },
+          "address": {
+            "type": "object",
+            "properties": {
+              "scope": {
+                "enum": [
+                  "group",
+                  "channel"
+                ]
+              },
+              "group": {
+                "$ref": "#/$defs/Uint4"
+              },
+              "channel": {
+                "$ref": "#/$defs/Uint4"
+              }
+            },
+            "additionalProperties": false
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "clicksPerBeat": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "accentPattern": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "description": "Flex: Set Metronome parameters.",
+        "additionalProperties": false
+      },
+      "Flex.KeySignature": {
+        "type": "object",
+        "required": [
+          "statusClass",
+          "status",
+          "data"
+        ],
+        "properties": {
+          "statusClass": {
+            "const": 16
+          },
+          "status": {
+            "const": 4
+          },
+          "address": {
+            "type": "object",
+            "properties": {
+              "scope": {
+                "enum": [
+                  "group",
+                  "channel"
+                ]
+              },
+              "group": {
+                "$ref": "#/$defs/Uint4"
+              },
+              "channel": {
+                "$ref": "#/$defs/Uint4"
+              }
+            },
+            "additionalProperties": false
+          },
+          "data": {
+            "type": "object",
+            "required": [
+              "key"
+            ],
+            "properties": {
+              "key": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "description": "Flex: Set Key Signature (e.g., 'C', 'Gm').",
+        "additionalProperties": false
+      },
+      "Flex.ChordName": {
+        "type": "object",
+        "required": [
+          "statusClass",
+          "status",
+          "data"
+        ],
+        "properties": {
+          "statusClass": {
+            "const": 16
+          },
+          "status": {
+            "const": 5
+          },
+          "address": {
+            "type": "object",
+            "properties": {
+              "scope": {
+                "enum": [
+                  "group",
+                  "channel"
+                ]
+              },
+              "group": {
+                "$ref": "#/$defs/Uint4"
+              },
+              "channel": {
+                "$ref": "#/$defs/Uint4"
+              }
+            },
+            "additionalProperties": false
+          },
+          "data": {
+            "type": "object",
+            "required": [
+              "chord"
+            ],
+            "properties": {
+              "chord": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "description": "Flex: Chord name at position.",
+        "additionalProperties": false
+      },
+      "Flex.Text": {
+        "type": "object",
+        "required": [
+          "statusClass",
+          "status",
+          "data"
+        ],
+        "properties": {
+          "statusClass": {
+            "const": 17
+          },
+          "status": {
+            "const": 1
+          },
+          "address": {
+            "type": "object",
+            "properties": {
+              "scope": {
+                "enum": [
+                  "group",
+                  "channel"
+                ]
+              },
+              "group": {
+                "$ref": "#/$defs/Uint4"
+              },
+              "channel": {
+                "$ref": "#/$defs/Uint4"
+              }
+            },
+            "additionalProperties": false
+          },
+          "data": {
+            "type": "object",
+            "required": [
+              "text"
+            ],
+            "properties": {
+              "text": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "description": "Flex Text.",
+        "additionalProperties": false
+      },
+      "Flex.Lyric": {
+        "type": "object",
+        "required": [
+          "statusClass",
+          "status",
+          "data"
+        ],
+        "properties": {
+          "statusClass": {
+            "const": 17
+          },
+          "status": {
+            "const": 2
+          },
+          "address": {
+            "type": "object",
+            "properties": {
+              "scope": {
+                "enum": [
+                  "group",
+                  "channel"
+                ]
+              },
+              "group": {
+                "$ref": "#/$defs/Uint4"
+              },
+              "channel": {
+                "$ref": "#/$defs/Uint4"
+              }
+            },
+            "additionalProperties": false
+          },
+          "data": {
+            "type": "object",
+            "required": [
+              "lyric"
+            ],
+            "properties": {
+              "lyric": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "description": "Flex Lyric.",
+        "additionalProperties": false
+      },
+      "Flex.Ruby": {
+        "type": "object",
+        "required": [
+          "statusClass",
+          "status",
+          "data"
+        ],
+        "properties": {
+          "statusClass": {
+            "const": 17
+          },
+          "status": {
+            "const": 3
+          },
+          "address": {
+            "type": "object",
+            "properties": {
+              "scope": {
+                "enum": [
+                  "group",
+                  "channel"
+                ]
+              },
+              "group": {
+                "$ref": "#/$defs/Uint4"
+              },
+              "channel": {
+                "$ref": "#/$defs/Uint4"
+              }
+            },
+            "additionalProperties": false
+          },
+          "data": {
+            "type": "object",
+            "required": [
+              "ruby"
+            ],
+            "properties": {
+              "ruby": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "description": "Flex Ruby (furigana).",
+        "additionalProperties": false
+      }
+    }
+  }
+}

@@ -49,6 +49,7 @@ export const TeatroStageApp: React.FC = () => {
   const lastTimeRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
   const [snapshot, setSnapshot] = useState<StageSnapshot | null>(null);
+  const [midi2Status, setMidi2Status] = useState<string>("pending");
   const [isPlaying, setIsPlaying] = useState(true);
   const [windStrength] = useState(0.6);
   const [showDiag, setShowDiag] = useState(false);
@@ -117,6 +118,25 @@ export const TeatroStageApp: React.FC = () => {
       });
   }, []);
 
+  // Fetch midi2 bridge status (semantic-browser runtime) to aid planner/testing.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/midi2/status")
+      .then((res) => res.json())
+      .then((json) => {
+        if (cancelled) return;
+        const summary = json.ok ? `midi2 ok (bundleLoaded=${json.bundleLoaded ?? false})` : "midi2 unavailable";
+        setMidi2Status(summary);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setMidi2Status("midi2 unavailable");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div
       style={{
@@ -158,6 +178,19 @@ export const TeatroStageApp: React.FC = () => {
             >
               ⧉
             </button>
+            <div
+              style={{
+                padding: "4px 8px",
+                borderRadius: 6,
+                background: "rgba(0,0,0,0.05)",
+                border: "1px solid rgba(0,0,0,0.1)",
+                fontSize: 12,
+                color: "#0d47a1"
+              }}
+              title="midi2 bridge status"
+            >
+              {midi2Status}
+            </div>
             <button
               type="button"
               aria-label="Info"

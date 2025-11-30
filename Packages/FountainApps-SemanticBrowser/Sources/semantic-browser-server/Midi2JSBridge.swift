@@ -6,6 +6,7 @@ import JavaScriptCore
 final class Midi2JSBridge {
     private let context: JSContext
     private let bundlePath: String?
+    private(set) var bundleLoaded: Bool = false
 
     init?(bundlePath: String? = nil) {
         guard let ctx = JSContext() else { return nil }
@@ -14,6 +15,8 @@ final class Midi2JSBridge {
         injectHarness()
         if let bundlePath {
             loadBundle(at: bundlePath)
+        } else if let defaultBundle = Self.defaultBundlePath() {
+            loadBundle(at: defaultBundle)
         }
     }
 
@@ -23,6 +26,7 @@ final class Midi2JSBridge {
         let url = URL(fileURLWithPath: bundlePath)
         guard let data = try? Data(contentsOf: url), let script = String(data: data, encoding: .utf8) else { return }
         _ = context.evaluateScript(script)
+        bundleLoaded = true
     }
 
     private func injectHarness() {
@@ -58,5 +62,19 @@ final class Midi2JSBridge {
         guard let midi2 = context.objectForKeyedSubscript("midi2"),
               let res = midi2.invokeMethod("logSize", withArguments: []) else { return 0 }
         return Int(res.toInt32())
+    }
+
+    private static func defaultBundlePath() -> String? {
+        let candidates = [
+            "Public/midi2-browser/vendor/midi2/dist/midi2.js",
+            "Public/midi2-browser/vendor/midi2/dist/midi2.umd.js",
+            "Public/midi2-browser/vendor/midi2/dist/index.js"
+        ]
+        for path in candidates {
+            if FileManager.default.fileExists(atPath: path) {
+                return path
+            }
+        }
+        return nil
     }
 }

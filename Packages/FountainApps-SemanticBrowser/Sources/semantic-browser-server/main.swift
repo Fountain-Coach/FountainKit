@@ -90,7 +90,9 @@ internal func midi2StatusResponse(env: [String: String]) -> HTTPResponse {
     let json: [String: Any] = [
         "ok": true,
         "bundle": bundle as Any,
-        "capabilities": caps
+        "bundleLoaded": bridge.bundleLoaded,
+        "capabilities": caps,
+        "logSize": bridge.logSize()
     ].compactMapValues { $0 }
     let data = (try? JSONSerialization.data(withJSONObject: json, options: [])) ?? Data("{}".utf8)
     return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: data)

@@ -50,6 +50,7 @@ export const TeatroStageApp: React.FC = () => {
   const rafRef = useRef<number | null>(null);
   const [snapshot, setSnapshot] = useState<StageSnapshot | null>(null);
   const [midi2Status, setMidi2Status] = useState<string>("pending");
+  const [midi2Caps, setMidi2Caps] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(true);
   const [windStrength] = useState(0.6);
   const [showDiag, setShowDiag] = useState(false);
@@ -137,6 +138,27 @@ export const TeatroStageApp: React.FC = () => {
     };
   }, []);
 
+  // Fetch midi2 capabilities for planner/diag visibility.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/midi2/capabilities")
+      .then((res) => res.json())
+      .then((json) => {
+        if (cancelled) return;
+        const summary = json.ok
+          ? `caps: scheduler=${json.scheduler ?? "unknown"} version=${json.version ?? ""}`
+          : "caps unavailable";
+        setMidi2Caps(summary);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setMidi2Caps("caps unavailable");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div
       style={{
@@ -191,6 +213,21 @@ export const TeatroStageApp: React.FC = () => {
             >
               {midi2Status}
             </div>
+            {midi2Caps && (
+              <div
+                style={{
+                  padding: "4px 8px",
+                  borderRadius: 6,
+                  background: "rgba(0,0,0,0.05)",
+                  border: "1px solid rgba(0,0,0,0.1)",
+                  fontSize: 12,
+                  color: "#0d47a1"
+                }}
+                title="midi2 capabilities"
+              >
+                {midi2Caps}
+              </div>
+            )}
             <button
               type="button"
               aria-label="Info"

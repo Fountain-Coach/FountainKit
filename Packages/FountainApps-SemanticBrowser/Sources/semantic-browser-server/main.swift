@@ -79,6 +79,23 @@ internal func webGPUCapabilitiesResponse(env: [String: String]) -> HTTPResponse 
     return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: data)
 }
 
+/// Expose minimal midi2 bridge health/capabilities for diagnostics and planners.
+internal func midi2StatusResponse(env: [String: String]) -> HTTPResponse {
+    let bundle = env["SB_MIDI2_BUNDLE"]
+    guard let bridge = Midi2JSBridge(bundlePath: bundle) else {
+        let body = Data(#"{"ok":false,"error":"js_context_init_failed"}"#.utf8)
+        return HTTPResponse(status: 500, headers: ["Content-Type": "application/json"], body: body)
+    }
+    let caps = bridge.capabilities()
+    let json: [String: Any] = [
+        "ok": true,
+        "bundle": bundle as Any,
+        "capabilities": caps
+    ].compactMapValues { $0 }
+    let data = (try? JSONSerialization.data(withJSONObject: json, options: [])) ?? Data("{}".utf8)
+    return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: data)
+}
+
 verifyLauncherSignature()
 
 final class FountainStoreBackend: SemanticMemoryService.Backend, @unchecked Sendable {
@@ -288,6 +305,9 @@ Task {
     let fallback = FountainRuntime.HTTPKernel { req in
         if req.method == "GET" && req.path == "/webgpu/capabilities" {
             return webGPUCapabilitiesResponse(env: env)
+        }
+        if req.method == "GET" && req.path == "/midi2/status" {
+            return midi2StatusResponse(env: env)
         }
         if let resp = serveStatic(root: stageRoot, path: req.path) { return resp }
         if req.method == "GET" && req.path == "/metrics" {

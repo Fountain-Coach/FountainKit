@@ -5,11 +5,24 @@ import JavaScriptCore
 /// Loads a tiny JS harness to confirm JSContext availability and to expose a future `scheduleUMP` hook.
 final class Midi2JSBridge {
     private let context: JSContext
+    private let bundlePath: String?
 
-    init?() {
+    init?(bundlePath: String? = nil) {
         guard let ctx = JSContext() else { return nil }
         self.context = ctx
+        self.bundlePath = bundlePath
         injectHarness()
+        if let bundlePath {
+            loadBundle(at: bundlePath)
+        }
+    }
+
+    /// Attempt to load a midi2.js bundle from disk and evaluate it in the JSContext.
+    /// - Parameter bundlePath: path to a JS bundle (e.g., bundled midi2.js build) to load.
+    func loadBundle(at bundlePath: String) {
+        let url = URL(fileURLWithPath: bundlePath)
+        guard let data = try? Data(contentsOf: url), let script = String(data: data, encoding: .utf8) else { return }
+        _ = context.evaluateScript(script)
     }
 
     private func injectHarness() {

@@ -79,23 +79,56 @@ internal func webGPUCapabilitiesResponse(env: [String: String]) -> HTTPResponse 
     return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: data)
 }
 
-/// Expose minimal midi2 bridge health/capabilities for diagnostics and planners.
-internal func midi2StatusResponse(env: [String: String]) -> HTTPResponse {
-    let bundle = env["SB_MIDI2_BUNDLE"]
-    guard let bridge = Midi2JSBridge(bundlePath: bundle) else {
-        let body = Data(#"{"ok":false,"error":"js_context_init_failed"}"#.utf8)
-        return HTTPResponse(status: 500, headers: ["Content-Type": "application/json"], body: body)
+/// Shared midi2 runtime that owns a JSCore bridge and provides status/scheduling helpers.
+final class Midi2Runtime {
+    private let env: [String: String]
+    private let bridge: Midi2JSBridge?
+    private let queue = DispatchQueue(label: "semantic-browser.midi2.runtime")
+
+    init(env: [String: String]) {
+        self.env = env
+        self.bridge = Midi2JSBridge(bundlePath: env["SB_MIDI2_BUNDLE"])
     }
-    let caps = bridge.capabilities()
-    let json: [String: Any] = [
-        "ok": true,
-        "bundle": bundle as Any,
-        "bundleLoaded": bridge.bundleLoaded,
-        "capabilities": caps,
-        "logSize": bridge.logSize()
-    ].compactMapValues { $0 }
-    let data = (try? JSONSerialization.data(withJSONObject: json, options: [])) ?? Data("{}".utf8)
-    return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: data)
+
+    func statusResponse() -> HTTPResponse {
+        queue.sync {
+            guard let bridge else {
+                let body = Data(#"{"ok":false,"error":"js_context_init_failed"}"#.utf8)
+                return HTTPResponse(status: 500, headers: ["Content-Type": "application/json"], body: body)
+            }
+            let caps = bridge.capabilities()
+            let json: [String: Any] = [
+                "ok": true,
+                "bundle": env["SB_MIDI2_BUNDLE"] as Any,
+                "bundleLoaded": bridge.bundleLoaded,
+                "capabilities": caps,
+                "logSize": bridge.logSize()
+            ].compactMapValues { $0 }
+            let data = (try? JSONSerialization.data(withJSONObject: json, options: [])) ?? Data("{}".utf8)
+            return HTTPResponse(status: 200, headers: ["Content-Type": "application/json"], body: data)
+        }
+    }
+
+    func scheduleResponse(body: Data) -> HTTPResponse {
+        queue.sync {
+            guard let bridge else {
+                let body = Data(#"{"ok":false,"error":"bridge_not_ready"}"#.utf8)
+                return HTTPResponse(status: 500, headers: ["Content-Type": "application/json"], body: body)
+            }
+            struct Payload: Codable { let bytes: [UInt8]; let ts: UInt64 }
+            guard let payload = try? JSONDecoder().decode(Payload.self, from: body) else {
+                let body = Data(#"{"ok":false,"error":"invalid_payload"}"#.utf8)
+                return HTTPResponse(status: 400, headers: ["Content-Type": "application/json"], body: body)
+            }
+            let ok = bridge.scheduleUMP(bytes: payload.bytes, timestamp: payload.ts)
+            let json: [String: Any] = [
+                "ok": ok,
+                "logSize": bridge.logSize()
+            ]
+            let data = (try? JSONSerialization.data(withJSONObject: json, options: [])) ?? Data("{}".utf8)
+            return HTTPResponse(status: ok ? 200 : 500, headers: ["Content-Type": "application/json"], body: data)
+        }
+    }
 }
 
 verifyLauncherSignature()
@@ -303,13 +336,17 @@ Task {
     let backend = makeFountainStoreBackend(from: env)
     let service = buildService(backend: backend)
     let stageRoot = URL(fileURLWithPath: env["SB_STAGE_ROOT"] ?? "Public/teatro-stage-web/dist", isDirectory: true)
+    let midi2Runtime = Midi2Runtime(env: env)
     // Serve generated OpenAPI handlers via a lightweight NIO transport.
     let fallback = FountainRuntime.HTTPKernel { req in
         if req.method == "GET" && req.path == "/webgpu/capabilities" {
             return webGPUCapabilitiesResponse(env: env)
         }
         if req.method == "GET" && req.path == "/midi2/status" {
-            return midi2StatusResponse(env: env)
+            return midi2Runtime.statusResponse()
+        }
+        if req.method == "POST" && req.path == "/midi2/schedule" {
+            return midi2Runtime.scheduleResponse(body: req.body)
         }
         if let resp = serveStatic(root: stageRoot, path: req.path) { return resp }
         if req.method == "GET" && req.path == "/metrics" {

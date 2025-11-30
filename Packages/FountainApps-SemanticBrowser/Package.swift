@@ -21,7 +21,10 @@ let package = Package(
                 .product(name: "FountainRuntime", package: "FountainCore"),
                 .product(name: "LauncherSignature", package: "FountainCore")
             ]
+        ),
+        .testTarget(
+            name: "SemanticBrowserServerTests",
+            dependencies: ["semantic-browser-server"]
         )
     ]
 )
-

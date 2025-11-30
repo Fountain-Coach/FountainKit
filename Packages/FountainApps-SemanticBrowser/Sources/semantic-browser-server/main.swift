@@ -6,7 +6,7 @@ import FountainStoreClient
 import Dispatch
 
 /// Simple static file helper for serving the teatro-stage landing bundle.
-private func serveStatic(root: URL, path: String) -> HTTPResponse? {
+internal func serveStatic(root: URL, path: String) -> HTTPResponse? {
     // Normalize path; default route falls back to index.html.
     let trimmedPath = path.split(separator: "?").first.map(String.init) ?? path
     let relative = trimmedPath == "/" ? "index.html" : trimmedPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -41,7 +41,7 @@ private func serveStatic(root: URL, path: String) -> HTTPResponse? {
 }
 
 /// Returns a WebGPU capability manifest, optionally loaded from disk via `SB_WEBGPU_CAPABILITIES_PATH`.
-private func webGPUCapabilitiesResponse(env: [String: String]) -> HTTPResponse {
+internal func webGPUCapabilitiesResponse(env: [String: String]) -> HTTPResponse {
     if let path = env["SB_WEBGPU_CAPABILITIES_PATH"], !path.isEmpty {
         let url = URL(fileURLWithPath: path)
         if let data = try? Data(contentsOf: url) {

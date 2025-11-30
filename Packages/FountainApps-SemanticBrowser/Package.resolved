@@ -263,15 +263,6 @@
       }
     },
     {
-      "identity" : "typesense-swift",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/typesense/typesense-swift.git",
-      "state" : {
-        "revision" : "0f6c550c627433d82b2f9698b1ed5c59490b56d2",
-        "version" : "1.0.1"
-      }
-    },
-    {
       "identity" : "yams",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/jpsim/Yams.git",

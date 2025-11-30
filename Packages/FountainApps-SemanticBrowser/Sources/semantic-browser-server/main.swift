@@ -174,10 +174,12 @@ func buildService(backend: SemanticMemoryService.Backend? = nil) -> SemanticMemo
 }
 
 func makeFountainStoreBackend(from env: [String: String]) -> SemanticMemoryService.Backend? {
-    guard let path = env["SB_STORE_PATH"], !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-        return nil
-    }
-    let resolved = path.hasPrefix("~") ? (FileManager.default.homeDirectoryForCurrentUser.path + path.dropFirst()) : path
+    // Prefer explicit path, fall back to shared FountainStore root in the workspace.
+    let rawPath = env["SB_STORE_PATH"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        ?? env["FOUNTAINSTORE_DIR"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        ?? ".fountain/store"
+    guard !rawPath.isEmpty else { return nil }
+    let resolved = rawPath.hasPrefix("~") ? (FileManager.default.homeDirectoryForCurrentUser.path + rawPath.dropFirst()) : rawPath
     let url = URL(fileURLWithPath: resolved, isDirectory: true)
     do {
         let disk = try DiskFountainStoreClient(rootDirectory: url)

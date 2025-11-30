@@ -26,6 +26,9 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
     }
 
     public func queryPages(_ input: Operations.queryPages.Input) async throws -> Operations.queryPages.Output {
+        guard await service.hasBackend() else {
+            return .undocumented(statusCode: 503, OpenAPIRuntime.UndocumentedPayload())
+        }
         let q = input.query.q
         let host = input.query.host
         let lang = input.query.lang
@@ -51,6 +54,9 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
     }
 
     public func querySegments(_ input: Operations.querySegments.Input) async throws -> Operations.querySegments.Output {
+        guard await service.hasBackend() else {
+            return .undocumented(statusCode: 503, OpenAPIRuntime.UndocumentedPayload())
+        }
         let q = input.query.q
         let kind = input.query.kind?.rawValue
         let entity = input.query.entity
@@ -74,6 +80,9 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
     }
 
     public func queryEntities(_ input: Operations.queryEntities.Input) async throws -> Operations.queryEntities.Output {
+        guard await service.hasBackend() else {
+            return .undocumented(statusCode: 503, OpenAPIRuntime.UndocumentedPayload())
+        }
         let q = input.query.q
         let type = input.query._type?.rawValue
         let limit = input.query.limit ?? 20
@@ -101,10 +110,10 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
             imageId: snapshot.rendered.image?.imageId,
             rectsByBlock: raw.blockRects
         )
+        var anchors: [SemanticMemoryService.VisualAnchor] = []
         // Persist visuals (best-effort)
         if let image = snapshot.rendered.image {
             let asset = SemanticMemoryService.VisualAsset(imageId: image.imageId ?? "", contentType: image.contentType ?? "image/png", width: image.width ?? 0, height: image.height ?? 0, scale: Float(image.scale ?? 1.0), fetchedAt: snapshot.page.fetchedAt)
-            var anchors: [SemanticMemoryService.VisualAnchor] = []
             let anchorTs = analysis.envelope.source.fetchedAt
             for b in analysis.blocks {
                 for r in (b.rects ?? []) {
@@ -113,7 +122,20 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
             }
             await service.storeVisual(pageId: analysis.envelope.id, asset: asset, anchors: anchors)
         }
-        let resp = Components.Schemas.BrowseResponse(snapshot: snapshot, analysis: analysis, index: nil)
+        // Optional indexing into the semantic memory store
+        var indexResult: Components.Schemas.IndexResult? = nil
+        if req.index?.enabled == true {
+            let res = await service.ingest(full: fromGeneratedAnalysis(analysis))
+            indexResult = Components.Schemas.IndexResult(
+                pagesUpserted: res.pagesUpserted,
+                segmentsUpserted: res.segmentsUpserted,
+                entitiesUpserted: res.entitiesUpserted,
+                tablesUpserted: res.tablesUpserted,
+                anchorsPersisted: anchors.count,
+                coveragePercent: nil
+            )
+        }
+        let resp = Components.Schemas.BrowseResponse(snapshot: snapshot, analysis: analysis, index: indexResult)
         return .ok(.init(body: .json(resp)))
     }
     public func snapshotOnly(_ input: Operations.snapshotOnly.Input) async throws -> Operations.snapshotOnly.Output {
@@ -342,6 +364,9 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
         return .undocumented(statusCode: 404, OpenAPIRuntime.UndocumentedPayload())
     }
     public func exportArtifacts(_ input: Operations.exportArtifacts.Input) async throws -> Operations.exportArtifacts.Output {
+        guard await service.hasBackend() else {
+            return .undocumented(statusCode: 503, OpenAPIRuntime.UndocumentedPayload())
+        }
         let pageId = input.query.pageId
         switch input.query.format {
         case .snapshot_period_html:
@@ -598,6 +623,9 @@ public struct SemanticBrowserOpenAPI: APIProtocol, @unchecked Sendable {
 // MARK: - Visuals Query
 extension SemanticBrowserOpenAPI {
     public func getVisual(_ input: Operations.getVisual.Input) async throws -> Operations.getVisual.Output {
+        guard await service.hasBackend() else {
+            return .undocumented(statusCode: 503, OpenAPIRuntime.UndocumentedPayload())
+        }
         let pageId = input.query.pageId
         if let (asset, anchors) = await service.loadVisual(pageId: pageId) {
             let image: Components.Schemas.VisualResponse.imagePayload?

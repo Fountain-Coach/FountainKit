@@ -26,19 +26,15 @@ security:
   - ApiKeyAuth: []
 tags:
   - name: Browse
-    description: Navigate with a real browser (CDP/WebKit), wait for readiness, 
-      and capture a Snapshot.
+    description: Navigate with a real browser (CDP/WebKit), wait for readiness, and capture a Snapshot.
   - name: Analyze
-    description: Turn a Snapshot into a normalized Analysis (blocks, entities, 
-      claims, tables, summaries).
+    description: Turn a Snapshot into a normalized Analysis (blocks, entities, claims, tables, summaries).
   - name: Index
-    description: Persist derived artifacts into FountainStore under a corpus 
-      defined by Bootstrapping and Baseline Awareness.
+    description: Persist derived artifacts into FountainStore under a corpus defined by Bootstrapping and Baseline Awareness.
   - name: Query
-    description: Query previously indexed pages, segments, entities, and tables.
+    description: Query previously indexed pages, segments, entities, and tables. Requires FountainStore; returns 503 if absent.
   - name: Export
-    description: Export artifacts (rendered HTML/text/markdown/tables.csv) for 
-      auditing and handoff.
+    description: Export artifacts (rendered HTML/text/markdown/tables.csv) for auditing and handoff. Requires FountainStore; returns 503 if absent.
   - name: Admin
     description: Health, version, and runtime information.
   - name: Verify

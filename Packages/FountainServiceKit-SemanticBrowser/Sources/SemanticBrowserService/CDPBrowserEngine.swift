@@ -112,7 +112,7 @@ public struct CDPBrowserEngine: BrowserEngine {
             var shot: Data? = nil
             var w: Int? = nil
             var h: Int? = nil
-            var scale: Float? = 1.0
+            let scale: Float? = 1.0
             do {
                 struct Metrics: Decodable { struct Size: Decodable { let width: Double; let height: Double }; let contentSize: Size }
                 let met: Metrics = try await session.sendRecv("Page.getLayoutMetrics", params: [:], result: Metrics.self)
@@ -404,6 +404,11 @@ actor CDPSession {
         _ = try await sendRecv("Runtime.enable", params: [:], result: CDPRuntimeEnableAck.self)
         let r: CDPEvalResult<T> = try await sendRecv("Runtime.evaluate", params: ["expression": expression, "returnByValue": true], result: CDPEvalResult<T>.self)
         return r.result.value
+    }
+    func injectScript(id: String, content: String) async throws {
+        _ = try await sendRecv("Runtime.enable", params: [:], result: CDPRuntimeEnableAck.self)
+        struct AddScript: Decodable { let identifier: String }
+        _ = try await sendRecv("Page.addScriptToEvaluateOnNewDocument", params: ["source": content, "worldName": id], result: AddScript.self)
     }
     func getResponseBody(requestId: String) async throws -> (String, Bool) {
         struct BodyRes: Decodable { let body: String; let base64Encoded: Bool }

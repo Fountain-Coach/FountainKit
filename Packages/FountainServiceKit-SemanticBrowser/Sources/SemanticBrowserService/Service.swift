@@ -39,6 +39,7 @@ public actor SemanticMemoryService {
     private var coveredCache: [String: (until: Date, covered: Bool)] = [:]
 
     public init(backend: Backend? = nil) { self.backend = backend }
+    public func hasBackend() -> Bool { backend != nil }
 
     // Seeding for tests or importers
     public func seed(pages: [PageDoc] = [], segments: [SegmentDoc] = [], entities: [EntityDoc] = []) {

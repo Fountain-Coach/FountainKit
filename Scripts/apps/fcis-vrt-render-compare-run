@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage(){ cat <<USAGE >&2
+FCIS-VRT Render Compare Runner (legacy pb-vrt service)
+
+Compares a candidate image (and optional audio pair) against the current baseline.
+
+Usage:
+  $(basename "$0") --baseline-id <id> --candidate candidate.png [--server <url>] \
+    [--featureprint-max 0.035] [--pixel-l1-max 0.012] [--ssim-min 0.94] \
+    [--baseline-png <path>] [--drift-max-px 5] [--conf-min 0.85] \
+    [--weighted-ssim-min 0.96] [--weighted-l1-max 0.02]
+
+Optional audio checks:
+  --baseline-wav b.wav --candidate-wav c.wav [--lsd-db-max 0.5]
+
+Server defaults to port stamped in .fountain/pb-vrt-port (legacy), or 8010 if missing.
+Prints a concise pass/fail with metric lines.
+USAGE
+}
+
+BASELINE_ID=""
+SERVER=""
+CAND=""
+FPMAX=0.035
+L1MAX=0.012
+SSIMMIN=0.94
+BWAV=""
+CWAV=""
+LSDMAX=0.5
+BPNG=""
+DRIFTMAX=5
+CONFMIN=0.85
+WSSIMMIN=0.96
+WL1MAX=0.02
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --baseline-id) BASELINE_ID="$2"; shift 2;;
+    --server) SERVER="$2"; shift 2;;
+    --candidate) CAND="$2"; shift 2;;
+    --featureprint-max) FPMAX="$2"; shift 2;;
+    --pixel-l1-max) L1MAX="$2"; shift 2;;
+    --ssim-min) SSIMMIN="$2"; shift 2;;
+    --baseline-wav) BWAV="$2"; shift 2;;
+    --candidate-wav) CWAV="$2"; shift 2;;
+    --lsd-db-max) LSDMAX="$2"; shift 2;;
+    --baseline-png) BPNG="$2"; shift 2;;
+    --drift-max-px) DRIFTMAX="$2"; shift 2;;
+    --conf-min) CONFMIN="$2"; shift 2;;
+    --weighted-ssim-min) WSSIMMIN="$2"; shift 2;;
+    --weighted-l1-max) WL1MAX="$2"; shift 2;;
+    -h|--help) usage; exit 0;;
+    *) echo "Unknown arg: $1" >&2; usage; exit 2;;
+  esac
+done
+
+if [[ -z "$BASELINE_ID" ]]; then echo "--baseline-id is required" >&2; exit 2; fi
+if [[ -z "$CAND" ]]; then echo "--candidate is required" >&2; exit 2; fi
+if [[ ! -f "$CAND" ]]; then echo "Candidate not found: $CAND" >&2; exit 2; fi
+
+if [[ -z "$SERVER" ]]; then
+  if [[ -f .fountain/pb-vrt-port ]]; then PORT=$(cat .fountain/pb-vrt-port | tr -d '\n'); SERVER="http://127.0.0.1:${PORT}/pb-vrt"; else SERVER="http://127.0.0.1:8010/pb-vrt"; fi
+fi
+
+echo "Compare: image vs baseline=$BASELINE_ID @ $SERVER" >&2
+R=$(curl -sS -X POST "$SERVER/compare" \
+  -F baselineId="$BASELINE_ID" \
+  -F candidatePng=@"$CAND;type=application/octet-stream")
+
+if command -v jq >/dev/null 2>&1 && printf '%s' "$R" | jq -e . >/dev/null 2>&1; then
+  FP=$(printf '%s' "$R" | jq -r '.metrics.featureprint_distance // empty')
+  L1=$(printf '%s' "$R" | jq -r '.metrics.pixel_l1 // empty')
+  SS=$(printf '%s' "$R" | jq -r '.metrics.ssim // empty')
+  ART_CAND=$(printf '%s' "$R" | jq -r '.artifacts.candidatePng // empty')
+  ART_DPNG=$(printf '%s' "$R" | jq -r '.artifacts.deltaPng // empty')
+  ART_DFULL=$(printf '%s' "$R" | jq -r '.artifacts.deltaFullPng // empty')
+else
+  FP=$(printf "%s" "$R" | grep -oE '"featureprint_distance"[[:space:]]*:[[:space:]]*[-0-9.eE]+' | head -n1 | sed 's/.*:[[:space:]]*//')
+  L1=$(printf "%s" "$R" | grep -oE '"pixel_l1"[[:space:]]*:[[:space:]]*[-0-9.eE]+' | head -n1 | sed 's/.*:[[:space:]]*//')
+  SS=$(printf "%s" "$R" | grep -oE '"ssim"[[:space:]]*:[[:space:]]*[-0-9.eE]+' | head -n1 | sed 's/.*:[[:space:]]*//')
+  ART_CAND=$(printf "%s" "$R" | grep -oE '"candidatePng"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 | sed 's/.*:"//; s/"$//')
+  ART_DPNG=$(printf "%s" "$R" | grep -oE '"deltaPng"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 | sed 's/.*:"//; s/"$//')
+  ART_DFULL=$(printf "%s" "$R" | grep -oE '"deltaFullPng"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 | sed 's/.*:"//; s/"$//')
+fi
+
+pass_img=1
+is_num(){ [[ "$1" =~ ^-?[0-9]+(\.[0-9]+)?$ ]]; }
+if is_num "$FP"; then awk -v v="$FP" -v m="$FPMAX" 'BEGIN{exit !(v<=m)}' || pass_img=0; printf "featureprint_distance=%.6f (max %.6f)\n" "$FP" "$FPMAX"; else echo "featureprint_distance=NA (skipped)"; fi
+if is_num "$L1"; then awk -v v="$L1" -v m="$L1MAX" 'BEGIN{exit !(v<=m)}' || pass_img=0; printf "pixel_l1=%.6f (max %.6f)\n" "$L1" "$L1MAX"; else echo "pixel_l1=NA (skipped)"; fi
+if is_num "$SS"; then awk -v v="$SS" -v m="$SSIMMIN" 'BEGIN{exit !(v>=m)}' || pass_img=0; printf "ssim=%.6f (min %.6f)\n" "$SS" "$SSIMMIN"; else echo "ssim=NA (skipped)"; fi
+if [[ -n "$ART_CAND" || -n "$ART_DPNG" || -n "$ART_DFULL" ]]; then
+  echo "artifacts.compare:"
+  [[ -n "$ART_CAND" ]] && echo "  candidatePng: $ART_CAND"
+  [[ -n "$ART_DPNG" ]] && echo "  deltaPng:     $ART_DPNG"
+  [[ -n "$ART_DFULL" ]] && echo "  deltaFullPng: $ART_DFULL"
+fi
+
+# Optional align + saliency if baseline.png is available
+pass_align=1
+pass_sal=1
+if [[ -z "$BPNG" ]]; then
+  # derive default path
+  CANDIDATE_DIR=".fountain/artifacts/pb-vrt/$BASELINE_ID"
+  CAND_BASE="$CANDIDATE_DIR/baseline.png"
+  if [[ -f "$CAND_BASE" ]]; then BPNG="$CAND_BASE"; fi
+fi
+if [[ -n "$BPNG" && -f "$BPNG" ]]; then
+  echo "Probe: align (translation/scale/rotation)" >&2
+  ALIGN=$(curl -sS -X POST "$SERVER/probes/align" -F baselineId="$BASELINE_ID" -F baselinePng=@"$BPNG;type=application/octet-stream" -F candidatePng=@"$CAND;type=application/octet-stream")
+  if command -v jq >/dev/null 2>&1 && printf '%s' "$ALIGN" | jq -e . >/dev/null 2>&1; then
+    DRIFT=$(printf '%s' "$ALIGN" | jq -r '.postAlignDriftPx // empty')
+    CONF=$(printf '%s' "$ALIGN" | jq -r '.confidence // empty')
+    ART_ALIGN=$(printf '%s' "$ALIGN" | jq -r '.artifacts.alignedCandidatePng // empty')
+  else
+    DRIFT=$(printf "%s" "$ALIGN" | awk -F '[: ,]+' '/postAlignDriftPx/ {for(i=1;i<=NF;i++) if($i=="postAlignDriftPx") {print $(i+1); exit}}')
+    CONF=$(printf "%s" "$ALIGN" | awk -F '[: ,]+' '/confidence/ {for(i=1;i<=NF;i++) if($i=="confidence") {print $(i+1); exit}}')
+    ART_ALIGN=$(printf "%s" "$ALIGN" | awk -F '"' '/alignedCandidatePng/ {print $4; exit}')
+  fi
+  awk -v v="$DRIFT" -v m="$DRIFTMAX" 'BEGIN{exit !(v<=m)}' || pass_align=0
+  awk -v v="$CONF" -v m="$CONFMIN" 'BEGIN{exit !(v>=m)}' || pass_align=0
+  printf "postAlignDriftPx=%.3f (max %.3f)\n" "$DRIFT" "$DRIFTMAX"
+  printf "align_confidence=%.3f (min %.3f)\n" "$CONF" "$CONFMIN"
+  [[ -n "$ART_ALIGN" ]] && echo "artifacts.align:\n  alignedCandidatePng: $ART_ALIGN"
+
+  echo "Probe: saliency (weighted)" >&2
+  SAL=$(curl -sS -X POST "$SERVER/probes/saliency/compare" -F baselineId="$BASELINE_ID" -F baselinePng=@"$BPNG;type=application/octet-stream" -F candidatePng=@"$CAND;type=application/octet-stream")
+  if command -v jq >/dev/null 2>&1 && printf '%s' "$SAL" | jq -e . >/dev/null 2>&1; then
+    WL1=$(printf '%s' "$SAL" | jq -r '.weighted_l1 // empty')
+    WSS=$(printf '%s' "$SAL" | jq -r '.weighted_ssim // empty')
+    ART_SAL_B=$(printf '%s' "$SAL" | jq -r '.artifacts.baselineSaliency // empty')
+    ART_SAL_C=$(printf '%s' "$SAL" | jq -r '.artifacts.candidateSaliency // empty')
+    ART_SAL_W=$(printf '%s' "$SAL" | jq -r '.artifacts.weightedDelta // empty')
+  else
+    WL1=$(printf "%s" "$SAL" | awk -F '[: ,]+' '/weighted_l1/ {for(i=1;i<=NF;i++) if($i=="weighted_l1") {print $(i+1); exit}}')
+    WSS=$(printf "%s" "$SAL" | awk -F '[: ,]+' '/weighted_ssim/ {for(i=1;i<=NF;i++) if($i=="weighted_ssim") {print $(i+1); exit}}')
+    ART_SAL_B=$(printf "%s" "$SAL" | awk -F '"' '/baselineSaliency/ {print $4; exit}')
+    ART_SAL_C=$(printf "%s" "$SAL" | awk -F '"' '/candidateSaliency/ {print $4; exit}')
+    ART_SAL_W=$(printf "%s" "$SAL" | awk -F '"' '/weightedDelta/ {print $4; exit}')
+  fi
+  awk -v v="$WL1" -v m="$WL1MAX" 'BEGIN{exit !(v<=m)}' || pass_sal=0
+  awk -v v="$WSS" -v m="$WSSIMMIN" 'BEGIN{exit !(v>=m)}' || pass_sal=0
+  printf "weighted_l1=%.6f (max %.6f)\n" "$WL1" "$WL1MAX"
+  printf "weighted_ssim=%.6f (min %.6f)\n" "$WSS" "$WSSIMMIN"
+  ART_SAL_B=$(printf "%s" "$SAL" | awk -F '"' '/baselineSaliency/ {print $4; exit}')
+  ART_SAL_C=$(printf "%s" "$SAL" | awk -F '"' '/candidateSaliency/ {print $4; exit}')
+  ART_SAL_W=$(printf "%s" "$SAL" | awk -F '"' '/weightedDelta/ {print $4; exit}')
+  echo "artifacts.saliency:"
+  [[ -n "$ART_SAL_B" ]] && echo "  baselineSaliency:  $ART_SAL_B"
+  [[ -n "$ART_SAL_C" ]] && echo "  candidateSaliency: $ART_SAL_C"
+  [[ -n "$ART_SAL_W" ]] && echo "  weightedDelta:     $ART_SAL_W"
+else
+  echo "Note: baseline PNG not found; skipping align/saliency (pass by default)." >&2
+fi
+
+pass_audio=1
+if [[ -n "$BWAV" && -n "$CWAV" ]]; then
+  echo "Compare: audio spectrogram" >&2
+  A=$(curl -sS -X POST "$SERVER/probes/audio/spectrogram/compare" \
+    -F baselineId="$BASELINE_ID" -F baselineWav=@"$BWAV;type=application/octet-stream" -F candidateWav=@"$CWAV;type=application/octet-stream")
+  if command -v jq >/dev/null 2>&1 && printf '%s' "$A" | jq -e . >/dev/null 2>&1; then
+    LSD=$(printf '%s' "$A" | jq -r '.lsd_db // empty')
+  else
+    LSD=$(printf "%s" "$A" | awk -F '[: ,]+' '/lsd_db/ {for(i=1;i<=NF;i++) if($i=="lsd_db") {print $(i+1); exit}}')
+  fi
+  awk -v v="$LSD" -v m="$LSDMAX" 'BEGIN{exit !(v<=m)}' || pass_audio=0
+  printf "lsd_db=%.3f (max %.3f)\n" "$LSD" "$LSDMAX"
+fi
+
+if [[ $pass_img -eq 1 && $pass_audio -eq 1 && $pass_align -eq 1 && $pass_sal -eq 1 ]]; then
+  echo "PASS"; exit 0
+else
+  echo "FAIL"; exit 1
+fi

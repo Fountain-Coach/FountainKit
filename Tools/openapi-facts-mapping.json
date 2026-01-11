@@ -19,7 +19,7 @@
   { "spec": "openapi-curator.yml", "agentId": "fountain.coach/agent/openapi-curator/service" },
   { "spec": "patchbay.yml", "agentId": "fountain.coach/agent/patchbay/service" },
   { "spec": "payload-inspection-gateway.yml", "agentId": "fountain.coach/agent/payload-inspection-gateway/service" },
-  { "spec": "pb-vrt.yml", "agentId": "fountain.coach/agent/pb-vrt/service" },
+  { "spec": "fcis-vrt-render.yml", "agentId": "fountain.coach/agent/pb-vrt/service" },
   { "spec": "mpe-pad.yml", "agentId": "fountain.coach/agent/mpe-pad/service" },
   { "spec": "planner.yml", "agentId": "fountain.coach/agent/planner/service" },
   { "spec": "persist.yml", "agentId": "fountain.coach/agent/persist/service" },

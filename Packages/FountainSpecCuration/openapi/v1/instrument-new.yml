@@ -62,7 +62,7 @@ components:
           description: Spec filename under openapi/v1 (e.g., llm-chat.yml).
         visual:
           type: boolean
-          description: Whether the instrument has a visual surface and PB-VRT baselines.
+          description: Whether the instrument has a visual surface and FCIS-VRT Render baselines.
           default: true
         metalview:
           type: boolean
@@ -107,4 +107,3 @@ components:
         dryRun:
           type: boolean
           description: Echo of the dryRun flag from the request.
-

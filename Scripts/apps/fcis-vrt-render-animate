@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+import argparse, os, glob, time, json, subprocess
+from PIL import Image, ImageDraw, ImageFont
+
+def latest(globpat):
+    files = glob.glob(globpat)
+    if not files: return None
+    files.sort(key=lambda p: os.path.getmtime(p))
+    return files[-1]
+
+def load(path):
+    if not path or not os.path.exists(path): return None
+    try:
+        return Image.open(path).convert('RGB')
+    except Exception:
+        return None
+
+def banner(img, text):
+    W,H = img.size
+    band_h = max(36, H//20)
+    band = Image.new('RGB', (W, band_h), (20,20,20))
+    draw = ImageDraw.Draw(band)
+    try:
+        f = ImageFont.truetype('Helvetica.ttc', 16)
+    except Exception:
+        f = ImageFont.load_default()
+    try:
+        tw, th = draw.textlength(text, font=f), f.size
+        th = th if isinstance(th, int) else 16
+    except Exception:
+        # Fallback for older Pillow
+        tw, th = draw.textbbox((0,0), text, font=f)[2:4]
+    draw.text(((W-tw)//2, (band_h-th)//2), text, fill=(240,240,240), font=f)
+    out = Image.new('RGB', (W, H+band_h), (255,255,255))
+    out.paste(band, (0,0))
+    out.paste(img, (0,band_h))
+    return out
+
+def stack_h(a, b):
+    if a is None: return b
+    if b is None: return a
+    h = min(a.height, b.height)
+    a2 = a.resize((int(a.width*h/a.height), h), Image.LANCZOS)
+    b2 = b.resize((int(b.width*h/b.height), h), Image.LANCZOS)
+    out = Image.new('RGB', (a2.width+b2.width, h), (255,255,255))
+    out.paste(a2, (0,0)); out.paste(b2, (a2.width,0))
+    return out
+
+def main():
+    ap = argparse.ArgumentParser(description='FCIS-VRT Render animation composer (legacy pb-vrt artifacts)')
+    ap.add_argument('--baseline-id', required=True)
+    ap.add_argument('--out', default=None)
+    ap.add_argument('--width', type=int, default=800)
+    ap.add_argument('--open', action='store_true')
+    ap.add_argument('--frames-dir', default=None)
+    ap.add_argument('--baseline-wav', default=None)
+    ap.add_argument('--candidate-wav', default=None)
+    ap.add_argument('--server', default=None)
+    args = ap.parse_args()
+
+    root = os.getcwd()
+    art = os.path.join(root, '.fountain', 'artifacts', 'pb-vrt', args.baseline_id)
+    adh = os.path.join(root, '.fountain', 'artifacts', 'pb-vrt', 'ad-hoc')
+
+    baseline = load(os.path.join(art, 'baseline.png'))
+    candidate = load(os.path.join(art, 'candidate.png'))
+    delta = load(os.path.join(art, 'delta.png')) or load(os.path.join(art, 'delta_full.png'))
+
+    aligned = load(latest(os.path.join(adh, '*', 'aligned.png')))
+    sal_b = load(latest(os.path.join(adh, '*', 'baseline-saliency.png')))
+    sal_c = load(latest(os.path.join(adh, '*', 'candidate-saliency.png')))
+    sal_w = load(latest(os.path.join(adh, '*', 'weighted-delta.png')))
+
+    # Optionally request spectrograms via server
+    spec_pair = None
+    spec_delta = None
+    if args.baseline_wav and args.candidate_wav:
+        base = args.server
+        if not base:
+            portfile = os.path.join(root, '.fountain', 'pb-vrt-port')
+            if os.path.exists(portfile):
+                port = open(portfile).read().strip()
+                base = f'http://127.0.0.1:{port}/pb-vrt'
+        if base:
+            try:
+                cmd = [
+                    'curl','-sS','-X','POST', f'{base}/probes/audio/spectrogram/compare',
+                    '-F', f'baselineWav=@{args.baseline_wav};type=application/octet-stream',
+                    '-F', f'candidateWav=@{args.candidate_wav};type=application/octet-stream'
+                ]
+                out = subprocess.check_output(cmd)
+                j = json.loads(out.decode('utf-8'))
+                bspec = j.get('artifacts',{}).get('baselineSpecPng')
+                cspec = j.get('artifacts',{}).get('candidateSpecPng')
+                dspec = j.get('artifacts',{}).get('deltaSpecPng')
+                sb = load(bspec) if bspec else None
+                sc = load(cspec) if cspec else None
+                sd = load(dspec) if dspec else None
+                if sb and sc:
+                    spec_pair = stack_h(sb, sc)
+                if sd:
+                    spec_delta = sd
+            except Exception:
+                pass
+
+    # Prepare frames
+    frames = []
+    labels = []
+    if baseline: frames.append(baseline); labels.append('Scene: Baseline')
+    if candidate: frames.append(candidate); labels.append('Scene: Candidate')
+    if aligned: frames.append(aligned); labels.append('Scene: Aligned Candidate')
+    if delta: frames.append(delta); labels.append('Scene: Pixel Delta')
+    if sal_b and sal_c:
+        frames.append(stack_h(sal_b, sal_c)); labels.append('Scene: Saliency (Baseline | Candidate)')
+    if sal_w: frames.append(sal_w); labels.append('Scene: Saliency-weighted Delta')
+    if spec_pair is not None:
+        frames.append(spec_pair); labels.append('Scene: Spectrogram (Baseline | Candidate)')
+    if spec_delta is not None:
+        frames.append(spec_delta); labels.append('Scene: Spectrogram Delta')
+
+    if not frames:
+        raise SystemExit('No frames found; run compare first.')
+
+    # Normalize size
+    W = args.width
+    norm = []
+    for i,im in enumerate(frames):
+        h = int(im.height * (W/float(im.width)))
+        norm.append(banner(im.resize((W,h), Image.LANCZOS), labels[i]))
+
+    out = args.out or os.path.join(art, 'demo.gif')
+    dur = [1200] + [600]*(len(norm)-1)
+    norm[0].save(out, save_all=True, append_images=norm[1:], duration=dur, loop=0)
+    print(out)
+
+    # Optionally emit frames and timeline JSON for video renderers
+    if args.frames_dir:
+        os.makedirs(args.frames_dir, exist_ok=True)
+        timeline = {"frames": []}
+        for i,im in enumerate(norm):
+            p = os.path.join(args.frames_dir, f"frame_{i:04d}.png")
+            im.save(p)
+            timeline["frames"].append({
+                "path": p,
+                "durationMs": int(dur[i]),
+                "label": labels[i]
+            })
+        with open(os.path.join(args.frames_dir, 'timeline.json'), 'w') as f:
+            json.dump(timeline, f, indent=2)
+        print(args.frames_dir)
+    if args.open and os.name == 'posix': os.system(f'open "{out}" >/dev/null 2>&1 || true')
+
+if __name__ == '__main__':
+    main()

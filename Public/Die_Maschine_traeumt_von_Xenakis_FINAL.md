@@ -1,6 +1,6 @@
 # „Die Maschine träumt von Xenakis“
 
-Ein PB‑VRT / FountainAI Projekt   
+Ein FCIS-VRT Render / FountainAI Projekt   
 Uraufführung: Opernhaus der Form, 2026  
 Version 1.4.2 (S‑Tag: Partiturstil + Git‑Quadrupel‑Legende + Erklärung)
 
@@ -14,9 +14,9 @@ Diese Oper ist eine Versuchsanordnung.
 
 Musik, Projektion und Systemlogik werden nicht verbunden, sondern gemeinsam komponiert.  Ziel ist eine wiederholbare Aufführung, deren Struktur nachvollziehbar bleibt.  
 
-Das System verwendet PB‑VRT (Prompt‑Bound Visual Regression Testing).   Es macht Veränderungen sichtbar, prüfbar und hält jeden Zustand als Teil einer lernenden Form fest.  
+Das System verwendet FCIS-VRT Render (Prompt-Bound Visual Regression Testing).   Es macht Veränderungen sichtbar, prüfbar und hält jeden Zustand als Teil einer lernenden Form fest.  
 
-Die Spezifikation folgt dem [PB‑VRT‑Essay im FountainKit‑Repository](https://github.com/Fountain-Coach/FountainKit/blob/main/Public/pb-vrt-spec-and-openapi/PB-VRT-Essay.md).  
+Die Spezifikation folgt dem [FCIS-VRT-Render-Essay im FountainKit-Repository](https://github.com/Fountain-Coach/FountainKit/blob/main/Public/fcis-vrt-render-spec-and-openapi/FCIS-VRT-Render-Essay.md).  
 Dort wird das Prinzip des Quiet Frame als Grundlage einer präzisen, visuellen Kontrollkette beschrieben.
 
 ---
@@ -28,7 +28,7 @@ Dort wird das Prinzip des Quiet Frame als Grundlage einer präzisen, visuellen K
 | Prompt Layer |  LLM‑Semantik | Dramaturgische Steuerung |
 | FountainAI Agent Layer | Midi2  | Steuerung von Musik, Licht, Bewegung |
 | MetalViewKit | GPU‑Projektionen | Bühnen‑ und Lichtarchitektur |
-| PB‑VRT Framework | Visual Regression Testing | Baseline, Drift, Quiet Frame |
+| FCIS-VRT Render Framework | Visual Regression Testing | Baseline, Drift, Quiet Frame |
 | Archiv Layer | FountainStore | Speicherung, Baselines, Varianten |
 
 ---
@@ -40,7 +40,7 @@ Dort wird das Prinzip des Quiet Frame als Grundlage einer präzisen, visuellen K
 Fünf Akte bilden den Bogen.  
 
 Jeder Akt beschreibt eine Verschiebung von Klang, Raum und Dichte.  
-PB‑VRT vergleicht die Zustände und macht Abweichungen nachvollziehbar.  So entsteht eine Oper, die sich selbst beobachtet.
+FCIS-VRT Render vergleicht die Zustände und macht Abweichungen nachvollziehbar.  So entsteht eine Oper, die sich selbst beobachtet.
 
 ---
 
@@ -87,7 +87,7 @@ partitur:
   titel: "Die Maschine träumt von Xenakis"
   version: "1.4.2"
   global:
-    sync: "midi2_pbvrt_clock"
+    sync: "midi2_vrt_render_clock"
     meter: "frei"
     dynamik_basis: "p–ff"
   instrumentation:
@@ -107,7 +107,7 @@ partitur:
     - id: "SpectralAgent"
       rolle: "spektrale_analyse"
     - id: "ArchivistAgent"
-      rolle: "pbvrt_snapshot_und_diff"
+      rolle: "vrt_render_snapshot_und_diff"
 ```
 
 ---
@@ -115,7 +115,7 @@ partitur:
 ## Appendix A – Quiet‑Frame‑Versionierung
 
 Jede Aufführung ist ein Frame.  
-PB‑VRT ersetzt klassische Build‑Nummern durch Zustände: Baseline, Drift, Quiet Frame.  
+FCIS-VRT Render ersetzt klassische Build-Nummern durch Zustände: Baseline, Drift, Quiet Frame.  
 Die Version ist nicht Zahl, sondern Rhythmus.
 
 | Kategorie | Kürzel | Beschreibung |
@@ -144,10 +144,10 @@ Die Sprache vermeidet technische Rhetorik, bleibt klar, ruhig und musikalisch st
 |----------|------------|--------------------------|
 | **Commit** | Ein Zustands­eintrag im Verlauf der Arbeit. Jeder Commit speichert den exakten Stand des Projekts zu einem Zeitpunkt – alle Dateien, Änderungen und Metadaten. | Dient der feingliedrigen Nachvollziehbarkeit von Entwicklungs­schritten. Jeder Commit ist ein einzelner Takt im zeitlichen Verlauf der Arbeit. |
 | **Tag** | Eine Markierung auf einem bestimmten Commit. Sie benennt diesen Zustand und macht ihn auffindbar. | Wird genutzt, um Baselines oder bestimmte Entwicklungsphasen eindeutig zu kennzeichnen. |
-| **Release** | Eine gefasste Version des Projekts, die als stabil gilt. Ein Release vereint mehrere Commits und Tags zu einem überprüften Ganzen. | Im PB‑VRT‑Kontext entspricht ein Release dem Quiet Frame – einem reproduzierbaren, ruhigen Zustand der Form. |
+| **Release** | Eine gefasste Version des Projekts, die als stabil gilt. Ein Release vereint mehrere Commits und Tags zu einem überprüften Ganzen. | Im FCIS-VRT Render‑Kontext entspricht ein Release dem Quiet Frame – einem reproduzierbaren, ruhigen Zustand der Form. |
 | **Snapshot** | Eine Momentaufnahme des gesamten Repositoriums. Sie enthält alle Inhalte und Metadaten in einem eingefrorenen Zustand. | Dient der Archivierung. Ein Snapshot bewahrt eine Version dauerhaft und unabhängig von späteren Änderungen auf. |
 
-**Symbolische Zuordnung im PB‑VRT‑System:**  
+**Symbolische Zuordnung im FCIS-VRT Render‑System:**  
 - Commit → Drift Frame  
 - Tag → Baseline Frame  
 - Release → Quiet Frame  
@@ -160,7 +160,7 @@ Die Sprache vermeidet technische Rhetorik, bleibt klar, ruhig und musikalisch st
 Ein **Quadrupel** (vom lateinischen *quadruplex* = vierfach) bezeichnet eine **Viererstruktur** – ein System aus vier Elementen, die gemeinsam eine Einheit bilden.  
 In der Informatik und Mathematik ist es eine geordnete Vierergruppe `(a, b, c, d)` – jedes Element besitzt seine definierte Rolle.
 
-Im PB‑VRT‑System beschreibt das **Git‑Quadrupel** den vollständigen Lebenszyklus eines Projekts:  
+Im FCIS-VRT Render‑System beschreibt das **Git‑Quadrupel** den vollständigen Lebenszyklus eines Projekts:  
 
 | Element | Funktion | Bedeutung |
 |----------|-----------|-----------|

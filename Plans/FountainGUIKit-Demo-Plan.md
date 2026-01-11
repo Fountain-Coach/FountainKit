@@ -7,7 +7,7 @@ FountainGUIKit is a standalone GUI framework that gives us an NSView‑based hos
 - Embed a FountainGUIKit‑backed NSView surface in the FountainKit workspace as a minimal, fast‑building demo app.
 - Prove end‑to‑end gesture coverage (scroll, drag, magnify/pinch, rotate, swipe) mapped into a stable property schema.
 - Keep the demo CoreMIDI‑free, using the existing MIDI 2.0 transports and CI/PE machinery only.
-- Make the demo robot‑testable via MRTS and PB‑VRT, aligned with the Baseline‑PatchBay invariants.
+- Make the demo robot‑testable via MRTS and FCIS-VRT Render, aligned with the Baseline‑PatchBay invariants.
 - Treat AGENTS and PLAN docs as the authoritative description of the demo’s behaviour; implementation follows.
 
 ### Phase 1 — Dependency and Build Wiring
@@ -49,19 +49,19 @@ FountainGUIKit is a standalone GUI framework that gives us an NSView‑based hos
   - Listens for CI/PE SET operations and forwards them back into `setProperty(_ name:value:)` on the node graph.
 - Confirm that all of this uses the existing `MIDI2`/`MIDI2Transports` stack only; the demo must never import CoreMIDI.
 
-### Phase 5 — MRTS and PB‑VRT Alignment
+### Phase 5 — MRTS and FCIS-VRT Render Alignment
 - Introduce a new MRTS suite for the demo under `Packages/FountainApps/Tests`, following the patterns used for Baseline‑PatchBay:
   - Drive the demo exclusively via MIDI 2.0 CI/PE using the instrument’s property schema.
   - Assert numeric invariants for zoom, pan, rotation, and reset behaviour.
-- Wire the demo into PB‑VRT visual regression testing:
+- Wire the demo into FCIS-VRT Render visual regression testing:
   - Add snapshots of the demo surface at key zoom/pan states.
-  - Ensure PB‑VRT harnesses can target the `fountain-gui-demo` app via the same scripting interface used for existing PatchBay tests.
-- Align robot and PB‑VRT docs in `Plans/Legacy/Robot-Testing.md` and relevant AGENTS files so the demo’s coverage is visible and maintained.
+  - Ensure FCIS-VRT Render harnesses can target the `fountain-gui-demo` app via the same scripting interface used for existing PatchBay tests.
+- Align robot and FCIS-VRT Render docs in `Plans/Legacy/Robot-Testing.md` and relevant AGENTS files so the demo’s coverage is visible and maintained.
 
 ### Phase 6 — Documentation, Prompts, and Operator Ergonomics
 - Add or extend an AGENTS file under the `fountain-gui-demo` source directory to:
   - Describe the demo’s purpose, gesture semantics, property schema, and MIDI 2.0 wiring.
-  - Declare how it participates in MRTS and PB‑VRT (which tests, scripts, and prompts apply).
+  - Declare how it participates in MRTS and FCIS-VRT Render (which tests, scripts, and prompts apply).
 - Add a short demo section to the FountainApps README (or a dedicated demo README) that:
   - Shows how to run the demo via `Scripts/dev/fountain-gui-demo-min` or `Scripts/apps/fountain-gui-demo`.
   - Points to the AGENTS file and this plan as canonical references.
@@ -73,5 +73,5 @@ FountainGUIKit is a standalone GUI framework that gives us an NSView‑based hos
 - `fountain-gui-demo` builds and runs via targeted scripts, with FountainGUIKit providing the NSView host and event model.
 - All primary gestures (scroll, drag, magnify/pinch, rotate, swipe) are wired into a documented property schema, with behaviour matching the design intent.
 - MIDI 2.0 CI/PE integration is in place and CoreMIDI is not referenced anywhere in the demo codepath.
-- MRTS and PB‑VRT suites cover the demo’s key interactions and visual states, with passing tests in CI.
+- MRTS and FCIS-VRT Render suites cover the demo’s key interactions and visual states, with passing tests in CI.
 - AGENTS, this plan, and operator‑facing docs stay in sync whenever the demo’s behaviour or surface changes.

@@ -30,7 +30,7 @@ MAP_LIST=(
   "openapi-curator.yml:fountain.coach/agent/openapi-curator/service"
   "patchbay.yml:fountain.coach/agent/patchbay/service"
   "payload-inspection-gateway.yml:fountain.coach/agent/payload-inspection-gateway/service"
-  "pb-vrt.yml:fountain.coach/agent/pb-vrt/service"
+  "fcis-vrt-render.yml:fountain.coach/agent/pb-vrt/service"
   "mpe-pad.yml:fountain.coach/agent/mpe-pad/service"
   "planner.yml:fountain.coach/agent/planner/service"
   "persist.yml:fountain.coach/agent/persist/service"

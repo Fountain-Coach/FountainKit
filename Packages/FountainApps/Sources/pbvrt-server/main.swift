@@ -25,7 +25,7 @@ func resolveStore() -> FountainStoreClient {
 let store = resolveStore()
 let transport = NIOOpenAPIServerTransport(fallback: HTTPKernel { req in
     if req.path == "/pb-vrt/openapi.yaml" || req.path == "/openapi.yaml" {
-        if let data = try? Data(contentsOf: URL(fileURLWithPath: "Packages/FountainSpecCuration/openapi/v1/pb-vrt.yml")) {
+        if let data = try? Data(contentsOf: URL(fileURLWithPath: "Packages/FountainSpecCuration/openapi/v1/fcis-vrt-render.yml")) {
             return HTTPResponse(status: 200, headers: ["Content-Type": "application/yaml"], body: data)
         }
     }
@@ -45,7 +45,7 @@ Task {
     do {
         let port = Int(env["PBVRT_PORT"] ?? env["PORT"] ?? "8010") ?? 8010
         _ = try await server.start(port: port)
-        print("pbvrt-server listening on port \(port) — spec at /pb-vrt/openapi.yaml")
+        print("pbvrt-server (FCIS-VRT Render, legacy path) listening on port \(port) — spec at /pb-vrt/openapi.yaml")
     } catch {
         FileHandle.standardError.write(Data("[pbvrt-server] start failed: \(error)\n".utf8))
     }

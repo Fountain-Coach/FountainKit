@@ -11,7 +11,7 @@ Before we talk about the linter, we need a few pieces of vocabulary:
 - **Teatro prompt** — a human‑written description of a surface, stored in FountainStore under `prompt:<app-id>`. Think “stage directions” in plain language.
 - **OpenAPI spec** — a machine‑readable contract for an HTTP API in `Packages/FountainSpecCuration/openapi/v1/*.yml`.
 - **Facts** — Property Exchange metadata generated from an OpenAPI spec and stored in FountainStore; this tells the MIDI host how to call an instrument’s HTTP routes.
-- **PB‑VRT** — PatchBay Visual Regression Tests; image‑based tests that compare rendered frames against baselines.
+- **FCIS-VRT Render** — visual regression tests that compare rendered frames against baselines.
 - **MRTS** — MIDI Robot Test Scripts; tests that drive instruments by sending MIDI 2.0 UMP and checking numeric and visual invariants.
 
 What follows is not “common sense UI advice”. It’s a concrete story about how one codebase repeatedly shipped beautiful *views* that were not real *instruments*—and how a small, grumpy tool called `instrument-lint` helped us stop doing that.
@@ -26,7 +26,7 @@ In this world, we keep running into the same failure mode:
 - It behaves perfectly under their hand, on their machine.
 - And yet nothing else in the system can meaningfully talk to it.
 
-There is no MIDI 2.0 route into it, no facts in FountainStore, no OpenAPI spec for its state, no PB‑VRT baselines to catch visual drift. It is a sealed box.
+There is no MIDI 2.0 route into it, no facts in FountainStore, no OpenAPI spec for its state, no FCIS-VRT Render baselines to catch visual drift. It is a sealed box.
 
 In an ordinary GUI app that might be acceptable. In FountainKit — where the whole point is to treat GUIs as MIDI instruments you can drive and test robotically — it is a structural bug. You get a museum of demos instead of a band of instruments.
 
@@ -51,7 +51,7 @@ Under the hood that promise is backed by concrete plumbing:
 - MIDI 2.0 Property Exchange fields that carry the instrument’s knobs as structured data.
 - OpenAPI specs and generated types that describe how to reach those knobs over HTTP.
 - Facts in FountainStore so the MIDI host can route PE GET/SET calls to the right HTTP operations.
-- Tests (including PB‑VRT and MRTS where possible) that drive both properties and pixels.
+- Tests (including FCIS-VRT Render and MRTS where possible) that drive both properties and pixels.
 
 The picture to hold in mind is simple: if you put this thing on stage, a human performer, a MIDI robot, and a conductor AI should all be able to read its sheet music and make it behave. If that is not true, it is not yet an instrument, no matter how pretty the shader.
 
@@ -104,7 +104,7 @@ This is the **stage manager’s clipboard**: which lever talks to which cable, w
 Finally, there are tests:
 
 - unit tests that poke properties directly and assert invariants;
-- PB‑VRT snapshot tests that compare pixels against baselines for visual drift;
+- FCIS-VRT Render snapshot tests that compare pixels against baselines for visual drift;
 - MIDI robot tests (MRTS) that stream UMP and assert the transform behaves (follow‑finger pan, anchor‑stable zoom).
 
 This is your **rehearsal footage**: evidence that the show looks like the poster and that it still looks like the poster after you refactor.
@@ -236,7 +236,7 @@ The LLM + linter combo takes care of:
 
 - Remembering the invisible paperwork.  
 - Wiring specs and facts.  
-- Ensuring there is at least one unit test and one snapshot/PB‑VRT‑style test for each instrument in the index.
+- Ensuring there is at least one unit test and one snapshot/FCIS-VRT Render-style test for each instrument in the index.
 
 ### 6.2 Onboarding without a map
 

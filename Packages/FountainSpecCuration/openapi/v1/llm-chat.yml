@@ -174,7 +174,7 @@ components:
         thread.scrollOffset:
           type: number
           format: double
-          description: Logical scroll offset for PB-VRT / robot tests (0 = bottom).
+          description: Logical scroll offset for FCIS-VRT Render / robot tests (0 = bottom).
         thread.selectedMessageId:
           type: string
           nullable: true

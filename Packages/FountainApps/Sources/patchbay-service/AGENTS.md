@@ -14,7 +14,7 @@ Keep instrument modeling behind one contract so the app and service evolve toget
 - Health probe: `GET /health` (used by `Scripts/dev-up --check`); one‑shot bind+exit with `PATCHBAY_ONESHOT=1`
 - Config: `FOUNTAINSTORE_DIR` (default `.fountain/store`), `PATCHBAY_CORPUS` (default `patchbay`), SecretStore service `FountainAI.PatchBay` key `VendorIdentity` (manufacturerId/family/model/revision)
 - Spec first: edit `Packages/FountainSpecCuration/openapi/v1/patchbay.yml`; mirror at `Packages/FountainApps/Sources/patchbay-service/openapi.yaml`; generator config `Packages/FountainApps/Sources/patchbay-service/openapi-generator-config.yaml` (`generate: [types, server]`). App client spec: `Packages/FountainApps/Sources/patchbay-app/openapi.yaml`.
-- PB‑VRT doc (Vision+Audio): corpus `patchbay`, page `docs:pb-vrt-vision-audio`, segment `doc`. Fetch: `CORPUS_ID=patchbay SEGMENT_ID='docs:pb-vrt-vision-audio:doc' swift run --package-path Packages/FountainApps store-dump`.
+- FCIS-VRT Render doc (Vision+Audio): corpus `patchbay`, page `docs:pb-vrt-vision-audio` (legacy id), segment `doc`. Fetch: `CORPUS_ID=patchbay SEGMENT_ID='docs:pb-vrt-vision-audio:doc' swift run --package-path Packages/FountainApps store-dump`.
 - One spec for all instruments: extend `InstrumentKind`, geometry, or `PropertySchema` rather than adding per‑instrument specs. Enum drift check: `Scripts/ci/check-patchbay-spec-sync.sh`.
 
 **Routes (OpenAPI)**

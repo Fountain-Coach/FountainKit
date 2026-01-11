@@ -1,16 +1,17 @@
 openapi: 3.1.0
 info:
-  title: Prompt‑Bound Visual Regression Testing API (PB‑VRT)
+  title: FCIS-VRT Render API (Prompt-Bound Visual Regression Testing)
   version: "1.0.0"
-  summary: API for prompt-first baselines, probe-backed comparisons, and drift reporting for MIDI 2.0–driven GUIs.
+  summary: API for prompt-first baselines, probe-backed comparisons, and drift reporting for MIDI 2.0-driven GUIs.
   description: |
     This API exposes prompt registration, baseline creation, and comparison
-    endpoints for PB‑VRT. Images are exchanged via multipart/form-data; MIDI 2.0
-    sequences are passed as UMP bytes (base64) or JSON events.
+    endpoints for FCIS-VRT Render (legacy alias: PB-VRT). Images are exchanged via
+    multipart/form-data; MIDI 2.0 sequences are passed as UMP bytes (base64) or
+    JSON events.
 
 servers:
   - url: http://localhost:8010/pb-vrt
-    description: Local development
+    description: Local development (legacy path)
 
 tags:
   - name: Prompts

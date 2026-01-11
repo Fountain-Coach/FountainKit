@@ -30,7 +30,7 @@ Why
 How
 - Usage: `Scripts/dev/<service>-min [build|run]`. Examples:
   - `Scripts/dev/gateway-min [build|run]`
-  - `Scripts/dev/pbvrt-min [build|run]`
+  - `Scripts/dev/fcis-vrt-render-min [build|run]` (legacy pbvrt target)
   - `Scripts/dev/quietframe-min [build|run]`
   - `Scripts/dev/planner-min [build|run]`
   - `Scripts/dev/function-caller-min [build|run]`
@@ -95,27 +95,27 @@ Web mirror (Baseline‑PatchBay)
 - Env: `PATCHBAY_URL`, `MIDI_SERVICE_URL`.
 - Drive: set target to “PatchBay Canvas” (macOS) or “Headless Canvas” (Linux/headless) and keep “MIDI 2.0” mode with “Sync PE” on.
 
-PatchBay docs (PB‑VRT Vision + Audio)
+PatchBay docs (FCIS-VRT Render Vision + Audio)
 - Seed combined doc into FountainStore: `swift run --package-path Packages/FountainApps patchbay-docs-seed`.
-- Read back: `CORPUS_ID=patchbay SEGMENT_ID='docs:pb-vrt-vision-audio:doc' swift run --package-path Packages/FountainApps store-dump`.
+- Read back: `CORPUS_ID=patchbay SEGMENT_ID='docs:pb-vrt-vision-audio:doc' swift run --package-path Packages/FountainApps store-dump` (legacy id).
 
-PB‑VRT tests (Vision + Audio)
-- Run server kernel tests headless: `bash Scripts/ci/pbvrt-tests.sh`.
+FCIS-VRT Render tests (Vision + Audio)
+- Run server kernel tests headless: `bash Scripts/ci/fcis-vrt-render-tests.sh`.
 - Scope to a single test: `ROBOT_ONLY=1 swift test --package-path Packages/FountainApps -c debug --filter PBVRTHTTPIntegrationTests.testCompareCandidateWritesBaselineSegment`.
 - Build server only: `swift build --package-path Packages/FountainApps -c debug --target pbvrt-server`.
 
-PB‑VRT baseline seeding
-- One‑shot seeder: `Scripts/apps/pbvrt-baseline-seed`
+FCIS-VRT Render baseline seeding
+- One‑shot seeder: `Scripts/apps/fcis-vrt-render-baseline-seed`
   - Seeds a prompt, creates a baseline with viewport, and captures a baseline PNG.
   - Example: `FOUNTAIN_SKIP_LAUNCHER_SIG=1 PBVRT_CORPUS_ID=pb-vrt swift run --package-path Packages/FountainApps pbvrt-server &`
-    then `bash Scripts/apps/pbvrt-baseline-seed --png baseline.png --prompt-id quiet-frame-lab --server http://127.0.0.1:8010/pb-vrt --out baseline.id`.
+    then `bash Scripts/apps/fcis-vrt-render-baseline-seed --png baseline.png --prompt-id quiet-frame-lab --server http://127.0.0.1:8010/pb-vrt --out baseline.id`.
   - Options: `--prompt-file <md>` or `--prompt-text "..."`, `--viewport WxH` (auto‑inferred with `sips`), `--renderer <ver>`.
 
-PB‑VRT local runners
-- Start server and stamp port: `bash Scripts/apps/pbvrt-up` (writes `.fountain/pb-vrt-port` and logs under `.fountain/logs/`).
-- Compare candidate to baseline with thresholds: `bash Scripts/apps/pbvrt-compare-run --baseline-id $(cat baseline.id) --candidate candidate.png`.
-- Generate audio WAVs (Csound or Python fallback): `bash Scripts/apps/pbvrt-audio-generate --out baseline.wav --freq 440`.
-- Seed the PB‑VRT test rig prompt (Teatro): `FOUNTAIN_SKIP_LAUNCHER_SIG=1 swift run --package-path Packages/FountainApps pbvrt-rig-seed` (corpus via `CORPUS_ID`, default `patchbay`).
+FCIS-VRT Render local runners
+- Start server and stamp port: `bash Scripts/apps/fcis-vrt-render-up` (writes `.fountain/pb-vrt-port` and logs under `.fountain/logs/`).
+- Compare candidate to baseline with thresholds: `bash Scripts/apps/fcis-vrt-render-compare-run --baseline-id $(cat baseline.id) --candidate candidate.png`.
+- Generate audio WAVs (Csound or Python fallback): `bash Scripts/apps/fcis-vrt-render-audio-generate --out baseline.wav --freq 440`.
+- Seed the FCIS-VRT Render test rig prompt (Teatro): `FOUNTAIN_SKIP_LAUNCHER_SIG=1 swift run --package-path Packages/FountainApps pbvrt-rig-seed` (corpus via `CORPUS_ID`, default `patchbay`).
 
 ## Gateway — Quick Start
 

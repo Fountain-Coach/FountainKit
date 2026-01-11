@@ -1,8 +1,8 @@
-# Prompt-Bound Visual Regression Specification
+# FCIS-VRT Render Specification
 
 ## 1. Purpose
 
-This document defines the canonical architecture for **Prompt-Bound Visual Regression Testing (PB-VRT)** — a framework for verifying GUI rendering fidelity under MIDI 2.0 control, grounded in text-based prompts as semantic sources of truth.
+This document defines the canonical architecture for **FCIS-VRT Render** — a framework for verifying GUI rendering fidelity under MIDI 2.0 control, grounded in text-based prompts as semantic sources of truth. The legacy alias **PB-VRT** refers to this same render mode.
 
 It unifies three domains:
 
@@ -18,7 +18,7 @@ Each GUI state in a test suite originates from a **Prompt**.
 The prompt defines semantic intent — e.g., _“Render the login form with email, password, and a disabled submit button.”_  
 From this, the system renders a **visual baseline** and records MIDI 2.0 sequences for deterministic replay.
 
-At runtime, PB-VRT compares current renderings against these baselines using multiple probes.
+At runtime, FCIS-VRT Render compares current renderings against these baselines using multiple probes.
 
 ---
 

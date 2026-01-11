@@ -70,11 +70,10 @@ We extended PatchBay with two families of automatic checks:
 
 ## Where To Learn More
 
-- Internal doc (for product teams): “PB‑VRT — Vision + Audio Probes (Spec & Plan)”
-  - Stored in FountainStore: corpus `patchbay`, page `docs:pb-vrt-vision-audio`.
+- Internal doc (for product teams): “FCIS-VRT Render — Vision + Audio Probes (Spec & Plan)”
+  - Stored in FountainStore: corpus `patchbay`, page `docs:pb-vrt-vision-audio` (legacy id).
 - Ask the team if you want a quick demo — the reports make it click in a minute.
 
 ---
 
 Short version: we turned PatchBay’s eyes and ears on. It now notices the changes humans notice — and helps us keep the good parts steady while we ship faster.
-

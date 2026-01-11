@@ -11,9 +11,8 @@ final class LLMChatAppTests: XCTestCase {
 @MainActor
 final class LLMChatAppSnapshotTests: XCTestCase {
     func testPlaceholderSnapshots() {
-        // Placeholder snapshot test; real PB-VRT coverage will be added
+        // Placeholder snapshot test; real FCIS-VRT Render coverage will be added
         // once the chat instrument UI is implemented.
         XCTAssertTrue(true)
     }
 }
-

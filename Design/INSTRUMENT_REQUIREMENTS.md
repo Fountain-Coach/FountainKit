@@ -61,7 +61,7 @@ For visual instruments in MetalViewKit, the preferred pattern is facts → `midi
   - Drives the instrument via MIDI 2.0 CI/PE and/or HTTP according to facts.
   - Verifies properties and invariants:
     - Example: pan moves the canvas by expected deltas; zoom stays within bounds; rotation is applied about the documented anchor.
-  - For GUI instruments, PB‑VRT/Snapshot tests are preferred for visual invariants.
+  - For GUI instruments, FCIS-VRT Render / snapshot tests are preferred for visual invariants.
 - Tests must live close to the owning app:
   - Example: `FountainGUIDemoTests`, `PatchBayAppUITests`, `MPEPadAppTests`, `MVKRuntimeServerTests`.
 
@@ -82,4 +82,3 @@ For visual instruments in MetalViewKit, the preferred pattern is facts → `midi
   - Do **not** list them in `Tools/instruments.json`.
 
 Keeping instruments aligned with this checklist makes them discoverable, controllable, and testable across GUI, runtime, and MIDI 2.0, and prevents “GUI only” surfaces from slipping in where a full instrument is required.
-

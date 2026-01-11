@@ -169,7 +169,7 @@ How
 Wrappers Index
 - editor: `Scripts/dev/editor-min` (build|run)
 - gateway: `Scripts/dev/gateway-min` (build|run)
-- pbvrt: `Scripts/dev/pbvrt-min` (build|run)
+- fcis-vrt-render: `Scripts/dev/fcis-vrt-render-min` (build|run, legacy pbvrt target)
 - quietframe: `Scripts/dev/quietframe-min` (build|run)
 - planner: `Scripts/dev/planner-min` (build|run)
 - function-caller: `Scripts/dev/function-caller-min` (build|run)
@@ -468,10 +468,10 @@ Pattern (per service)
 - No smoke in main: servers start real HTTP only; smoke/e2e lives in scripts/tests.
 
 Adoption status
-- Adopted: `fountain-editor`, `gateway-server`, `pbvrt-server`, `quietframe-service-server`.
+- Adopted: `fountain-editor`, `gateway-server`, `pbvrt-server` (legacy FCIS-VRT Render), `quietframe-service-server`.
   - Editor core: `Packages/FountainApps/Sources/fountain-editor-service`, server: `Packages/FountainApps/Sources/fountain-editor-service-server`.
   - Gateway core: `Packages/FountainApps/Sources/gateway-service`, server: `Packages/FountainApps/Sources/gateway-server`.
-  - PB‑VRT core: `Packages/FountainApps/Sources/pbvrt-service`, server: `Packages/FountainApps/Sources/pbvrt-server`.
+  - FCIS-VRT Render core (legacy pbvrt): `Packages/FountainApps/Sources/pbvrt-service`, server: `Packages/FountainApps/Sources/pbvrt-server`.
   - QuietFrame core: `Packages/FountainApps/Sources/quietframe-service`, server: `Packages/FountainApps/Sources/quietframe-service-server`.
 - Already compliant via ServiceKit cores: `planner-server`, `function-caller-server`, `persist-server`, `baseline-awareness-server`, `bootstrap-server`, `tools-factory-server`, `tool-server` (their OpenAPI generation lives in `Packages/FountainServiceKit-*`).
 
@@ -755,9 +755,9 @@ GUI Code of Conduct — Self‑Healing Visual Tests (Default)
 - Typical sizes: We maintain golden baselines for 1440×900 and 1280×800 (portrait/landscape) for macOS. The agent adds more sizes as needed and keeps them updated.
 - No approvals from operators: The agent generates, reviews, and commits goldens; maintainers review the PR as usual.
 
-PB‑VRT Vision + Audio (Docs in Store)
+FCIS-VRT Render Vision + Audio (Docs in Store)
 - Combined probe plan (Vision + Audio) is stored in FountainStore to keep UI/audio probes canonical for PatchBay.
-- Location: corpus `patchbay`, page `docs:pb-vrt-vision-audio`, segment `doc`.
+- Location: corpus `patchbay`, page `docs:pb-vrt-vision-audio` (legacy id), segment `doc`.
 - Quick fetch: `CORPUS_ID=patchbay SEGMENT_ID='docs:pb-vrt-vision-audio:doc' swift run --package-path Packages/FountainApps store-dump`.
 
 Milestones (high level)
@@ -779,7 +779,7 @@ Milestones (high level)
 ## Swift 6 Concurrency + Focus Guardrails (Authoritative)
 
 Why
-- Swift 6 actor isolation is strict. Older GCD patterns lead to races and flaky focus. We standardize main‑actor UI and deterministic focus backed by PB‑VRT tests.
+- Swift 6 actor isolation is strict. Older GCD patterns lead to races and flaky focus. We standardize main‑actor UI and deterministic focus backed by FCIS-VRT Render tests.
 
 Rules
 - UI code is `@MainActor`. Prefer `await MainActor.run { … }` over `DispatchQueue.main.async { … }`.
@@ -790,7 +790,7 @@ Rules
 Responder chain (deterministic)
 - Text inputs that must take focus use an AppKit bridge (NSViewRepresentable) with a stable identifier and `window.makeFirstResponder`.
 - Apps launched from Terminal call `NSApplication.shared.activate(ignoringOtherApps: true)` during bootstrap.
-- PB‑VRT focus tests are required for new input surfaces; never land focus changes without tests.
+- FCIS-VRT Render focus tests are required for new input surfaces; never land focus changes without tests.
 
 Lint (CI)
 - Concurrency: `! rg -n '\\bDispatchQueue\\.main\\.async\\b' -S Packages MIDI2InstrumentLab`, `! rg -n '\\bTask\\.detached\\(' -S`.
@@ -835,11 +835,11 @@ Tasks (authoritative)
   - Output: `Tools/history-audit.txt` (commit counts, first/last sighting) and a repo snapshot of current matches.
 - Repo scan + patch queue refresh:
   - Command: `rg -n "\\bDispatchQueue\\.main\\.async\\b|\\.focused\\(|makeFirstResponder\\(|firstResponder\\b|fieldEditor\\(|@Sendable|@unchecked\\s+Sendable" -S`
-  - Update `Tools/concurrency_patch_queue.md` with file‑level actions (replace GCD, add FocusKit bridge, PB‑VRT tests).
+  - Update `Tools/concurrency_patch_queue.md` with file‑level actions (replace GCD, add FocusKit bridge, FCIS-VRT Render tests).
 - Lints (must pass before landing changes):
   - `bash Scripts/ci/lint-concurrency.sh`
-- PB‑VRT focus check for active app:
-  - Example (Lab): `make -C MIDI2InstrumentLab lab-pbvrt`
+- FCIS-VRT Render focus check for active app:
+  - Example (Lab): `make -C MIDI2InstrumentLab lab-pbvrt` (legacy target name)
 - Optional org‑wide audit (when `gh` is configured):
   - `gh api -X GET /search/code -f q='org:Fountain-Coach "DispatchQueue.main.async" language:Swift' -q '.total_count'`
   - Produce `Tools/org-audit.md` with counts/links.
@@ -847,4 +847,4 @@ Tasks (authoritative)
 Agent expectations
 - Do not ask the operator to paste logs; run the scripts locally, analyze outputs, and patch.
 - Do not introduce prompts or facts into code; keep guidance in FountainStore.
-- Only claim “green” after lints + PB‑VRT tests pass locally.
+- Only claim “green” after lints + FCIS-VRT Render tests pass locally.

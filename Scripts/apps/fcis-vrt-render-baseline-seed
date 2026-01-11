@@ -1,0 +1,161 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat << USAGE >&2
+FCIS-VRT Render Baseline Seeder
+
+Seeds a prompt, creates a baseline, and captures a baseline PNG in one go.
+
+Usage:
+  $(basename "$0") --png <baseline.png> [--server <url>] [--prompt-id <id>] \
+      [--prompt-file <file.md>|--prompt-text <text>] [--viewport <WxH>] \
+      [--renderer <version>] [--out <file>]
+
+Options:
+  --png           Path to baseline PNG (required)
+  --server        Legacy pb-vrt base URL (default: http://127.0.0.1:8010/pb-vrt)
+  --prompt-id     Prompt id (default: quiet-frame-lab)
+  --prompt-file   Markdown/text file for prompt text
+  --prompt-text   Prompt text (overrides file)
+  --viewport      Viewport as WxH (default inferred from PNG)
+  --renderer      Renderer version string (default: lab-1.0)
+  --out           Write baselineId to file (default: stdout only)
+
+Requires: curl, python3, and macOS 'sips' (or provide --viewport).
+USAGE
+}
+
+PNG=""
+SERVER=""
+PROMPT_ID="quiet-frame-lab"
+PROMPT_FILE=""
+PROMPT_TEXT=""
+VIEWPORT=""
+RENDERER="lab-1.0"
+OUTFILE=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --png) PNG="$2"; shift 2;;
+    --server) SERVER="$2"; shift 2;;
+    --prompt-id) PROMPT_ID="$2"; shift 2;;
+    --prompt-file) PROMPT_FILE="$2"; shift 2;;
+    --prompt-text) PROMPT_TEXT="$2"; shift 2;;
+    --viewport) VIEWPORT="$2"; shift 2;;
+    --renderer) RENDERER="$2"; shift 2;;
+    --out) OUTFILE="$2"; shift 2;;
+    -h|--help) usage; exit 0;;
+    *) echo "Unknown argument: $1" >&2; usage; exit 2;;
+  esac
+done
+
+# Default server from stamp or fallback
+if [[ -z "${SERVER}" ]]; then
+  if [[ -f .fountain/pb-vrt-port ]]; then
+    PORT=$(cat .fountain/pb-vrt-port | tr -d '\n')
+    SERVER="http://127.0.0.1:${PORT}/pb-vrt"
+  else
+    SERVER="http://127.0.0.1:8010/pb-vrt"
+  fi
+fi
+
+if [[ -z "$PNG" ]]; then
+  echo "Error: --png <baseline.png> is required" >&2
+  usage
+  exit 2
+fi
+if [[ ! -f "$PNG" ]]; then
+  echo "Error: PNG not found: $PNG" >&2
+  exit 2
+fi
+
+# Resolve prompt text
+if [[ -z "$PROMPT_TEXT" ]]; then
+  if [[ -n "$PROMPT_FILE" ]]; then
+    PROMPT_TEXT=$(cat "$PROMPT_FILE")
+  else
+    PROMPT_TEXT=$(cat << 'EOF'
+Quiet Frame Lab — FCIS-VRT Render Test Rig for Vision + Audio.
+Capture a golden frame, then compare new frames in sight and sound. 
+Vision: align, weigh attention, read text, measure spacing. 
+Audio: twin, spectrogram, pulses, pitch, loudness, sync. 
+Pass when thresholds are met; keep artifacts and summaries.
+EOF
+)
+  fi
+fi
+
+# Infer viewport if needed (macOS sips)
+WIDTH=""
+HEIGHT=""
+if [[ -n "$VIEWPORT" ]]; then
+  WIDTH=${VIEWPORT%x*}
+  HEIGHT=${VIEWPORT#*x}
+else
+  if command -v sips >/dev/null 2>&1; then
+    WIDTH=$(sips -g pixelWidth "$PNG" 2>/dev/null | awk '/pixelWidth/ {print $2}')
+    HEIGHT=$(sips -g pixelHeight "$PNG" 2>/dev/null | awk '/pixelHeight/ {print $2}')
+  else
+    # fallback using Python Pillow if available
+    if python3 -c 'import sys; from PIL import Image; im=Image.open(sys.argv[1]); print(im.size[0], im.size[1])' "$PNG" >/dev/null 2>&1; then
+      read -r WIDTH HEIGHT < <(python3 - << PY
+from PIL import Image; import sys
+im=Image.open(sys.argv[1])
+print(im.size[0], im.size[1])
+PY
+"$PNG")
+    else
+      echo "Warning: cannot infer viewport; defaulting to 1280x800" >&2
+      WIDTH=1280; HEIGHT=800
+    fi
+  fi
+fi
+
+echo "Registering prompt '$PROMPT_ID' at $SERVER" >&2
+TMP_PROMPT=$(mktemp)
+printf "%s" "$PROMPT_TEXT" > "$TMP_PROMPT"
+PROMPT_JSON=$(TMP_PROMPT="$TMP_PROMPT" PROMPT_ID="$PROMPT_ID" python3 - << 'PY'
+import json, os, pathlib
+pid = os.environ['PROMPT_ID']
+text = pathlib.Path(os.environ['TMP_PROMPT']).read_text()
+print(json.dumps({"id": pid, "text": text, "modality": "visual"}))
+PY
+)
+set +e
+curl -sS -X POST "$SERVER/prompts" -H 'Content-Type: application/json' -d "$PROMPT_JSON" >/dev/null
+RC=$?
+set -e
+rm -f "$TMP_PROMPT"
+if [[ $RC -ne 0 ]]; then echo "Warning: prompt registration may have failed (continuing)" >&2; fi
+
+echo "Creating baseline (viewport ${WIDTH}x${HEIGHT})" >&2
+CREATE=$(curl -sS -X POST "$SERVER/baselines" -H 'Content-Type: application/json' -d @- << JSON
+{
+  "promptId":"$PROMPT_ID",
+  "viewport": {"width": $WIDTH, "height": $HEIGHT, "scale": 1},
+  "rendererVersion": "$RENDERER",
+  "midiSequence": {"sequenceID":"lab","packets":[{"word0":"00000000"}]}
+}
+JSON
+)
+
+BASELINE_ID=$(printf "%s" "$CREATE" | awk -F '"' '/baselineId/ {print $4; exit}')
+
+if [[ -z "$BASELINE_ID" ]]; then
+  echo "Error: failed to create baseline — response: $CREATE" >&2
+  exit 1
+fi
+
+echo "BaselineId: $BASELINE_ID" >&2
+
+echo "Capturing baseline image" >&2
+curl -sS -X POST "$SERVER/baselines/$BASELINE_ID/capture" \
+  -F baselinePng=@"$PNG;type=application/octet-stream" >/dev/null
+
+echo "$BASELINE_ID"
+if [[ -n "$OUTFILE" ]]; then
+  echo "$BASELINE_ID" > "$OUTFILE"
+fi
+
+echo "Done. Baseline artifacts live under .fountain/artifacts/pb-vrt/$BASELINE_ID" >&2

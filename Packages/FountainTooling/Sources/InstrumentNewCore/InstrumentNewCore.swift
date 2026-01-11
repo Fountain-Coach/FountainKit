@@ -39,7 +39,7 @@ public struct InstrumentNew {
               specName   Spec filename under openapi/v1 (e.g., llm-chat.yml).
 
             Flags:
-              --visual / --no-visual   Whether to scaffold PB-VRT baselines (default: visual).
+              --visual / --no-visual   Whether to scaffold FCIS-VRT Render baselines (default: visual).
               --metalview              Also scaffold a MetalViewKit renderer driven by the FGK graph.
               --no-app                 Do not create an executable app target; seed/spec/tests only.
             """)
@@ -112,7 +112,7 @@ public struct InstrumentNew {
         print("  - Instrument index entry in Tools/instruments.json for appId=\(appId)")
         print("  - Tests module: Packages/FountainApps/Tests/\(appIdUpper)Tests/")
         if cfg.visual {
-            print("    • Baselines directory for PB-VRT snapshots")
+            print("    • Baselines directory for FCIS-VRT Render snapshots")
         }
         print("    • SurfaceTests + PETests (+ SnapshotTests when visual)")
         if !cfg.noApp {
@@ -512,7 +512,7 @@ public struct InstrumentNew {
             lines.append("@MainActor")
             lines.append("final class \(appIdCamel)SnapshotTests: XCTestCase {")
             lines.append("    func testPlaceholderSnapshots() {")
-            lines.append("        // TODO: add PB-VRT snapshot tests for \(appId).")
+            lines.append("        // TODO: add FCIS-VRT Render snapshot tests for \(appId).")
             lines.append("        XCTAssertTrue(true)")
             lines.append("    }")
             lines.append("}")

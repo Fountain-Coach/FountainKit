@@ -1,29 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Minimal PBVRT-only build helper
-# Usage: Scripts/dev/pbvrt-min [build|run]
-
-ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-PKG_PATH="$ROOT_DIR/Packages/FountainApps"
-
-export FK_MIN_TARGET=pbvrt
-export FK_SKIP_NOISY_TARGETS=1
-export FOUNTAIN_SKIP_LAUNCHER_SIG=1
-
-cmd="${1:-build}"
-case "$cmd" in
-  build)
-    echo "[pbvrt-min] Building pbvrt-server (minimal)…"
-    swift build --package-path "$PKG_PATH" -c debug --target pbvrt-server
-    ;;
-  run)
-    echo "[pbvrt-min] Running pbvrt-server (minimal)…"
-    swift run --package-path "$PKG_PATH" -c debug pbvrt-server
-    ;;
-  *)
-    echo "Usage: $0 [build|run]" >&2
-    exit 2
-    ;;
-esac
-
+# Legacy alias for FCIS-VRT Render (deprecated).
+exec "$(dirname "$0")/fcis-vrt-render-min" "$@"

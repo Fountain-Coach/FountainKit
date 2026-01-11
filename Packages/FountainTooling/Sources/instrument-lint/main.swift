@@ -93,7 +93,7 @@ struct InstrumentLint {
             }
         }
 
-        // 6) Snapshot / PB-VRT baselines: require directory when specified
+        // 6) Snapshot / FCIS-VRT Render baselines: require directory when specified
         if let rel = inst.snapshotBaselinesDir {
             let path = root.appendingPathComponent(rel)
             var isDir: ObjCBool = false

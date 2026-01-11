@@ -13,7 +13,7 @@ Included tools
 - `editor-min` — Minimal, targeted build/run for the editor server (no smoke).
 - `editor-vrt` — Gates manifest to only `quietframe-editor-app`, `editor-snapshots`, and `EditorAppUITests`.
 - `gateway-min` — Minimal, targeted build/run for Gateway.
-- `pbvrt-min` — Minimal, targeted build/run for PBVRT.
+- `fcis-vrt-render-min` — Minimal, targeted build/run for FCIS-VRT Render (legacy pbvrt target).
 - `planner-min` — Minimal, targeted build/run for Planner.
 - `function-caller-min` — Minimal, targeted build/run for Function‑Caller.
 - `persist-min` — Minimal, targeted build/run for Persist.
@@ -51,14 +51,14 @@ Use `Scripts/dev/editor-min` to focus builds on the editor service only. The wra
 
 Note: There is no `smoke` subcommand — server mains are real HTTP servers; in‑process smoke codepaths are prohibited to avoid hangs.
 
-Targeted builds (gateway/pbvrt)
+Targeted builds (gateway/fcis-vrt-render)
 - `Scripts/dev/gateway-min` exports `FK_MIN_TARGET=gateway`, `FK_SKIP_NOISY_TARGETS=1`, `FOUNTAIN_SKIP_LAUNCHER_SIG=1` and builds/runs only `gateway-server`.
-- `Scripts/dev/pbvrt-min` exports `FK_MIN_TARGET=pbvrt`, `FK_SKIP_NOISY_TARGETS=1`, `FOUNTAIN_SKIP_LAUNCHER_SIG=1` and builds/runs only `pbvrt-server`.
+- `Scripts/dev/fcis-vrt-render-min` exports `FK_MIN_TARGET=pbvrt`, `FK_SKIP_NOISY_TARGETS=1`, `FOUNTAIN_SKIP_LAUNCHER_SIG=1` and builds/runs only `pbvrt-server`.
 
 Wrappers index (service‑minimal)
 - editor: `Scripts/dev/editor-min`
 - gateway: `Scripts/dev/gateway-min`
-- pbvrt: `Scripts/dev/pbvrt-min`
+- fcis-vrt-render: `Scripts/dev/fcis-vrt-render-min`
 - quietframe: `Scripts/dev/quietframe-min`
 - planner: `Scripts/dev/planner-min`
 - function-caller: `Scripts/dev/function-caller-min`

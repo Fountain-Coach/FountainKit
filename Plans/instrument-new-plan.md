@@ -29,7 +29,7 @@ We want a single entry point for creating new instruments that:
   - `agentId` — canonical agent id (e.g., `fountain.coach/agent/llm-chat/service`).
   - `specName` — spec filename under `openapi/v1` (e.g., `llm-chat.yml`).
 - Optional flags:
-  - `--visual` (default true) — instrument has a visual surface and must get PB‑VRT scaffolding.
+  - `--visual` (default true) — instrument has a visual surface and must get FCIS-VRT Render scaffolding.
   - `--metalview` — in addition to the FountainGUIKit graph, scaffold a MetalViewKit canvas renderer that is driven by the same FGK node/events.
   - `--no-app` — seed/spec/tests only; no executable app surface yet (for backend‑only instruments).
 

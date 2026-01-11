@@ -6,7 +6,7 @@ Purpose
 Legend
 - Replace GCD → `await MainActor.run { … }`
 - Replace asyncAfter → `try? await Task.sleep` inside `Task { @MainActor in … }`
-- Ensure focus via FocusKit or AppKit bridge + PB‑VRT test
+- Ensure focus via FocusKit or AppKit bridge + FCIS-VRT Render test
 
 Queue
 - Packages/FountainApps/Sources/grid-dev-app/GraphOverlayMac.swift
@@ -14,7 +14,7 @@ Queue
 
 Completed
 - Packages/FountainApps/Sources/patchbay-app/AppMain.swift
-  - Async focus paths now use `Task`/`Task.sleep`; FocusTextField + FocusManager handle first responder; remaining work is PB‑VRT focus tests for chat/editor inputs.
+  - Async focus paths now use `Task`/`Task.sleep`; FocusTextField + FocusManager handle first responder; remaining work is FCIS-VRT Render focus tests for chat/editor inputs.
 - Packages/FountainApps/Sources/patchbay-app/PBVRTInspector.swift
   - GCD/Task.detached replaced with `Task(priority:)` and `MainActor.run` for UI updates.
 - Packages/FountainApps/Sources/engraver-studio/EngraverStudioView.swift
